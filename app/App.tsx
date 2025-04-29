@@ -1,35 +1,31 @@
 import React from 'react';
-import { createStackNavigator } from '@react-navigation/stack';
 import { NavigationContainer } from '@react-navigation/native';
-import HomeScreen from '../screens/HomeScreen';
-import SignUpScreen from '../screens/SignUpScreen';
-import SignInScreen from '../screens/SignInScreen';
-import ProfileScreen from '../screens/ProfileScreen';
-import Navbar from '../components/Navbar'; // Navbar component (you can include this if you want to display it globally)
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import HomeScreen from '../screens/HomeScreen'; // Your Home screen component
+import SignupScreen from '../screens/SignUpScreen'; // Your Sign Up screen component
+import SigninScreen from '../screens/SignInScreen'; // Your Sign In screen component
+import Navbar from '../components/Navbar'; // Your Navbar component
 
-const Stack = createStackNavigator();
+// Define navigation param list
+type RootStackParamList = {
+  Home: undefined;
+  Signup: undefined;
+  Signin: undefined;
+};
 
-const AppNavigator: React.FC = () => {
+const Stack = createNativeStackNavigator<RootStackParamList>();
+
+const App = () => {
   return (
     <NavigationContainer>
-      {/* You can add a global Navbar here if you want to display it across all screens */}
-      <Navbar />
-      
-      <Stack.Navigator initialRouteName="Home" screenOptions={{ headerShown: false }}>
-        {/* Home screen */}
+      <Navbar /> {/* Place Navbar to make it appear on all screens */}
+      <Stack.Navigator initialRouteName="Home">
         <Stack.Screen name="Home" component={HomeScreen} />
-        
-        {/* SignUp screen */}
-        <Stack.Screen name="SignUp" component={SignUpScreen} />
-        
-        {/* SignIn screen */}
-        <Stack.Screen name="SignIn" component={SignInScreen} />
-        
-        {/* Profile screen */}
-        <Stack.Screen name="Profile" component={ProfileScreen} />
+        <Stack.Screen name="Signup" component={SignupScreen} />
+        <Stack.Screen name="Signin" component={SigninScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );
 };
 
-export default AppNavigator;
+export default App;

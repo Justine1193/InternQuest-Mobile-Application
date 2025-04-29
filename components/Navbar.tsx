@@ -19,7 +19,7 @@ const Navbar: React.FC = () => {
   return (
     <View style={styles.navbar}>
       <TouchableOpacity onPress={() => navigation.navigate('Home')} style={styles.logoContainer}>
-      <Image source={require('../../assets/logo-black.png')} style={styles.logo} />
+      <Image source={require('../assets/images/logo-black.png')} style={styles.logo} />
       </TouchableOpacity>
 
       <View style={[styles.navbarActions, isMobile && styles.mobileNavbarActions]}>

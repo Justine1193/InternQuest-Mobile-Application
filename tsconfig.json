@@ -1,19 +1,6 @@
 {
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
-    "strict": true,
-    "moduleResolution": "node", // Ensure module resolution uses Node style (important for imports)
-    "paths": {
-      "@/*": [
-        "./*"
-      ]
-    },
-    "jsx": "react-native"  // Make sure JSX is properly set for React Native
-  },
-  "include": [
-    "src/**/*.ts",          // Ensure all TypeScript files are included within the src folder
-    "src/**/*.tsx",         // Include .tsx files as well
-    ".expo/types/**/*.ts", // Include Expo types
-    "expo-env.d.ts"         // Expo environment types
-  ]
+    "strict": true
+  }
 }

@@ -8,6 +8,7 @@ import {
   ImageBackground,
   Alert,
 } from "react-native";
+import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useNavigation } from "@react-navigation/native";
 import { signInWithEmailAndPassword } from "firebase/auth";
@@ -34,6 +35,7 @@ const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
 
   const [email, setEmail] = useState<string>("");
   const [password, setPassword] = useState<string>("");
+  const [showPassword, setShowPassword] = useState<boolean>(false);
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -65,26 +67,47 @@ const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
       imageStyle={{ opacity: 0.85 }}
     >
       <View style={styles.container}>
-        <Text style={styles.title}>Log In</Text>
+        <Text style={styles.appName}>InternQuest</Text>
+        <Text style={styles.subtitle}>Real Experience Starts Here.</Text>
 
-        <TextInput
-          placeholder="Your Email"
-          style={styles.input}
-          value={email}
-          onChangeText={setEmail}
-          keyboardType="email-address"
-          autoCapitalize="none"
-        />
-        <TextInput
-          placeholder="Your Password"
-          style={styles.input}
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-        />
+        <Text style={styles.label}>Email</Text>
+        <View style={styles.inputContainer}>
+          <Icon name="email-outline" size={20} style={styles.icon} />
+          <TextInput
+            placeholder="Enter email"
+            style={styles.input}
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
+          />
+        </View>
+
+        <Text style={styles.label}>Password</Text>
+        <View style={styles.inputContainer}>
+          <Icon name="lock-outline" size={20} style={styles.icon} />
+          <TextInput
+            placeholder="Enter password"
+            style={styles.input}
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry={!showPassword}
+          />
+          <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+            <Icon
+              name={showPassword ? "eye-off-outline" : "eye-outline"}
+              size={20}
+              style={styles.icon}
+            />
+          </TouchableOpacity>
+        </View>
+
+        <TouchableOpacity>
+          <Text style={styles.forgotPassword}>Forgot password?</Text>
+        </TouchableOpacity>
 
         <TouchableOpacity onPress={handleLogin} style={styles.button}>
-          <Text style={styles.buttonText}>Log In</Text>
+          <Text style={styles.buttonText}>Sign In</Text>
         </TouchableOpacity>
 
         <View style={styles.signupContainer}>
@@ -94,7 +117,7 @@ const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
               style={styles.signupLink}
               onPress={() => navigation.navigate("SignUp")}
             >
-              Sign Up
+              Sign up
             </Text>
           </Text>
         </View>
@@ -115,26 +138,52 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     elevation: 5,
   },
-  title: {
-    fontSize: 26,
-    fontWeight: "600",
+  appName: {
+    fontSize: 28,
+    fontWeight: "bold",
+    color: "#0077cc",
     textAlign: "center",
-    marginBottom: 20,
-    color: "#002f6c",
+  },
+  subtitle: {
+    fontSize: 12,
+    textAlign: "center",
+    color: "#555",
+    marginBottom: 30,
+  },
+  label: {
+    fontSize: 14,
+    marginBottom: 5,
+    color: "#333",
+  },
+  inputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderColor: "#ccc",
+    borderWidth: 1,
+    borderRadius: 6,
+    marginBottom: 15,
+    paddingHorizontal: 10,
+  },
+  icon: {
+    marginRight: 5,
+    color: "#555",
   },
   input: {
-    padding: 12,
-    borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: 6,
-    marginBottom: 16,
+    flex: 1,
+    paddingVertical: 10,
     fontSize: 16,
   },
+  forgotPassword: {
+    textAlign: "right",
+    color: "#0077cc",
+    marginBottom: 20,
+  },
   button: {
-    backgroundColor: "#2980b9",
+    backgroundColor: "#004d40",
     paddingVertical: 14,
     borderRadius: 6,
     alignItems: "center",
+    marginBottom: 20,
   },
   buttonText: {
     color: "#fff",
@@ -142,7 +191,6 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
   signupContainer: {
-    marginTop: 16,
     alignItems: "center",
   },
   signupText: {
@@ -150,7 +198,7 @@ const styles = StyleSheet.create({
     color: "#333",
   },
   signupLink: {
-    color: "#004aad",
+    color: "#0077cc",
     fontWeight: "500",
     textDecorationLine: "underline",
   },

@@ -1,12 +1,14 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import SignInScreen from './screens/SignInScreen';
 import SignUpScreen from './screens/SignUpScreen';
-import HomeScreen from './screens/HomeScreen'; // Now the main post-login screen
+import HomeScreen from './screens/HomeScreen';
 import ProfileScreen from './screens/ProfileScreen';
+import LaunchScreen from './screens/LaunchScreen'; // Make sure this file exists and is exported properly
 
 export type RootStackParamList = {
+  Launch: undefined;
   SignIn: undefined;
   SignUp: undefined;
   Home: undefined;
@@ -17,39 +19,40 @@ const Stack = createStackNavigator<RootStackParamList>();
 
 const App: React.FC = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [launchCompleted, setLaunchCompleted] = useState(false);
 
-  const initialRoute = isLoggedIn ? 'Home' : 'SignIn';
+  useEffect(() => {
+    const timer = setTimeout(() => setLaunchCompleted(true), 2000); // Simulate 2-sec splash delay
+    return () => clearTimeout(timer);
+  }, []);
 
   return (
     <NavigationContainer>
-      <Stack.Navigator initialRouteName={initialRoute}>
-        {!isLoggedIn ? (
-          <>
-            <Stack.Screen
-              name="SignIn"
-              options={{ headerShown: false }}
-            >
-              {(props) => <SignInScreen {...props} setIsLoggedIn={setIsLoggedIn} />}
-            </Stack.Screen>
-            <Stack.Screen
-              name="SignUp"
-              component={SignUpScreen}
-              options={{ headerShown: false }}
-            />
-          </>
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        {!launchCompleted ? (
+          // Only shown on initial app load
+          <Stack.Screen name="Launch" component={LaunchScreen} />
         ) : (
           <>
-            <Stack.Screen
-              name="Home"
-              options={{ headerShown: false }}
-            >
-              {(props) => <HomeScreen {...props} />}
-            </Stack.Screen>
-            <Stack.Screen
-              name="Profile"
-              component={ProfileScreen}
-              options={{ title: 'My Profile' }}
-            />
+            {!isLoggedIn ? (
+              <>
+                <Stack.Screen name="SignIn">
+                  {(props) => <SignInScreen {...props} setIsLoggedIn={setIsLoggedIn} />}
+                </Stack.Screen>
+                <Stack.Screen name="SignUp" component={SignUpScreen} />
+              </>
+            ) : (
+              <>
+                <Stack.Screen name="Home">
+                  {(props) => <HomeScreen {...props} />}
+                </Stack.Screen>
+                <Stack.Screen
+                  name="Profile"
+                  component={ProfileScreen}
+                  options={{ headerShown: true, title: 'My Profile' }}
+                />
+              </>
+            )}
           </>
         )}
       </Stack.Navigator>

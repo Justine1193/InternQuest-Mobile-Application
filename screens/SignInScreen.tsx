@@ -13,19 +13,23 @@ import { useNavigation } from "@react-navigation/native";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "../firebase";
 
-// Navigation type definition
 type RootStackParamList = {
-  Dashboard: undefined;
+  Login: undefined;
   SignUp: undefined;
-  SignIn: undefined;
+  Home: undefined;
+  Profile: undefined;
 };
 
 type SignInScreenNavigationProp = NativeStackNavigationProp<
   RootStackParamList,
-  "SignIn"
+  "Login"
 >;
 
-const SignInScreen: React.FC = () => {
+type Props = {
+  setIsLoggedIn: (value: boolean) => void;
+};
+
+const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
   const navigation = useNavigation<SignInScreenNavigationProp>();
 
   const [email, setEmail] = useState<string>("");
@@ -40,7 +44,12 @@ const SignInScreen: React.FC = () => {
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       console.log("✅ User signed in:", userCredential.user.uid);
-      navigation.navigate("Dashboard");
+      setIsLoggedIn(true);
+
+      navigation.reset({
+        index: 0,
+        routes: [{ name: "Home" }],
+      });
     } catch (error: any) {
       Alert.alert("Login Failed", "Invalid email or password.");
       console.error("Login error:", error.message);
@@ -94,18 +103,17 @@ const SignInScreen: React.FC = () => {
   );
 };
 
-// 👇 STYLE GOES HERE
 const styles = StyleSheet.create({
   background: {
     flex: 1,
-    justifyContent: "center", // Align content vertically centered
+    justifyContent: "center",
   },
   container: {
-    backgroundColor: "rgba(255, 255, 255, 0.85)", // Semi-transparent background for readability
+    backgroundColor: "rgba(255, 255, 255, 0.85)",
     margin: 20,
     padding: 20,
     borderRadius: 10,
-    elevation: 5, // Adds a shadow effect for better visibility
+    elevation: 5,
   },
   title: {
     fontSize: 26,

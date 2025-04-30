@@ -1,15 +1,13 @@
 import React, { useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
-
-import LoginScreen from './screens/SignInScreen';
+import SignInScreen from './screens/SignInScreen';
 import SignUpScreen from './screens/SignUpScreen';
 import HomeScreen from './screens/HomeScreen';
 import ProfileScreen from './screens/ProfileScreen';
 
-// Define the type for the stack params
 export type RootStackParamList = {
-  Login: undefined;
+  SignIn: undefined;
   SignUp: undefined;
   Home: undefined;
   Profile: undefined;
@@ -20,14 +18,17 @@ const Stack = createStackNavigator<RootStackParamList>();
 const App: React.FC = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
+  // Define initialRoute based on the login state
+  const initialRoute = isLoggedIn ? 'Home' : 'SignIn';
+
   return (
-    // Ensure NavigationContainer wraps the entire Stack.Navigator
     <NavigationContainer>
-      <Stack.Navigator initialRouteName={isLoggedIn ? 'Home' : 'Login'}>
-        {/* Only render login and signup screens if not logged in */}
+      <Stack.Navigator initialRouteName={initialRoute}>
         {!isLoggedIn ? (
           <>
-            <Stack.Screen name="Login" component={LoginScreen} />
+            <Stack.Screen name="SignIn">
+              {(props) => <SignInScreen {...props} setIsLoggedIn={setIsLoggedIn} />}
+            </Stack.Screen>
             <Stack.Screen name="SignUp" component={SignUpScreen} />
           </>
         ) : (

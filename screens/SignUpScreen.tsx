@@ -38,10 +38,11 @@ const SignUpScreen: React.FC = () => {
       await set(ref(db, `users/${user.uid}`), {
         fullName,
         email,
+        password
       });
 
       Alert.alert('Success', 'Account created!');
-      navigation.navigate('Login');
+      navigation.navigate('SignIn');
     } catch (error: any) {
       Alert.alert('Error', error.message);
     }
@@ -93,7 +94,7 @@ const SignUpScreen: React.FC = () => {
           <View style={styles.loginContainer}>
             <Text style={styles.loginText}>
               Already have an account?{' '}
-              <Text style={styles.loginLink} onPress={() => navigation.navigate('Login')}>
+              <Text style={styles.loginLink} onPress={() => navigation.navigate('SignIn')}>
                 Log In
               </Text>
             </Text>

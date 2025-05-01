@@ -5,8 +5,10 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  ImageBackground,
   Alert,
+  Image,
+  useColorScheme,
+  ScrollView,
 } from "react-native";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -32,6 +34,17 @@ type Props = {
 
 const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
   const navigation = useNavigation<SignInScreenNavigationProp>();
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === "dark";
+
+  const theme = {
+    background: isDark ? "#121212" : "#fff",
+    text: isDark ? "#fff" : "#333",
+    border: isDark ? "#444" : "#ccc",
+    buttonText: "#fff",
+    buttonBg: "#004d40",
+    link: "#0077cc",
+  };
 
   const [email, setEmail] = useState<string>("");
   const [password, setPassword] = useState<string>("");
@@ -47,7 +60,6 @@ const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       console.log("✅ User signed in:", userCredential.user.uid);
       setIsLoggedIn(true);
-
       navigation.reset({
         index: 0,
         routes: [{ name: "Home" }],
@@ -59,23 +71,23 @@ const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
   };
 
   return (
-    <ImageBackground
-      source={{
-        uri: "https://upload.wikimedia.org/wikipedia/commons/thumb/3/31/NEU_Main_Campus%2C_Central_Avenue%2C_New_Era%2C_Quezon_City.jpg/330px-NEU_Main_Campus%2C_Central_Avenue%2C_New_Era%2C_Quezon_City.jpg",
-      }}
-      style={styles.background}
-      imageStyle={{ opacity: 0.85 }}
-    >
+    <ScrollView contentContainerStyle={[styles.scroll, { backgroundColor: theme.background }]}>
       <View style={styles.container}>
-        <Text style={styles.appName}>InternQuest</Text>
-        <Text style={styles.subtitle}>Real Experience Starts Here.</Text>
+        <Image
+          source={require("../assets/InternQuest.png")}
+          style={styles.logo}
+          resizeMode="contain"
+        />
 
-        <Text style={styles.label}>Email</Text>
-        <View style={styles.inputContainer}>
-          <Icon name="email-outline" size={20} style={styles.icon} />
+        <Text style={[styles.subtitle, { color: theme.text }]}>Real Experience Starts Here.</Text>
+
+        <Text style={[styles.label, { color: theme.text }]}>Email</Text>
+        <View style={[styles.inputContainer, { borderColor: theme.border }]}>
+          <Icon name="email-outline" size={20} style={[styles.icon, { color: theme.text }]} />
           <TextInput
             placeholder="Enter email"
-            style={styles.input}
+            placeholderTextColor={isDark ? "#888" : "#aaa"}
+            style={[styles.input, { color: theme.text }]}
             value={email}
             onChangeText={setEmail}
             keyboardType="email-address"
@@ -83,12 +95,13 @@ const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
           />
         </View>
 
-        <Text style={styles.label}>Password</Text>
-        <View style={styles.inputContainer}>
-          <Icon name="lock-outline" size={20} style={styles.icon} />
+        <Text style={[styles.label, { color: theme.text }]}>Password</Text>
+        <View style={[styles.inputContainer, { borderColor: theme.border }]}>
+          <Icon name="lock-outline" size={20} style={[styles.icon, { color: theme.text }]} />
           <TextInput
             placeholder="Enter password"
-            style={styles.input}
+            placeholderTextColor={isDark ? "#888" : "#aaa"}
+            style={[styles.input, { color: theme.text }]}
             value={password}
             onChangeText={setPassword}
             secureTextEntry={!showPassword}
@@ -97,24 +110,24 @@ const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
             <Icon
               name={showPassword ? "eye-off-outline" : "eye-outline"}
               size={20}
-              style={styles.icon}
+              style={{ color: theme.text }}
             />
           </TouchableOpacity>
         </View>
 
         <TouchableOpacity>
-          <Text style={styles.forgotPassword}>Forgot password?</Text>
+          <Text style={[styles.forgotPassword, { color: theme.link }]}>Forgot password?</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={handleLogin} style={styles.button}>
-          <Text style={styles.buttonText}>Sign In</Text>
+        <TouchableOpacity onPress={handleLogin} style={[styles.button, { backgroundColor: theme.buttonBg }]}>
+          <Text style={[styles.buttonText, { color: theme.buttonText }]}>Sign In</Text>
         </TouchableOpacity>
 
         <View style={styles.signupContainer}>
-          <Text style={styles.signupText}>
+          <Text style={[styles.signupText, { color: theme.text }]}>
             Don’t have an account?{" "}
             <Text
-              style={styles.signupLink}
+              style={[styles.signupLink, { color: theme.link }]}
               onPress={() => navigation.navigate("SignUp")}
             >
               Sign up
@@ -122,43 +135,42 @@ const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
           </Text>
         </View>
       </View>
-    </ImageBackground>
+    </ScrollView>
   );
 };
 
 const styles = StyleSheet.create({
-  background: {
-    flex: 1,
+  scroll: {
+    flexGrow: 1,
     justifyContent: "center",
   },
   container: {
-    backgroundColor: "rgba(255, 255, 255, 0.85)",
-    margin: 20,
     padding: 20,
-    borderRadius: 10,
-    elevation: 5,
+  },
+  logo: {
+    width: 200,
+    height: 200,
+    alignSelf: "center",
+    marginBottom: 0,
   },
   appName: {
     fontSize: 28,
     fontWeight: "bold",
-    color: "#0077cc",
     textAlign: "center",
   },
   subtitle: {
-    fontSize: 12,
+    fontSize: 16,
     textAlign: "center",
-    color: "#555",
+    marginTop: 0,
     marginBottom: 30,
   },
   label: {
     fontSize: 14,
     marginBottom: 5,
-    color: "#333",
   },
   inputContainer: {
     flexDirection: "row",
     alignItems: "center",
-    borderColor: "#ccc",
     borderWidth: 1,
     borderRadius: 6,
     marginBottom: 15,
@@ -166,7 +178,6 @@ const styles = StyleSheet.create({
   },
   icon: {
     marginRight: 5,
-    color: "#555",
   },
   input: {
     flex: 1,
@@ -175,18 +186,15 @@ const styles = StyleSheet.create({
   },
   forgotPassword: {
     textAlign: "right",
-    color: "#0077cc",
     marginBottom: 20,
   },
   button: {
-    backgroundColor: "#004d40",
     paddingVertical: 14,
     borderRadius: 6,
     alignItems: "center",
     marginBottom: 20,
   },
   buttonText: {
-    color: "#fff",
     fontSize: 17,
     fontWeight: "bold",
   },
@@ -195,10 +203,8 @@ const styles = StyleSheet.create({
   },
   signupText: {
     fontSize: 14,
-    color: "#333",
   },
   signupLink: {
-    color: "#0077cc",
     fontWeight: "500",
     textDecorationLine: "underline",
   },

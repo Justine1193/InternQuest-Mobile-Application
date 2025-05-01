@@ -12,19 +12,24 @@ const LaunchScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
+      {/* Logo or icon */}
       <Image
-        source={require('../assets/launch-logo.png')}
-        style={styles.logo}
+        source={{ uri: 'https://img.icons8.com/color/48/000000/user-male-circle--v1.png' }}
+        style={styles.profileIcon}
         resizeMode="contain"
       />
+      
+      {/* Sign In button */}
       <TouchableOpacity style={styles.button} onPress={() => navigation.navigate('SignIn')}>
         <Text style={styles.buttonText}>Sign In</Text>
       </TouchableOpacity>
+      
+      {/* Sign Up button */}
       <TouchableOpacity
         style={[styles.button, styles.secondaryButton]}
         onPress={() => navigation.navigate('SignUp')}
       >
-        <Text style={[styles.buttonText, { color: '#004aad' }]}>Sign Up</Text>
+        <Text style={[styles.buttonText, styles.secondaryButtonText]}>Sign Up</Text>
       </TouchableOpacity>
     </View>
   );
@@ -40,9 +45,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
   },
-  logo: {
-    width: 150,
-    height: 150,
+  profileIcon: {
+    width: 120,
+    height: 120,
     marginBottom: 40,
   },
   button: {
@@ -51,6 +56,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
     borderRadius: 8,
     marginBottom: 16,
+    alignItems: 'center',
   },
   secondaryButton: {
     backgroundColor: '#fff',
@@ -59,6 +65,11 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  secondaryButtonText: {
+    color: '#004aad',
     fontSize: 16,
     fontWeight: '600',
   },

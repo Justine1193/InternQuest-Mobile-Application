@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, SafeAreaView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Platform } from 'react-native';
 import RNPickerSelect from 'react-native-picker-select';
-import CheckBox from '@react-native-community/checkbox';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { RootStackParamList } from '../App'; // Adjust the path if needed
+import { RootStackParamList } from '../App';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'SetupAccount'>;
 
@@ -23,7 +22,7 @@ export default function SetupAccountScreen() {
   };
 
   const finishSetup = () => {
-    navigation.navigate('SignIn'); // ✅ Now this is type-safe
+    navigation.navigate('SignIn');
   };
 
   return (
@@ -47,7 +46,7 @@ export default function SetupAccountScreen() {
         <Text style={styles.label}>Preferred Field / Industry</Text>
         <RNPickerSelect
           onValueChange={(value) => setField(value)}
-          placeholder={{ label: 'Type your course', value: null }}
+          placeholder={{ label: 'Choose field', value: null }}
           items={[
             { label: 'Tech', value: 'tech' },
             { label: 'Finance', value: 'finance' },
@@ -58,27 +57,16 @@ export default function SetupAccountScreen() {
 
         <Text style={styles.label}>Location Preference</Text>
         <View style={styles.checkboxContainer}>
-          <View style={styles.checkboxRow}>
-            <CheckBox
-              value={locationPreference.remote}
-              onValueChange={() => toggleCheckbox('remote')}
-            />
-            <Text style={styles.checkboxLabel}>Remote</Text>
-          </View>
-          <View style={styles.checkboxRow}>
-            <CheckBox
-              value={locationPreference.onsite}
-              onValueChange={() => toggleCheckbox('onsite')}
-            />
-            <Text style={styles.checkboxLabel}>On-site</Text>
-          </View>
-          <View style={styles.checkboxRow}>
-            <CheckBox
-              value={locationPreference.hybrid}
-              onValueChange={() => toggleCheckbox('hybrid')}
-            />
-            <Text style={styles.checkboxLabel}>Hybrid</Text>
-          </View>
+          {['remote', 'onsite', 'hybrid'].map((type) => (
+            <TouchableOpacity
+              key={type}
+              style={styles.checkboxRow}
+              onPress={() => toggleCheckbox(type as keyof typeof locationPreference)}
+            >
+              <View style={[styles.checkbox, locationPreference[type as keyof typeof locationPreference] && styles.checkedBox]} />
+              <Text style={styles.checkboxLabel}>{type.charAt(0).toUpperCase() + type.slice(1)}</Text>
+            </TouchableOpacity>
+          ))}
         </View>
 
         <TouchableOpacity style={styles.button} onPress={finishSetup}>
@@ -117,17 +105,27 @@ const styles = StyleSheet.create({
     marginBottom: 5,
   },
   checkboxContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 5,
+    marginTop: 10,
     marginBottom: 20,
   },
   checkboxRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 10,
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 3,
+    borderWidth: 1,
+    borderColor: '#555',
+    marginRight: 10,
+  },
+  checkedBox: {
+    backgroundColor: '#00A8E8',
   },
   checkboxLabel: {
-    marginLeft: 5,
+    fontSize: 14,
   },
   button: {
     backgroundColor: '#00A8E8',

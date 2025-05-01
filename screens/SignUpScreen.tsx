@@ -21,15 +21,26 @@ import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 type NavigationProp = StackNavigationProp<RootStackParamList, "SignUp">;
 
 const SignUpScreen: React.FC = () => {
-  const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
+  const [confirmEmail, setConfirmEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const navigation = useNavigation<NavigationProp>();
 
   const handleSignUp = async () => {
-    if (!fullName || !email || !password) {
+    if (!email || !confirmEmail || !password || !confirmPassword) {
       Alert.alert("Please fill in all fields.");
+      return;
+    }
+
+    if (email !== confirmEmail) {
+      Alert.alert("Emails do not match.");
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      Alert.alert("Passwords do not match.");
       return;
     }
 
@@ -38,15 +49,12 @@ const SignUpScreen: React.FC = () => {
       const user = userCredential.user;
 
       await set(ref(db, `users/${user.uid}`), {
-        fullName,
         email,
         password,
       });
 
       Alert.alert("Success", "Account created!");
-
-      // Navigate to Setup Account screen after sign up
-      navigation.navigate("SetupAccount"); // Changed navigation
+      navigation.navigate("SetupAccount");
     } catch (error: any) {
       Alert.alert("Error", error.message);
     }
@@ -66,15 +74,6 @@ const SignUpScreen: React.FC = () => {
       <Text style={styles.title}>Welcome</Text>
       <Text style={styles.subtitle}>Create your Account here!!</Text>
 
-      <View style={styles.inputWrapper}>
-        <Icon name="account-outline" size={20} color="#555" style={styles.icon} />
-        <TextInput
-          placeholder="Enter full name"
-          style={styles.input}
-          value={fullName}
-          onChangeText={setFullName}
-        />
-      </View>
 
       <View style={styles.inputWrapper}>
         <Icon name="email-outline" size={20} color="#555" style={styles.icon} />
@@ -85,6 +84,18 @@ const SignUpScreen: React.FC = () => {
           autoCapitalize="none"
           keyboardType="email-address"
           onChangeText={setEmail}
+        />
+      </View>
+
+      <View style={styles.inputWrapper}>
+        <Icon name="email-check-outline" size={20} color="#555" style={styles.icon} />
+        <TextInput
+          placeholder="Confirm email"
+          style={styles.input}
+          value={confirmEmail}
+          autoCapitalize="none"
+          keyboardType="email-address"
+          onChangeText={setConfirmEmail}
         />
       </View>
 
@@ -104,6 +115,17 @@ const SignUpScreen: React.FC = () => {
             color="#555"
           />
         </TouchableOpacity>
+      </View>
+
+      <View style={styles.inputWrapper}>
+        <Icon name="lock-check-outline" size={20} color="#555" style={styles.icon} />
+        <TextInput
+          placeholder="Confirm password"
+          style={styles.input}
+          secureTextEntry={!showPassword}
+          value={confirmPassword}
+          onChangeText={setConfirmPassword}
+        />
       </View>
 
       <TouchableOpacity style={styles.button} onPress={handleSignUp}>

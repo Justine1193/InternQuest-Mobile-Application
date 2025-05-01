@@ -44,14 +44,6 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-        {/* Top bar */}
-        <View style={styles.topBar}>
-          <Image
-            source={{ uri: 'https://img.icons8.com/color/48/000000/user-male-circle--v1.png' }}
-            style={styles.profileIcon}
-          />
-          <Text style={styles.title}>InternQuest</Text>
-        </View>
 
         {/* Search & Filter */}
         <View style={styles.searchFilterContainer}>

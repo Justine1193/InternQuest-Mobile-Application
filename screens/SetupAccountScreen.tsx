@@ -1,5 +1,13 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Platform } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  SafeAreaView,
+  TouchableOpacity,
+  TextInput,
+  Platform,
+} from 'react-native';
 import RNPickerSelect from 'react-native-picker-select';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -9,6 +17,7 @@ type NavigationProp = StackNavigationProp<RootStackParamList, 'SetupAccount'>;
 
 export default function SetupAccountScreen() {
   const navigation = useNavigation<NavigationProp>();
+  const [fullName, setFullName] = useState('');
   const [program, setProgram] = useState('');
   const [field, setField] = useState('');
   const [locationPreference, setLocationPreference] = useState({
@@ -22,6 +31,10 @@ export default function SetupAccountScreen() {
   };
 
   const finishSetup = () => {
+    if (!fullName) {
+      alert('Please enter your name.');
+      return;
+    }
     navigation.navigate('SignIn');
   };
 
@@ -30,6 +43,14 @@ export default function SetupAccountScreen() {
       <Text style={styles.header}>Setup Account</Text>
       <View style={styles.card}>
         <Text style={styles.title}>Set up Your Profile</Text>
+
+        <Text style={styles.label}>Full Name</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Enter your full name"
+          value={fullName}
+          onChangeText={setFullName}
+        />
 
         <Text style={styles.label}>Programs</Text>
         <RNPickerSelect
@@ -63,8 +84,15 @@ export default function SetupAccountScreen() {
               style={styles.checkboxRow}
               onPress={() => toggleCheckbox(type as keyof typeof locationPreference)}
             >
-              <View style={[styles.checkbox, locationPreference[type as keyof typeof locationPreference] && styles.checkedBox]} />
-              <Text style={styles.checkboxLabel}>{type.charAt(0).toUpperCase() + type.slice(1)}</Text>
+              <View
+                style={[
+                  styles.checkbox,
+                  locationPreference[type as keyof typeof locationPreference] && styles.checkedBox,
+                ]}
+              />
+              <Text style={styles.checkboxLabel}>
+                {type.charAt(0).toUpperCase() + type.slice(1)}
+              </Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -103,6 +131,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 10,
     marginBottom: 5,
+  },
+  input: {
+    fontSize: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 5,
+    backgroundColor: '#F4F5F9',
+    color: 'black',
+    marginBottom: 10,
   },
   checkboxContainer: {
     marginTop: 10,

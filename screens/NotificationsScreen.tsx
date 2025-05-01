@@ -30,7 +30,7 @@ const NotificationsScreen: React.FC<Props> = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff', padding: 20 },
+  container: { flex: 1, backgroundColor: '#fff', padding: 20, marginTop: 20, },
   header: { fontSize: 20, fontWeight: 'bold', marginBottom: 16 },
   list: { gap: 12 },
   notification: { fontSize: 16, backgroundColor: '#f0f0f0', padding: 12, borderRadius: 8 },

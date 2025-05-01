@@ -5,7 +5,9 @@ import SignInScreen from './screens/SignInScreen';
 import SignUpScreen from './screens/SignUpScreen';
 import HomeScreen from './screens/HomeScreen';
 import ProfileScreen from './screens/ProfileScreen';
-import LaunchScreen from './screens/LaunchScreen'; // Make sure this file exists and is exported properly
+import LaunchScreen from './screens/LaunchScreen';
+import NotificationsScreen from './screens/NotificationsScreen';
+import SettingsScreen from './screens/SettingsScreen';
 
 export type RootStackParamList = {
   Launch: undefined;
@@ -13,6 +15,8 @@ export type RootStackParamList = {
   SignUp: undefined;
   Home: undefined;
   Profile: undefined;
+  Notifications: undefined;
+  Settings: undefined;
 };
 
 const Stack = createStackNavigator<RootStackParamList>();
@@ -22,7 +26,7 @@ const App: React.FC = () => {
   const [launchCompleted, setLaunchCompleted] = useState(false);
 
   useEffect(() => {
-    const timer = setTimeout(() => setLaunchCompleted(true), 2000); // Simulate 2-sec splash delay
+    const timer = setTimeout(() => setLaunchCompleted(true), 2000);
     return () => clearTimeout(timer);
   }, []);
 
@@ -30,7 +34,6 @@ const App: React.FC = () => {
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {!launchCompleted ? (
-          // Only shown on initial app load
           <Stack.Screen name="Launch" component={LaunchScreen} />
         ) : (
           <>
@@ -46,11 +49,9 @@ const App: React.FC = () => {
                 <Stack.Screen name="Home">
                   {(props) => <HomeScreen {...props} />}
                 </Stack.Screen>
-                <Stack.Screen
-                  name="Profile"
-                  component={ProfileScreen}
-                  options={{ headerShown: true, title: 'My Profile' }}
-                />
+                <Stack.Screen name="Profile" component={ProfileScreen} />
+                <Stack.Screen name="Notifications" component={NotificationsScreen} />
+                <Stack.Screen name="Settings" component={SettingsScreen} />
               </>
             )}
           </>

@@ -1,46 +1,55 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, TouchableOpacity, StyleSheet, Text } from 'react-native';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../App';
 
 type Props = {
-  navigation: StackNavigationProp<RootStackParamList, 'Home'>;
+  navigation: StackNavigationProp<RootStackParamList>;
 };
 
 const BottomNavbar: React.FC<Props> = ({ navigation }) => {
   return (
-    <View style={styles.navbar}>
-      <TouchableOpacity
-        style={styles.navItem}
-        onPress={() => navigation.navigate('Home')}
-      >
-        <Text style={styles.navLabel}>Home</Text>
+    <View style={styles.container}>
+      <TouchableOpacity onPress={() => navigation.navigate('Home')} style={styles.tab}>
+        <Icon name="home-outline" size={24} color="#444" />
+        <Text style={styles.label}>Home</Text>
       </TouchableOpacity>
-      <TouchableOpacity
-        style={styles.navItem}
-        onPress={() => navigation.navigate('Profile')}
-      >
-        <Text style={styles.navLabel}>Profile</Text>
+
+      <TouchableOpacity onPress={() => navigation.navigate('Notifications')} style={styles.tab}>
+        <Icon name="bell-outline" size={24} color="#444" />
+        <Text style={styles.label}>Notifications</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity onPress={() => navigation.navigate('Settings')} style={styles.tab}>
+        <Icon name="cog-outline" size={24} color="#444" />
+        <Text style={styles.label}>Settings</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity onPress={() => navigation.navigate('Profile')} style={styles.tab}>
+        <Icon name="account-outline" size={24} color="#444" />
+        <Text style={styles.label}>Profile</Text>
       </TouchableOpacity>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  navbar: {
+  container: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    padding: 10,
-    backgroundColor: '#f8f9fa',
+    paddingVertical: 10,
     borderTopWidth: 1,
-    borderTopColor: '#ddd',
+    borderColor: '#ddd',
+    backgroundColor: '#fff',
   },
-  navItem: {
+  tab: {
     alignItems: 'center',
   },
-  navLabel: {
-    fontSize: 14,
-    color: '#555',
+  label: {
+    fontSize: 12,
+    color: '#444',
+    marginTop: 2,
   },
 });
 

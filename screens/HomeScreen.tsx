@@ -1,6 +1,14 @@
-import React from 'react';
-import { View, Text, Image, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
-import BottomNavbar from '../components/BottomNav'; // Ensure BottomNavbar is imported
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  Image,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+} from 'react-native';
+import BottomNavbar from '../components/BottomNav';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../App';
 
@@ -8,10 +16,34 @@ type Props = {
   navigation: StackNavigationProp<RootStackParamList, 'Home'>;
 };
 
+const mockPosts = [
+  { id: '1', company: 'TechCorp', description: 'Innovating AI for the next generation.', category: 'Tech' },
+  { id: '2', company: 'DesignPro', description: 'Crafting visual stories that resonate.', category: 'Design' },
+  { id: '3', company: 'MarketGurus', description: 'Driving smart digital marketing.', category: 'Marketing' },
+  { id: '4', company: 'InnovateX', description: 'Shaping the future with smart devices.', category: 'Tech' },
+  { id: '5', company: 'CreateHub', description: 'Creative strategies for brand growth.', category: 'Design' },
+  { id: '6', company: 'BrandNest', description: 'Helping brands build identity.', category: 'Marketing' },
+  { id: '7', company: 'CodeCrafters', description: 'Custom software for complex needs.', category: 'Tech' },
+  { id: '8', company: 'PixelPerfect', description: 'Designing interfaces with precision.', category: 'Design' },
+  { id: '9', company: 'AdWise', description: 'Targeted campaigns with measurable results.', category: 'Marketing' },
+  { id: '10', company: 'NextGen Solutions', description: 'Tomorrow’s tech, delivered today.', category: 'Tech' },
+  { id: '11', company: 'SketchStudio', description: 'From concept to creation.', category: 'Design' },
+  { id: '12', company: 'BuzzMetrics', description: 'Social analytics that matter.', category: 'Marketing' },
+];
+
 const HomeScreen: React.FC<Props> = ({ navigation }) => {
+  const [searchText, setSearchText] = useState('');
+  const [filter, setFilter] = useState('All');
+
+  const filteredPosts = mockPosts.filter(post => {
+    const matchesSearch = post.company.toLowerCase().includes(searchText.toLowerCase());
+    const matchesFilter = filter === 'All' || post.category === filter;
+    return matchesSearch && matchesFilter;
+  });
+
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         {/* Top bar */}
         <View style={styles.topBar}>
           <Image
@@ -19,35 +51,45 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
             style={styles.profileIcon}
           />
           <Text style={styles.title}>InternQuest</Text>
-          <TouchableOpacity onPress={() => navigation.navigate('Profile')}>
-            <Image
-              source={{ uri: 'https://img.icons8.com/ios-filled/50/000000/menu--v1.png' }}
-              style={styles.menuIcon}
-            />
-          </TouchableOpacity>
+        </View>
+
+        {/* Search & Filter */}
+        <View style={styles.searchFilterContainer}>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search companies..."
+            value={searchText}
+            onChangeText={setSearchText}
+          />
+          <View style={styles.filterContainer}>
+            {['All', 'Tech', 'Design', 'Marketing'].map(category => (
+              <TouchableOpacity
+                key={category}
+                style={[styles.filterButton, filter === category && styles.activeFilter]}
+                onPress={() => setFilter(category)}
+              >
+                <Text style={[styles.filterText, filter === category && styles.activeFilterText]}>
+                  {category}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
         </View>
 
         {/* Post Cards */}
-        {[...Array(5)].map((_, index) => (
-          <View key={index} style={styles.card}>
+        {filteredPosts.map((post) => (
+          <View key={post.id} style={styles.card}>
             <View style={styles.cardHeader}>
               <Image
                 source={{ uri: 'https://img.icons8.com/ios-filled/50/000000/company.png' }}
                 style={styles.companyLogo}
               />
               <View>
-                <Text style={styles.companyName}>Company {index + 1}</Text>
-                <Text style={styles.followers}>1,350 followers</Text>
+                <Text style={styles.companyName}>{post.company}</Text>
+                <Text style={styles.postText}>{post.description}</Text>
               </View>
             </View>
-            <Text style={styles.postText}>
-              At Company {index + 1}, we value growth and innovation in all aspects of technology...
-            </Text>
-            <Image
-              source={{ uri: 'https://via.placeholder.com/300x150' }}
-              style={styles.postImage}
-            />
-            <Text style={styles.reactions}>😍👏🔥 200</Text>
+            <Text style={styles.categoryTag}>{post.category}</Text>
           </View>
         ))}
       </ScrollView>
@@ -63,22 +105,54 @@ const styles = StyleSheet.create({
   scrollContent: { padding: 16 },
   topBar: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 16,
   },
   profileIcon: {
     width: 36,
     height: 36,
     borderRadius: 18,
+    marginRight: 12,
   },
   title: {
     fontSize: 20,
     fontWeight: 'bold',
   },
-  menuIcon: {
-    width: 24,
-    height: 24,
+  searchFilterContainer: {
+    marginBottom: 20,
+  },
+  searchInput: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 10,
+  },
+  filterContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+  },
+  filterButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#ccc',
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  activeFilter: {
+    backgroundColor: '#004d40',
+    borderColor: '#004d40',
+  },
+  filterText: {
+    fontSize: 12,
+    color: '#333',
+  },
+  activeFilterText: {
+    color: '#fff',
   },
   card: {
     backgroundColor: '#f8f9fa',
@@ -104,24 +178,20 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 16,
   },
-  followers: {
-    fontSize: 12,
-    color: '#666',
-  },
   postText: {
     fontSize: 14,
-    marginBottom: 12,
     color: '#333',
+    marginTop: 2,
   },
-  postImage: {
-    width: '100%',
-    height: 150,
-    borderRadius: 8,
-    marginBottom: 10,
-  },
-  reactions: {
-    fontSize: 14,
-    color: '#888',
+  categoryTag: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#e0f2f1',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    fontSize: 12,
+    color: '#004d40',
+    fontWeight: '500',
   },
 });
 

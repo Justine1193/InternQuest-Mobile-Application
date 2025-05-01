@@ -74,12 +74,10 @@ const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
     <ScrollView contentContainerStyle={[styles.scroll, { backgroundColor: theme.background }]}>
       <View style={styles.container}>
         <Image
-          source={require("../assets/InternQuest.png")}
+          source={require("../assets/InternQuest_with_text.png")}
           style={styles.logo}
           resizeMode="contain"
         />
-
-        <Text style={[styles.subtitle, { color: theme.text }]}>Real Experience Starts Here.</Text>
 
         <Text style={[styles.label, { color: theme.text }]}>Email</Text>
         <View style={[styles.inputContainer, { borderColor: theme.border }]}>
@@ -146,7 +144,7 @@ const styles = StyleSheet.create({
   },
   container: {
     padding: 20,
-  },
+  }, 
   logo: {
     width: 200,
     height: 200,

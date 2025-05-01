@@ -1,5 +1,13 @@
 import React from 'react';
 import { View, Text, StyleSheet, FlatList } from 'react-native';
+import BottomNavbar from '../components/BottomNav'; // Ensure you have BottomNavbar component imported
+import { StackNavigationProp } from '@react-navigation/stack';
+import { RootStackParamList } from '../App'; // Ensure RootStackParamList is correctly imported from App
+
+// Define the prop type for navigation
+type Props = {
+  navigation: StackNavigationProp<RootStackParamList, 'Notifications'>;
+};
 
 const notifications = [
   { id: '1', text: 'You have a new message from HR.' },
@@ -7,7 +15,7 @@ const notifications = [
   { id: '3', text: 'Reminder: Complete your profile.' },
 ];
 
-const NotificationsScreen: React.FC = () => {
+const NotificationsScreen: React.FC<Props> = ({ navigation }) => {
   return (
     <View style={styles.container}>
       <Text style={styles.header}>Notifications</Text>

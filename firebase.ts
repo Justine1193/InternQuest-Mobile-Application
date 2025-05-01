@@ -1,9 +1,9 @@
 // firebase.ts
-import { initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
-import { getDatabase } from "firebase/database";
+import { initializeApp } from 'firebase/app';
+import { getAuth } from 'firebase/auth'; // No persistence with Expo Go
+import { getDatabase } from 'firebase/database';
 
-// Firebase configuration
+// Firebase config
 const firebaseConfig = {
   apiKey: "AIzaSyCdc_SdyFRbNFIw3KqJcQQ19ALfW3pLIts",
   authDomain: "neuinternshipdb.firebaseapp.com",
@@ -17,7 +17,7 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
-// Initialize services
+// Safe for Expo Go (no async storage persistence)
 const auth = getAuth(app);
 const db = getDatabase(app);
 

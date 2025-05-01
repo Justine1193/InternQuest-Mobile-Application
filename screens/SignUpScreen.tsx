@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -9,27 +9,27 @@ import {
   KeyboardAvoidingView,
   Platform,
   Image,
-} from 'react-native';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { ref, set } from 'firebase/database';
-import { auth, db } from '../firebase';
-import { useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
-import { RootStackParamList } from '../App';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+} from "react-native";
+import { createUserWithEmailAndPassword } from "firebase/auth";
+import { ref, set } from "firebase/database";
+import { auth, db } from "../firebase";
+import { useNavigation } from "@react-navigation/native";
+import { StackNavigationProp } from "@react-navigation/stack";
+import { RootStackParamList } from "../App";
+import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 
-type NavigationProp = StackNavigationProp<RootStackParamList, 'SignUp'>;
+type NavigationProp = StackNavigationProp<RootStackParamList, "SignUp">;
 
 const SignUpScreen: React.FC = () => {
-  const [fullName, setFullName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const navigation = useNavigation<NavigationProp>();
 
   const handleSignUp = async () => {
     if (!fullName || !email || !password) {
-      Alert.alert('Please fill in all fields.');
+      Alert.alert("Please fill in all fields.");
       return;
     }
 
@@ -43,20 +43,22 @@ const SignUpScreen: React.FC = () => {
         password,
       });
 
-      Alert.alert('Success', 'Account created!');
-      navigation.navigate('SignIn');
+      Alert.alert("Success", "Account created!");
+
+      // Navigate to Setup Account screen after sign up
+      navigation.navigate("SetupAccount"); // Changed navigation
     } catch (error: any) {
-      Alert.alert('Error', error.message);
+      Alert.alert("Error", error.message);
     }
   };
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
       style={styles.container}
     >
       <Image
-        source={require('../assets/InternQuest.png')}
+        source={require("../assets/InternQuest.png")}
         style={styles.logo}
         resizeMode="contain"
       />
@@ -97,7 +99,7 @@ const SignUpScreen: React.FC = () => {
         />
         <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
           <Icon
-            name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+            name={showPassword ? "eye-off-outline" : "eye-outline"}
             size={20}
             color="#555"
           />
@@ -110,8 +112,8 @@ const SignUpScreen: React.FC = () => {
 
       <View style={styles.loginContainer}>
         <Text style={styles.loginText}>
-          Already have an account?{' '}
-          <Text style={styles.loginLink} onPress={() => navigation.navigate('SignIn')}>
+          Already have an account?{" "}
+          <Text style={styles.loginLink} onPress={() => navigation.navigate("SignIn")}>
             Sign In
           </Text>
         </Text>
@@ -123,33 +125,33 @@ const SignUpScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
+    justifyContent: "center",
     paddingHorizontal: 24,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
   },
   logo: {
     width: 200,
     height: 200,
-    alignSelf: 'center',
+    alignSelf: "center",
     marginBottom: 0,
   },
   title: {
     fontSize: 30,
-    fontWeight: 'bold',
-    color: '#0077cc',
-    textAlign: 'center',
+    fontWeight: "bold",
+    color: "#0077cc",
+    textAlign: "center",
     marginTop: 0,
   },
   subtitle: {
     fontSize: 16,
-    textAlign: 'center',
-    color: '#555',
+    textAlign: "center",
+    color: "#555",
     marginBottom: 20,
   },
   inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderColor: '#ccc',
+    flexDirection: "row",
+    alignItems: "center",
+    borderColor: "#ccc",
     borderWidth: 1,
     borderRadius: 6,
     paddingHorizontal: 10,
@@ -162,30 +164,29 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 10,
     fontSize: 16,
+    color: "#333",
   },
   button: {
-    backgroundColor: '#004d40',
+    backgroundColor: "#0077cc",
     paddingVertical: 14,
     borderRadius: 6,
-    alignItems: 'center',
     marginBottom: 20,
+    alignItems: "center",
   },
   buttonText: {
-    color: '#fff',
-    fontSize: 17,
-    fontWeight: 'bold',
+    fontSize: 18,
+    color: "#fff",
   },
   loginContainer: {
-    alignItems: 'center',
+    alignItems: "center",
   },
   loginText: {
     fontSize: 14,
-    color: '#333',
+    color: "#555",
   },
   loginLink: {
-    color: '#0077cc',
-    fontWeight: '500',
-    textDecorationLine: 'underline',
+    fontWeight: "bold",
+    color: "#0077cc",
   },
 });
 

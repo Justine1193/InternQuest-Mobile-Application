@@ -42,7 +42,7 @@ const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
     text: isDark ? "#fff" : "#333",
     border: isDark ? "#444" : "#ccc",
     buttonText: "#fff",
-    buttonBg: "#004d40",
+    buttonBg: "#007bff",  // Button color changed to blue
     link: "#0077cc",
   };
 
@@ -60,10 +60,6 @@ const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       console.log("✅ User signed in:", userCredential.user.uid);
       setIsLoggedIn(true);
-      navigation.reset({
-        index: 0,
-        routes: [{ name: "Home" }],
-      });
     } catch (error: any) {
       Alert.alert("Login Failed", "Invalid email or password.");
       console.error("Login error:", error.message);
@@ -74,7 +70,7 @@ const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
     <ScrollView contentContainerStyle={[styles.scroll, { backgroundColor: theme.background }]}>
       <View style={styles.container}>
         <Image
-          source={require("../assets/InternQuest_with_text.png")}
+          source={require("../assets/InternQuest.png")}
           style={styles.logo}
           resizeMode="contain"
         />
@@ -144,7 +140,7 @@ const styles = StyleSheet.create({
   },
   container: {
     padding: 20,
-  }, 
+  },
   logo: {
     width: 200,
     height: 200,

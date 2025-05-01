@@ -9,6 +9,10 @@ import {
   Image,
   useColorScheme,
   ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+  Keyboard,
+  TouchableWithoutFeedback,
 } from "react-native";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -17,7 +21,7 @@ import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "../firebase";
 
 type RootStackParamList = {
-  Login: undefined;
+  SignIn: undefined;
   SignUp: undefined;
   Home: undefined;
   Profile: undefined;
@@ -25,7 +29,7 @@ type RootStackParamList = {
 
 type SignInScreenNavigationProp = NativeStackNavigationProp<
   RootStackParamList,
-  "Login"
+  "SignIn"
 >;
 
 type Props = {
@@ -42,13 +46,13 @@ const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
     text: isDark ? "#fff" : "#333",
     border: isDark ? "#444" : "#ccc",
     buttonText: "#fff",
-    buttonBg: "#007bff",  // Button color changed to blue
+    buttonBg: "#007bff",
     link: "#0077cc",
   };
 
-  const [email, setEmail] = useState<string>("");
-  const [password, setPassword] = useState<string>("");
-  const [showPassword, setShowPassword] = useState<boolean>(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -60,76 +64,84 @@ const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       console.log("✅ User signed in:", userCredential.user.uid);
       setIsLoggedIn(true);
+      navigation.replace("Home"); // <-- Navigate to Home after login
     } catch (error: any) {
-      Alert.alert("Login Failed", "Invalid email or password.");
+      Alert.alert("Login Failed", error.message || "Invalid email or password.");
       console.error("Login error:", error.message);
     }
   };
 
   return (
-    <ScrollView contentContainerStyle={[styles.scroll, { backgroundColor: theme.background }]}>
-      <View style={styles.container}>
-        <Image
-          source={require("../assets/InternQuest.png")}
-          style={styles.logo}
-          resizeMode="contain"
-        />
-
-        <Text style={[styles.label, { color: theme.text }]}>Email</Text>
-        <View style={[styles.inputContainer, { borderColor: theme.border }]}>
-          <Icon name="email-outline" size={20} style={[styles.icon, { color: theme.text }]} />
-          <TextInput
-            placeholder="Enter email"
-            placeholderTextColor={isDark ? "#888" : "#aaa"}
-            style={[styles.input, { color: theme.text }]}
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-          />
-        </View>
-
-        <Text style={[styles.label, { color: theme.text }]}>Password</Text>
-        <View style={[styles.inputContainer, { borderColor: theme.border }]}>
-          <Icon name="lock-outline" size={20} style={[styles.icon, { color: theme.text }]} />
-          <TextInput
-            placeholder="Enter password"
-            placeholderTextColor={isDark ? "#888" : "#aaa"}
-            style={[styles.input, { color: theme.text }]}
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry={!showPassword}
-          />
-          <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-            <Icon
-              name={showPassword ? "eye-off-outline" : "eye-outline"}
-              size={20}
-              style={{ color: theme.text }}
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      style={{ flex: 1 }}
+    >
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <ScrollView contentContainerStyle={[styles.scroll, { backgroundColor: theme.background }]}>
+          <View style={styles.container}>
+            <Image
+              source={require("../assets/InternQuest.png")}
+              style={styles.logo}
+              resizeMode="contain"
             />
-          </TouchableOpacity>
-        </View>
 
-        <TouchableOpacity>
-          <Text style={[styles.forgotPassword, { color: theme.link }]}>Forgot password?</Text>
-        </TouchableOpacity>
+            <Text style={[styles.label, { color: theme.text }]}>Email</Text>
+            <View style={[styles.inputContainer, { borderColor: theme.border }]}>
+              <Icon name="email-outline" size={20} style={[styles.icon, { color: theme.text }]} />
+              <TextInput
+                placeholder="Enter email"
+                placeholderTextColor={isDark ? "#888" : "#aaa"}
+                style={[styles.input, { color: theme.text }]}
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+            </View>
 
-        <TouchableOpacity onPress={handleLogin} style={[styles.button, { backgroundColor: theme.buttonBg }]}>
-          <Text style={[styles.buttonText, { color: theme.buttonText }]}>Sign In</Text>
-        </TouchableOpacity>
+            <Text style={[styles.label, { color: theme.text }]}>Password</Text>
+            <View style={[styles.inputContainer, { borderColor: theme.border }]}>
+              <Icon name="lock-outline" size={20} style={[styles.icon, { color: theme.text }]} />
+              <TextInput
+                placeholder="Enter password"
+                placeholderTextColor={isDark ? "#888" : "#aaa"}
+                style={[styles.input, { color: theme.text }]}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+              />
+              <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+                <Icon
+                  name={showPassword ? "eye-off-outline" : "eye-outline"}
+                  size={20}
+                  style={{ color: theme.text }}
+                />
+              </TouchableOpacity>
+            </View>
 
-        <View style={styles.signupContainer}>
-          <Text style={[styles.signupText, { color: theme.text }]}>
-            Don’t have an account?{" "}
-            <Text
-              style={[styles.signupLink, { color: theme.link }]}
-              onPress={() => navigation.navigate("SignUp")}
-            >
-              Sign up
-            </Text>
-          </Text>
-        </View>
-      </View>
-    </ScrollView>
+            <TouchableOpacity>
+              <Text style={[styles.forgotPassword, { color: theme.link }]}>Forgot password?</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={handleLogin} style={[styles.button, { backgroundColor: theme.buttonBg }]}>
+              <Text style={[styles.buttonText, { color: theme.buttonText }]}>Sign In</Text>
+            </TouchableOpacity>
+
+            <View style={styles.signupContainer}>
+              <Text style={[styles.signupText, { color: theme.text }]}>
+                Don’t have an account?{" "}
+                <Text
+                  style={[styles.signupLink, { color: theme.link }]}
+                  onPress={() => navigation.navigate("SignUp")}
+                >
+                  Sign up
+                </Text>
+              </Text>
+            </View>
+          </View>
+        </ScrollView>
+      </TouchableWithoutFeedback>
+    </KeyboardAvoidingView>
   );
 };
 
@@ -146,17 +158,6 @@ const styles = StyleSheet.create({
     height: 200,
     alignSelf: "center",
     marginBottom: 0,
-  },
-  appName: {
-    fontSize: 28,
-    fontWeight: "bold",
-    textAlign: "center",
-  },
-  subtitle: {
-    fontSize: 16,
-    textAlign: "center",
-    marginTop: 0,
-    marginBottom: 30,
   },
   label: {
     fontSize: 14,

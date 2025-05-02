@@ -7,6 +7,7 @@ import {
   StyleSheet,
   TextInput,
   TouchableOpacity,
+  Modal,
 } from 'react-native';
 import BottomNavbar from '../components/BottomNav';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -16,7 +17,15 @@ type Props = {
   navigation: StackNavigationProp<RootStackParamList, 'Home'>;
 };
 
-const mockPosts = [
+// Define a type for the mock posts
+type Post = {
+  id: string;
+  company: string;
+  description: string;
+  category: string;
+};
+
+const mockPosts: Post[] = [
   { id: '1', company: 'TechCorp', description: 'Innovating AI for the next generation.', category: 'Tech' },
   { id: '2', company: 'DesignPro', description: 'Crafting visual stories that resonate.', category: 'Design' },
   { id: '3', company: 'MarketGurus', description: 'Driving smart digital marketing.', category: 'Marketing' },
@@ -34,6 +43,8 @@ const mockPosts = [
 const HomeScreen: React.FC<Props> = ({ navigation }) => {
   const [searchText, setSearchText] = useState('');
   const [filter, setFilter] = useState('All');
+  const [selectedPost, setSelectedPost] = useState<null | Post>(null);  // Typing selectedPost
+  const [modalVisible, setModalVisible] = useState(false);
 
   const filteredPosts = mockPosts.filter(post => {
     const matchesSearch = post.company.toLowerCase().includes(searchText.toLowerCase());
@@ -41,10 +52,14 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
     return matchesSearch && matchesFilter;
   });
 
+  const openModal = (post: Post) => {
+    setSelectedPost(post);
+    setModalVisible(true);
+  };
+
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-
         {/* Search & Filter */}
         <View style={styles.searchFilterContainer}>
           <TextInput
@@ -71,16 +86,18 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
         {/* Post Cards */}
         {filteredPosts.map((post) => (
           <View key={post.id} style={styles.card}>
-            <View style={styles.cardHeader}>
-              <Image
-                source={{ uri: 'https://img.icons8.com/ios-filled/50/000000/company.png' }}
-                style={styles.companyLogo}
-              />
-              <View>
-                <Text style={styles.companyName}>{post.company}</Text>
-                <Text style={styles.postText}>{post.description}</Text>
+            <TouchableOpacity onPress={() => openModal(post)}>
+              <View style={styles.cardHeader}>
+                <Image
+                  source={{ uri: 'https://img.icons8.com/ios-filled/50/000000/company.png' }}
+                  style={styles.companyLogo}
+                />
+                <View>
+                  <Text style={styles.companyName}>{post.company}</Text>
+                  <Text style={styles.postText}>{post.description}</Text>
+                </View>
               </View>
-            </View>
+            </TouchableOpacity>
             <Text style={styles.categoryTag}>{post.category}</Text>
           </View>
         ))}
@@ -88,20 +105,32 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
 
       {/* Bottom Navbar */}
       <BottomNavbar navigation={navigation} />
+
+      {/* Modal for selected post */}
+      {selectedPost && (
+        <Modal
+          visible={modalVisible}
+          onRequestClose={() => setModalVisible(false)}
+          animationType="slide"
+        >
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>{selectedPost.company}</Text>
+            <Text>{selectedPost.description}</Text>
+            <Text>Category: {selectedPost.category}</Text>
+            <TouchableOpacity onPress={() => setModalVisible(false)}>
+              <Text style={styles.closeButton}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </Modal>
+      )}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff',  marginTop: 25, },
+  container: { flex: 1, backgroundColor: '#fff', marginTop: 25 },
   scrollContent: { padding: 16 },
-  title: {
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  searchFilterContainer: {
-    marginBottom: 20,
-  },
+  searchFilterContainer: { marginBottom: 20 },
   searchInput: {
     borderWidth: 1,
     borderColor: '#ccc',
@@ -172,6 +201,23 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#004d40',
     fontWeight: '500',
+  },
+  modalContent: {
+    padding: 20,
+    backgroundColor: '#fff',
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  closeButton: {
+    color: '#004d40',
+    marginTop: 20,
+    fontWeight: 'bold',
   },
 });
 

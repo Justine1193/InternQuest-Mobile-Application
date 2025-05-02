@@ -6,22 +6,26 @@ import {
   SafeAreaView,
   TouchableOpacity,
   TextInput,
-  Platform,
+  ScrollView,
 } from 'react-native';
 import RNPickerSelect from 'react-native-picker-select';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../App';
+import { ref, set } from 'firebase/database';
+import { auth, db } from '../firebase';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'SetupAccount'>;
 
 export default function SetupAccountScreen() {
   const navigation = useNavigation<NavigationProp>();
-  const [fullName, setFullName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [gender, setGender] = useState('');
   const [program, setProgram] = useState('');
   const [field, setField] = useState('');
   const [locationPreference, setLocationPreference] = useState({
-    remote: true,
+    remote: false,
     onsite: false,
     hybrid: false,
   });
@@ -30,27 +34,76 @@ export default function SetupAccountScreen() {
     setLocationPreference((prev) => ({ ...prev, [type]: !prev[type] }));
   };
 
-  const finishSetup = () => {
-    if (!fullName) {
-      alert('Please enter your name.');
+  const finishSetup = async () => {
+    if (!firstName || !lastName || !gender) {
+      alert('Please complete all fields.');
       return;
     }
-    navigation.navigate('SignIn');
+
+    const userData = {
+      firstName,
+      lastName,
+      gender,
+      program,
+      field,
+      locationPreference,
+      createdAt: new Date().toISOString(),
+    };
+
+    try {
+      const userRef = ref(db, 'userinformation/' + auth.currentUser?.uid);
+      await set(userRef, userData);
+
+      alert('Account Setup Complete!');
+      navigation.navigate('SignIn');
+    } catch (error) {
+      console.error('Error saving user data:', error);
+      alert('An error occurred while saving your data.');
+    }
   };
 
   return (
     <SafeAreaView style={styles.container}>
       <Text style={styles.header}>Setup Account</Text>
-      <View style={styles.card}>
+      <ScrollView contentContainerStyle={styles.card}>
         <Text style={styles.title}>Set up Your Profile</Text>
 
-        <Text style={styles.label}>Full Name</Text>
+        <Text style={styles.label}>First Name</Text>
         <TextInput
           style={styles.input}
-          placeholder="Enter your full name"
-          value={fullName}
-          onChangeText={setFullName}
+          placeholder="Enter Your First Name"
+          value={firstName}
+          onChangeText={setFirstName}
         />
+
+        <Text style={styles.label}>Last Name</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Enter Your Last Name"
+          value={lastName}
+          onChangeText={setLastName}
+        />
+
+        <Text style={styles.label}>Gender</Text>
+        <View style={styles.genderContainer}>
+          {['Male', 'Female', 'Others'].map((g) => (
+            <TouchableOpacity
+              key={g}
+              style={styles.genderRow}
+              onPress={() => setGender(g)}
+            >
+              <View
+                style={[
+                  styles.radioCircle,
+                  gender === g && styles.selectedRadio,
+                ]}
+              />
+              <Text style={styles.genderLabel}>{g}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <Text style={[styles.title, { marginTop: 20 }]}>Internship Preference</Text>
 
         <Text style={styles.label}>Programs</Text>
         <RNPickerSelect
@@ -100,7 +153,7 @@ export default function SetupAccountScreen() {
         <TouchableOpacity style={styles.button} onPress={finishSetup}>
           <Text style={styles.buttonText}>Finish Setup</Text>
         </TouchableOpacity>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -109,11 +162,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F4F5F9',
-    padding: 20,
+    paddingTop: 40,
+    paddingHorizontal: 20,
   },
   header: {
-    fontSize: 18,
-    color: '#333',
+    fontSize: 20,
+    fontWeight: '500',
+    color: '#4A4A4A',
     marginBottom: 10,
   },
   card: {
@@ -121,16 +176,19 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 20,
     elevation: 3,
+    paddingBottom: 30,
   },
   title: {
     fontWeight: 'bold',
     fontSize: 16,
     marginBottom: 15,
+    color: '#000',
   },
   label: {
     fontSize: 14,
     marginTop: 10,
     marginBottom: 5,
+    fontWeight: '500',
   },
   input: {
     fontSize: 14,
@@ -142,6 +200,30 @@ const styles = StyleSheet.create({
     backgroundColor: '#F4F5F9',
     color: 'black',
     marginBottom: 10,
+  },
+  genderContainer: {
+    flexDirection: 'column',
+    marginBottom: 10,
+  },
+  genderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  radioCircle: {
+    height: 16,
+    width: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#555',
+    marginRight: 10,
+  },
+  selectedRadio: {
+    backgroundColor: '#00A8E8',
+  },
+  genderLabel: {
+    fontSize: 14,
+    color: '#000',
   },
   checkboxContainer: {
     marginTop: 10,

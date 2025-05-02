@@ -22,20 +22,15 @@ type NavigationProp = StackNavigationProp<RootStackParamList, "SignUp">;
 
 const SignUpScreen: React.FC = () => {
   const [email, setEmail] = useState("");
-  const [confirmEmail, setConfirmEmail] = useState("");
+  const [contact, setContact] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const navigation = useNavigation<NavigationProp>();
 
   const handleSignUp = async () => {
-    if (!email || !confirmEmail || !password || !confirmPassword) {
+    if (!email || !contact || !password || !confirmPassword) {
       Alert.alert("Please fill in all fields.");
-      return;
-    }
-
-    if (email !== confirmEmail) {
-      Alert.alert("Emails do not match.");
       return;
     }
 
@@ -50,6 +45,7 @@ const SignUpScreen: React.FC = () => {
 
       await set(ref(db, `users/${user.uid}`), {
         email,
+        contact,
         password,
       });
 
@@ -74,7 +70,6 @@ const SignUpScreen: React.FC = () => {
       <Text style={styles.title}>Welcome</Text>
       <Text style={styles.subtitle}>Create your Account here!!</Text>
 
-
       <View style={styles.inputWrapper}>
         <Icon name="email-outline" size={20} color="#555" style={styles.icon} />
         <TextInput
@@ -88,15 +83,20 @@ const SignUpScreen: React.FC = () => {
       </View>
 
       <View style={styles.inputWrapper}>
-        <Icon name="email-check-outline" size={20} color="#555" style={styles.icon} />
+        <Icon name="phone-outline" size={20} color="#555" style={styles.icon} />
         <TextInput
-          placeholder="Confirm email"
+          placeholder="Enter contact number"
           style={styles.input}
-          value={confirmEmail}
-          autoCapitalize="none"
-          keyboardType="email-address"
-          onChangeText={setConfirmEmail}
-        />
+          value={contact}
+          keyboardType="phone-pad"
+          onChangeText={(text) => {
+          // Only allow digits and limit input to 11 characters
+          if (/^\d{0,11}$/.test(text)) {
+          setContact(text);
+    }
+  }}
+/>
+
       </View>
 
       <View style={styles.inputWrapper}>

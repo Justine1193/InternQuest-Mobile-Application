@@ -93,7 +93,7 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff',  marginTop: 20, },
+  container: { flex: 1, backgroundColor: '#fff',  marginTop: 25, },
   scrollContent: { padding: 16 },
   title: {
     fontSize: 20,

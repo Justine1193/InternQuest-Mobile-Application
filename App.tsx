@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 
+// Screens
 import LaunchScreen from './screens/LaunchScreen';
 import SignInScreen from './screens/SignInScreen';
 import SignUpScreen from './screens/SignUpScreen';
@@ -10,7 +11,20 @@ import HomeScreen from './screens/HomeScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import NotificationsScreen from './screens/NotificationsScreen';
 import SettingsScreen from './screens/SettingsScreen';
+import InternshipDetailsScreen from './screens/InternshipDetailsScreen';
 
+// Shared Post Type
+export type Post = {
+  id: string;
+  company: string;
+  description: string;
+  category: string;
+  location: string;
+  industry: string;
+  tags: string[];
+};
+
+// Stack Param List
 export type RootStackParamList = {
   Launch: undefined;
   SignUp: undefined;
@@ -20,6 +34,7 @@ export type RootStackParamList = {
   Profile: undefined;
   Notifications: undefined;
   Settings: undefined;
+  InternshipDetails: { post: Post };
 };
 
 const Stack = createStackNavigator<RootStackParamList>();
@@ -29,9 +44,7 @@ const App: React.FC = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 2000); // Simulate splash screen
+    const timer = setTimeout(() => setIsLoading(false), 2000); // Simulate splash
     return () => clearTimeout(timer);
   }, []);
 
@@ -51,6 +64,7 @@ const App: React.FC = () => {
             <Stack.Screen name="Profile" component={ProfileScreen} />
             <Stack.Screen name="Notifications" component={NotificationsScreen} />
             <Stack.Screen name="Settings" component={SettingsScreen} />
+            <Stack.Screen name="InternshipDetails" component={InternshipDetailsScreen} />
           </>
         )}
       </Stack.Navigator>

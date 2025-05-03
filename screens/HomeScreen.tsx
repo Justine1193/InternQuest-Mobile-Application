@@ -2,161 +2,210 @@ import React, { useState } from 'react';
 import {
   View,
   Text,
-  Image,
-  ScrollView,
-  StyleSheet,
   TextInput,
   TouchableOpacity,
-  Modal,
+  ScrollView,
+  StyleSheet,
 } from 'react-native';
 import BottomNavbar from '../components/BottomNav';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { RootStackParamList } from '../App';
+import { RootStackParamList, Post } from '../App';
+import { Ionicons } from '@expo/vector-icons';
 
 type Props = {
   navigation: StackNavigationProp<RootStackParamList, 'Home'>;
 };
 
-// Define a type for the mock posts
-type Post = {
-  id: string;
-  company: string;
-  description: string;
-  category: string;
-};
-
 const mockPosts: Post[] = [
-  { id: '1', company: 'TechCorp', description: 'Innovating AI for the next generation.', category: 'Tech' },
-  { id: '2', company: 'DesignPro', description: 'Crafting visual stories that resonate.', category: 'Design' },
-  { id: '3', company: 'MarketGurus', description: 'Driving smart digital marketing.', category: 'Marketing' },
-  { id: '4', company: 'InnovateX', description: 'Shaping the future with smart devices.', category: 'Tech' },
-  { id: '5', company: 'CreateHub', description: 'Creative strategies for brand growth.', category: 'Design' },
-  { id: '6', company: 'BrandNest', description: 'Helping brands build identity.', category: 'Marketing' },
-  { id: '7', company: 'CodeCrafters', description: 'Custom software for complex needs.', category: 'Tech' },
-  { id: '8', company: 'PixelPerfect', description: 'Designing interfaces with precision.', category: 'Design' },
-  { id: '9', company: 'AdWise', description: 'Targeted campaigns with measurable results.', category: 'Marketing' },
-  { id: '10', company: 'NextGen Solutions', description: 'Tomorrow’s tech, delivered today.', category: 'Tech' },
-  { id: '11', company: 'SketchStudio', description: 'From concept to creation.', category: 'Design' },
-  { id: '12', company: 'BuzzMetrics', description: 'Social analytics that matter.', category: 'Marketing' },
+  {
+    id: '1',
+    company: 'Google',
+    description: 'Google is committed to supporting the Philippine government’s ambition for a Digital Philippines.',
+    category: 'Tech',
+    location: 'Taguig, Metro Manila',
+    industry: 'Technology',
+    tags: ['Programming', 'Web development', 'Databases'],
+  },
+  {
+    id: '2',
+    company: 'Clinchoice',
+    description: 'Clinchoice is a global clinical stage CRO with over 1800 professionals in 15+ countries.',
+    category: 'Medical',
+    location: 'Ortigas Center, Pasig City',
+    industry: 'Pharmaceuticals, Biotechnology & Medical',
+    tags: ['Programming', 'Web development', 'Databases'],
+  },
+  {
+    id: '3',
+    company: 'Amdocs',
+    description: 'Amdocs helps those who build the future to make it amazing.',
+    category: 'Tech',
+    location: 'Pasig City',
+    industry: 'Telecommunications',
+    tags: ['Java', 'React Native', 'Cloud'],
+  },
+  {
+    id: '4',
+    company: 'Accenture',
+    description: 'Join Accenture and help transform leading organizations and communities around the world.',
+    category: 'Consulting',
+    location: 'Mandaluyong City',
+    industry: 'IT Services & Consulting',
+    tags: ['Business Analysis', 'Agile', 'Scrum'],
+  },
+  {
+    id: '5',
+    company: 'IBM',
+    description: 'IBM is looking for interns who want to build a smarter planet.',
+    category: 'Tech',
+    location: 'Quezon City',
+    industry: 'Technology & Innovation',
+    tags: ['AI', 'Python', 'Machine Learning'],
+  },
+  {
+    id: '6',
+    company: 'Ayala Corporation',
+    description: 'An opportunity to work in one of the oldest and most respected conglomerates in the Philippines.',
+    category: 'Business',
+    location: 'Makati City',
+    industry: 'Real Estate & Holdings',
+    tags: ['Finance', 'Strategy', 'Marketing'],
+  },
+  {
+    id: '7',
+    company: 'PLDT',
+    description: 'Be a part of the largest telecommunications and digital services company in the Philippines.',
+    category: 'Telecom',
+    location: 'Makati City',
+    industry: 'Telecommunications',
+    tags: ['Networking', 'Data Science', 'Security'],
+  },
+  {
+    id: '8',
+    company: 'Nestlé Philippines',
+    description: 'Work with a leading nutrition, health, and wellness company.',
+    category: 'Food & Beverage',
+    location: 'Rockwell, Makati',
+    industry: 'FMCG',
+    tags: ['Marketing', 'Supply Chain', 'Sales'],
+  },
+  {
+    id: '9',
+    company: 'GCash',
+    description: 'Join GCash’s mission to make digital finance accessible for every Filipino.',
+    category: 'Fintech',
+    location: 'BGC, Taguig',
+    industry: 'Financial Technology',
+    tags: ['Mobile Dev', 'UI/UX', 'React Native'],
+  },
+  {
+    id: '10',
+    company: 'UNDP Philippines',
+    description: 'Support sustainable development projects and gain experience in the NGO sector.',
+    category: 'Non-profit',
+    location: 'Pasig City',
+    industry: 'International Development',
+    tags: ['Project Management', 'Research', 'Policy Writing'],
+  },
 ];
+
 
 const HomeScreen: React.FC<Props> = ({ navigation }) => {
   const [searchText, setSearchText] = useState('');
-  const [filter, setFilter] = useState('All');
-  const [selectedPost, setSelectedPost] = useState<null | Post>(null);  // Typing selectedPost
-  const [modalVisible, setModalVisible] = useState(false);
+  const [activeFilter, setActiveFilter] = useState<string | null>(null);
 
-  const filteredPosts = mockPosts.filter(post => {
-    const matchesSearch = post.company.toLowerCase().includes(searchText.toLowerCase());
-    const matchesFilter = filter === 'All' || post.category === filter;
-    return matchesSearch && matchesFilter;
-  });
-
-  const openModal = (post: Post) => {
-    setSelectedPost(post);
-    setModalVisible(true);
+  const handleFilterPress = (filter: string) => {
+    setActiveFilter(activeFilter === filter ? null : filter); // Toggle filter
   };
 
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-        {/* Search & Filter */}
-        <View style={styles.searchFilterContainer}>
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search companies..."
-            value={searchText}
-            onChangeText={setSearchText}
-          />
-          <View style={styles.filterContainer}>
-            {['All', 'Tech', 'Design', 'Marketing'].map(category => (
-              <TouchableOpacity
-                key={category}
-                style={[styles.filterButton, filter === category && styles.activeFilter]}
-                onPress={() => setFilter(category)}
-              >
-                <Text style={[styles.filterText, filter === category && styles.activeFilterText]}>
-                  {category}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search"
+          value={searchText}
+          onChangeText={setSearchText}
+        />
+
+        <View style={styles.topFilters}>
+          {['Best Matches', 'Most Recent', 'Saved Internship', 'Filters'].map((label, index) => (
+            <TouchableOpacity
+              key={index}
+              style={[styles.filterPill, activeFilter === label && styles.activeFilter]}
+              onPress={() => handleFilterPress(label)}
+            >
+              <Text style={[styles.filterPillText, activeFilter === label && styles.activeFilterText]}>
+                {label}
+              </Text>
+              {activeFilter === label && <Ionicons name="checkmark" size={16} color="#007aff" />}
+            </TouchableOpacity>
+          ))}
         </View>
 
-        {/* Post Cards */}
-        {filteredPosts.map((post) => (
-          <View key={post.id} style={styles.card}>
-            <TouchableOpacity onPress={() => openModal(post)}>
+        {mockPosts
+          .filter(post => post.company.toLowerCase().includes(searchText.toLowerCase()))
+          .map(post => (
+            <TouchableOpacity
+              key={post.id}
+              style={styles.card}
+              onPress={() => navigation.navigate('InternshipDetails', { post })}
+            >
               <View style={styles.cardHeader}>
-                <Image
-                  source={{ uri: 'https://img.icons8.com/ios-filled/50/000000/company.png' }}
-                  style={styles.companyLogo}
-                />
-                <View>
-                  <Text style={styles.companyName}>{post.company}</Text>
-                  <Text style={styles.postText}>{post.description}</Text>
-                </View>
+                <Text style={styles.companyName}>{post.company}</Text>
+                <Ionicons name="star-outline" size={20} color="#007aff" />
               </View>
+              <Text style={styles.metaText}>Industry: {post.industry}</Text>
+              <Text style={styles.metaText}>Location: {post.location}</Text>
+              <Text numberOfLines={2} style={styles.description}>{post.description}</Text>
+
+              <View style={styles.tagContainer}>
+                {post.tags.map((tag, idx) => (
+                  <Text key={idx} style={styles.tag}>{tag}</Text>
+                ))}
+              </View>
+              <Text style={styles.timeStamp}>Posted 1 hour ago</Text>
             </TouchableOpacity>
-            <Text style={styles.categoryTag}>{post.category}</Text>
-          </View>
-        ))}
+          ))}
       </ScrollView>
 
-      {/* Bottom Navbar */}
       <BottomNavbar navigation={navigation} />
-
-      {/* Modal for selected post */}
-      {selectedPost && (
-        <Modal
-          visible={modalVisible}
-          onRequestClose={() => setModalVisible(false)}
-          animationType="slide"
-        >
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>{selectedPost.company}</Text>
-            <Text>{selectedPost.description}</Text>
-            <Text>Category: {selectedPost.category}</Text>
-            <TouchableOpacity onPress={() => setModalVisible(false)}>
-              <Text style={styles.closeButton}>Close</Text>
-            </TouchableOpacity>
-          </View>
-        </Modal>
-      )}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff', marginTop: 25 },
+  container: { flex: 1, backgroundColor: '#fff', paddingTop: 30 },
   scrollContent: { padding: 16 },
-  searchFilterContainer: { marginBottom: 20 },
   searchInput: {
     borderWidth: 1,
     borderColor: '#ccc',
-    borderRadius: 8,
-    padding: 10,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     marginBottom: 10,
   },
-  filterContainer: {
+  topFilters: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 20,
   },
-  filterButton: {
+  filterPill: {
+    backgroundColor: '#f0f0f0',
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#ccc',
     marginRight: 8,
-    marginBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   activeFilter: {
-    backgroundColor: '#004d40',
-    borderColor: '#004d40',
+    backgroundColor: '#007aff',
+    borderColor: '#007aff',
   },
-  filterText: {
+  filterPillText: {
     fontSize: 12,
     color: '#333',
   },
@@ -164,60 +213,54 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   card: {
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#fff',
+    borderRadius: 16,
     padding: 16,
-    borderRadius: 12,
-    marginBottom: 20,
+    marginBottom: 16,
     shadowColor: '#000',
     shadowOpacity: 0.05,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 4 },
+    borderWidth: 1,
+    borderColor: '#eee',
   },
   cardHeader: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
-  },
-  companyLogo: {
-    width: 40,
-    height: 40,
-    marginRight: 12,
+    marginBottom: 6,
   },
   companyName: {
-    fontWeight: 'bold',
     fontSize: 16,
+    fontWeight: 'bold',
   },
-  postText: {
-    fontSize: 14,
+  metaText: {
+    fontSize: 13,
+    color: '#555',
+  },
+  description: {
+    fontSize: 13,
+    marginTop: 6,
     color: '#333',
-    marginTop: 2,
   },
-  categoryTag: {
-    alignSelf: 'flex-start',
+  tagContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 10,
+    gap: 6,
+  },
+  tag: {
     backgroundColor: '#e0f2f1',
-    paddingHorizontal: 10,
+    color: '#00796b',
     paddingVertical: 4,
+    paddingHorizontal: 10,
     borderRadius: 12,
     fontSize: 12,
-    color: '#004d40',
-    fontWeight: '500',
   },
-  modalContent: {
-    padding: 20,
-    backgroundColor: '#fff',
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 10,
-  },
-  closeButton: {
-    color: '#004d40',
-    marginTop: 20,
-    fontWeight: 'bold',
+  timeStamp: {
+    fontSize: 11,
+    color: '#888',
+    marginTop: 10,
   },
 });
 

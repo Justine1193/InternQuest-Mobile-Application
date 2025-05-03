@@ -51,7 +51,7 @@ export default function SetupAccountScreen() {
     };
 
     try {
-      const userRef = ref(db, 'userinformation/' + auth.currentUser?.uid);
+      const userRef = ref(db, 'users/' + auth.currentUser?.uid);
       await set(userRef, userData);
 
       alert('Account Setup Complete!');

@@ -103,6 +103,22 @@ const InternshipDetailsScreen: React.FC<Props> = ({ route }) => {
   </View>
 </View>
 
+        {/* Skills Required */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Skills Required</Text>
+          {post.tags && post.tags.length > 0 ? (
+            <View style={styles.skillsContainer}>
+              {post.tags.map((tag, index) => (
+          <View key={index} style={styles.skillPill}>
+            <Text style={styles.skillPillText}>{tag}</Text>
+          </View>
+              ))}
+            </View>
+          ) : (
+            <Text style={styles.noSkillsText}>No specific skills required.</Text>
+          )}
+        </View>
+
         {/* Tags */}
         <View style={styles.tagRow}>
           <TouchableOpacity style={styles.tagBox} onPress={() => Alert.alert('NDA Info', 'This internship requires an NDA.')}>
@@ -242,6 +258,36 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#333',
     fontSize: 14,
+  },
+  skillsContainer: {
+    marginTop: 8,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  skill: {
+    fontSize: 14,
+    color: '#444',
+    marginBottom: 4,
+  },
+  noSkillsText: {
+    fontSize: 14,
+    color: '#888',
+  },
+  skillPill: {
+    backgroundColor: '#e0f2f1',
+    borderRadius: 16,
+    marginRight: 8,
+    marginBottom: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  skillPillText: {
+    fontSize: 14,
+    color: '#00796b',
+    fontWeight: 'bold',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
   },
 });
 

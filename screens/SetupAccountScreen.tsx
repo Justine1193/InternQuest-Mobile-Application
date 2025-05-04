@@ -17,8 +17,17 @@ import { auth, db } from '../firebase';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'SetupAccount'>;
 
-export default function SetupAccountScreen() {
-  const navigation = useNavigation<NavigationProp>();
+type SetupAccountScreenProps = {
+  navigation: any;
+  route: any;
+  onSetupComplete: () => void;
+};
+
+export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
+  navigation,
+  route,
+  onSetupComplete,
+}) => {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [gender, setGender] = useState('');
@@ -29,6 +38,20 @@ export default function SetupAccountScreen() {
     onsite: false,
     hybrid: false,
   });
+  const [skills, setSkills] = useState<string[]>([]);
+  const [skillSearch, setSkillSearch] = useState('');
+
+  const availableSkills = [
+    'Programming',
+    'AI',
+    'React Native',
+    'Cloud',
+    'Data Science',
+    'Web Development',
+    'Machine Learning',
+    'Cybersecurity',
+    'UI/UX Design',
+  ];
 
   const toggleCheckbox = (type: 'remote' | 'onsite' | 'hybrid') => {
     setLocationPreference((prev) => ({ ...prev, [type]: !prev[type] }));
@@ -47,6 +70,7 @@ export default function SetupAccountScreen() {
       program,
       field,
       locationPreference,
+      skills,
       createdAt: new Date().toISOString(),
     };
 
@@ -56,6 +80,7 @@ export default function SetupAccountScreen() {
 
       alert('Account Setup Complete!');
       navigation.navigate('SignIn');
+      onSetupComplete();
     } catch (error) {
       console.error('Error saving user data:', error);
       alert('An error occurred while saving your data.');
@@ -140,7 +165,8 @@ export default function SetupAccountScreen() {
               <View
                 style={[
                   styles.checkbox,
-                  locationPreference[type as keyof typeof locationPreference] && styles.checkedBox,
+                  locationPreference[type as keyof typeof locationPreference] &&
+                    styles.checkedBox,
                 ]}
               />
               <Text style={styles.checkboxLabel}>
@@ -150,13 +176,52 @@ export default function SetupAccountScreen() {
           ))}
         </View>
 
+        {/* Skills Section with Search and Pills */}
+        <Text style={styles.label}>Skills</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Search skills"
+          value={skillSearch}
+          onChangeText={setSkillSearch}
+        />
+
+        <View style={styles.skillPillContainer}>
+          {availableSkills
+            .filter(
+              (skill) =>
+          skill.toLowerCase().includes(skillSearch.toLowerCase()) &&
+          (skillSearch.length > 0 ? true : skills.includes(skill))
+            )
+            .map((skill) => (
+              <TouchableOpacity
+          key={skill}
+          style={[
+            styles.skillPillSelected,
+            !skills.includes(skill) && { opacity: 0.5 },
+          ]}
+          onPress={() => {
+            if (skills.includes(skill)) {
+              setSkills((prev) => prev.filter((s) => s !== skill));
+            } else {
+              setSkills((prev) => [...prev, skill]);
+            }
+          }}
+              >
+          <Text style={styles.skillText}>
+            {skill}
+            {skills.includes(skill) ? ' ✕' : ' ＋'}
+          </Text>
+              </TouchableOpacity>
+            ))}
+        </View>
+
         <TouchableOpacity style={styles.button} onPress={finishSetup}>
           <Text style={styles.buttonText}>Finish Setup</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: {
@@ -248,6 +313,38 @@ const styles = StyleSheet.create({
   checkboxLabel: {
     fontSize: 14,
   },
+  skillSuggestionContainer: {
+    marginBottom: 10,
+  },
+  suggestionItem: {
+    backgroundColor: '#E0F7FF',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginVertical: 4,
+    alignSelf: 'flex-start',
+  },
+  suggestionText: {
+    color: '#0077B6',
+    fontSize: 14,
+  },
+  skillPillContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: 20,
+  },
+  skillPillSelected: {
+    backgroundColor: '#00A8E8',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 20,
+    marginVertical: 4,
+    marginRight: 8,
+  },
+  skillText: {
+    color: '#fff',
+    fontSize: 13,
+  },
   button: {
     backgroundColor: '#00A8E8',
     paddingVertical: 10,
@@ -287,3 +384,5 @@ const pickerSelectStyles = {
     marginBottom: 10,
   },
 };
+
+export default SetupAccountScreen;

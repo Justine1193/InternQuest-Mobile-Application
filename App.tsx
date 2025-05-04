@@ -9,7 +9,7 @@ import { SavedInternshipsProvider } from './context/SavedInternshipsContext';
 import LaunchScreen from './screens/LaunchScreen';
 import SignInScreen from './screens/SignInScreen';
 import SignUpScreen from './screens/SignUpScreen';
-import SetupAccountScreen from './screens/SetupAccountScreen';
+import { SetupAccountScreen } from './screens/SetupAccountScreen';
 import HomeScreen from './screens/HomeScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import NotificationsScreen from './screens/NotificationsScreen';
@@ -27,6 +27,7 @@ export type Post = {
   tags: string[];
   website?: string; // ✅ Added
   email?: string;   // ✅ Added
+  skills?: string[]; // <-- Add this line
 };
 
 // Stack Param List
@@ -61,10 +62,20 @@ const App: React.FC = () => {
             <Stack.Screen name="Launch" component={LaunchScreen} />
           ) : (
             <>
-              <Stack.Screen name="SignUp" component={SignUpScreen} />
-              <Stack.Screen name="SetupAccount" component={SetupAccountScreen} />
               <Stack.Screen name="SignIn">
-                {props => <SignInScreen {...props} setIsLoggedIn={setIsLoggedIn} />}
+              {props => <SignInScreen {...props} setIsLoggedIn={setIsLoggedIn} />}
+              </Stack.Screen>
+              <Stack.Screen name="SignUp" component={SignUpScreen} />
+              <Stack.Screen name="SetupAccount">
+              {props => (
+                <SetupAccountScreen
+                {...props}
+                onSetupComplete={() => {
+                  setIsLoggedIn(true);
+                  props.navigation.replace('Home');
+                }}
+                />
+              )}
               </Stack.Screen>
               <Stack.Screen name="Home" component={HomeScreen} />
               <Stack.Screen name="Profile" component={ProfileScreen} />

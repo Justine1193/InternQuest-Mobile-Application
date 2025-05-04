@@ -232,7 +232,7 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
               <Text style={styles.companyName}>{post.company}</Text>
               <TouchableOpacity onPress={() => toggleSaveInternship(post)}>
                 <Ionicons
-                  name={savedInternships.some(saved => saved.id === post.id) ? 'star' : 'star-outline'}
+                  name={savedInternships.some(saved => saved.id === post.id) ? 'bookmark' : 'bookmark-outline'}
                   size={20}
                   color="#007aff"
                 />

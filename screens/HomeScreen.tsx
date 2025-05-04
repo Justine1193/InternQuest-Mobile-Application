@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,10 +11,14 @@ import BottomNavbar from '../components/BottomNav';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList, Post } from '../App';
 import { Ionicons } from '@expo/vector-icons';
+import { useSavedInternships } from '../context/SavedInternshipsContext';
 
 type Props = {
   navigation: StackNavigationProp<RootStackParamList, 'Home'>;
 };
+
+// Mock user preferences from Setup Account Screen
+const userPreferences = ['Programming', 'AI', 'React Native', 'Cloud'];
 
 const mockPosts: Post[] = [
   {
@@ -112,11 +116,42 @@ const mockPosts: Post[] = [
 
 const HomeScreen: React.FC<Props> = ({ navigation }) => {
   const [searchText, setSearchText] = useState('');
-  const [activeFilter, setActiveFilter] = useState<string | null>(null);
+  const [activeFilter, setActiveFilter] = useState<string | null>('Best Matches'); // Default filter
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]); // State for selected tags
+  const { savedInternships, toggleSaveInternship } = useSavedInternships();
 
   const handleFilterPress = (filter: string) => {
     setActiveFilter(activeFilter === filter ? null : filter); // Toggle filter
+    setShowDropdown(false);
   };
+
+  const handleTagToggle = (tag: string) => {
+    setSelectedTags(prev =>
+      prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
+    );
+  };
+
+  const filteredPosts = (activeFilter === 'Saved Internship' ? savedInternships : mockPosts)
+    .filter(post => {
+      if (selectedTags.length > 0) {
+        // Include posts that match any of the selected tags
+        return post.tags.some(tag => selectedTags.includes(tag));
+      }
+      if (activeFilter && !['Best Matches', 'Most Recent', 'Saved Internship'].includes(activeFilter)) {
+        return post.tags.includes(activeFilter) && post.company.toLowerCase().includes(searchText.toLowerCase());
+      }
+      return post.company.toLowerCase().includes(searchText.toLowerCase());
+    })
+    .sort((a, b) => {
+      if (activeFilter === 'Best Matches') {
+        // Sort by the number of matching tags with user preferences
+        const aMatches = a.tags.filter(tag => userPreferences.includes(tag)).length;
+        const bMatches = b.tags.filter(tag => userPreferences.includes(tag)).length;
+        return bMatches - aMatches; // Higher matches come first
+      }
+      return 0; // No sorting for other filters
+    });
 
   return (
     <View style={styles.container}>
@@ -127,9 +162,8 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
           value={searchText}
           onChangeText={setSearchText}
         />
-
         <View style={styles.topFilters}>
-          {['Best Matches', 'Most Recent', 'Saved Internship', 'Filters'].map((label, index) => (
+          {['Best Matches', 'Most Recent', 'Saved Internship'].map((label, index) => (
             <TouchableOpacity
               key={index}
               style={[styles.filterPill, activeFilter === label && styles.activeFilter]}
@@ -141,32 +175,81 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
               {activeFilter === label && <Ionicons name="checkmark" size={16} color="#007aff" />}
             </TouchableOpacity>
           ))}
+          {/* Tags dropdown trigger */}
+          <TouchableOpacity
+            style={styles.filterPill}
+            onPress={() => setShowDropdown(!showDropdown)}
+          >
+            <Text style={styles.filterPillText}>Tags ▼</Text>
+          </TouchableOpacity>
         </View>
+        {/* Dropdown content */}
+        {showDropdown && (
+          <View
+            style={{
+              flexDirection: 'row',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              marginLeft: 0,
+              marginTop: 8,
+              marginBottom: 8,
+              gap: 8,
+            }}
+          >
+            {Array.from(new Set(mockPosts.flatMap(post => post.tags))).map((tag, idx) => (
+              <TouchableOpacity
+                key={idx}
+                style={[
+                  styles.filterPill,
+                  selectedTags.includes(tag) && styles.activeFilter, // Highlight selected tags
+                  { marginRight: 0, marginBottom: 0 },
+                ]}
+                onPress={() => handleTagToggle(tag)} // Toggle tag selection
+              >
+                <Text
+                  style={[
+                    styles.filterPillText,
+                    selectedTags.includes(tag) && styles.activeFilterText, // Highlight selected tags
+                  ]}
+                >
+                  {tag}
+                </Text>
+                {selectedTags.includes(tag) && (
+                  <Ionicons name="checkmark" size={16} color="#007aff" />
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
 
-        {mockPosts
-          .filter(post => post.company.toLowerCase().includes(searchText.toLowerCase()))
-          .map(post => (
-            <TouchableOpacity
-              key={post.id}
-              style={styles.card}
-              onPress={() => navigation.navigate('InternshipDetails', { post })}
-            >
-              <View style={styles.cardHeader}>
-                <Text style={styles.companyName}>{post.company}</Text>
-                <Ionicons name="star-outline" size={20} color="#007aff" />
-              </View>
-              <Text style={styles.metaText}>Industry: {post.industry}</Text>
-              <Text style={styles.metaText}>Location: {post.location}</Text>
-              <Text numberOfLines={2} style={styles.description}>{post.description}</Text>
+        {filteredPosts.map(post => (
+          <TouchableOpacity
+            key={post.id}
+            style={styles.card}
+            onPress={() => navigation.navigate('InternshipDetails', { post })}
+          >
+            <View style={styles.cardHeader}>
+              <Text style={styles.companyName}>{post.company}</Text>
+              <TouchableOpacity onPress={() => toggleSaveInternship(post)}>
+                <Ionicons
+                  name={savedInternships.some(saved => saved.id === post.id) ? 'star' : 'star-outline'}
+                  size={20}
+                  color="#007aff"
+                />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.metaText}>Industry: {post.industry}</Text>
+            <Text style={styles.metaText}>Location: {post.location}</Text>
+            <Text numberOfLines={2} style={styles.description}>{post.description}</Text>
 
-              <View style={styles.tagContainer}>
-                {post.tags.map((tag, idx) => (
-                  <Text key={idx} style={styles.tag}>{tag}</Text>
-                ))}
-              </View>
-              <Text style={styles.timeStamp}>Posted 1 hour ago</Text>
-            </TouchableOpacity>
-          ))}
+            <View style={styles.tagContainer}>
+              {post.tags.map((tag, idx) => (
+                <Text key={idx} style={styles.tag}>{tag}</Text>
+              ))}
+            </View>
+            <Text style={styles.timeStamp}>Posted 1 hour ago</Text>
+          </TouchableOpacity>
+        ))}
       </ScrollView>
 
       <BottomNavbar navigation={navigation} />

@@ -7,7 +7,6 @@ import {
   StyleSheet,
   Alert,
   Image,
-  useColorScheme,
   ScrollView,
   KeyboardAvoidingView,
   Platform,
@@ -38,13 +37,11 @@ type Props = {
 
 const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
   const navigation = useNavigation<SignInScreenNavigationProp>();
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === "dark";
 
   const theme = {
-    background: isDark ? "#121212" : "#fff",
-    text: isDark ? "#fff" : "#333",
-    border: isDark ? "#444" : "#ccc",
+    background: "#fff",
+    text: "#333",
+    border: "#ccc",
     buttonText: "#fff",
     buttonBg: "#007bff",
     link: "#0077cc",
@@ -90,7 +87,7 @@ const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
               <Icon name="email-outline" size={20} style={[styles.icon, { color: theme.text }]} />
               <TextInput
                 placeholder="Enter email"
-                placeholderTextColor={isDark ? "#888" : "#aaa"}
+                placeholderTextColor="#aaa"
                 style={[styles.input, { color: theme.text }]}
                 value={email}
                 onChangeText={setEmail}
@@ -104,7 +101,7 @@ const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
               <Icon name="lock-outline" size={20} style={[styles.icon, { color: theme.text }]} />
               <TextInput
                 placeholder="Enter password"
-                placeholderTextColor={isDark ? "#888" : "#aaa"}
+                placeholderTextColor="#aaa"
                 style={[styles.input, { color: theme.text }]}
                 value={password}
                 onChangeText={setPassword}

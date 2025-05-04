@@ -1,101 +1,281 @@
-import React, { useState } from 'react';
-import { View, Text, Button, TextInput, StyleSheet, TouchableOpacity, Image } from 'react-native';
-import { StackNavigationProp } from '@react-navigation/stack';
-import { RootStackParamList } from '../App'; // Ensure RootStackParamList is correctly imported from App
+import React from 'react';
+import { View, Text, Image, StyleSheet, ScrollView, Linking, TouchableOpacity, Alert } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import BottomNavbar from '../components/BottomNav';
+import * as Progress from 'react-native-progress';
 
-type Props = {
-  navigation: StackNavigationProp<RootStackParamList, 'Profile'>;
-};
+declare global {
+  // Adjust the User type as needed for your app
+  interface User {
+    name?: string;
+    // add other user properties here
+  }
+  var user: User | undefined;
+}
 
-const ProfileScreen: React.FC<Props> = ({ navigation }) => {
-  const [name, setName] = useState('John Doe');
-  const [email, setEmail] = useState('johndoe@example.com');
-  const [profilePic, setProfilePic] = useState('https://img.icons8.com/color/48/000000/user-male-circle--v1.png');
-
-  const handleSave = () => {
-    // Here you would typically handle the save functionality, e.g., send data to an API
-    alert('Profile saved!');
+const ProfileScreen = ({ navigation }: { navigation: any }) => {
+  const handleAchievementClick = (achievement: string) => {
+    Alert.alert('Achievement Details', `You clicked on: ${achievement}`);
   };
 
-  const handleChangeProfilePic = () => {
-    // Simulate changing profile picture (in real scenario, it would open a picker)
-    setProfilePic('https://img.icons8.com/color/48/000000/user-female-circle--v1.png');
+  const handleEditProfile = () => {
+    Alert.alert(
+      'Edit Profile',
+      'Are you sure you want to edit your profile?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Yes', onPress: () => navigation.navigate('EditProfile') },
+      ]
+    );
+  };
+
+  const handleEmailClick = () => {
+    Linking.openURL('mailto:google@gmail.com');
+  };
+
+  const handlePhoneClick = () => {
+    Linking.openURL('tel:+1234567890');
+  };
+
+  const handleLinkedInClick = () => {
+    Linking.openURL('https://linkedin.com/in/ashleywatson');
   };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>My Profile</Text>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        {/* Profile Header */}
+        <View style={styles.profileHeader}>
+          <Image
+            source={{ uri: 'https://randomuser.me/api/portraits/men/75.jpg' }}
+            style={styles.avatar}
+          />
+          <Text style={styles.name}>{/* Replace with user's name from signup */}
+            { /* Example: user?.name || 'Ashley Watson' */ }
+            {globalThis.user?.name || 'Ashley Watson'}
+          </Text>
+          <Text style={styles.subtext}>BSIT</Text>
+        </View>
 
-      {/* Profile Picture */}
-      <View style={styles.profilePicContainer}>
-        <TouchableOpacity onPress={handleChangeProfilePic}>
-          <Image source={{ uri: profilePic }} style={styles.profilePic} />
-        </TouchableOpacity>
-        <Text style={styles.changePicText}>Tap to change profile picture</Text>
-      </View>
+        {/* Stats Section */}
+        <View style={styles.statsContainer}>
+          <View style={styles.statCard}>
+            <Text style={styles.statLabel}>Hours</Text>
+            <Text style={styles.statValue}>36 hours</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={styles.statLabel}>Company</Text>
+            <Text style={styles.statValue}>Google</Text>
+          </View>
+        </View>
 
-      {/* Editable Name */}
-      <TextInput
-        style={styles.input}
-        placeholder="Enter your name"
-        value={name}
-        onChangeText={setName}
-      />
+        {/* Progress Section */}
+        <View style={styles.detailsContainer}>
+          <Text style={styles.sectionHeader}>Internship Progress</Text>
+          <Text style={styles.detailLabel}>Start Date:</Text>
+          <Text style={styles.detailValue}>April 01, 2025</Text>
 
-      {/* Editable Email */}
-      <TextInput
-        style={styles.input}
-        placeholder="Enter your email"
-        value={email}
-        onChangeText={setEmail}
-      />
+          <Text style={styles.detailLabel}>End Date:</Text>
+          <Text style={styles.detailValue}>June 11, 2025</Text>
 
-      {/* Save Button */}
-      <Button title="Save Changes" onPress={handleSave} />
+          <View style={styles.progressChartContainer}>
+            <Progress.Circle
+              size={120}
+              progress={0.08}
+              showsText={true}
+              formatText={() => '8%'}
+              color="#0080ff"
+              borderWidth={3}
+              thickness={6}
+            />
+          </View>
+          <Text style={styles.progressText}>Progress: 8% goal completed</Text>
+        </View>
 
-      {/* Back to Home Button */}
-      <TouchableOpacity onPress={() => navigation.navigate('Home')} style={styles.backButton}>
-        <Text style={styles.backButtonText}>Back to Home</Text>
+        {/* Work Details Section */}
+        <View style={styles.workDetails}>
+          <Text style={styles.sectionHeader}>Work Details</Text>
+          <Text style={styles.detailLabel}>Company Name:</Text>
+          <Text style={styles.detailValue}>Google</Text>
+
+          <Text style={styles.detailLabel}>Company Website:</Text>
+          <TouchableOpacity onPress={() => Linking.openURL('https://google.com')}>
+            <Text style={[styles.detailValue, styles.link]}>Google Inc.</Text>
+          </TouchableOpacity>
+
+          <Text style={styles.detailLabel}>Worked Field:</Text>
+          <Text style={styles.detailValue}>Programmer</Text>
+
+          <Text style={styles.detailLabel}>Email:</Text>
+          <TouchableOpacity onPress={handleEmailClick}>
+            <Text style={[styles.detailValue, styles.link]}>google@gmail.com</Text>
+          </TouchableOpacity>
+
+          <Text style={styles.detailLabel}>Phone:</Text>
+          <TouchableOpacity onPress={handlePhoneClick}>
+            <Text style={[styles.detailValue, styles.link]}>+1 234 567 890</Text>
+          </TouchableOpacity>
+
+          <Text style={styles.detailLabel}>LinkedIn:</Text>
+          <TouchableOpacity onPress={handleLinkedInClick}>
+            <Text style={[styles.detailValue, styles.link]}>linkedin.com/in/ashleywatson</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Achievements Section */}
+        <View style={styles.achievementsContainer}>
+          <Text style={styles.sectionHeader}>Achievements</Text>
+          <TouchableOpacity onPress={() => handleAchievementClick('Completed 100 hours of internship')}>
+            <View style={styles.achievementItem}>
+              <Ionicons name="trophy" size={20} color="#FFD700" />
+              <Text style={styles.achievementText}>Completed 100 hours of internship</Text>
+            </View>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => handleAchievementClick('Received Outstanding Intern Award')}>
+            <View style={styles.achievementItem}>
+              <Ionicons name="medal" size={20} color="#C0C0C0" />
+              <Text style={styles.achievementText}>Received Outstanding Intern Award</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+
+      {/* Edit Profile Button */}
+      <TouchableOpacity
+        style={styles.editProfileButton}
+        onPress={handleEditProfile}
+      >
+        <Ionicons name="pencil" size={20} color="#fff" />
+        <Text style={styles.editProfileButtonText}>Edit Profile</Text>
       </TouchableOpacity>
-    </View>
+      </ScrollView>
+
+      {/* Bottom Navbar */}
+        <BottomNavbar navigation={navigation} />
+      </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, justifyContent: 'center' },
-  title: { fontSize: 24, fontWeight: 'bold', marginBottom: 20 },
-  profilePicContainer: {
-    alignItems: 'center',
-    marginBottom: 20,
+  container: {
+    flex: 1,
+    backgroundColor: '#fff',
+    paddingTop: 30 
   },
-  profilePic: {
+  scrollContent: {
+    paddingHorizontal: 15,
+    paddingBottom: 20, // Add padding to avoid overlapping with the BottomNavbar
+  },
+  profileHeader: {
+    alignItems: 'center',
+    marginVertical: 25,
+  },
+  avatar: {
     width: 100,
     height: 100,
     borderRadius: 50,
+  },
+  name: {
+    marginTop: 10,
+    fontWeight: 'bold',
+    fontSize: 20,
+  },
+  subtext: {
+    fontSize: 14,
+    color: '#777',
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginVertical: 20,
+  },
+  statCard: {
+    backgroundColor: '#f9f9f9',
+    borderRadius: 10,
+    padding: 15,
+    width: '40%',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
+    elevation: 3,
+  },
+  statLabel: {
+    fontSize: 14,
+    color: '#888',
+  },
+  statValue: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginTop: 5,
+  },
+  detailsContainer: {
+    marginTop: 20,
+    marginBottom: 25,
+  },
+  sectionHeader: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 15,
+    color: '#333',
+  },
+  detailLabel: {
+    fontSize: 14,
+    color: '#444',
+    marginTop: 10,
+  },
+  detailValue: {
+    fontSize: 14,
+    fontWeight: 'bold',
     marginBottom: 10,
   },
-  changePicText: {
-    fontSize: 14,
-    color: '#007bff',
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    padding: 10,
-    marginBottom: 12,
-    fontSize: 16,
-  },
-  backButton: {
-    marginTop: 20,
-    backgroundColor: '#007bff',
-    paddingVertical: 12,
-    borderRadius: 8,
+  progressChartContainer: {
     alignItems: 'center',
+    marginVertical: 25,
   },
-  backButtonText: {
+  progressText: {
+    fontSize: 14,
+    textAlign: 'center',
+    color: '#555',
+    marginTop: 10,
+  },
+  workDetails: {
+    marginTop: 20,
+    marginBottom: 30,
+  },
+  link: {
+    color: '#0080ff',
+    textDecorationLine: 'underline',
+  },
+  achievementsContainer: {
+    marginTop: 25,
+    marginBottom: 30,
+  },
+  achievementItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  achievementText: {
+    marginLeft: 10,
+    fontSize: 14,
+    color: '#444',
+  },
+  editProfileButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#007aff',
+    padding: 12,
+    borderRadius: 5,
+    marginHorizontal: 20,
+    marginTop: 10,
+    marginBottom: 20,
+  },
+  editProfileButtonText: {
+    marginLeft: 10,
     color: '#fff',
-    fontSize: 16,
+    fontSize: 14,
+    fontWeight: 'bold',
   },
 });
 

@@ -22,6 +22,8 @@ export type Post = {
   location: string;
   industry: string;
   tags: string[];
+  website?: string; // ✅ Added
+  email?: string;   // ✅ Added
 };
 
 // Stack Param List

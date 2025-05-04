@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   ScrollView,
   TouchableOpacity,
   Linking,
+  Alert,
 } from 'react-native';
 import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../App';
@@ -19,6 +20,29 @@ type Props = {
 
 const InternshipDetailsScreen: React.FC<Props> = ({ route }) => {
   const { post } = route.params;
+  const [isSaved, setIsSaved] = useState(false);
+
+  const handleSaveToggle = () => {
+    setIsSaved(!isSaved);
+    Alert.alert(isSaved ? 'Removed' : 'Saved', `Internship ${isSaved ? 'removed from' : 'added to'} your saved list.`);
+  };
+
+  const openWebsite = () => {
+    if (post.website) {
+      Linking.openURL(post.website);
+    } else {
+      Alert.alert('Website not available');
+    }
+  };
+
+  const openEmail = () => {
+    Linking.openURL(`mailto:${post.email}`);
+  };
+
+  const openLocationInMaps = () => {
+    const query = encodeURIComponent(post.location);
+    Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${query}`);
+  };
 
   return (
     <ScrollView style={styles.container}>
@@ -36,40 +60,40 @@ const InternshipDetailsScreen: React.FC<Props> = ({ route }) => {
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Company Overview</Text>
-        <Text style={styles.label}>
-          Website:{' '}
-          <Text
-            style={styles.link}
-            onPress={() => Linking.openURL('https://www.google.com')}
-          >
-            https://www.google.com
-          </Text>
-        </Text>
+        <TouchableOpacity onPress={openWebsite}>
+          <Text style={styles.link}>{post.website || 'https://example.com'}</Text>
+        </TouchableOpacity>
         <Text style={styles.label}>Industry: {post.industry}</Text>
         <Text style={styles.label}>Location: {post.location}</Text>
-        <Text style={styles.label}>Email: company@email.com</Text>
+        <TouchableOpacity onPress={openEmail}>
+          <Text style={styles.link}>{post.email || 'email@company.com'}</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.tagRow}>
-        <View style={styles.tagBox}>
+        <TouchableOpacity style={styles.tagBox} onPress={() => Alert.alert('NDA Info', 'This internship requires an NDA.')}>
           <Image source={require('../assets/approved.png')} style={styles.tagIcon} />
           <Text style={styles.tagLabel}>Approved</Text>
           <Text style={styles.tagSubLabel}>NDA</Text>
-        </View>
-        <View style={styles.tagBox}>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.tagBox} onPress={() => Alert.alert('Mode', 'This internship is Hybrid.')}>
           <Image source={require('../assets/hybrid.png')} style={styles.tagIcon} />
           <Text style={styles.tagLabel}>Hybrid</Text>
           <Text style={styles.tagSubLabel}>Mode of Work</Text>
-        </View>
+        </TouchableOpacity>
       </View>
 
-      <Image
-        source={{ uri: 'https://via.placeholder.com/350x200?text=Map+Placeholder' }}
-        style={styles.map}
-      />
+      <TouchableOpacity onPress={openLocationInMaps}>
+        <Image
+          source={{ uri: 'https://via.placeholder.com/350x200?text=Tap+to+Open+Map' }}
+          style={styles.map}
+        />
+      </TouchableOpacity>
 
-      <TouchableOpacity style={styles.saveButton}>
-        <Text style={styles.saveText}>⭐ Saved Internship</Text>
+      <TouchableOpacity style={[styles.saveButton, isSaved && styles.savedButton]} onPress={handleSaveToggle}>
+        <Text style={[styles.saveText, isSaved && styles.savedText]}>
+          {isSaved ? '✅ Internship Saved' : '⭐ Save Internship'}
+        </Text>
       </TouchableOpacity>
     </ScrollView>
   );
@@ -119,9 +143,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 30,
   },
+  savedButton: {
+    backgroundColor: '#00796b',
+  },
   saveText: {
     color: '#00796b',
     fontWeight: 'bold',
+  },
+  savedText: {
+    color: '#fff',
   },
 });
 

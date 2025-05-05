@@ -5,10 +5,8 @@ import BottomNavbar from '../components/BottomNav';
 import * as Progress from 'react-native-progress';
 
 declare global {
-  // Adjust the User type as needed for your app
   interface User {
     name?: string;
-    // add other user properties here
   }
   var user: User | undefined;
 }
@@ -50,8 +48,7 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
             source={{ uri: 'https://randomuser.me/api/portraits/men/75.jpg' }}
             style={styles.avatar}
           />
-          <Text style={styles.name}>{/* Replace with user's name from signup */}
-            { /* Example: user?.name || 'Ashley Watson' */ }
+          <Text style={styles.name}>
             {globalThis.user?.name || 'Ashley Watson'}
           </Text>
           <Text style={styles.subtext}>BSIT</Text>
@@ -78,18 +75,18 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
           <Text style={styles.detailLabel}>End Date:</Text>
           <Text style={styles.detailValue}>June 11, 2025</Text>
 
-          <View style={styles.progressChartContainer}>
-            <Progress.Circle
-              size={120}
+          <View style={styles.progressBarContainer}>
+            <Progress.Bar
               progress={0.08}
-              showsText={true}
-              formatText={() => '8%'}
+              width={null}
+              height={20}
               color="#0080ff"
-              borderWidth={3}
-              thickness={6}
+              unfilledColor="#e0e0e0"
+              borderRadius={10}
+              borderWidth={0}
             />
+            <Text style={styles.progressText}>Progress: 8% goal completed</Text>
           </View>
-          <Text style={styles.progressText}>Progress: 8% goal completed</Text>
         </View>
 
         {/* Work Details Section */}
@@ -139,19 +136,19 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
           </TouchableOpacity>
         </View>
 
-      {/* Edit Profile Button */}
-      <TouchableOpacity
-        style={styles.editProfileButton}
-        onPress={handleEditProfile}
-      >
-        <Ionicons name="pencil" size={20} color="#fff" />
-        <Text style={styles.editProfileButtonText}>Edit Profile</Text>
-      </TouchableOpacity>
+        {/* Edit Profile Button */}
+        <TouchableOpacity
+          style={styles.editProfileButton}
+          onPress={handleEditProfile}
+        >
+          <Ionicons name="pencil" size={20} color="#fff" />
+          <Text style={styles.editProfileButtonText}>Edit Profile</Text>
+        </TouchableOpacity>
       </ScrollView>
 
       {/* Bottom Navbar */}
-        <BottomNavbar navigation={navigation} />
-      </View>
+      <BottomNavbar navigation={navigation} />
+    </View>
   );
 };
 
@@ -159,11 +156,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff',
-    paddingTop: 30 
+    paddingTop: 30
   },
   scrollContent: {
     paddingHorizontal: 15,
-    paddingBottom: 20, // Add padding to avoid overlapping with the BottomNavbar
+    paddingBottom: 20,
   },
   profileHeader: {
     alignItems: 'center',
@@ -228,9 +225,9 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginBottom: 10,
   },
-  progressChartContainer: {
-    alignItems: 'center',
+  progressBarContainer: {
     marginVertical: 25,
+    paddingHorizontal: 10,
   },
   progressText: {
     fontSize: 14,

@@ -17,6 +17,7 @@ import { signOut } from 'firebase/auth';
 import { auth } from '../firebase';
 import { RootStackParamList } from '../App';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import BottomNavbar from '../components/BottomNav';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'Settings'>;
 
@@ -53,7 +54,7 @@ const SettingsScreen: React.FC = () => {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <><ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.header}>Settings</Text>
 
       <View style={styles.settingRow}>
@@ -100,7 +101,7 @@ const SettingsScreen: React.FC = () => {
       <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
         <Text style={styles.logoutText}>Log Out</Text>
       </TouchableOpacity>
-    </ScrollView>
+    </ScrollView><BottomNavbar navigation={navigation} /></>
   );
 };
 

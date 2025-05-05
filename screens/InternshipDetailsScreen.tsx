@@ -22,7 +22,7 @@ type Props = {
 
 const InternshipDetailsScreen: React.FC<Props> = ({ route }) => {
   const { post } = route.params;
-  const navigation = useNavigation();
+  const navigation = useNavigation<import('@react-navigation/native').NavigationProp<RootStackParamList>>();
   const { savedInternships, toggleSaveInternship } = useSavedInternships();
 
   const isSaved = savedInternships.some(saved => saved.id === post.id);
@@ -42,6 +42,13 @@ const InternshipDetailsScreen: React.FC<Props> = ({ route }) => {
   const openLocationInMaps = () => {
     const query = encodeURIComponent(post.location);
     Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${query}`);
+  };
+
+  const handleGotHiredPress = () => {
+    // Navigate to the OJT Tracker Screen
+    navigation.navigate('OJTTracker', {
+      post, // Pass the internship details if needed
+    });
   };
 
   return (
@@ -143,7 +150,7 @@ const InternshipDetailsScreen: React.FC<Props> = ({ route }) => {
 
         {/* Bottom Buttons */}
         <View style={styles.bottomButtons}>
-          <TouchableOpacity style={styles.hiredButton}>
+          <TouchableOpacity style={styles.hiredButton} onPress={handleGotHiredPress}>
             <Text style={styles.hiredButtonText}>Got Hired</Text>
           </TouchableOpacity>
           <TouchableOpacity

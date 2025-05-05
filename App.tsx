@@ -15,6 +15,7 @@ import ProfileScreen from './screens/ProfileScreen';
 import NotificationsScreen from './screens/NotificationsScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import InternshipDetailsScreen from './screens/InternshipDetailsScreen';
+import OJTTrackerScreen from './screens/OJTTrackerScreen';
 
 // Shared Post Type
 export type Post = {
@@ -41,6 +42,7 @@ export type RootStackParamList = {
   Notifications: undefined;
   Settings: undefined;
   InternshipDetails: { post: Post };
+  OJTTracker: { post: Post }; // Updated to accept a post parameter
 };
 
 const Stack = createStackNavigator<RootStackParamList>();
@@ -82,6 +84,7 @@ const App: React.FC = () => {
               <Stack.Screen name="Notifications" component={NotificationsScreen} />
               <Stack.Screen name="Settings" component={SettingsScreen} />
               <Stack.Screen name="InternshipDetails" component={InternshipDetailsScreen} />
+              <Stack.Screen name="OJTTracker" component={OJTTrackerScreen} />
             </>
           )}
         </Stack.Navigator>

@@ -12,6 +12,7 @@ import {
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../App';
+import BottomNavbar from '../components/BottomNav';
 
 type Props = {
   navigation: StackNavigationProp<RootStackParamList, 'Notifications'>;
@@ -96,14 +97,13 @@ const NotificationsScreen: React.FC<Props> = ({ navigation }) => {
   );
 
   return (
-    <View style={styles.container}>
+    <><View style={styles.container}>
       <Text style={styles.header}>Notifications</Text>
       <FlatList
         data={notifications}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
-        contentContainerStyle={styles.list}
-      />
+        contentContainerStyle={styles.list} />
 
       {/* Modal Popup */}
       {selectedNotification && (
@@ -145,6 +145,8 @@ const NotificationsScreen: React.FC<Props> = ({ navigation }) => {
         </Modal>
       )}
     </View>
+    <BottomNavbar navigation={navigation} />
+    </>
   );
 };
 

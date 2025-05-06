@@ -1,0 +1,138 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+  
+  /* Ensure the html and body take full viewport height */
+  html, body, #root {
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+  }
+  
+  .login-page {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    width: 100vw;
+    background-color: #2196f3;
+    padding: 20px;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    overflow: auto;
+  }
+
+.login-page {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background-color: #2196f3;
+    padding: 20px;
+  }
+  
+  .login-card {
+    background: white;
+    padding: 50px;
+    border-radius: 10px;
+    box-shadow: 0 5px 10px rgba(0, 0, 0, 0.5);
+    width: 565px; 
+    height: 500px;
+
+  }
+  
+  .login-card h1 {
+    text-align: center;
+    margin-top: 20px;
+    margin-bottom: 20px;
+    font-size: 30px;
+    color: #000000;
+  }
+  
+
+  .form-group {
+    margin-bottom: 20px;
+  }
+  
+  .form-group label {
+    display: block;
+    margin-bottom: 8px;
+    color: #666;
+    font-size: 14px;
+  }
+  
+  .form-input {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+  }
+  
+  .form-input:focus {
+    outline: none;
+    border-color: #2196f3;
+  }
+  
+  .password-input-container {
+    position: relative;
+  }
+  
+  .password-toggle {
+    position: absolute;
+    right: 15px;
+    top: 55%;
+    transform: translateY(-50%);
+    cursor: pointer;
+    color: #666;
+  }
+  
+  .sign-in-button {
+    width: 80%;
+    padding: 12px;
+    background-color: #2196f3;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 16px;
+    cursor: pointer;
+    margin-top: 20px;
+  }
+  
+  .sign-in-button:hover {
+    background-color: #1976d2;
+  }
+  .form-group label {
+    display: flex;
+    margin-bottom: 8px;
+    color: #333;
+    font-size: 16px;
+    font-weight: 500;
+  }
+  
+  .form-input {
+    width: 100%;
+    padding: 15px;
+    border: 1px solid #e0e0e0;
+    border-radius: 10px;
+    font-size: 16px;
+    color: #333;
+    background-color: #fff;
+  }
+  
+  .form-input::placeholder {
+    color: #9e9e9e;
+    font-size: 16px;
+  }
+  
+  .form-input:focus {
+    outline: none;
+    border-color: #2196f3;
+    box-shadow: 0 0 0 1px #2196f3;
+  }

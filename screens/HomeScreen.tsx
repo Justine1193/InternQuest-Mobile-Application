@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   ScrollView,
   StyleSheet,
+  StatusBar,
 } from 'react-native';
 import BottomNavbar from '../components/BottomNav';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -29,6 +30,8 @@ const mockPosts: Post[] = [
     location: 'Taguig, Metro Manila',
     industry: 'Technology',
     tags: ['Programming', 'Web development', 'Databases'],
+    latitude: 0,
+    longitude: 0
   },
   {
     id: '2',
@@ -38,6 +41,8 @@ const mockPosts: Post[] = [
     location: 'Ortigas Center, Pasig City',
     industry: 'Pharmaceuticals, Biotechnology & Medical',
     tags: ['Programming', 'Web development', 'Databases'],
+    latitude: 0,
+    longitude: 0
   },
   {
     id: '3',
@@ -47,6 +52,8 @@ const mockPosts: Post[] = [
     location: 'Pasig City',
     industry: 'Telecommunications',
     tags: ['Java', 'React Native', 'Cloud'],
+    latitude: 0,
+    longitude: 0
   },
   {
     id: '4',
@@ -56,6 +63,8 @@ const mockPosts: Post[] = [
     location: 'Mandaluyong City',
     industry: 'IT Services & Consulting',
     tags: ['Business Analysis', 'Agile', 'Scrum'],
+    latitude: 0,
+    longitude: 0
   },
   {
     id: '5',
@@ -65,6 +74,8 @@ const mockPosts: Post[] = [
     location: 'Quezon City',
     industry: 'Technology & Innovation',
     tags: ['AI', 'Python', 'Machine Learning'],
+    latitude: 0,
+    longitude: 0
   },
   {
     id: '6',
@@ -74,6 +85,8 @@ const mockPosts: Post[] = [
     location: 'Makati City',
     industry: 'Real Estate & Holdings',
     tags: ['Finance', 'Strategy', 'Marketing'],
+    latitude: 0,
+    longitude: 0
   },
   {
     id: '7',
@@ -83,6 +96,8 @@ const mockPosts: Post[] = [
     location: 'Makati City',
     industry: 'Telecommunications',
     tags: ['Networking', 'Data Science', 'Security'],
+    latitude: 0,
+    longitude: 0
   },
   {
     id: '8',
@@ -92,6 +107,8 @@ const mockPosts: Post[] = [
     location: 'Rockwell, Makati',
     industry: 'FMCG',
     tags: ['Marketing', 'Supply Chain', 'Sales'],
+    latitude: 0,
+    longitude: 0
   },
   {
     id: '9',
@@ -101,6 +118,8 @@ const mockPosts: Post[] = [
     location: 'BGC, Taguig',
     industry: 'Financial Technology',
     tags: ['Mobile Dev', 'UI/UX', 'React Native'],
+    latitude: 0,
+    longitude: 0
   },
   {
     id: '10',
@@ -110,6 +129,8 @@ const mockPosts: Post[] = [
     location: 'Pasig City',
     industry: 'International Development',
     tags: ['Project Management', 'Research', 'Policy Writing'],
+    latitude: 0,
+    longitude: 0
   },
 ];
 
@@ -155,6 +176,7 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
+      <StatusBar translucent backgroundColor="transparent" barStyle="dark-content" />
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <TextInput
           style={styles.searchInput}
@@ -258,7 +280,7 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff', paddingTop: 30 },
+  container: { flex: 1, backgroundColor: '#fff', paddingTop: 20 },
   scrollContent: { padding: 16 },
   searchInput: {
     borderWidth: 1,

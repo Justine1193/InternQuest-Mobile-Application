@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import { RouteProp, useNavigation } from '@react-navigation/native';
 import { RootStackParamList } from '../App';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useSavedInternships } from '../context/SavedInternshipsContext';
+import MapView, { Marker } from 'react-native-maps';
 
 type InternshipDetailsScreenRouteProp = RouteProp<RootStackParamList, 'InternshipDetails'>;
 
@@ -26,6 +27,32 @@ const InternshipDetailsScreen: React.FC<Props> = ({ route }) => {
   const { savedInternships, toggleSaveInternship } = useSavedInternships();
 
   const isSaved = savedInternships.some(saved => saved.id === post.id);
+
+  const [coordinates, setCoordinates] = useState<{ latitude: number; longitude: number } | null>(null);
+
+  // Geocode the location to get latitude and longitude
+  useEffect(() => {
+    const geocodeLocation = async () => {
+      try {
+        const response = await fetch(
+          `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(
+            post.location
+          )}&key=AIzaSyBqKcbvrNZzqs8G43VkWb-THJYVozjI9T0`
+        );
+        const data = await response.json();
+        if (data.results && data.results.length > 0) {
+          const { lat, lng } = data.results[0].geometry.location;
+          setCoordinates({ latitude: lat, longitude: lng });
+        } else {
+          console.error('Geocoding failed: No results found.');
+        }
+      } catch (error) {
+        console.error('Geocoding error:', error);
+      }
+    };
+
+    geocodeLocation();
+  }, [post.location]);
 
   const openWebsite = () => {
     if (post.website) {
@@ -142,11 +169,48 @@ const InternshipDetailsScreen: React.FC<Props> = ({ route }) => {
 
         {/* Map Preview */}
         <TouchableOpacity onPress={openLocationInMaps}>
-          <Image
-            source={{ uri: 'https://via.placeholder.com/350x200?text=Tap+to+Open+Map' }}
-            style={styles.map}
-          />
-        </TouchableOpacity>
+  <View style={styles.map}>
+    {coordinates ? (
+      <MapView
+        style={{ flex: 1, borderRadius: 12 }}
+        initialRegion={{
+          latitude: coordinates.latitude,
+          longitude: coordinates.longitude,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        }}
+      >
+        <Marker
+          coordinate={{
+            latitude: coordinates.latitude,
+            longitude: coordinates.longitude,
+          }}
+          title={post.company}
+          description={post.location}
+        />
+      </MapView>
+    ) : (
+      <MapView
+        style={{ flex: 1, borderRadius: 12 }}
+        initialRegion={{
+          latitude: 14.5995, // Default to Manila
+          longitude: 120.9842,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        }}
+      >
+        <Marker
+          coordinate={{
+            latitude: 14.5995,
+            longitude: 120.9842,
+          }}
+          title="Default Location"
+          description="This is a fallback marker."
+        />
+      </MapView>
+    )}
+  </View>
+</TouchableOpacity>
 
         {/* Bottom Buttons */}
         <View style={styles.bottomButtons}>
@@ -164,6 +228,7 @@ const InternshipDetailsScreen: React.FC<Props> = ({ route }) => {
         </View>
       </ScrollView>
     </View>
+    
   );
 };
 

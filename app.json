@@ -1,0 +1,18 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "689f32c9-1322-4012-9df6-739adc309663"
+      }
+    },
+    "owner": "internquest",
+    "android": {
+      "package": "com.internquest.internquest",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyBqKcbvrNZzqs8G43VkWb-THJYVozjI9T0"
+        }
+      }
+    }
+  }
+}

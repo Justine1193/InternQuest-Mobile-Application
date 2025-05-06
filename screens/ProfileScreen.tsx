@@ -1,83 +1,132 @@
-import React from 'react';
-import { View, Text, Image, StyleSheet, ScrollView, Linking, TouchableOpacity, Alert } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  Image,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Alert,
+  ActivityIndicator,
+  Modal,
+  Linking, // Add this import
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import BottomNavbar from '../components/BottomNav';
+import { auth, db } from '../firebase';
+import { ref, onValue, update } from 'firebase/database';
 import * as Progress from 'react-native-progress';
 
-declare global {
-  interface User {
-    name?: string;
-  }
-  var user: User | undefined;
-}
-
 const ProfileScreen = ({ navigation }: { navigation: any }) => {
-  const handleAchievementClick = (achievement: string) => {
-    Alert.alert('Achievement Details', `You clicked on: ${achievement}`);
+  const [userData, setUserData] = useState<any>({
+    name: 'John Doe',
+    email: 'johndoe@example.com',
+    phone: '+1234567890',
+    linkedin: 'https://linkedin.com/in/johndoe',
+    skills: ['React Native', 'Firebase', 'JavaScript'],
+    avatar: 'https://randomuser.me/api/portraits/men/75.jpg',
+    course: 'BS Computer Science',
+    hours: 120,
+    company: 'TechCorp',
+    startDate: 'April 01, 2025',
+    endDate: 'June 30, 2025',
+    progress: 0.4,
+  });
+  const [loading, setLoading] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
+
+  const [name, setName] = useState(userData.name);
+  const [email, setEmail] = useState(userData.email);
+  const [phone, setPhone] = useState(userData.phone);
+  const [linkedin, setLinkedIn] = useState(userData.linkedin);
+  const [skills, setSkills] = useState(userData.skills);
+
+  const handleSaveProfile = () => {
+    const updatedData = {
+      ...userData,
+      name,
+      email,
+      phone,
+      linkedin,
+      skills,
+    };
+    setUserData(updatedData);
+    Alert.alert('Success', 'Profile updated successfully!');
+    setModalVisible(false);
   };
 
-  const handleEditProfile = () => {
-    Alert.alert(
-      'Edit Profile',
-      'Are you sure you want to edit your profile?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Yes', onPress: () => navigation.navigate('EditProfile') },
-      ]
+  const handleEmailPress = () => {
+    if (userData.email) {
+      Linking.openURL(`mailto:${userData.email}`);
+    } else {
+      Alert.alert('Error', 'Email not available.');
+    }
+  };
+
+  const handlePhonePress = () => {
+    if (userData.phone) {
+      Linking.openURL(`tel:${userData.phone}`);
+    } else {
+      Alert.alert('Error', 'Phone number not available.');
+    }
+  };
+
+  const handleLinkedInPress = () => {
+    if (userData.linkedin) {
+      Linking.openURL(userData.linkedin);
+    } else {
+      Alert.alert('Error', 'LinkedIn profile not available.');
+    }
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#007aff" />
+      </View>
     );
-  };
-
-  const handleEmailClick = () => {
-    Linking.openURL('mailto:google@gmail.com');
-  };
-
-  const handlePhoneClick = () => {
-    Linking.openURL('tel:+1234567890');
-  };
-
-  const handleLinkedInClick = () => {
-    Linking.openURL('https://linkedin.com/in/ashleywatson');
-  };
+  }
 
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
+        <Text style={styles.header}>Profile</Text>
+
         {/* Profile Header */}
         <View style={styles.profileHeader}>
           <Image
-            source={{ uri: 'https://randomuser.me/api/portraits/men/75.jpg' }}
+            source={{ uri: userData.avatar }}
             style={styles.avatar}
           />
-          <Text style={styles.name}>
-            {globalThis.user?.name || 'Ashley Watson'}
-          </Text>
-          <Text style={styles.subtext}>BSIT</Text>
+          <Text style={styles.name}>{userData.name}</Text>
+          <Text style={styles.subtext}>{userData.course}</Text>
         </View>
 
         {/* Stats Section */}
         <View style={styles.statsContainer}>
           <View style={styles.statCard}>
             <Text style={styles.statLabel}>Hours</Text>
-            <Text style={styles.statValue}>36 hours</Text>
+            <Text style={styles.statValue}>{userData.hours} hours</Text>
           </View>
           <View style={styles.statCard}>
             <Text style={styles.statLabel}>Company</Text>
-            <Text style={styles.statValue}>Google</Text>
+            <Text style={styles.statValue}>{userData.company}</Text>
           </View>
         </View>
 
         {/* Progress Section */}
-        <View style={styles.detailsContainer}>
+        <View style={styles.progressContainer}>
           <Text style={styles.sectionHeader}>Internship Progress</Text>
           <Text style={styles.detailLabel}>Start Date:</Text>
-          <Text style={styles.detailValue}>April 01, 2025</Text>
+          <Text style={styles.detailValue}>{userData.startDate}</Text>
 
           <Text style={styles.detailLabel}>End Date:</Text>
-          <Text style={styles.detailValue}>June 11, 2025</Text>
+          <Text style={styles.detailValue}>{userData.endDate}</Text>
 
           <View style={styles.progressBarContainer}>
             <Progress.Bar
-              progress={0.08}
+              progress={userData.progress}
               width={null}
               height={20}
               color="#0080ff"
@@ -85,66 +134,98 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
               borderRadius={10}
               borderWidth={0}
             />
-            <Text style={styles.progressText}>Progress: 8% goal completed</Text>
+            <Text style={styles.progressText}>
+              Progress: {Math.round(userData.progress * 100)}% goal completed
+            </Text>
           </View>
         </View>
 
         {/* Work Details Section */}
         <View style={styles.workDetails}>
           <Text style={styles.sectionHeader}>Work Details</Text>
-          <Text style={styles.detailLabel}>Company Name:</Text>
-          <Text style={styles.detailValue}>Google</Text>
-
-          <Text style={styles.detailLabel}>Company Website:</Text>
-          <TouchableOpacity onPress={() => Linking.openURL('https://google.com')}>
-            <Text style={[styles.detailValue, styles.link]}>Google Inc.</Text>
-          </TouchableOpacity>
-
-          <Text style={styles.detailLabel}>Worked Field:</Text>
-          <Text style={styles.detailValue}>Programmer</Text>
-
           <Text style={styles.detailLabel}>Email:</Text>
-          <TouchableOpacity onPress={handleEmailClick}>
-            <Text style={[styles.detailValue, styles.link]}>google@gmail.com</Text>
+          <TouchableOpacity onPress={handleEmailPress}>
+            <Text style={[styles.detailValue, styles.link]}>{userData.email}</Text>
           </TouchableOpacity>
 
           <Text style={styles.detailLabel}>Phone:</Text>
-          <TouchableOpacity onPress={handlePhoneClick}>
-            <Text style={[styles.detailValue, styles.link]}>+1 234 567 890</Text>
+          <TouchableOpacity onPress={handlePhonePress}>
+            <Text style={[styles.detailValue, styles.link]}>{userData.phone}</Text>
           </TouchableOpacity>
 
           <Text style={styles.detailLabel}>LinkedIn:</Text>
-          <TouchableOpacity onPress={handleLinkedInClick}>
-            <Text style={[styles.detailValue, styles.link]}>linkedin.com/in/ashleywatson</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Achievements Section */}
-        <View style={styles.achievementsContainer}>
-          <Text style={styles.sectionHeader}>Achievements</Text>
-          <TouchableOpacity onPress={() => handleAchievementClick('Completed 100 hours of internship')}>
-            <View style={styles.achievementItem}>
-              <Ionicons name="trophy" size={20} color="#FFD700" />
-              <Text style={styles.achievementText}>Completed 100 hours of internship</Text>
-            </View>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => handleAchievementClick('Received Outstanding Intern Award')}>
-            <View style={styles.achievementItem}>
-              <Ionicons name="medal" size={20} color="#C0C0C0" />
-              <Text style={styles.achievementText}>Received Outstanding Intern Award</Text>
-            </View>
+          <TouchableOpacity onPress={handleLinkedInPress}>
+            <Text style={[styles.detailValue, styles.link]}>{userData.linkedin}</Text>
           </TouchableOpacity>
         </View>
 
         {/* Edit Profile Button */}
         <TouchableOpacity
-          style={styles.editProfileButton}
-          onPress={handleEditProfile}
+          style={styles.button}
+          onPress={() => setModalVisible(true)}
         >
           <Ionicons name="pencil" size={20} color="#fff" />
-          <Text style={styles.editProfileButtonText}>Edit Profile</Text>
+          <Text style={styles.buttonText}>Edit Profile</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Edit Profile Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={modalVisible}
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalHeader}>Edit Profile</Text>
+
+            <Text style={styles.label}>Name</Text>
+            <TextInput
+              style={styles.input}
+              value={name}
+              onChangeText={setName}
+            />
+
+            <Text style={styles.label}>Email</Text>
+            <TextInput
+              style={styles.input}
+              value={email}
+              onChangeText={setEmail}
+            />
+
+            <Text style={styles.label}>Phone</Text>
+            <TextInput
+              style={styles.input}
+              value={phone}
+              onChangeText={setPhone}
+            />
+
+            <Text style={styles.label}>LinkedIn</Text>
+            <TextInput
+              style={styles.input}
+              value={linkedin}
+              onChangeText={setLinkedIn}
+            />
+
+            {/* Save and Cancel Buttons */}
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.saveButton]}
+                onPress={handleSaveProfile}
+              >
+                <Text style={styles.modalButtonText}>Save</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => setModalVisible(false)}
+              >
+                <Text style={styles.modalButtonText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Bottom Navbar */}
       <BottomNavbar navigation={navigation} />
@@ -156,11 +237,17 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff',
-    paddingTop: 30
+    paddingTop: 30,
   },
   scrollContent: {
     paddingHorizontal: 15,
     paddingBottom: 20,
+  },
+  header: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 20,
+    textAlign: 'center',
   },
   profileHeader: {
     alignItems: 'center',
@@ -205,14 +292,14 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginTop: 5,
   },
-  detailsContainer: {
+  workDetails: {
     marginTop: 20,
-    marginBottom: 25,
+    marginBottom: 30,
   },
   sectionHeader: {
     fontSize: 18,
     fontWeight: 'bold',
-    marginBottom: 15,
+    marginBottom: 10,
     color: '#333',
   },
   detailLabel: {
@@ -225,54 +312,104 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginBottom: 10,
   },
-  progressBarContainer: {
-    marginVertical: 25,
-    paddingHorizontal: 10,
-  },
-  progressText: {
-    fontSize: 14,
-    textAlign: 'center',
-    color: '#555',
-    marginTop: 10,
-  },
-  workDetails: {
+  progressContainer: {
     marginTop: 20,
     marginBottom: 30,
   },
-  link: {
-    color: '#0080ff',
-    textDecorationLine: 'underline',
+  progressBarContainer: {
+    marginTop: 10,
   },
-  achievementsContainer: {
-    marginTop: 25,
-    marginBottom: 30,
-  },
-  achievementItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  achievementText: {
-    marginLeft: 10,
+  progressText: {
+    marginTop: 10,
     fontSize: 14,
     color: '#444',
+    textAlign: 'center',
   },
-  editProfileButton: {
+  button: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#007aff',
-    padding: 12,
+    paddingVertical: 12,
     borderRadius: 5,
-    marginHorizontal: 20,
     marginTop: 10,
-    marginBottom: 20,
   },
-  editProfileButtonText: {
+  buttonText: {
     marginLeft: 10,
     color: '#fff',
     fontSize: 14,
     fontWeight: 'bold',
+  },
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalContent: {
+    width: '90%',
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 5,
+  },
+  modalHeader: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  input: {
+    fontSize: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 5,
+    backgroundColor: '#f9f9f9',
+    marginBottom: 15,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 20,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 5,
+    alignItems: 'center',
+    marginHorizontal: 5,
+  },
+  saveButton: {
+    backgroundColor: '#007aff',
+  },
+  cancelButton: {
+    backgroundColor: '#d9534f',
+  },
+  modalButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  label: {
+    fontSize: 14,
+    color: '#444',
+    marginBottom: 5,
+    marginTop: 10,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  link: {
+    color: '#007aff',
+    textDecorationLine: 'underline',
   },
 });
 

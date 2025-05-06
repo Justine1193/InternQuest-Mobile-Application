@@ -57,10 +57,7 @@ const SignUpScreen: React.FC = () => {
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      style={styles.container}
-    >
+    <View style={styles.container}>
       <Image
         source={require("../assets/InternQuest.png")}
         style={styles.logo}
@@ -90,13 +87,12 @@ const SignUpScreen: React.FC = () => {
           value={contact}
           keyboardType="phone-pad"
           onChangeText={(text) => {
-          // Only allow digits and limit input to 11 characters
-          if (/^\d{0,11}$/.test(text)) {
-          setContact(text);
-    }
-  }}
-/>
-
+            // Only allow digits and limit input to 11 characters
+            if (/^\d{0,11}$/.test(text)) {
+              setContact(text);
+            }
+          }}
+        />
       </View>
 
       <View style={styles.inputWrapper}>
@@ -140,7 +136,7 @@ const SignUpScreen: React.FC = () => {
           </Text>
         </Text>
       </View>
-    </KeyboardAvoidingView>
+    </View>
   );
 };
 

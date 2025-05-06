@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { StatusBar } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 
@@ -19,6 +20,8 @@ import OJTTrackerScreen from './screens/OJTTrackerScreen';
 
 // Shared Post Type
 export type Post = {
+  latitude: number;
+  longitude: number;
   id: string;
   company: string;
   description: string;
@@ -34,15 +37,15 @@ export type Post = {
 // Stack Param List
 export type RootStackParamList = {
   Launch: undefined;
+  Home: undefined;
+  SignIn: undefined;
   SignUp: undefined;
   SetupAccount: undefined;
-  SignIn: undefined;
-  Home: undefined;
-  Profile: undefined;
+  InternshipDetails: { post: Post };
+  OJTTracker: { post: Post };
   Notifications: undefined;
   Settings: undefined;
-  InternshipDetails: { post: Post };
-  OJTTracker: { post: Post }; // Updated to accept a post parameter
+  Profile: undefined;
 };
 
 const Stack = createStackNavigator<RootStackParamList>();
@@ -59,6 +62,8 @@ const App: React.FC = () => {
   return (
     <SavedInternshipsProvider>
       <NavigationContainer>
+        {/* Global StatusBar configuration */}
+        <StatusBar translucent backgroundColor="transparent" barStyle="dark-content" />
         <Stack.Navigator screenOptions={{ headerShown: false }}>
           {isLoading ? (
             <Stack.Screen name="Launch" component={LaunchScreen} />

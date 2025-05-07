@@ -70,19 +70,19 @@ const App: React.FC = () => {
           ) : (
             <>
               <Stack.Screen name="SignIn">
-              {props => <SignInScreen {...props} setIsLoggedIn={setIsLoggedIn} />}
+                {props => <SignInScreen {...props} setIsLoggedIn={setIsLoggedIn} />}
               </Stack.Screen>
               <Stack.Screen name="SignUp" component={SignUpScreen} />
               <Stack.Screen name="SetupAccount">
-              {props => (
-                <SetupAccountScreen
-                {...props}
-                onSetupComplete={() => {
-                  setIsLoggedIn(true);
-                  props.navigation.replace('Home');
-                }}
-                />
-              )}
+                {props => (
+                  <SetupAccountScreen
+                    {...props}
+                    onSetupComplete={() => {
+                      setIsLoggedIn(true);
+                      props.navigation.replace('Home');
+                    }}
+                  />
+                )}
               </Stack.Screen>
               <Stack.Screen name="Home" component={HomeScreen} />
               <Stack.Screen name="Profile" component={ProfileScreen} />

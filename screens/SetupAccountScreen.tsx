@@ -13,7 +13,7 @@ import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../App';
 import { ref, set } from 'firebase/database';
-import { auth, db } from '../firebase';
+import { auth, db } from '../firebase/config';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'SetupAccount'>;
 

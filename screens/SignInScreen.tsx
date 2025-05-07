@@ -17,7 +17,7 @@ import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useNavigation } from "@react-navigation/native";
 import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "../firebase";
+import { auth } from "../firebase/config";
 
 type RootStackParamList = {
   SignIn: undefined;
@@ -61,7 +61,7 @@ const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       console.log("✅ User signed in:", userCredential.user.uid);
       setIsLoggedIn(true);
-      navigation.replace("Home"); // <-- Navigate to Home after login
+      navigation.replace("Home"); // Navigate to Home after login
     } catch (error: any) {
       Alert.alert("Login Failed", error.message || "Invalid email or password.");
       console.error("Login error:", error.message);
@@ -93,6 +93,8 @@ const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
                 onChangeText={setEmail}
                 keyboardType="email-address"
                 autoCapitalize="none"
+                autoCorrect={false}
+                textContentType="emailAddress"
               />
             </View>
 
@@ -106,6 +108,8 @@ const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
+                autoCorrect={false}
+                textContentType="password"
               />
               <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
                 <Icon
@@ -154,7 +158,7 @@ const styles = StyleSheet.create({
     width: 200,
     height: 200,
     alignSelf: "center",
-    marginBottom: 0,
+    marginBottom: 20,
   },
   label: {
     fontSize: 14,

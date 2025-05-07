@@ -34,20 +34,29 @@ const InternshipDetailsScreen: React.FC<Props> = ({ route }) => {
   useEffect(() => {
     const geocodeLocation = async () => {
       try {
+        if (!post.location) {
+          console.error('No location provided');
+          Alert.alert('Error', 'No location provided for this internship.');
+          return;
+        }
+
+        console.log('Geocoding location:', post.location); // Debug log for location
+
         const response = await fetch(
-          `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(
-            post.location
-          )}&key=AIzaSyBqKcbvrNZzqs8G43VkWb-THJYVozjI9T0`
+          `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(post.location)}&key=AIzaSyBqKcbvrNZzqs8G43VkWb-THJYVozjI9T0`
         );
         const data = await response.json();
-        if (data.results && data.results.length > 0) {
+
+        if (data.status === 'OK' && data.results.length > 0) {
           const { lat, lng } = data.results[0].geometry.location;
           setCoordinates({ latitude: lat, longitude: lng });
         } else {
-          console.error('Geocoding failed: No results found.');
+          console.error('Geocoding failed: No results found for', post.location);
+          Alert.alert('Geocoding Error', 'Unable to find coordinates for the given location.');
         }
       } catch (error) {
         console.error('Geocoding error:', error);
+        Alert.alert('Geocoding Error', 'There was an issue with retrieving the location.');
       }
     };
 
@@ -109,33 +118,33 @@ const InternshipDetailsScreen: React.FC<Props> = ({ route }) => {
         </View>
 
         {/* Company Overview */}
-<View style={styles.card}>
-  <Text style={styles.cardTitle}>Company Overview</Text>
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Company Overview</Text>
 
-  <View style={styles.infoRow}>
-    <Text style={styles.infoLabel}>Website:</Text>
-    <TouchableOpacity onPress={openWebsite}>
-      <Text style={styles.link}>{post.website || 'N/A'}</Text>
-    </TouchableOpacity>
-  </View>
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Website:</Text>
+            <TouchableOpacity onPress={openWebsite}>
+              <Text style={styles.link}>{post.website || 'N/A'}</Text>
+            </TouchableOpacity>
+          </View>
 
-  <View style={styles.infoRow}>
-    <Text style={styles.infoLabel}>Industry:</Text>
-    <Text style={styles.detailText}>{post.industry || 'N/A'}</Text>
-  </View>
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Industry:</Text>
+            <Text style={styles.detailText}>{post.industry || 'N/A'}</Text>
+          </View>
 
-  <View style={styles.infoRow}>
-    <Text style={styles.infoLabel}>Location:</Text>
-    <Text style={styles.detailText}>{post.location || 'N/A'}</Text>
-  </View>
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Location:</Text>
+            <Text style={styles.detailText}>{post.location || 'N/A'}</Text>
+          </View>
 
-  <View style={styles.infoRow}>
-    <Text style={styles.infoLabel}>Email:</Text>
-    <TouchableOpacity onPress={openEmail}>
-      <Text style={styles.link}>{post.email || 'N/A'}</Text>
-    </TouchableOpacity>
-  </View>
-</View>
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Email:</Text>
+            <TouchableOpacity onPress={openEmail}>
+              <Text style={styles.link}>{post.email || 'N/A'}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
 
         {/* Skills Required */}
         <View style={styles.card}>
@@ -143,9 +152,9 @@ const InternshipDetailsScreen: React.FC<Props> = ({ route }) => {
           {post.tags && post.tags.length > 0 ? (
             <View style={styles.skillsContainer}>
               {post.tags.map((tag, index) => (
-          <View key={index} style={styles.skillPill}>
-            <Text style={styles.skillPillText}>{tag}</Text>
-          </View>
+                <View key={index} style={styles.skillPill}>
+                  <Text style={styles.skillPillText}>{tag}</Text>
+                </View>
               ))}
             </View>
           ) : (
@@ -169,48 +178,48 @@ const InternshipDetailsScreen: React.FC<Props> = ({ route }) => {
 
         {/* Map Preview */}
         <TouchableOpacity onPress={openLocationInMaps}>
-  <View style={styles.map}>
-    {coordinates ? (
-      <MapView
-        style={{ flex: 1, borderRadius: 12 }}
-        initialRegion={{
-          latitude: coordinates.latitude,
-          longitude: coordinates.longitude,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
-        }}
-      >
-        <Marker
-          coordinate={{
-            latitude: coordinates.latitude,
-            longitude: coordinates.longitude,
-          }}
-          title={post.company}
-          description={post.location}
-        />
-      </MapView>
-    ) : (
-      <MapView
-        style={{ flex: 1, borderRadius: 12 }}
-        initialRegion={{
-          latitude: 14.5995, // Default to Manila
-          longitude: 120.9842,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
-        }}
-      >
-        <Marker
-          coordinate={{
-            latitude: 14.5995,
-            longitude: 120.9842,
-          }}
-          title="Default Location"
-          description="This is a fallback marker."
-        />
-      </MapView>
-    )}
-  </View>
-</TouchableOpacity>
+          <View style={styles.map}>
+            {coordinates ? (
+              <MapView
+                style={{ flex: 1, borderRadius: 12 }}
+                initialRegion={{
+                  latitude: coordinates.latitude,
+                  longitude: coordinates.longitude,
+                  latitudeDelta: 0.01,
+                  longitudeDelta: 0.01,
+                }}
+              >
+                <Marker
+                  coordinate={{
+                    latitude: coordinates.latitude,
+                    longitude: coordinates.longitude,
+                  }}
+                  title={post.company}
+                  description={post.location}
+                />
+              </MapView>
+            ) : (
+              <MapView
+                style={{ flex: 1, borderRadius: 12 }}
+                initialRegion={{
+                  latitude: 14.5995, // Default to Manila
+                  longitude: 120.9842,
+                  latitudeDelta: 0.01,
+                  longitudeDelta: 0.01,
+                }}
+              >
+                <Marker
+                  coordinate={{
+                    latitude: 14.5995,
+                    longitude: 120.9842,
+                  }}
+                  title="Default Location"
+                  description="This is a fallback marker."
+                />
+              </MapView>
+            )}
+          </View>
+        </TouchableOpacity>
 
         {/* Bottom Buttons */}
         <View style={styles.bottomButtons}>
@@ -228,7 +237,6 @@ const InternshipDetailsScreen: React.FC<Props> = ({ route }) => {
         </View>
       </ScrollView>
     </View>
-    
   );
 };
 
@@ -322,29 +330,23 @@ const styles = StyleSheet.create({
   },
   infoRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 6,
-    justifyContent: 'space-between',
+    flexWrap: 'wrap',
   },
   infoLabel: {
     fontWeight: 'bold',
     color: '#333',
     fontSize: 14,
+    marginRight: 8,
+    maxWidth: 100,
   },
+  
   skillsContainer: {
     marginTop: 8,
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-  },
-  skill: {
-    fontSize: 14,
-    color: '#444',
-    marginBottom: 4,
-  },
-  noSkillsText: {
-    fontSize: 14,
-    color: '#888',
   },
   skillPill: {
     backgroundColor: '#e0f2f1',
@@ -361,6 +363,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
   },
+  noSkillsText: {
+    fontSize: 14,
+    color: '#888',
+    fontStyle: 'italic',
+    textAlign: 'center',
+    marginTop: 8,
+  },
 });
 
 export default InternshipDetailsScreen;
+

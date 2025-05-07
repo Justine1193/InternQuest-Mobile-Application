@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import BottomNavbar from '../components/BottomNav';
-import { auth, db } from '../firebase';
+import { auth, db } from '../firebase/config';
 import { ref, onValue, update } from 'firebase/database';
 import * as Progress from 'react-native-progress';
 

@@ -7,143 +7,68 @@ import {
   ScrollView,
   StyleSheet,
   StatusBar,
+  RefreshControl,
 } from 'react-native';
 import BottomNavbar from '../components/BottomNav';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList, Post } from '../App';
 import { Ionicons } from '@expo/vector-icons';
 import { useSavedInternships } from '../context/SavedInternshipsContext';
+import { collection, getDocs } from 'firebase/firestore';
+import { firestore } from '../firebase/config';
 
 type Props = {
   navigation: StackNavigationProp<RootStackParamList, 'Home'>;
 };
 
-// Mock user preferences from Setup Account Screen
 const userPreferences = ['Programming', 'AI', 'React Native', 'Cloud'];
-
-const mockPosts: Post[] = [
-  {
-    id: '1',
-    company: 'Google',
-    description: 'Google is committed to supporting the Philippine government’s ambition for a Digital Philippines.',
-    category: 'Tech',
-    location: 'Taguig, Metro Manila',
-    industry: 'Technology',
-    tags: ['Programming', 'Web development', 'Databases'],
-    latitude: 0,
-    longitude: 0
-  },
-  {
-    id: '2',
-    company: 'Clinchoice',
-    description: 'Clinchoice is a global clinical stage CRO with over 1800 professionals in 15+ countries.',
-    category: 'Medical',
-    location: 'Ortigas Center, Pasig City',
-    industry: 'Pharmaceuticals, Biotechnology & Medical',
-    tags: ['Programming', 'Web development', 'Databases'],
-    latitude: 0,
-    longitude: 0
-  },
-  {
-    id: '3',
-    company: 'Amdocs',
-    description: 'Amdocs helps those who build the future to make it amazing.',
-    category: 'Tech',
-    location: 'Pasig City',
-    industry: 'Telecommunications',
-    tags: ['Java', 'React Native', 'Cloud'],
-    latitude: 0,
-    longitude: 0
-  },
-  {
-    id: '4',
-    company: 'Accenture',
-    description: 'Join Accenture and help transform leading organizations and communities around the world.',
-    category: 'Consulting',
-    location: 'Mandaluyong City',
-    industry: 'IT Services & Consulting',
-    tags: ['Business Analysis', 'Agile', 'Scrum'],
-    latitude: 0,
-    longitude: 0
-  },
-  {
-    id: '5',
-    company: 'IBM',
-    description: 'IBM is looking for interns who want to build a smarter planet.',
-    category: 'Tech',
-    location: 'Quezon City',
-    industry: 'Technology & Innovation',
-    tags: ['AI', 'Python', 'Machine Learning'],
-    latitude: 0,
-    longitude: 0
-  },
-  {
-    id: '6',
-    company: 'Ayala Corporation',
-    description: 'An opportunity to work in one of the oldest and most respected conglomerates in the Philippines.',
-    category: 'Business',
-    location: 'Makati City',
-    industry: 'Real Estate & Holdings',
-    tags: ['Finance', 'Strategy', 'Marketing'],
-    latitude: 0,
-    longitude: 0
-  },
-  {
-    id: '7',
-    company: 'PLDT',
-    description: 'Be a part of the largest telecommunications and digital services company in the Philippines.',
-    category: 'Telecom',
-    location: 'Makati City',
-    industry: 'Telecommunications',
-    tags: ['Networking', 'Data Science', 'Security'],
-    latitude: 0,
-    longitude: 0
-  },
-  {
-    id: '8',
-    company: 'Nestlé Philippines',
-    description: 'Work with a leading nutrition, health, and wellness company.',
-    category: 'Food & Beverage',
-    location: 'Rockwell, Makati',
-    industry: 'FMCG',
-    tags: ['Marketing', 'Supply Chain', 'Sales'],
-    latitude: 0,
-    longitude: 0
-  },
-  {
-    id: '9',
-    company: 'GCash',
-    description: 'Join GCash’s mission to make digital finance accessible for every Filipino.',
-    category: 'Fintech',
-    location: 'BGC, Taguig',
-    industry: 'Financial Technology',
-    tags: ['Mobile Dev', 'UI/UX', 'React Native'],
-    latitude: 0,
-    longitude: 0
-  },
-  {
-    id: '10',
-    company: 'UNDP Philippines',
-    description: 'Support sustainable development projects and gain experience in the NGO sector.',
-    category: 'Non-profit',
-    location: 'Pasig City',
-    industry: 'International Development',
-    tags: ['Project Management', 'Research', 'Policy Writing'],
-    latitude: 0,
-    longitude: 0
-  },
-];
-
 
 const HomeScreen: React.FC<Props> = ({ navigation }) => {
   const [searchText, setSearchText] = useState('');
-  const [activeFilter, setActiveFilter] = useState<string | null>('Best Matches'); // Default filter
+  const [activeFilter, setActiveFilter] = useState<string | null>('Best Matches');
   const [showDropdown, setShowDropdown] = useState(false);
-  const [selectedTags, setSelectedTags] = useState<string[]>([]); // State for selected tags
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [companies, setCompanies] = useState<Post[]>([]);
   const { savedInternships, toggleSaveInternship } = useSavedInternships();
+  const [expanded, setExpanded] = useState<{ [key: string]: boolean }>({});
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchCompanies = async () => {
+    try {
+      setRefreshing(true);
+      const querySnapshot = await getDocs(collection(firestore, 'companies'));
+      const companyData: Post[] = querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          company: data.companyName || '',
+          description: data.companyDescription || '',
+          category: data.category || '',
+          location: data.companyAddress || '',
+          industry: data.industry || '',
+          tags: data.skillsREq || [],
+          website: data.companyWeb || '',
+          email: data.companyEmail || '',
+          moa: data.moa || '',
+          modeOfWork: Array.isArray(data.modeofwork) ? data.modeofwork[0] : data.modeofwork || '',
+          latitude: data.latitude || 0,
+          longitude: data.longitude || 0,
+        };
+      });
+      setCompanies(companyData);
+    } catch (error) {
+      console.error('Error fetching companies: ', error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchCompanies();
+  }, []);
 
   const handleFilterPress = (filter: string) => {
-    setActiveFilter(activeFilter === filter ? null : filter); // Toggle filter
+    setActiveFilter(activeFilter === filter ? null : filter);
     setShowDropdown(false);
   };
 
@@ -153,31 +78,36 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
     );
   };
 
-  const filteredPosts = (activeFilter === 'Saved Internship' ? savedInternships : mockPosts)
+  const filteredPosts = (activeFilter === 'Saved Internship' ? savedInternships : companies)
     .filter(post => {
       if (selectedTags.length > 0) {
-        // Include posts that match any of the selected tags
         return post.tags.some(tag => selectedTags.includes(tag));
-      }
-      if (activeFilter && !['Best Matches', 'Most Recent', 'Saved Internship'].includes(activeFilter)) {
-        return post.tags.includes(activeFilter) && post.company.toLowerCase().includes(searchText.toLowerCase());
       }
       return post.company.toLowerCase().includes(searchText.toLowerCase());
     })
     .sort((a, b) => {
       if (activeFilter === 'Best Matches') {
-        // Sort by the number of matching tags with user preferences
         const aMatches = a.tags.filter(tag => userPreferences.includes(tag)).length;
         const bMatches = b.tags.filter(tag => userPreferences.includes(tag)).length;
-        return bMatches - aMatches; // Higher matches come first
+        return bMatches - aMatches;
       }
-      return 0; // No sorting for other filters
+      return 0;
     });
+
+  const handleToggleExpand = (id: string) => {
+    setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
+  };
 
   return (
     <View style={styles.container}>
       <StatusBar translucent backgroundColor="transparent" barStyle="dark-content" />
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={fetchCompanies} />
+        }
+      >
         <TextInput
           style={styles.searchInput}
           placeholder="Search"
@@ -194,10 +124,9 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
               <Text style={[styles.filterPillText, activeFilter === label && styles.activeFilterText]}>
                 {label}
               </Text>
-              {activeFilter === label && <Ionicons name="checkmark" size={16} color="#007aff" />}
+              {activeFilter === label && <Ionicons name="checkmark" size={16} color="#fff" />}
             </TouchableOpacity>
           ))}
-          {/* Tags dropdown trigger */}
           <TouchableOpacity
             style={styles.filterPill}
             onPress={() => setShowDropdown(!showDropdown)}
@@ -205,40 +134,19 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
             <Text style={styles.filterPillText}>Tags ▼</Text>
           </TouchableOpacity>
         </View>
-        {/* Dropdown content */}
+
         {showDropdown && (
-          <View
-            style={{
-              flexDirection: 'row',
-              flexWrap: 'wrap',
-              alignItems: 'center',
-              marginLeft: 0,
-              marginTop: 8,
-              marginBottom: 8,
-              gap: 8,
-            }}
-          >
-            {Array.from(new Set(mockPosts.flatMap(post => post.tags))).map((tag, idx) => (
+          <View style={styles.tagDropdown}>
+            {Array.from(new Set(companies.flatMap(post => post.tags))).map((tag, idx) => (
               <TouchableOpacity
                 key={idx}
-                style={[
-                  styles.filterPill,
-                  selectedTags.includes(tag) && styles.activeFilter, // Highlight selected tags
-                  { marginRight: 0, marginBottom: 0 },
-                ]}
-                onPress={() => handleTagToggle(tag)} // Toggle tag selection
+                style={[styles.filterPill, selectedTags.includes(tag) && styles.activeFilter]}
+                onPress={() => handleTagToggle(tag)}
               >
-                <Text
-                  style={[
-                    styles.filterPillText,
-                    selectedTags.includes(tag) && styles.activeFilterText, // Highlight selected tags
-                  ]}
-                >
+                <Text style={[styles.filterPillText, selectedTags.includes(tag) && styles.activeFilterText]}>
                   {tag}
                 </Text>
-                {selectedTags.includes(tag) && (
-                  <Ionicons name="checkmark" size={16} color="#007aff" />
-                )}
+                {selectedTags.includes(tag) && <Ionicons name="checkmark" size={16} color="#fff" />}
               </TouchableOpacity>
             ))}
           </View>
@@ -262,7 +170,15 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
             </View>
             <Text style={styles.metaText}>Industry: {post.industry}</Text>
             <Text style={styles.metaText}>Location: {post.location}</Text>
-            <Text numberOfLines={2} style={styles.description}>{post.description}</Text>
+
+            <View style={styles.descriptionContainer}>
+              <Text style={styles.description}>
+                {expanded[post.id] ? post.description : post.description.substring(0, 150) + '...'}
+              </Text>
+              <TouchableOpacity onPress={() => handleToggleExpand(post.id)}>
+                <Text style={styles.readMore}>{expanded[post.id] ? 'Show Less' : 'View More'}</Text>
+              </TouchableOpacity>
+            </View>
 
             <View style={styles.tagContainer}>
               {post.tags.map((tag, idx) => (
@@ -343,10 +259,18 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#555',
   },
+  descriptionContainer: {
+    marginTop: 10,
+  },
   description: {
-    fontSize: 13,
-    marginTop: 6,
+    fontSize: 14,
     color: '#333',
+  },
+  readMore: {
+    color: '#007aff',
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginTop: 4,
   },
   tagContainer: {
     flexDirection: 'row',
@@ -366,6 +290,13 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#888',
     marginTop: 10,
+  },
+  tagDropdown: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    marginTop: 8,
+    gap: 8,
   },
 });
 

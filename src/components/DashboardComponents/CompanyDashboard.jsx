@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import './dashboard.css';
+import './CompanyDashboard.css';
 import { IoCloseOutline, IoSearchOutline, IoSettingsOutline } from "react-icons/io5";
 import { db } from '../../../firebase'; 
 import { collection, addDoc, getDocs, deleteDoc, doc} from 'firebase/firestore';

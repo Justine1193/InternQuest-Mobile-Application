@@ -3,7 +3,7 @@ import './CompanyDashboard.css';
 import { IoCloseOutline, IoSearchOutline, IoSettingsOutline } from "react-icons/io5";
 import { db } from '../../../firebase'; 
 import { collection, addDoc, getDocs, deleteDoc, doc} from 'firebase/firestore';
-import logo from '../../assets/InternQuest.png'; // Adjust the path to your logo image
+import logo from '../../assets/InternQuest_Logo.png'; // Adjust the path to your logo image
 import { signOut } from 'firebase/auth';
 import { auth } from '../../../firebase';
 

@@ -11,7 +11,7 @@ const Dashboard = () => {
   const [formData, setFormData] = useState({
     companyName: '',
     description: '',
-    website: '', // Add this line
+    website: '', 
     industry: '',
     address: '',
     email: '',
@@ -20,29 +20,128 @@ const Dashboard = () => {
     modeOfWork: '',
   });
 
+  const [isLoading, setIsLoading] = useState(false);
   const [skills, setSkills] = useState([]);
   const [skillInput, setSkillInput] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
   const skillsInputRef = useRef(null);
 
   const suggestedSkills = [
-    'GUI Design',
-    'UX & UI Design',
-    'iPad UI Design',
-    'Web Design',
-    'Graphic Design',
+    // Business, Accountancy, and Entrepreneurship
+    'Financial Analysis',
+    'Financial Reporting',
+    'QuickBooks',
+    'Xero',
+    'Market Research',
+    'Market Analysis',
+    'Sales',
+    'Negotiation',
+    'Microsoft Excel (Advanced)',
+    'Business Communication',
+    'Strategic Planning',
+    'CRM Tools',
+    
+    // IT, Computer Science, and Multimedia
+    'HTML',
+    'CSS',
+    'JavaScript',
+    'React',
+    'Node.js',
+    'PHP',
+    'Python',
+    'MySQL',
+    'Firebase',
+    'MongoDB',
+    'UI Design',
+    'UX Design',
+    'Figma',
+    'Adobe XD',
+    'Git',
+    'GitHub',
+    'Unity',
+    'Unreal Engine',
+    'Blender',
+    'Maya',
+    'Cybersecurity',
+    
+    // Psychology, Education, and Public Administration
+    'Psychological Assessment',
+    'Report Writing',
+    'Documentation',
+    'Classroom Management',
+    'Lesson Planning',
+    'Google Forms',
+    'SurveyMonkey',
+    'Community Outreach',
+    'Public Speaking',
+    'Facilitation',
+    'Active Listening',
+    
+    // Medical, Nursing, and Science
+    'Laboratory Safety',
+    'Diagnostic Skills',
+    'Vital Signs',
+    'Health Documentation',
+    'EHR Systems',
+    'Patient Communication',
+    'Research Methods',
+    'Data Interpretation',
+    'Specimen Handling',
+    'First Aid',
+    'Emergency Response',
+    
+    // Communication, Journalism, and Arts
+    'Copywriting',
+    'Editing',
+    'Photography',
+    'Videography',
     'Adobe Photoshop',
-    'Adobe Illustrator',
-    'Video Editing'
-  ];
+    'Adobe Premiere Pro',
+    'Adobe InDesign',
+    'Social Media Content',
+    'News Writing',
+    'Press Releases',
+    'Public Relations',
+    'Media Strategy',
+    'Storyboarding',
+    'Scriptwriting',
+    'Podcasting',
+    'Audio Editing',
+    
+    // Engineering and Architecture
+    'AutoCAD',
+    'SketchUp',
+    'Revit',
+    'Structural Design',
+    'Project Documentation',
+    'Technical Drawing',
+    'Blueprint Reading',
+    'MS Project',
+    'Safety Compliance',
+    'Problem Solving',
+    'Critical Thinking',
+    'Technical Writing',
+    
+    // Music and Performing Arts
+    'Instrumental Proficiency',
+    'Vocal Proficiency',
+    'Music Notation',
+    'Music Arrangement',
+    'FL Studio',
+    'Logic Pro',
+    'Event Coordination',
+    'Ensemble Collaboration',
+    'Conducting',
+    'Music Teaching',
+    'Audio Recording',
+    'Audio Mixing'
+];
 
   const [overviewStats, setOverviewStats] = useState({
     totalCompanies: 0,
-    totalStudents: 350, // You can make this dynamic later
-    totalApplications: 0
+    totalStudents: 0, 
   });
 
-  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [selectedItems, setSelectedItems] = useState([]);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -52,34 +151,41 @@ const Dashboard = () => {
 
   // Add these states at the top with your other states
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(5);
+  const [itemsPerPage] = useState(8);
 
   useEffect(() => {
-    const fetchCompanies = async () => {
+    const fetchData = async () => {
       try {
         setIsLoading(true);
-        const querySnapshot = await getDocs(collection(db, 'companies'));
-        const companies = querySnapshot.docs.map(doc => ({
+        // Fetch companies
+        const companiesSnapshot = await getDocs(collection(db, 'companies'));
+        const companies = companiesSnapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
         }));
         setTableData(companies);
         
+        // Fetch students
+        const studentsSnapshot = await getDocs(collection(db, 'users')); // <-- use your actual collection name
+        const studentCount = studentsSnapshot.size;
+
         // Update overview stats
         setOverviewStats(prev => ({
           ...prev,
-          totalCompanies: companies.length
+          totalCompanies: companies.length,
+          totalStudents: studentCount, // This will now update dynamically!
+          totalApplications: 0
         }));
       } catch (err) {
-        console.error("Error fetching companies:", err);
-        setError("Failed to fetch companies. Please try again.");
+        console.error("Error fetching data:", err);
+        setError("Failed to fetch data. Please try again.");
       } finally {
         setIsLoading(false);
       }
     };
 
-    fetchCompanies();
-  }, []); 
+    fetchData();
+}, []);
 
   const handleSkillInput = (e) => {
     setSkillInput(e.target.value);
@@ -166,6 +272,7 @@ const Dashboard = () => {
         moa: false,
         modeOfWork: '',
       });
+
       setSkills([]); // Clear skills array
     } catch (err) {
       setError(err.message);
@@ -265,8 +372,8 @@ const Dashboard = () => {
             <img src={logo} alt="Logo" height="32" /> {/* Add your logo image */}
           </div>
           <div className="nav-links">
-            <a href="/manage-internships" className="nav-link active">Manage Internships</a>
-            <a href="/manage-students" className="nav-link">Manage Students</a>
+            <a href="/dashboard" className="nav-link active">Manage Internships</a>
+            <a href="/studentDashboard" className="nav-link">Manage Students</a>
           </div>
         </div>
         <div className="nav-right">

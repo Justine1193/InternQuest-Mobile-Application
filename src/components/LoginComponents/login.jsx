@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './login.css';
 import { FaRegEye, FaRegEyeSlash } from "react-icons/fa";
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { db } from '../../../firebase';
 
 const Login = () => {
   const navigate = useNavigate();
@@ -32,18 +34,37 @@ const Login = () => {
     }
     
     try {
-      // Add your authentication logic here
-      // For now, we'll just navigate to dashboard
-      navigate('/dashboard');
+      // Query the admins collection for the username
+      const adminsRef = collection(db, 'adminusers');
+      const q = query(adminsRef, where('username', '==', formData.username));
+      const querySnapshot = await getDocs(q);
+
+      if (querySnapshot.empty) {
+        setError('Invalid username or password');
+        return;
+      }
+
+      // Get the admin document
+      const adminDoc = querySnapshot.docs[0];
+      const adminData = adminDoc.data();
+
+      // Check if password matches
+      if (adminData.password === formData.password) {
+        // If credentials are correct, navigate to dashboard
+        navigate('/dashboard');
+      } else {
+        setError('Invalid username or password');
+      }
     } catch (err) {
-      setError('Invalid credentials');
+      console.error("Login error:", err);
+      setError('Invalid username or password');
     }
   };
 
   return (
     <div className="login-page">
       <div className="login-card">
-        <h1>InternQuest Management</h1>
+        <h1>InternQuest Admin</h1>
         <form className="login-form" onSubmit={handleSubmit}>
           {error && <div className="error-message">{error}</div>}
           <div className="form-group">
@@ -73,7 +94,7 @@ const Login = () => {
               </span>
             </div>
           </div>
-          <button type="submit" className="sign-in-button">Sign in</button>
+          <button type="submit" className="sign-in-button">Sign in as Admin</button>
         </form>
       </div>
     </div>

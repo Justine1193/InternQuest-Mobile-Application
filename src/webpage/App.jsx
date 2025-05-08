@@ -1,6 +1,6 @@
 import './App.css';
 import React from 'react';
-import Login from '../components/LoginComponents/Login.jsx';
+import Login from '../components/LoginComponents/AdminLogin.jsx';
 import Dashboard from '../components/DashboardComponents/CompanyDashboard.jsx'
 import StudentDashboard from '../components/StudentComponents/StudentDashboard.jsx';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';

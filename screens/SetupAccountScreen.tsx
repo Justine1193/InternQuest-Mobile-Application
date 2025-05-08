@@ -9,11 +9,10 @@ import {
   ScrollView,
 } from 'react-native';
 import RNPickerSelect from 'react-native-picker-select';
-import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../App';
-import { ref, set } from 'firebase/database';
-import { auth, db } from '../firebase/config';
+import { doc, setDoc } from 'firebase/firestore';
+import { auth, firestore } from '../firebase/config';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'SetupAccount'>;
 
@@ -75,8 +74,8 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
     };
 
     try {
-      const userRef = ref(db, 'users/' + auth.currentUser?.uid);
-      await set(userRef, userData);
+      const userDocRef = doc(firestore, 'users', auth.currentUser?.uid || 'unknown');
+      await setDoc(userDocRef, userData);
 
       alert('Account Setup Complete!');
       navigation.navigate('SignIn');
@@ -176,7 +175,6 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
           ))}
         </View>
 
-        {/* Skills Section with Search and Pills */}
         <Text style={styles.label}>Skills</Text>
         <TextInput
           style={styles.input}
@@ -189,28 +187,28 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
           {availableSkills
             .filter(
               (skill) =>
-          skill.toLowerCase().includes(skillSearch.toLowerCase()) &&
-          (skillSearch.length > 0 ? true : skills.includes(skill))
+                skill.toLowerCase().includes(skillSearch.toLowerCase()) &&
+                (skillSearch.length > 0 ? true : skills.includes(skill))
             )
             .map((skill) => (
               <TouchableOpacity
-          key={skill}
-          style={[
-            styles.skillPillSelected,
-            !skills.includes(skill) && { opacity: 0.5 },
-          ]}
-          onPress={() => {
-            if (skills.includes(skill)) {
-              setSkills((prev) => prev.filter((s) => s !== skill));
-            } else {
-              setSkills((prev) => [...prev, skill]);
-            }
-          }}
+                key={skill}
+                style={[
+                  styles.skillPillSelected,
+                  !skills.includes(skill) && { opacity: 0.5 },
+                ]}
+                onPress={() => {
+                  if (skills.includes(skill)) {
+                    setSkills((prev) => prev.filter((s) => s !== skill));
+                  } else {
+                    setSkills((prev) => [...prev, skill]);
+                  }
+                }}
               >
-          <Text style={styles.skillText}>
-            {skill}
-            {skills.includes(skill) ? ' ✕' : ' ＋'}
-          </Text>
+                <Text style={styles.skillText}>
+                  {skill}
+                  {skills.includes(skill) ? ' ✕' : ' ＋'}
+                </Text>
               </TouchableOpacity>
             ))}
         </View>
@@ -311,21 +309,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#00A8E8',
   },
   checkboxLabel: {
-    fontSize: 14,
-  },
-  skillSuggestionContainer: {
-    marginBottom: 10,
-  },
-  suggestionItem: {
-    backgroundColor: '#E0F7FF',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    marginVertical: 4,
-    alignSelf: 'flex-start',
-  },
-  suggestionText: {
-    color: '#0077B6',
     fontSize: 14,
   },
   skillPillContainer: {

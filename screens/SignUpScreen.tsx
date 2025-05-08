@@ -6,13 +6,11 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
-  KeyboardAvoidingView,
-  Platform,
   Image,
 } from "react-native";
 import { createUserWithEmailAndPassword } from "firebase/auth";
-import { ref, set } from "firebase/database";
-import { auth, db } from "../firebase/config";
+import { doc, setDoc } from "firebase/firestore";
+import { auth, firestore } from "../firebase/config";
 import { useNavigation } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "../App";
@@ -43,10 +41,10 @@ const SignUpScreen: React.FC = () => {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      await set(ref(db, `users/${user.uid}`), {
+      // Save user data to Firestore (not storing password for security reasons)
+      await setDoc(doc(firestore, "users", user.uid), {
         email,
         contact,
-        password,
       });
 
       Alert.alert("Success", "Account created!");

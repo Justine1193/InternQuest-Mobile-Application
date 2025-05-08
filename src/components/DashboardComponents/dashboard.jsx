@@ -2,8 +2,10 @@ import React, { useState, useRef, useEffect } from 'react';
 import './dashboard.css';
 import { IoCloseOutline, IoSearchOutline, IoSettingsOutline } from "react-icons/io5";
 import { db } from '../../../firebase'; 
-import { collection, addDoc, getDocs, deleteDoc, doc } from 'firebase/firestore';
+import { collection, addDoc, getDocs, deleteDoc, doc} from 'firebase/firestore';
 import logo from '../../assets/InternQuest.png'; // Adjust the path to your logo image
+import { signOut } from 'firebase/auth';
+import { auth } from '../../../firebase';
 
 const Dashboard = () => {
 
@@ -152,6 +154,8 @@ const Dashboard = () => {
   // Add these states at the top with your other states
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(8);
+
+  const [showLogout, setShowLogout] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -364,6 +368,15 @@ const Dashboard = () => {
 
   const currentItems = filteredData.slice(indexOfFirstItem, indexOfLastItem);
 
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      window.location.href = '/'; // Redirect to login page
+    } catch (error) {
+      alert('Logout failed!');
+    }
+  };
+
   return (
     <div className="dashboard-container">
       <nav className="top-nav">
@@ -376,8 +389,45 @@ const Dashboard = () => {
             <a href="/studentDashboard" className="nav-link">Manage Students</a>
           </div>
         </div>
-        <div className="nav-right">
-          <IoSettingsOutline className="settings-icon" />
+        <div className="nav-right" style={{ position: 'relative' }}>
+          <IoSettingsOutline
+            className="settings-icon"
+            onClick={() => setShowLogout(prev => !prev)}
+            style={{ cursor: 'pointer' }}
+          />
+          {showLogout && (
+            <div
+              style={{
+                position: 'absolute',
+                right: 0,
+                top: '40px',
+                background: '#fff',
+                border: '1px solid #ddd',
+                borderRadius: '4px',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                zIndex: 1000,
+                minWidth: '120px',
+                padding: '8px 0',
+              }}
+            >
+              <button
+                onClick={handleLogout}
+                style={{
+                  width: '100%',
+                  background: 'none',
+                  border: 'none',
+                  padding: '10px 16px',
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  fontSize: '16px',
+                  color: '#333',
+                  outline: 'none'
+                }}
+              >
+                Logout
+              </button>
+            </div>
+          )}
         </div>
       </nav>
 

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { IoSearchOutline, IoSettingsOutline } from "react-icons/io5";
 import { db } from '../../../firebase'; 
 import { collection, getDocs, addDoc } from 'firebase/firestore';
-import logo from '../../assets/InternQuest.png';
+import logo from '../../assets/InternQuest_Logo.png';
 import { signOut } from 'firebase/auth';
 import { auth } from '../../../firebase';
 

@@ -194,7 +194,9 @@
     padding: 1rem;
     margin: 2rem 0;
     overflow-x: auto;
-    max-height: calc(100vh - 300px); /* Adjust based on your needs */
+    max-height: calc(100vh - 100px); /* Adjust based on your needs */
+    width: 100%;
+    min-width: 1000px;
   }
   
   .overview-cards {
@@ -219,6 +221,7 @@
     width: 100%;
     min-width: 1000px; /* Ensures horizontal scroll on smaller screens */
     border-collapse: collapse;
+    table-layout: fixed;
   }
   
   /* Add responsive scrollbars */
@@ -591,24 +594,24 @@
 .skills-container {
   border: 1px solid #ddd;
   border-radius: 8px;
-  padding: 15px;    /* Increased padding */
+  padding: 15px;
   margin-top: 5px;
   margin-bottom: 15px;
   background-color: #fff;
-  width: 100%;      /* Full width of parent */
-  max-width: 700px; /* Maximum width */
-  min-height: 100px; /* Minimum height */
+  width: 100%;
+  max-width: 700px;
+  min-height: 100px;
 }
 
 .skills-input-wrapper {
   position: relative;
-  margin-bottom: 15px;  /* Increased margin */
+  margin-bottom: 15px;
   width: 100%;
 }
 
 .skills-input {
   width: 100%;
-  padding: 10px 15px;   /* Increased padding */
+  padding: 10px 15px;
   border: none;
   border-radius: 4px;
   font-size: 14px;
@@ -654,8 +657,6 @@
   cursor: grabbing;
 }
 
-
-/* Animation for dragging */
 .skill-tag[data-rbd-dragging="true"] {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
@@ -665,22 +666,15 @@
   cursor: pointer;
   font-size: 18px;
   line-height: 1;
-  color: #ffffff; /* White X button */
+  color: #ffffff;
   background: transparent;
+  display: flex;
+  align-items: center;
+  transition: transform 0.2s ease;
 }
 
 .skill-tag .remove-skill:hover {
-  color: #ffffff; /* Bright red on hover */
-  background: transparent;
-}
-
-.skill-tag .remove-skill {
-  display: flex;
-  align-items: center;
-  margin-left: 8px;
-  cursor: pointer;
-  color: #ffffff;
-  background: transparent;
+  color: #dc3545;
 }
 
 .skill-tag .remove-skill svg {
@@ -690,17 +684,6 @@
 
 .skill-tag .remove-skill:hover svg {
   transform: scale(1.5);
-}
-
-.skill-tag .remove-skill {
-  margin-left: 8px;
-  cursor: pointer;
-  line-height: 1;
-  color: #ffffff;
-}
-
-.skill-tag .remove-skill:hover {
-  color: #dc3545;
 }
 
 .skills-dropdown {
@@ -720,10 +703,12 @@
 .skills-dropdown-item {
   padding: 8px 12px;
   cursor: pointer;
+  transition: background-color 0.2s ease;
 }
 
 .skills-dropdown-item:hover {
   background-color: #23578b;
+  color: #ffffff;
 }
 
 .skills-limit {
@@ -838,8 +823,8 @@ table th input[type="checkbox"] {
 /*add entry button*/
 .table-actions {
   display: flex;
-  justify-content: center; /* Center the buttons horizontally */
-  align-items: center; /* Center the buttons vertically */
+  justify-content: center;
+  align-items: center;
   gap: 1rem;
   margin-top: 1rem;
   padding: 1rem;
@@ -855,7 +840,7 @@ table th input[type="checkbox"] {
   font-size: 14px;
   font-weight: 500;
   transition: background-color 0.2s;
-  min-width: 120px; /* Add fixed width for consistent button size */
+  min-width: 120px;
   text-align: center;
 }
 
@@ -985,10 +970,11 @@ table th input[type="checkbox"] {
 }
 
 .search-wrapper {
+  position: relative;
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center; /* Center horizontally */
   width: 100%;
-  margin: 1rem 0;
 }
 
 .search-container {
@@ -997,6 +983,7 @@ table th input[type="checkbox"] {
   max-width: 1000px;
   display: flex;
   align-items: center;
+  justify-content: center; /* Center the search bar and filter button */
 }
 
 .search-icon {
@@ -1059,4 +1046,513 @@ table th input[type="checkbox"] {
 .pagination-arrow:disabled {
   cursor: not-allowed;
   opacity: 0.5;
+}
+
+/* Logout Dropdown Styles */
+.logout-dropdown {
+  position: absolute;
+  right: 0;
+  top: 40px; /* Adjust as needed to sit just below the icon */
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  z-index: 1000;
+  min-width: 120px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.logout-dropdown button {
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 10px 16px;
+  text-align: left;
+  cursor: pointer;
+  font-size: 15px;
+  color: #333;
+  outline: none;
+  border-radius: 0 0 6px 6px;
+  transition: background 0.2s;
+  font-weight: normal;
+}
+
+.logout-dropdown button:hover {
+  background: #f5f5f5;
+}
+
+.options-menu-wrapper {
+  position: relative;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.options-icon {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0 8px;
+}
+
+.options-dropdown {
+  position: absolute;
+  top: 28px;
+  right: 0;
+  background: #fff;
+  border: 1px solid #ddd;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  z-index: 10;
+  min-width: 80px;
+  border-radius: 4px;
+  padding: 4px 0;
+}
+
+.edit-btn {
+  background: none;
+  border: none;
+  color: #333;
+  padding: 8px 16px;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  font-size: 1rem;
+}
+
+.edit-btn:hover {
+  background: #f0f0f0;
+}
+
+.filter-btn {
+  margin-left: 8px;
+  padding: 6px 12px;
+  background: #f0f0f0;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.filter-wrapper {
+  position: relative;
+  display: inline-block; /* So the dropdown is positioned relative to the icon */
+}
+
+.filter-dropdown {
+  position: absolute;
+  top: 110%; /* Just below the button */
+  right: 0;  /* Align right edge of dropdown with button */
+  background: #fff;
+  border: 1px solid #eee;
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+  padding: 20px 16px 16px 16px;
+  min-width: 220px;
+  z-index: 100;
+}
+
+.filter-dropdown label {
+  display: block;
+  margin-bottom: 4px;
+  font-weight: 500;
+}
+
+.filter-dropdown input,
+.filter-dropdown select {
+  width: 100%;
+  margin-bottom: 12px;
+  padding: 4px 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+.apply-filter-btn {
+  width: 100%;
+  padding: 6px 0;
+  background: #007bff;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.action-cell {
+  width: 40px;
+  min-width: 40px;
+  max-width: 40px;
+  text-align: right;
+  padding-right: 8px;
+}
+
+/* Make the Mode of work column wider */
+.table-container table th:nth-last-child(2),
+.table-container table td:nth-last-child(2) {
+  min-width: 160px;
+  max-width: 220px;
+  white-space: normal;
+}
+
+.skills-section {
+  margin-bottom: 1.5rem;
+}
+
+.skills-input-wrapper {
+  position: relative;
+  margin-bottom: 1rem;
+}
+
+.skills-input-wrapper input {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 1rem;
+  transition: all 0.3s ease;
+  background-color: #f8f9fa;
+}
+
+.skills-input-wrapper input:focus {
+  outline: none;
+  border-color: #4a90e2;
+  background-color: #fff;
+  box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+}
+
+.skills-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  max-height: 200px;
+  overflow-y: auto;
+  margin-top: 4px;
+}
+
+.dropdown-skill {
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.dropdown-skill:last-child {
+  border-bottom: none;
+}
+
+.dropdown-skill:hover {
+  background-color: #f8f9fa;
+  color: #4a90e2;
+}
+
+.skills-tags-container {
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.skills-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  min-height: 40px;
+  padding: 0.5rem;
+  background-color: #fff;
+  border-radius: 6px;
+  border: 1px solid #e0e0e0;
+}
+
+.skill-tag {
+  display: inline-flex;
+  align-items: center;
+  background-color: #e3f2fd;
+  color: #1976d2;
+  padding: 0.5rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.9rem;
+  gap: 0.5rem;
+  transition: all 0.2s ease;
+  cursor: grab;
+  user-select: none;
+  border: 1px solid #bbdefb;
+}
+
+.skill-tag:active {
+  cursor: grabbing;
+}
+
+.skill-tag:hover {
+  background-color: #bbdefb;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.drag-handle {
+  color: #90caf9;
+  cursor: grab;
+  font-size: 1.1rem;
+  margin-right: 0.25rem;
+  user-select: none;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.skill-text {
+  flex: 1;
+}
+
+.remove-skill {
+  cursor: pointer;
+  font-size: 1.1rem;
+  color: #1976d2;
+  transition: all 0.2s ease;
+  padding: 2px;
+  border-radius: 50%;
+}
+
+.remove-skill:hover {
+  color: #d32f2f;
+  background-color: rgba(211, 47, 47, 0.1);
+}
+
+.skills-hint {
+  display: flex;
+  align-items: center;
+  color: #666;
+  font-size: 0.8rem;
+  margin-top: 0.75rem;
+  gap: 0.5rem;
+}
+
+.hint-icon {
+  font-size: 1rem;
+}
+
+/* Drag and drop styles */
+.skill-tag.dragging {
+  opacity: 0.5;
+  transform: scale(0.95);
+  cursor: grabbing;
+}
+
+.skill-tag.drag-over {
+  border: 2px dashed #ffffff;
+  background-color: #1565c0;
+}
+
+/* Animation for new tags */
+@keyframes tagAppear {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.skill-tag {
+  animation: tagAppear 0.2s ease-out;
+}
+
+/* src/components/ConfirmModal.css */
+.confirm-modal-backdrop {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+.confirm-modal {
+  background: #fff;
+  border-radius: 12px;
+  padding: 32px 24px 24px 24px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+  min-width: 320px;
+  max-width: 90vw;
+  text-align: center;
+}
+
+.confirm-modal-message {
+  font-size: 1.1rem;
+  margin-bottom: 24px;
+  color: #222;
+}
+
+.confirm-modal-actions {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+}
+
+.confirm-btn {
+  background: #d32f2f;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 24px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.confirm-btn:hover {
+  background: #b71c1c;
+}
+
+.cancel-btn {
+  background: #f5f5f5;
+  color: #333;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 24px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.cancel-btn:hover {
+  background: #e0e0e0;
+}
+
+.searchbar-wrapper {
+  display: flex;
+  align-items: center;
+  background: #393e4b;
+  border-radius: 24px;
+  padding: 0 8px 0 16px;
+  height: 44px;
+  width: 350px; /* Adjust as needed */
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  position: relative;
+}
+
+.searchbar-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-size: 1rem;
+  padding: 0 8px;
+  outline: none;
+}
+
+.searchbar-filter-btn {
+  background: none !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  padding: 4px;
+  border-radius: 50%;
+  color: #888;
+  transition: background 0.2s, color 0.2s;
+}
+
+/* Only on hover: fill with black, icon turns white */
+.searchbar-filter-btn:hover {
+  background: #222;
+  color: #fff;
+}
+
+.searchbar-filter-btn:hover svg {
+  color: #fff;
+  fill: #fff;
+}
+
+/* Remove focus/active styles if you don't want the effect on click/focus */
+.searchbar-filter-btn:focus,
+.searchbar-filter-btn:active {
+  background: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  color: #888 !important;
+}
+.searchbar-filter-btn:focus svg,
+.searchbar-filter-btn:active svg {
+  color: #888;
+  fill: #888;
+}
+
+.filter-label {
+  font-size: 0.95em;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.searchbar-container {
+  display: flex;
+  align-items: center;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 999px;
+  padding: 0 16px;
+  height: 48px;
+  width: 100%;
+  max-width: 1000px;
+  margin: 0 auto;
+  box-sizing: border-box;
+  position: relative;
+}
+
+.searchbar-icon {
+  display: flex;
+  align-items: center;
+  margin-right: 8px;
+}
+
+.searchbar-input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 1rem;
+  color: #333;
+  padding: 0 8px;
+}
+
+.searchbar-filter-btn {
+  background: none;
+  border: none;
+  outline: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  margin-left: 8px;
+  padding: 4px;
+  border-radius: 50%;
+  transition: background 0.2s;
+}
+
+.searchbar-filter-btn:hover {
+  background: #f0f0f0;
+}
+
+.checkbox-cell,
+.kebab-cell {
+  width: 32px;         /* Make the columns narrow */
+  min-width: 32px;
+  max-width: 36px;
+  padding-left: 0;
+  padding-right: 0;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.kebab-icon {
+  cursor: pointer;
+  font-size: 20px;
+  display: inline-block;
+  vertical-align: middle;
 }

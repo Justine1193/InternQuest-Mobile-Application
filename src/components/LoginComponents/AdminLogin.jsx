@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import './login.css';
+import './AdminLogin.css';
 import { FaRegEye, FaRegEyeSlash } from "react-icons/fa";
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../../../firebase';

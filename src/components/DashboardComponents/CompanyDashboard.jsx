@@ -1,11 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './CompanyDashboard.css';
-import { IoCloseOutline, IoSearchOutline, IoSettingsOutline } from "react-icons/io5";
+import { IoCloseOutline, IoSearchOutline, IoSettingsOutline, IoEllipsisVertical } from "react-icons/io5";
 import { db } from '../../../firebase'; 
-import { collection, addDoc, getDocs, deleteDoc, doc} from 'firebase/firestore';
-import logo from '../../assets/InternQuest_Logo.png'; // Adjust the path to your logo image
+import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import logo from '../../assets/InternQuest_Logo.png'; 
 import { signOut } from 'firebase/auth';
 import { auth } from '../../../firebase';
+import ConfirmModal from '../ConfirmModal/ConfirmModal.jsx';
+import { FiFilter } from "react-icons/fi";
+import { FaFilter } from "react-icons/fa";
 
 const Dashboard = () => {
 
@@ -19,7 +22,7 @@ const Dashboard = () => {
     email: '',
     skills: '',
     moa: false,
-    modeOfWork: '',
+    modeOfWork: [],
   });
 
   const [isLoading, setIsLoading] = useState(false);
@@ -156,6 +159,25 @@ const Dashboard = () => {
   const [itemsPerPage] = useState(8);
 
   const [showLogout, setShowLogout] = useState(false);
+  const [openMenuRow, setOpenMenuRow] = useState(null);
+
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editCompanyId, setEditCompanyId] = useState(null);
+
+  const [showFilter, setShowFilter] = useState(false);
+  const [filterValues, setFilterValues] = useState({
+    industry: '',
+    modeOfWork: '',
+    moa: '',
+  });
+
+  const [pendingFilterValues, setPendingFilterValues] = useState({
+    industry: '',
+    modeOfWork: '',
+    moa: '',
+  });
+
+  const [showConfirm, setShowConfirm] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -216,6 +238,17 @@ const Dashboard = () => {
     });
   };
 
+  const handleModeOfWorkChange = (e) => {
+    const { value, checked } = e.target;
+    setFormData((prev) => {
+      if (checked) {
+        return { ...prev, modeOfWork: [...prev.modeOfWork, value] };
+      } else {
+        return { ...prev, modeOfWork: prev.modeOfWork.filter((mode) => mode !== value) };
+      }
+    });
+  };
+
   // Update the handleAddEntry function
   const handleAddEntry = async () => {
     try {
@@ -241,8 +274,8 @@ const Dashboard = () => {
       if (skills.length === 0) {
         throw new Error("At least one skill is required");
       }
-      if (!formData.modeOfWork) {
-        throw new Error("Mode of work is required");
+      if (formData.modeOfWork.length === 0) {
+        throw new Error("At least one mode of work is required");
       }
 
       setIsLoading(true);
@@ -255,7 +288,7 @@ const Dashboard = () => {
         companyEmail: formData.email,          
         skillsREq: skills,                  
         moa: formData.moa ? "Yes" : "No",     
-        modeofwork: [formData.modeOfWork],    
+        modeOfWork: formData.modeOfWork,    
         createdAt: new Date().toISOString()
       };
 
@@ -274,7 +307,7 @@ const Dashboard = () => {
         email: '',
         skills: '',
         moa: false,
-        modeOfWork: '',
+        modeOfWork: [],
       });
 
       setSkills([]); // Clear skills array
@@ -287,14 +320,14 @@ const Dashboard = () => {
   };
 
   const handleDelete = async () => {
+    setShowConfirm(true);
+  };
+
+  const confirmDelete = async () => {
+    setShowConfirm(false);
     try {
       setIsDeleting(true);
       
-      // Confirm delete
-      if (!window.confirm(`Are you sure you want to delete ${selectedItems.length} item(s)?`)) {
-        return;
-      }
-  
       // Delete from Firestore
       for (const id of selectedItems) {
         await deleteDoc(doc(db, 'companies', id));
@@ -310,6 +343,10 @@ const Dashboard = () => {
     } finally {
       setIsDeleting(false);
     }
+  };
+
+  const cancelDelete = () => {
+    setShowConfirm(false);
   };
   
   const handleSelectItem = (id) => {
@@ -358,11 +395,26 @@ const Dashboard = () => {
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
 
-  const filteredData = tableData.filter(row => 
-    row.companyName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    row.industry.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    row.companyDescription.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredData = tableData.filter(row => {
+    const matchesSearch =
+      row.companyName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      row.industry.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      row.companyDescription.toLowerCase().includes(searchQuery.toLowerCase());
+
+    const matchesIndustry = filterValues.industry
+      ? row.industry.toLowerCase().includes(filterValues.industry.toLowerCase())
+      : true;
+
+    const matchesModeOfWork = filterValues.modeOfWork
+      ? Array.isArray(row.modeOfWork) && row.modeOfWork.includes(filterValues.modeOfWork)
+      : true;
+
+    const matchesMoa = filterValues.moa
+      ? row.moa === filterValues.moa
+      : true;
+
+    return matchesSearch && matchesIndustry && matchesModeOfWork && matchesMoa;
+  });
 
   const totalPages = Math.ceil(filteredData.length / itemsPerPage);
 
@@ -376,6 +428,79 @@ const Dashboard = () => {
       alert('Logout failed!');
     }
   };
+
+  const handleEdit = (company) => {
+    setFormData({
+      companyName: company.companyName || '',
+      description: company.companyDescription || '',
+      website: company.companyWeb || '',
+      industry: company.industry || '',
+      address: company.companyAddress || '',
+      email: company.companyEmail || '',
+      skills: '',
+      moa: company.moa === "Yes",
+      modeOfWork: Array.isArray(company.modeOfWork) ? company.modeOfWork : [],
+    });
+    setSkills(Array.isArray(company.skillsREq) ? company.skillsREq : []);
+    setIsEditMode(true);
+    setEditCompanyId(company.id);
+    setIsModalOpen(true);
+  };
+
+  const handleUpdateEntry = async () => {
+    try {
+      if (!formData.companyName.trim()) throw new Error("Company name is required");
+      if (!formData.description.trim()) throw new Error("Description is required");
+      if (!formData.website.trim()) throw new Error("Website is required");
+      if (!formData.industry.trim()) throw new Error("Industry is required");
+      if (!formData.address.trim()) throw new Error("Address is required");
+      if (!formData.email.trim()) throw new Error("Email is required");
+      if (skills.length === 0) throw new Error("At least one skill is required");
+      if (formData.modeOfWork.length === 0) throw new Error("At least one mode of work is required");
+
+      setIsLoading(true);
+      const updatedCompany = {
+        companyName: formData.companyName,
+        companyDescription: formData.description,
+        companyWeb: formData.website,
+        industry: formData.industry,
+        companyAddress: formData.address,
+        companyEmail: formData.email,
+        skillsREq: skills,
+        moa: formData.moa ? "Yes" : "No",
+        modeOfWork: formData.modeOfWork,
+      };
+
+      await updateDoc(doc(db, 'companies', editCompanyId), updatedCompany);
+
+      setTableData(prev =>
+        prev.map(item =>
+          item.id === editCompanyId ? { ...item, ...updatedCompany } : item
+        )
+      );
+      setIsModalOpen(false);
+      setIsEditMode(false);
+      setEditCompanyId(null);
+      setFormData({
+        companyName: '',
+        description: '',
+        website: '',
+        industry: '',
+        address: '',
+        email: '',
+        skills: '',
+        moa: false,
+        modeOfWork: [],
+      });
+      setSkills([]);
+    } catch (err) {
+      setError(err.message);
+      return;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="dashboard-container">
       <nav className="top-nav">
@@ -395,36 +520,8 @@ const Dashboard = () => {
             style={{ cursor: 'pointer' }}
           />
           {showLogout && (
-            <div
-              style={{
-                position: 'absolute',
-                right: 0,
-                top: '40px',
-                background: '#fff',
-                border: '1px solid #ddd',
-                borderRadius: '4px',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-                zIndex: 1000,
-                minWidth: '120px',
-                padding: '8px 0',
-              }}
-            >
-              <button
-                onClick={handleLogout}
-                style={{
-                  width: '100%',
-                  background: 'none',
-                  border: 'none',
-                  padding: '10px 16px',
-                  textAlign: 'left',
-                  cursor: 'pointer',
-                  fontSize: '16px',
-                  color: '#333',
-                  outline: 'none'
-                }}
-              >
-                Logout
-              </button>
+            <div className="logout-dropdown">
+              <button onClick={handleLogout}>Logout</button>
             </div>
           )}
         </div>
@@ -468,32 +565,80 @@ const Dashboard = () => {
 
         <div className="internships-section">
           <h2>Manage Internships</h2>
-          <div className="search-wrapper">
-            <div className="search-container">
-              <IoSearchOutline className="search-icon" />
-              <input
-                type="text"
-                placeholder="Search company..."
-                value={searchQuery}
-                onChange={handleSearch}
-                className="search-input"
-              />
+          <div className="searchbar-container">
+            <span className="searchbar-icon">
+              <svg width="20" height="20" fill="none" stroke="#888" strokeWidth="2">
+                <circle cx="9" cy="9" r="7" />
+                <line x1="15" y1="15" x2="19" y2="19" />
+              </svg>
+            </span>
+            <input
+              type="text"
+              className="searchbar-input"
+              placeholder="Search companies..."
+              value={searchQuery}
+              onChange={handleSearch}
+            />
+            <div className="filter-wrapper">
+              <button className="searchbar-filter-btn" onClick={() => {
+                setPendingFilterValues(filterValues);
+                setShowFilter((prev) => !prev);
+              }} title="Filter">
+                <FaFilter size={18} />
+              </button>
+              {showFilter && (
+                <div className="filter-dropdown">
+                  <div>
+                    <label>Industry:</label>
+                    <input
+                      type="text"
+                      value={pendingFilterValues.industry}
+                      onChange={e => setPendingFilterValues(f => ({ ...f, industry: e.target.value }))}
+                      placeholder="Industry"
+                    />
+                  </div>
+                  <div>
+                    <label>Mode of Work:</label>
+                    <select
+                      value={pendingFilterValues.modeOfWork}
+                      onChange={e => setPendingFilterValues(f => ({ ...f, modeOfWork: e.target.value }))}
+                    >
+                      <option value="">All</option>
+                      <option value="On-site">On-site</option>
+                      <option value="Remote">Remote</option>
+                      <option value="Hybrid">Hybrid</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label>MOA:</label>
+                    <select
+                      value={pendingFilterValues.moa}
+                      onChange={e => setPendingFilterValues(f => ({ ...f, moa: e.target.value }))}
+                    >
+                      <option value="">All</option>
+                      <option value="Yes">Yes</option>
+                      <option value="No">No</option>
+                    </select>
+                  </div>
+                  <button
+                    className="apply-filter-btn"
+                    onClick={() => {
+                      setFilterValues(pendingFilterValues);
+                      setShowFilter(false);
+                    }}
+                    type="button"
+                  >
+                    Apply
+                  </button>
+                </div>
+              )}
             </div>
           </div>
           <div className="table-container">
             <table>
               <thead>
                 <tr>
-                  <th>
-                    <div className="select-header">
-                      <input 
-                        type="checkbox" 
-                        onChange={handleSelectAll} 
-                        checked={selectedItems.length === tableData.length && tableData.length > 0}
-                      />
-                      <span>Select All</span>
-                    </div>
-                  </th>
+                  <th className="checkbox-cell"></th>
                   <th>Company Name</th>
                   <th>Description</th>
                   <th>Company Website</th>
@@ -503,12 +648,13 @@ const Dashboard = () => {
                   <th>Skills required</th>
                   <th>MOA</th>
                   <th>Mode of work</th>
+                  <th className="kebab-cell"></th>
                 </tr>
               </thead>
               <tbody>
                 {currentItems.map((row) => (
                   <tr key={row.id} className={selectedItems.includes(row.id) ? 'selected-row' : ''}>
-                    <td>
+                    <td className="checkbox-cell">
                       <input 
                         type="checkbox" 
                         checked={selectedItems.includes(row.id)} 
@@ -549,58 +695,95 @@ const Dashboard = () => {
                     <td>
                       <input type="checkbox" checked={row.moa === "Yes"} readOnly />
                     </td>
-                    <td>{Array.isArray(row.modeofwork) ? row.modeofwork[0] : row.modeofwork}</td>
+                    <td>{Array.isArray(row.modeOfWork) ? row.modeOfWork.join(", ") : row.modeOfWork}</td>
+                    <td className="kebab-cell">
+                      <IoEllipsisVertical
+                        className="kebab-icon"
+                        onClick={() => setOpenMenuRow(openMenuRow === row.id ? null : row.id)}
+                        title="Options"
+                      />
+                      {openMenuRow === row.id && (
+                        <div className="options-dropdown">
+                          <button
+                            className="edit-btn"
+                            onClick={() => {
+                              setOpenMenuRow(null);
+                              handleEdit(row);
+                            }}
+                          >
+                            Edit
+                          </button>
+                        </div>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          {/* Add this after your table component */}
-        <div className="pagination">
-          <button 
-            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-            disabled={currentPage === 1}
-            className="pagination-arrow"
-          >
-            &lt;
-          </button>
-          {[...Array(totalPages)].map((_, index) => (
-            <button
-              key={index + 1}
-              onClick={() => setCurrentPage(index + 1)}
-              className={`pagination-number ${currentPage === index + 1 ? 'active' : ''}`}
-            >
-              {index + 1}
-            </button>
-          ))}
-          <button 
-            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-            disabled={currentPage === totalPages}
-            className="pagination-arrow"
-          >
-            &gt;
-          </button>
-        </div>
-        
-          <div className="table-actions">
-            <button className="add-entry" onClick={() => setIsModalOpen(true)}>
-              Add Entry
-            </button>
+          <div className="pagination">
             <button 
-              className="delete" 
-              onClick={handleDelete}
-              disabled={selectedItems.length === 0 || isDeleting}
+              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+              className="pagination-arrow"
             >
-              {isDeleting ? 'Deleting...' : `Delete (${selectedItems.length})`}
+              &lt;
+            </button>
+            {[...Array(totalPages)].map((_, index) => (
+              <button
+                key={index + 1}
+                onClick={() => setCurrentPage(index + 1)}
+                className={`pagination-number ${currentPage === index + 1 ? 'active' : ''}`}
+              >
+                {index + 1}
+              </button>
+            ))}
+            <button 
+              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+              disabled={currentPage === totalPages}
+              className="pagination-arrow"
+            >
+              &gt;
             </button>
           </div>
+          <div className="table-actions">
+            <button
+              className="add-entry"
+              onClick={() => {
+                setIsEditMode(false);
+                setIsModalOpen(true);
+                setFormData({
+                  companyName: '',
+                  description: '',
+                  website: '',
+                  industry: '',
+                  address: '',
+                  email: '',
+                  skills: '',
+                  moa: false,
+                  modeOfWork: [],
+                });
+                setSkills([]);
+              }}
+            >
+              Add Entry
+            </button>
+            <button
+              className="delete"
+              onClick={handleDelete}
+              disabled={selectedItems.length === 0}
+            >
+              Delete
+            </button>
+          </div>
+          
         </div>
       </div>
 
       {isModalOpen && (
         <div className="modal">
           <div className="modal-content">
-            <h2>Add New Company</h2>
+            <h2>{isEditMode ? "Edit Company" : "Add New Company"}</h2>
             {error && (
               <div className="modal-error-message">
                 {error}
@@ -620,7 +803,6 @@ const Dashboard = () => {
                   required
                 />
               </div>
-
               <div className="form-group">
                 <label htmlFor="description">Description:</label>
                 <textarea
@@ -629,24 +811,21 @@ const Dashboard = () => {
                   value={formData.description}
                   onChange={handleInputChange}
                   placeholder="Enter company description"
-                  rows="4"
                   required
                 />
               </div>
-
               <div className="form-group">
-                <label htmlFor="website">Company Website:</label>
+                <label htmlFor="website">Website:</label>
                 <input
                   id="website"
-                  type="url"
+                  type="text"
                   name="website"
                   value={formData.website}
                   onChange={handleInputChange}
-                  placeholder="Enter company website URL"
+                  placeholder="Enter company website"
                   required
                 />
               </div>
-
               <div className="form-group">
                 <label htmlFor="industry">Industry:</label>
                 <input
@@ -655,11 +834,10 @@ const Dashboard = () => {
                   name="industry"
                   value={formData.industry}
                   onChange={handleInputChange}
-                  placeholder="Enter industry"
+                  placeholder="Enter company industry"
                   required
                 />
               </div>
-
               <div className="form-group">
                 <label htmlFor="address">Address:</label>
                 <input
@@ -672,7 +850,6 @@ const Dashboard = () => {
                   required
                 />
               </div>
-
               <div className="form-group">
                 <label htmlFor="email">Email:</label>
                 <input
@@ -685,7 +862,6 @@ const Dashboard = () => {
                   required
                 />
               </div>
-
               <div className="form-group">
                 <label htmlFor="skills">Skills Required:</label>
                 <div className="skills-container">
@@ -718,28 +894,57 @@ const Dashboard = () => {
                       </div>
                     )}
                   </div>
-                  <div className="skills-tags">
-                    {skills.map((skill, index) => (
-                      <div key={index} className="skill-tag">
+                  <div 
+                    className="skills-tags" 
+                    onDragOver={(e) => e.preventDefault()}
+                  >
+                    {skills.map((skill, idx) => (
+                      <span
+                        key={idx}
+                        className="skill-tag"
+                        draggable
+                        onDragStart={(e) => {
+                          e.dataTransfer.setData('text/plain', idx.toString());
+                          e.currentTarget.classList.add('dragging');
+                        }}
+                        onDragEnd={(e) => {
+                          e.currentTarget.classList.remove('dragging');
+                        }}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          e.currentTarget.classList.add('drag-over');
+                        }}
+                        onDragLeave={(e) => {
+                          e.currentTarget.classList.remove('drag-over');
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          e.currentTarget.classList.remove('drag-over');
+                          const fromIndex = parseInt(e.dataTransfer.getData('text/plain'));
+                          const toIndex = idx;
+                          if (fromIndex !== toIndex) {
+                            const newSkills = [...skills];
+                            const [movedSkill] = newSkills.splice(fromIndex, 1);
+                            newSkills.splice(toIndex, 0, movedSkill);
+                            setSkills(newSkills);
+                          }
+                        }}
+                      >
                         {skill}
-                        <span 
-                          className="remove-skill" 
+                        <IoCloseOutline
+                          className="remove-skill"
                           onClick={() => removeSkill(skill)}
-                        >
-                          <IoCloseOutline />
-                        </span>
-                      </div>
+                        />
+                      </span>
                     ))}
                   </div>
                   <div className="skills-limit">
-                    Maximum 15 skills.
+                    {skills.length}/15 skills added
                   </div>
                 </div>
               </div>
-
-              <div className="form-group checkbox-group">
-                <label htmlFor="moa">
-                MOA (Memorandum of Agreement)
+              <div className="form-group">
+                <label htmlFor="moa" className="checkbox-label">
                   <input
                     id="moa"
                     type="checkbox"
@@ -747,32 +952,65 @@ const Dashboard = () => {
                     checked={formData.moa}
                     onChange={handleInputChange}
                   />
+                  MOA (Memorandum of Agreement)
                 </label>
               </div>
-
               <div className="form-group">
-                <label htmlFor="modeOfWork">Mode of Work:</label>
-                <select
-                  id="modeOfWork"
-                  name="modeOfWork"
-                  value={formData.modeOfWork}
-                  onChange={handleInputChange}
-                  required
-                >
-                  <option value="" disabled>Select Mode of Work</option>
-                  <option value="On-site">On-site</option>
-                  <option value="Remote">Remote</option>
-                  <option value="Hybrid">Hybrid</option>
-                </select>
+                <label>Mode of Work:</label>
+                <div className="mode-of-work-options">
+                  {['On-site', 'Remote', 'Hybrid'].map(mode => (
+                    <label key={mode} className="mode-checkbox">
+                      <input
+                        type="checkbox"
+                        value={mode}
+                        checked={formData.modeOfWork.includes(mode)}
+                        onChange={handleModeOfWorkChange}
+                      />
+                      {mode}
+                    </label>
+                  ))}
+                </div>
               </div>
             </form>
             <div className="modal-actions">
-              <button onClick={handleAddEntry}>Add</button>
-              <button onClick={() => setIsModalOpen(false)}>Cancel</button>
+              {isEditMode ? (
+                <button type="button" onClick={handleUpdateEntry}>Update</button>
+              ) : (
+                <button type="button" onClick={handleAddEntry}>Add</button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsModalOpen(false);
+                  setIsEditMode(false);
+                  setEditCompanyId(null);
+                  setFormData({
+                    companyName: '',
+                    description: '',
+                    website: '',
+                    industry: '',
+                    address: '',
+                    email: '',
+                    skills: '',
+                    moa: false,
+                    modeOfWork: [],
+                  });
+                  setSkills([]);
+                }}
+              >
+                Cancel
+              </button>
             </div>
           </div>
         </div>
       )}
+
+      <ConfirmModal
+        open={showConfirm}
+        message={`Are you sure you want to delete ${selectedItems.length} item(s)?`}
+        onConfirm={confirmDelete}
+        onCancel={cancelDelete}
+      />
     </div>
   );
 };

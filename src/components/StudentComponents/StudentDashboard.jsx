@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { IoSearchOutline, IoSettingsOutline } from "react-icons/io5";
+import { IoSearchOutline, IoSettingsOutline, IoMenu, IoEllipsisVertical } from "react-icons/io5";
 import { db } from '../../../firebase'; 
-import { collection, getDocs, addDoc } from 'firebase/firestore';
+import { collection, getDocs, addDoc, deleteDoc, doc } from 'firebase/firestore';
 import logo from '../../assets/InternQuest_Logo.png';
 import { signOut } from 'firebase/auth';
 import { auth } from '../../../firebase';
+
 
 const StudentDashboard = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -20,6 +21,11 @@ const StudentDashboard = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(8);
   const [showLogout, setShowLogout] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedItems, setSelectedItems] = useState([]);
+  const [openMenuId, setOpenMenuId] = useState(null);
+  const [selectedRowId, setSelectedRowId] = useState(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -90,6 +96,44 @@ const StudentDashboard = () => {
     }
   };
 
+  const handleSelectItem = (id) => {
+    setSelectedItems(prev =>
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleDeleteSingle = async (id) => {
+    try {
+      setIsDeleting(true);
+      await deleteDoc(doc(db, 'users', id)); // Use 'users' for students
+      setStudents(prev => prev.filter(student => student.id !== id));
+    } catch (error) {
+      setError("Failed to delete student. Please try again.");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    try {
+      setIsDeleting(true);
+      if (!window.confirm(`Are you sure you want to delete ${selectedItems.length} item(s)?`)) {
+        setIsDeleting(false);
+        return;
+      }
+      for (const id of selectedItems) {
+        await deleteDoc(doc(db, 'companies', id));
+      }
+      setCompanies(prevCompanies => prevCompanies.filter(company => !selectedItems.includes(company.id)));
+      setSelectedItems([]);
+      setSelectionMode(false);
+    } catch (error) {
+      setError("Failed to delete items. Please try again.");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
     <div className="dashboard-container">
       <nav className="top-nav">
@@ -109,36 +153,8 @@ const StudentDashboard = () => {
             style={{ cursor: 'pointer' }}
           />
           {showLogout && (
-            <div
-              style={{
-                position: 'absolute',
-                right: 0,
-                top: '40px',
-                background: '#fff',
-                border: '1px solid #ddd',
-                borderRadius: '4px',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-                zIndex: 1000,
-                minWidth: '120px',
-                padding: '8px 0',
-              }}
-            >
-              <button
-                onClick={handleLogout}
-                style={{
-                  width: '100%',
-                  background: 'none',
-                  border: 'none',
-                  padding: '10px 16px',
-                  textAlign: 'left',
-                  cursor: 'pointer',
-                  fontSize: '16px',
-                  color: '#333',
-                  outline: 'none'
-                }}
-              >
-                Logout
-              </button>
+            <div className="logout-dropdown">
+              <button onClick={handleLogout}>Logout</button>
             </div>
           )}
         </div>
@@ -198,36 +214,85 @@ const StudentDashboard = () => {
             <table>
               <thead>
                 <tr>
+                  <th className="checkbox-cell"></th>
                   <th>First Name</th>
                   <th>Last Name</th>
                   <th>Gender</th>
                   <th>Program</th>
-                  <th>Field</th>
-                  <th>Location Preference</th>
                   <th>Skills</th>
+                  <th>Location Preference</th>
+                  <th className="kebab-cell"></th>
                 </tr>
               </thead>
               <tbody>
-                {currentItems.map((student) => (
-                  <tr key={student.id}>
-                    <td>{student.firstName}</td>
-                    <td>{student.lastName}</td>
-                    <td>{student.gender}</td>
-                    <td>{student.program}</td>
-                    <td>{student.field}</td>
+                {currentItems.map((row) => (
+                  <tr key={row.id} className={selectedItems.includes(row.id) ? 'selected-row' : ''}>
+                    <td className="checkbox-cell">
+                      {selectedRowId === row.id && (
+                        <input
+                          type="checkbox"
+                          checked={true}
+                          readOnly
+                        />
+                      )}
+                    </td>
+                    <td>{row.firstName}</td>
+                    <td>{row.lastName}</td>
+                    <td>{row.gender}</td>
+                    <td>{row.program}</td>
                     <td>
-                      {student.locationPreference && (
+                      {Array.isArray(row.skills) && row.skills.map((skill, idx) => (
+                        <span key={idx} className="table-skill-tag">{skill}</span>
+                      ))}
+                    </td>
+                    <td>
+                      {row.locationPreference && (
                         <>
-                          {student.locationPreference.hybrid && "Hybrid "}
-                          {student.locationPreference.onsite && "Onsite "}
-                          {student.locationPreference.remote && "Remote "}
+                          {row.locationPreference.hybrid && "Hybrid "}
+                          {row.locationPreference.onsite && "Onsite "}
+                          {row.locationPreference.remote && "Remote "}
                         </>
                       )}
                     </td>
-                    <td>
-                      {Array.isArray(student.skills) && student.skills.map((skill, idx) => (
-                        <span key={idx} className="table-skill-tag">{skill}</span>
-                      ))}
+                    <td className="kebab-cell">
+                      <span className="kebab-icon-wrapper" style={{ position: 'relative', display: 'inline-block' }}>
+                        <IoEllipsisVertical
+                          className="kebab-icon"
+                          onClick={() => {
+                            if (openMenuId === row.id) {
+                              setOpenMenuId(null);
+                              setSelectedRowId(null);
+                            } else {
+                              setOpenMenuId(row.id);
+                              setSelectedRowId(null);
+                            }
+                          }}
+                          title="Options"
+                        />
+                        {openMenuId === row.id && (
+                          <div className="kebab-dropdown">
+                            {selectedRowId !== row.id ? (
+                              <button onClick={() => setSelectedRowId(row.id)}>Select</button>
+                            ) : (
+                              <button
+                                className="delete"
+                                onClick={async () => {
+                                  setIsDeleting(true);
+                                  if (window.confirm('Are you sure you want to delete this student?')) {
+                                    await handleDeleteSingle(row.id);
+                                  }
+                                  setIsDeleting(false);
+                                  setOpenMenuId(null);
+                                  setSelectedRowId(null);
+                                }}
+                                disabled={isDeleting}
+                              >
+                                {isDeleting ? 'Deleting...' : 'Delete'}
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </span>
                     </td>
                   </tr>
                 ))}
@@ -259,6 +324,26 @@ const StudentDashboard = () => {
               &gt;
             </button>
           </div>
+          {selectedItems.length > 0 && (
+            <div style={{ margin: '1rem 0' }}>
+              <button
+                className="delete"
+                onClick={handleDelete}
+                disabled={isDeleting}
+              >
+                {isDeleting ? 'Deleting...' : `Delete (${selectedItems.length})`}
+              </button>
+              <button
+                onClick={() => {
+                  setSelectedItems([]);
+                  setOpenMenuId(null);
+                }}
+                style={{ marginLeft: '1rem' }}
+              >
+                Cancel
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

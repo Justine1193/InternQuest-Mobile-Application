@@ -376,7 +376,6 @@ const Dashboard = () => {
       alert('Logout failed!');
     }
   };
-
   return (
     <div className="dashboard-container">
       <nav className="top-nav">

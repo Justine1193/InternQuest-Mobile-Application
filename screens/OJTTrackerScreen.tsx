@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, ScrollView, Modal, TextInput,
   TouchableOpacity, Alert, StyleSheet
@@ -10,6 +10,9 @@ import BottomNavbar from '../components/BottomNav';
 import { useNavigation } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import type { RootStackParamList } from '../App'; // Import RootStackParamList
+import { auth, firestore } from '../firebase/config';
+import { doc, setDoc, deleteDoc, collection, getDocs } from 'firebase/firestore';
+import { Picker } from '@react-native-picker/picker';
 
 type TimeLog = {
   date: string;
@@ -25,20 +28,30 @@ const OJTTrackerScreen = () => {
   const [formData, setFormData] = useState<TimeLog>({ date: '', clockIn: '', clockOut: '', hours: '' });
   const [editIndex, setEditIndex] = useState<number | null>(null);
   const [isDropdownVisible, setIsDropdownVisible] = useState(false);
+  const [clockInAmPm, setClockInAmPm] = useState('AM');
+  const [clockOutAmPm, setClockOutAmPm] = useState('PM');
+  const [requiredHours, setRequiredHours] = useState(300);
+  const [goalModalVisible, setGoalModalVisible] = useState(false);
+  const [goalInput, setGoalInput] = useState('300');
+  const [totalHours, setTotalHours] = useState(0);
 
   useEffect(() => {
-    loadLogsFromStorage();
+    const loadGoal = async () => {
+      const savedGoal = await AsyncStorage.getItem('OJT_REQUIRED_HOURS');
+      if (savedGoal) setRequiredHours(Number(savedGoal));
+    };
+    loadGoal();
+    loadLogsFromFirestore();
   }, []);
 
-  const loadLogsFromStorage = async () => {
-    try {
-      const savedLogs = await AsyncStorage.getItem('OJT_TIME_LOGS');
-      if (savedLogs) {
-        setTimeLogs(JSON.parse(savedLogs));
-      }
-    } catch (error) {
-      console.error('Failed to load time logs:', error);
-    }
+  const loadLogsFromFirestore = async () => {
+    if (!auth.currentUser) return;
+    const userId = auth.currentUser.uid;
+    const logsCol = collection(firestore, `users/${userId}/ojtLogs`);
+    const logsSnap = await getDocs(logsCol);
+    const logs: TimeLog[] = [];
+    logsSnap.forEach(doc => logs.push(doc.data() as TimeLog));
+    setTimeLogs(logs);
   };
 
   const saveLogsToStorage = async () => {
@@ -48,6 +61,36 @@ const OJTTrackerScreen = () => {
     } catch (error) {
       Alert.alert('Error', 'Failed to save time logs.');
     }
+  };
+
+  const saveGoal = useCallback(async () => {
+    const num = Number(goalInput);
+    if (isNaN(num) || num <= 0) {
+      Alert.alert('Error', 'Please enter a valid number of hours.');
+      return;
+    }
+    setRequiredHours(num);
+    await AsyncStorage.setItem('OJT_REQUIRED_HOURS', String(num));
+    setGoalModalVisible(false);
+  }, [goalInput]);
+
+  // Helper to sync a log to Firestore
+  const syncLogToFirestore = async (log: TimeLog) => {
+    if (!auth.currentUser) return;
+    const userId = auth.currentUser.uid;
+    // Use date+clockIn as a unique log ID (or use a better unique ID if needed)
+    const logId = `${log.date}_${log.clockIn}`.replace(/\W/g, '');
+    const logRef = doc(firestore, `users/${userId}/ojtLogs/${logId}`);
+    await setDoc(logRef, log);
+  };
+
+  // Helper to delete a log from Firestore
+  const deleteLogFromFirestore = async (log: TimeLog) => {
+    if (!auth.currentUser) return;
+    const userId = auth.currentUser.uid;
+    const logId = `${log.date}_${log.clockIn}`.replace(/\W/g, '');
+    const logRef = doc(firestore, `users/${userId}/ojtLogs/${logId}`);
+    await deleteDoc(logRef);
   };
 
   const openModal = (log?: TimeLog, index?: number) => {
@@ -61,31 +104,57 @@ const OJTTrackerScreen = () => {
     setModalVisible(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formData.date || !formData.clockIn || !formData.clockOut || !formData.hours) {
       Alert.alert('Error', 'Please fill in all fields.');
       return;
     }
-
+    if (isNaN(Number(formData.hours))) {
+      Alert.alert('Error', 'Hours must be a valid number.');
+      return;
+    }
+    const logId = `${formData.date}_${formData.clockIn}`.replace(/\W/g, '');
+    const duplicate = timeLogs.find(
+      log => `${log.date}_${log.clockIn}`.replace(/\W/g, '') === logId && editIndex === null
+    );
+    if (duplicate) {
+      Alert.alert('Error', 'A log for this date and clock-in time already exists.');
+      return;
+    }
+    // Combine time and AM/PM
+    const logToSave = {
+      ...formData,
+      clockIn: formData.clockIn + ' ' + clockInAmPm,
+      clockOut: formData.clockOut + ' ' + clockOutAmPm,
+    };
     if (editIndex !== null) {
       const updatedLogs = [...timeLogs];
-      updatedLogs[editIndex] = formData;
+      updatedLogs[editIndex] = logToSave;
       setTimeLogs(updatedLogs);
+      await syncLogToFirestore(logToSave);
     } else {
-      setTimeLogs([...timeLogs, formData]);
+      const newLogs = [...timeLogs, logToSave];
+      setTimeLogs(newLogs);
+      await syncLogToFirestore(logToSave);
     }
-
+    await loadLogsFromFirestore();
+    setTimeLogs(prev => [...prev].sort((a, b) => b.date.localeCompare(a.date)));
     setModalVisible(false);
     setFormData({ date: '', clockIn: '', clockOut: '', hours: '' });
   };
 
-  const handleDelete = (index: number) => {
+  const handleDelete = async (index: number) => {
     Alert.alert("Confirm", "Delete this time log?", [
       { text: "Cancel" },
       {
-        text: "Delete", onPress: () => {
+        text: "Delete", onPress: async () => {
+          const logToDelete = timeLogs[index];
           const filtered = timeLogs.filter((_, i) => i !== index);
           setTimeLogs(filtered);
+          // Delete from Firestore
+          await deleteLogFromFirestore(logToDelete);
+          // Reload logs from Firestore to ensure UI is in sync
+          await loadLogsFromFirestore();
         }
       }
     ]);
@@ -95,114 +164,197 @@ const OJTTrackerScreen = () => {
     setIsDropdownVisible(!isDropdownVisible);
   };
 
+  // Calculate total hours whenever logs change
+  useEffect(() => {
+    const sum = timeLogs.reduce((acc, log) => acc + Number(log.hours), 0);
+    setTotalHours(sum);
+  }, [timeLogs]);
+
   return (
     <><ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
-          <View style={styles.header}>
-              <Icon name="arrow-back" size={24} onPress={() => navigation.goBack()} />
-              <Text style={styles.headerText}>OJT Personal Tracker</Text>
+      <View style={styles.header}>
+        <Icon name="arrow-back" size={24} onPress={() => navigation.goBack()} />
+        <Text style={styles.headerText}>OJT Personal Tracker</Text>
+      </View>
+
+      <View style={styles.infoRow}>
+        <View style={styles.infoBox}>
+          <Text style={styles.infoLabel}>Goal</Text>
+          <TouchableOpacity onPress={() => setGoalModalVisible(true)}>
+            <Text style={styles.infoValue}>{totalHours}hrs / {requiredHours} hrs</Text>
+          </TouchableOpacity>
+          <Text style={styles.subText}>
+            {Math.max(0, requiredHours - totalHours)} hours remaining
+          </Text>
+        </View>
+        <View style={styles.infoBox}>
+          <Text style={styles.infoLabel}>Company</Text>
+          <Text style={styles.infoValue}>Google Inc.</Text>
+        </View>
+      </View>
+
+      <View style={styles.noteBox}>
+        <Icon name="warning-outline" size={20} color="#FFA500" />
+        <Text style={styles.noteText}>
+          This tracker is for personal use only. For official time logs, please check with your HR.
+        </Text>
+      </View>
+
+      <Card style={styles.tableCard}>
+        <View style={styles.tableHeader}>
+          <Text style={styles.tableHeaderText}>Date</Text>
+          <Text style={styles.tableHeaderText}>Clock In</Text>
+          <Text style={styles.tableHeaderText}>Clock Out</Text>
+          <Text style={styles.tableHeaderText}>Hours</Text>
+        </View>
+
+        {timeLogs.map((item, index) => (
+          <View key={index} style={styles.tableRow}>
+            <Text style={styles.tableCell}>{item.date}</Text>
+            <Text style={styles.tableCell}>{item.clockIn}</Text>
+            <Text style={styles.tableCell}>{item.clockOut}</Text>
+            <Text style={styles.tableCell}>{item.hours}</Text>
+            <TouchableOpacity onPress={() => openModal(item, index)}>
+              <Icon name="create-outline" size={18} color="blue" />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => handleDelete(index)}>
+              <Icon name="trash-outline" size={18} color="red" style={{ marginLeft: 8 }} />
+            </TouchableOpacity>
           </View>
+        ))}
+      </Card>
 
-          <View style={styles.infoRow}>
-              <View style={styles.infoBox}>
-                  <Text style={styles.infoLabel}>Goal</Text>
-                  <Text style={styles.infoValue}>36hrs / 300 hrs</Text>
-                  <Text style={styles.subText}>Estimated left 44 workdays</Text>
-              </View>
-              <View style={styles.infoBox}>
-                  <Text style={styles.infoLabel}>Company</Text>
-                  <Text style={styles.infoValue}>Google Inc.</Text>
-              </View>
-          </View>
-
-          <View style={styles.noteBox}>
-              <Icon name="warning-outline" size={20} color="#FFA500" />
-              <Text style={styles.noteText}>
-                  This tracker is for personal use only. For official time logs, please check with your HR.
-              </Text>
-          </View>
-
-          <Card style={styles.tableCard}>
-              <View style={styles.tableHeader}>
-                  <Text style={styles.tableHeaderText}>Date</Text>
-                  <Text style={styles.tableHeaderText}>Clock In</Text>
-                  <Text style={styles.tableHeaderText}>Clock Out</Text>
-                  <Text style={styles.tableHeaderText}>Hours</Text>
-              </View>
-
-              {timeLogs.map((item, index) => (
-                  <View key={index} style={styles.tableRow}>
-                      <Text style={styles.tableCell}>{item.date}</Text>
-                      <Text style={styles.tableCell}>{item.clockIn}</Text>
-                      <Text style={styles.tableCell}>{item.clockOut}</Text>
-                      <Text style={styles.tableCell}>{item.hours}</Text>
-                      <TouchableOpacity onPress={() => openModal(item, index)}>
-                          <Icon name="create-outline" size={18} color="blue" />
-                      </TouchableOpacity>
-                      <TouchableOpacity onPress={() => handleDelete(index)}>
-                          <Icon name="trash-outline" size={18} color="red" style={{ marginLeft: 8 }} />
-                      </TouchableOpacity>
-                  </View>
-              ))}
-          </Card>
-
-          <View style={styles.pagination}>
-              <Text>‹ Previous</Text>
-              <Text style={styles.pageIndicator}>Page 1 ▾</Text>
-              <Text>Next ›</Text>
-          </View>
-      </ScrollView>
+      <View style={styles.pagination}>
+        <Text>‹ Previous</Text>
+        <Text style={styles.pageIndicator}>Page 1 ▾</Text>
+        <Text>Next ›</Text>
+      </View>
+    </ScrollView>
 
       {/* Dropdown Buttons */}
       {isDropdownVisible && (
-          <View style={styles.dropdownContainer}>
-              <FAB
-                  style={styles.dropdownButton}
-                  icon="content-save"
-                  label="Save"
-                  onPress={saveLogsToStorage} />
-              <FAB
-                  style={styles.dropdownButton}
-                  icon="plus"
-                  label="Add Log"
-                  onPress={() => openModal()} />
-          </View>
+        <View style={styles.dropdownContainer}>
+          <FAB
+            style={styles.dropdownButton}
+            icon="content-save"
+            label="Save"
+            onPress={saveLogsToStorage} />
+          <FAB
+            style={styles.dropdownButton}
+            icon="plus"
+            label="Add Log"
+            onPress={() => openModal()} />
+        </View>
       )}
 
       {/* Plus Button */}
       <FAB
-          style={styles.fabPlus}
-          icon="plus"
-          onPress={toggleDropdown} />
+        style={styles.fabPlus}
+        icon="plus"
+        onPress={toggleDropdown} />
 
       {/* Bottom Navbar */}
       <View style={styles.bottomNavbar}>
-          <BottomNavbar navigation={navigation} />
+        <BottomNavbar navigation={navigation} />
       </View>
 
       <Modal visible={modalVisible} animationType="slide" transparent>
-          <View style={styles.modalOverlay}>
-              <View style={styles.modalContent}>
-                  <Text style={styles.modalTitle}>{editIndex !== null ? 'Edit Log' : 'Add Time Log'}</Text>
-                  {['date', 'clockIn', 'clockOut', 'hours'].map((field) => (
-                      <TextInput
-                          key={field}
-                          placeholder={field}
-                          style={styles.input}
-                          value={(formData as any)[field]}
-                          onChangeText={(text) => setFormData({ ...formData, [field]: text })} />
-                  ))}
-                  <View style={styles.modalButtons}>
-                      <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.cancelBtn}>
-                          <Text>Cancel</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity onPress={handleSave} style={styles.saveBtn}>
-                          <Text style={{ color: 'white' }}>Save</Text>
-                      </TouchableOpacity>
-                  </View>
-              </View>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>{editIndex !== null ? 'Edit Log' : 'Add Time Log'}</Text>
+            {/* Date Field */}
+            <TextInput
+              placeholder="Date (YYYY/MM/DD)"
+              style={styles.input}
+              value={formData.date}
+              onChangeText={text => setFormData({ ...formData, date: text })}
+              keyboardType="phone-pad"
+              maxLength={10}
+            />
+            {/* Clock In Field */}
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <TextInput
+                placeholder="Clock In (HH/MM)"
+                style={[styles.input, { flex: 1 }]}
+                value={formData.clockIn}
+                onChangeText={text => setFormData({ ...formData, clockIn: text })}
+                keyboardType="phone-pad"
+                maxLength={5}
+              />
+              <Picker
+                selectedValue={clockInAmPm}
+                style={{ width: 80 }}
+                onValueChange={value => setClockInAmPm(value)}
+              >
+                <Picker.Item label="AM" value="AM" />
+                <Picker.Item label="PM" value="PM" />
+              </Picker>
+            </View>
+            {/* Clock Out Field */}
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <TextInput
+                placeholder="Clock Out (HH/MM)"
+                style={[styles.input, { flex: 1 }]}
+                value={formData.clockOut}
+                onChangeText={text => setFormData({ ...formData, clockOut: text })}
+                keyboardType="phone-pad"
+                maxLength={5}
+              />
+              <Picker
+                selectedValue={clockOutAmPm}
+                style={{ width: 80 }}
+                onValueChange={value => setClockOutAmPm(value)}
+              >
+                <Picker.Item label="AM" value="AM" />
+                <Picker.Item label="PM" value="PM" />
+              </Picker>
+            </View>
+            {/* Hours Field */}
+            <TextInput
+              placeholder="Hours (e.g. 8)"
+              style={styles.input}
+              value={formData.hours}
+              onChangeText={text => setFormData({ ...formData, hours: text })}
+              keyboardType="phone-pad"
+              maxLength={4}
+            />
+            <View style={styles.modalButtons}>
+              <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.cancelBtn}>
+                <Text>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleSave} style={styles.saveBtn}>
+                <Text style={{ color: 'white' }}>Save</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-      </Modal></>
+        </View>
+      </Modal>
 
+      {/* Goal Edit Modal */}
+      <Modal visible={goalModalVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Set Required Hours</Text>
+            <TextInput
+              placeholder="Required Hours"
+              style={styles.input}
+              value={goalInput}
+              onChangeText={setGoalInput}
+              keyboardType="number-pad"
+              maxLength={4}
+            />
+            <View style={styles.modalButtons}>
+              <TouchableOpacity onPress={() => setGoalModalVisible(false)} style={styles.cancelBtn}>
+                <Text>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={saveGoal} style={styles.saveBtn}>
+                <Text style={{ color: 'white' }}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </>
   );
 };
 

@@ -14,6 +14,8 @@ import { RootStackParamList } from '../App';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useSavedInternships } from '../context/SavedInternshipsContext';
 import MapView, { Marker } from 'react-native-maps';
+import { doc, setDoc } from 'firebase/firestore';
+import { auth, firestore } from '../firebase/config';
 
 type InternshipDetailsScreenRouteProp = RouteProp<RootStackParamList, 'InternshipDetails'>;
 
@@ -80,11 +82,84 @@ const InternshipDetailsScreen: React.FC<Props> = ({ route }) => {
     Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${query}`);
   };
 
-  const handleGotHiredPress = () => {
-    // Navigate to the OJT Tracker Screen
-    navigation.navigate('OJTTracker', {
-      post, // Pass the internship details if needed
-    });
+  const handleGotHiredPress = async () => {
+    if (!auth.currentUser) {
+      Alert.alert('Error', 'You must be logged in to update your status');
+      return;
+    }
+
+    const userId = auth.currentUser.uid; // Store uid in a variable after null check
+
+    // First show confirmation dialog
+    Alert.alert(
+      'Confirm Status Update',
+      'Are you sure you want to update your status to "Hired" for ' + post.company + '?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel'
+        },
+        {
+          text: 'Yes, Update Status',
+          onPress: async () => {
+            try {
+              // Update status in Firestore
+              const userDocRef = doc(firestore, "users", userId);
+              await setDoc(userDocRef, {
+                status: 'hired',
+                company: post.company
+              }, { merge: true });
+
+              // Show success message
+              Alert.alert(
+                'Success!',
+                'Your status has been updated to "Hired". You can now track your OJT hours.',
+                [
+                  {
+                    text: 'Go to OJT Tracker',
+                    onPress: () => {
+                      navigation.navigate('OJTTracker', {
+                        post, // Pass the internship details
+                      });
+                    }
+                  }
+                ]
+              );
+            } catch (error) {
+              Alert.alert('Error', 'Failed to update status. Please try again.');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleSaveInternship = () => {
+    Alert.alert(
+      isSaved ? 'Remove from Saved?' : 'Save Internship?',
+      isSaved
+        ? 'Are you sure you want to remove this internship from your saved list?'
+        : 'Would you like to save this internship for later?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel'
+        },
+        {
+          text: isSaved ? 'Yes, Remove' : 'Yes, Save',
+          onPress: () => {
+            toggleSaveInternship(post);
+            Alert.alert(
+              'Success',
+              isSaved
+                ? 'Internship removed from saved list'
+                : 'Internship saved successfully!',
+              [{ text: 'OK' }]
+            );
+          }
+        }
+      ]
+    );
   };
 
   return (
@@ -228,7 +303,7 @@ const InternshipDetailsScreen: React.FC<Props> = ({ route }) => {
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.saveButton, isSaved && styles.savedButton]}
-            onPress={() => toggleSaveInternship(post)}
+            onPress={handleSaveInternship}
           >
             <Text style={[styles.saveText, isSaved && styles.savedText]}>
               {isSaved ? '✅ Saved Internship' : '⭐ Save Internship'}
@@ -341,7 +416,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
     maxWidth: 100,
   },
-  
+
   skillsContainer: {
     marginTop: 8,
     flexDirection: 'row',

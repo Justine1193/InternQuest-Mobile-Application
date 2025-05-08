@@ -16,7 +16,7 @@ import {
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useNavigation } from "@react-navigation/native";
-import { signInWithEmailAndPassword } from "firebase/auth";
+import { signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
 import { auth } from "../firebase/config";
 
 type RootStackParamList = {
@@ -65,6 +65,25 @@ const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
     } catch (error: any) {
       Alert.alert("Login Failed", error.message || "Invalid email or password.");
       console.error("Login error:", error.message);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!email) {
+      Alert.alert("Error", "Please enter your email address first.");
+      return;
+    }
+
+    try {
+      await sendPasswordResetEmail(auth, email);
+      Alert.alert(
+        "Password Reset",
+        "A password reset link has been sent to your email address.",
+        [{ text: "OK" }]
+      );
+    } catch (error: any) {
+      Alert.alert("Error", error.message || "Failed to send password reset email.");
+      console.error("Password reset error:", error.message);
     }
   };
 
@@ -120,7 +139,7 @@ const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity>
+            <TouchableOpacity onPress={handleForgotPassword}>
               <Text style={[styles.forgotPassword, { color: theme.link }]}>Forgot password?</Text>
             </TouchableOpacity>
 
@@ -130,7 +149,7 @@ const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
 
             <View style={styles.signupContainer}>
               <Text style={[styles.signupText, { color: theme.text }]}>
-                Don’t have an account?{" "}
+                Don't have an account?{" "}
                 <Text
                   style={[styles.signupLink, { color: theme.link }]}
                   onPress={() => navigation.navigate("SignUp")}

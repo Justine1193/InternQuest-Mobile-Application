@@ -13,6 +13,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../App';
 import { doc, setDoc } from 'firebase/firestore';
 import { auth, firestore } from '../firebase/config';
+import { updatePassword } from "firebase/auth";
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'SetupAccount'>;
 
@@ -75,7 +76,7 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
 
     try {
       const userDocRef = doc(firestore, 'users', auth.currentUser?.uid || 'unknown');
-      await setDoc(userDocRef, userData);
+      await setDoc(userDocRef, userData, { merge: true });
 
       alert('Account Setup Complete!');
       navigation.navigate('SignIn');
@@ -165,7 +166,7 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
                 style={[
                   styles.checkbox,
                   locationPreference[type as keyof typeof locationPreference] &&
-                    styles.checkedBox,
+                  styles.checkedBox,
                 ]}
               />
               <Text style={styles.checkboxLabel}>

@@ -9,7 +9,7 @@ import {
   Image,
 } from "react-native";
 import { createUserWithEmailAndPassword } from "firebase/auth";
-import { doc, setDoc } from "firebase/firestore";
+import { doc, setDoc, serverTimestamp, getDoc } from "firebase/firestore";
 import { auth, firestore } from "../firebase/config";
 import { useNavigation } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
@@ -28,29 +28,71 @@ const SignUpScreen: React.FC = () => {
 
   const handleSignUp = async () => {
     if (!email || !contact || !password || !confirmPassword) {
-      Alert.alert("Please fill in all fields.");
+      Alert.alert("Error", "Please fill in all fields.");
       return;
     }
 
     if (password !== confirmPassword) {
-      Alert.alert("Passwords do not match.");
+      Alert.alert("Error", "Passwords do not match.");
       return;
     }
 
     try {
+      // Create user in Firebase Auth
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      // Save user data to Firestore (not storing password for security reasons)
-      await setDoc(doc(firestore, "users", user.uid), {
+      // Save user data to Firestore with additional fields
+      const userDocRef = doc(firestore, "users", user.uid);
+      const existingDoc = await getDoc(userDocRef);
+      let existingContact = "";
+      if (existingDoc.exists()) {
+        existingContact = existingDoc.data().contact || "";
+      }
+
+      const userData = {
         email,
         contact,
-      });
+        createdAt: serverTimestamp(),
+        lastLogin: serverTimestamp(),
+        isProfileComplete: false,
+        role: "user",
+        status: "active",
+        existingContact,
+      };
 
-      Alert.alert("Success", "Account created!");
-      navigation.navigate("SetupAccount");
+      await setDoc(userDocRef, userData, { merge: true });
+
+      Alert.alert(
+        "Success",
+        "Account created successfully!",
+        [
+          {
+            text: "OK",
+            onPress: () => navigation.navigate("SetupAccount")
+          }
+        ]
+      );
     } catch (error: any) {
-      Alert.alert("Error", error.message);
+      let errorMessage = "An error occurred during sign up.";
+
+      // Handle specific Firebase errors
+      switch (error.code) {
+        case 'auth/email-already-in-use':
+          errorMessage = "This email is already registered.";
+          break;
+        case 'auth/invalid-email':
+          errorMessage = "Please enter a valid email address.";
+          break;
+        case 'auth/weak-password':
+          errorMessage = "Password should be at least 6 characters.";
+          break;
+        default:
+          errorMessage = error.message;
+      }
+
+      Alert.alert("Error", errorMessage);
+      console.error("Sign up error:", error);
     }
   };
 

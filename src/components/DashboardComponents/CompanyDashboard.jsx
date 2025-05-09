@@ -1,14 +1,145 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './CompanyDashboard.css';
 import { IoCloseOutline, IoSearchOutline, IoSettingsOutline, IoEllipsisVertical } from "react-icons/io5";
-import { db } from '../../../firebase'; 
-import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { db, auth } from '../../../firebase'; 
+import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc, getDoc } from 'firebase/firestore';
 import logo from '../../assets/InternQuest_Logo.png'; 
 import { signOut } from 'firebase/auth';
-import { auth } from '../../../firebase';
 import ConfirmModal from '../ConfirmModal/ConfirmModal.jsx';
 import { FiFilter } from "react-icons/fi";
 import { FaFilter } from "react-icons/fa";
+import PortalDropdown from '../PortalDropdown'; // adjust path as needed
+import { ReactTags } from 'react-tag-autocomplete';
+
+function KebabCell({
+  row,
+  openMenuId,
+  setOpenMenuId,
+  selectedRowId,
+  setSelectedRowId,
+  handleDeleteSingle,
+  isDeleting,
+  selectionMode,
+  setSelectedItems,
+  setSelectionMode,
+  setIsEditMode,
+  setEditCompanyId,
+  setFormData,
+  setSkills,
+  setIsModalOpen
+}) {
+  const kebabRef = useRef(null);
+
+  return (
+    <span
+      ref={kebabRef}
+      className="kebab-icon-wrapper"
+      style={{ position: 'relative', display: 'inline-block' }}
+    >
+      <IoEllipsisVertical
+        className="kebab-icon"
+        onClick={() => {
+          setOpenMenuId(row.id);
+          setSelectedRowId(null);
+          if (selectionMode) {
+            setSelectionMode(false);
+            setSelectedItems([]);
+          }
+        }}
+        title="Options"
+      />
+      <PortalDropdown
+        anchorRef={kebabRef}
+        open={openMenuId === row.id}
+        onClose={() => setOpenMenuId(null)}
+      >
+        <button
+          className="edit-btn"
+          onClick={() => {
+            console.log('Edit clicked', row);
+            setIsEditMode(true);
+            setEditCompanyId(row.id);
+            setFormData({
+              companyName: row.companyName || '',
+              description: row.companyDescription || '',
+              website: row.companyWeb || '',
+              field: row.field || '',
+              address: row.companyAddress || '',
+              email: row.companyEmail || '',
+              skills: '', // or row.skillsREq if you want to prefill
+              moa: row.moa === "Yes",
+              modeOfWork: Array.isArray(row.modeOfWork) ? row.modeOfWork : [],
+            });
+            setSkills(Array.isArray(row.skillsREq) ? row.skillsREq : []);
+            setIsModalOpen(true);
+            setOpenMenuId(null);
+            setSelectedRowId(null);
+          }}
+        >
+          Edit
+        </button>
+        {selectedRowId !== row.id ? (
+          <button
+            className="select-btn"
+            onClick={() => {
+              setSelectionMode(true);
+              setSelectedItems([row.id]);
+              setOpenMenuId(null);
+              setSelectedRowId(null);
+            }}
+          >
+            Select
+          </button>
+        ) : (
+          <button
+            className="delete"
+            onClick={async () => {
+              setIsDeleting(true);
+              if (window.confirm('Are you sure you want to delete this student?')) {
+                await handleDeleteSingle(row.id);
+              }
+              setIsDeleting(false);
+              setOpenMenuId(null);
+              setSelectedRowId(null);
+            }}
+            disabled={isDeleting}
+          >
+            {isDeleting ? 'Deleting...' : 'Delete'}
+          </button>
+        )}
+      </PortalDropdown>
+    </span>
+  );
+}
+
+function useSuggestionSkills() {
+  const [skills, setSkills] = useState([]);
+  useEffect(() => {
+    async function fetchSkills() {
+      const docSnap = await getDoc(doc(db, 'meta', 'suggestionSkills'));
+      if (docSnap.exists()) {
+        // Remove trailing spaces if any
+        setSkills((docSnap.data().list || []).map(skill => skill.trim()));
+      }
+    }
+    fetchSkills();
+  }, []);
+  return skills;
+}
+
+function useSuggestionFields() {
+  const [fields, setFields] = useState([]);
+  useEffect(() => {
+    async function fetchFields() {
+      const docSnap = await getDoc(doc(db, 'meta', 'field'));
+      if (docSnap.exists()) {
+        setFields((docSnap.data().list || []).map(field => field.trim()));
+      }
+    }
+    fetchFields();
+  }, []);
+  return fields;
+}
 
 const Dashboard = () => {
 
@@ -17,7 +148,7 @@ const Dashboard = () => {
     companyName: '',
     description: '',
     website: '', 
-    industry: '',
+    field: '',
     address: '',
     email: '',
     skills: '',
@@ -31,116 +162,19 @@ const Dashboard = () => {
   const [showDropdown, setShowDropdown] = useState(false);
   const skillsInputRef = useRef(null);
 
-  const suggestedSkills = [
-    // Business, Accountancy, and Entrepreneurship
-    'Financial Analysis',
-    'Financial Reporting',
-    'QuickBooks',
-    'Xero',
-    'Market Research',
-    'Market Analysis',
-    'Sales',
-    'Negotiation',
-    'Microsoft Excel (Advanced)',
-    'Business Communication',
-    'Strategic Planning',
-    'CRM Tools',
-    
-    // IT, Computer Science, and Multimedia
-    'HTML',
-    'CSS',
-    'JavaScript',
-    'React',
-    'Node.js',
-    'PHP',
-    'Python',
-    'MySQL',
-    'Firebase',
-    'MongoDB',
-    'UI Design',
-    'UX Design',
-    'Figma',
-    'Adobe XD',
-    'Git',
-    'GitHub',
-    'Unity',
-    'Unreal Engine',
-    'Blender',
-    'Maya',
-    'Cybersecurity',
-    
-    // Psychology, Education, and Public Administration
-    'Psychological Assessment',
-    'Report Writing',
-    'Documentation',
-    'Classroom Management',
-    'Lesson Planning',
-    'Google Forms',
-    'SurveyMonkey',
-    'Community Outreach',
-    'Public Speaking',
-    'Facilitation',
-    'Active Listening',
-    
-    // Medical, Nursing, and Science
-    'Laboratory Safety',
-    'Diagnostic Skills',
-    'Vital Signs',
-    'Health Documentation',
-    'EHR Systems',
-    'Patient Communication',
-    'Research Methods',
-    'Data Interpretation',
-    'Specimen Handling',
-    'First Aid',
-    'Emergency Response',
-    
-    // Communication, Journalism, and Arts
-    'Copywriting',
-    'Editing',
-    'Photography',
-    'Videography',
-    'Adobe Photoshop',
-    'Adobe Premiere Pro',
-    'Adobe InDesign',
-    'Social Media Content',
-    'News Writing',
-    'Press Releases',
-    'Public Relations',
-    'Media Strategy',
-    'Storyboarding',
-    'Scriptwriting',
-    'Podcasting',
-    'Audio Editing',
-    
-    // Engineering and Architecture
-    'AutoCAD',
-    'SketchUp',
-    'Revit',
-    'Structural Design',
-    'Project Documentation',
-    'Technical Drawing',
-    'Blueprint Reading',
-    'MS Project',
-    'Safety Compliance',
-    'Problem Solving',
-    'Critical Thinking',
-    'Technical Writing',
-    
-    // Music and Performing Arts
-    'Instrumental Proficiency',
-    'Vocal Proficiency',
-    'Music Notation',
-    'Music Arrangement',
-    'FL Studio',
-    'Logic Pro',
-    'Event Coordination',
-    'Ensemble Collaboration',
-    'Conducting',
-    'Music Teaching',
-    'Audio Recording',
-    'Audio Mixing'
-];
+  const suggestionSkills = useSuggestionSkills();
+  const suggestions = suggestionSkills.map((skill, idx) => ({ id: idx, name: skill }));
+
+  const [input, setInput] = useState('');
+  const [filtered, setFiltered] = useState([]);
+
+  useEffect(() => {
+    setFiltered(
+      suggestionSkills.filter(skill =>
+        skill.toLowerCase().includes(skillInput.toLowerCase())
+      )
+    );
+  }, [skillInput, suggestionSkills]);
 
   const [overviewStats, setOverviewStats] = useState({
     totalCompanies: 0,
@@ -166,52 +200,39 @@ const Dashboard = () => {
 
   const [showFilter, setShowFilter] = useState(false);
   const [filterValues, setFilterValues] = useState({
-    industry: '',
+    field: '',
     modeOfWork: '',
     moa: '',
   });
 
   const [pendingFilterValues, setPendingFilterValues] = useState({
-    industry: '',
+    field: '',
     modeOfWork: '',
     moa: '',
   });
 
   const [showConfirm, setShowConfirm] = useState(false);
 
+  const [openMenuId, setOpenMenuId] = useState(null);
+  const [selectedRowId, setSelectedRowId] = useState(null);
+
+  const [selectionMode, setSelectionMode] = useState(false);
+
+  const [fields, setFields] = useState([]);
+  const [fieldInput, setFieldInput] = useState('');
+  const [showFieldDropdown, setShowFieldDropdown] = useState(false);
+
+  const suggestionFields = useSuggestionFields();
+  const fieldSuggestions = suggestionFields.map((field, idx) => ({ id: idx, name: field }));
+
+  const [filteredFields, setFilteredFields] = useState([]);
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setIsLoading(true);
-        // Fetch companies
-        const companiesSnapshot = await getDocs(collection(db, 'companies'));
-        const companies = companiesSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-        setTableData(companies);
-        
-        // Fetch students
-        const studentsSnapshot = await getDocs(collection(db, 'users')); // <-- use your actual collection name
-        const studentCount = studentsSnapshot.size;
-
-        // Update overview stats
-        setOverviewStats(prev => ({
-          ...prev,
-          totalCompanies: companies.length,
-          totalStudents: studentCount, // This will now update dynamically!
-          totalApplications: 0
-        }));
-      } catch (err) {
-        console.error("Error fetching data:", err);
-        setError("Failed to fetch data. Please try again.");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchData();
-}, []);
+    setFilteredFields(
+      suggestionFields.filter(field =>
+        field.toLowerCase().includes(fieldInput.toLowerCase())
+      )
+    );
+  }, [fieldInput, suggestionFields]);
 
   const handleSkillInput = (e) => {
     setSkillInput(e.target.value);
@@ -262,8 +283,8 @@ const Dashboard = () => {
       if (!formData.website.trim()) {
         throw new Error("Website is required");
       }
-      if (!formData.industry.trim()) {
-        throw new Error("Industry is required");
+      if (fields.length === 0) {
+        throw new Error("At least one field is required");
       }
       if (!formData.address.trim()) {
         throw new Error("Address is required");
@@ -283,13 +304,14 @@ const Dashboard = () => {
         companyName: formData.companyName,
         companyDescription: formData.description,       
         companyWeb: formData.website,                  
-        industry: formData.industry,
+        field: formData.field,
         companyAddress: formData.address,             
         companyEmail: formData.email,          
         skillsREq: skills,                  
         moa: formData.moa ? "Yes" : "No",     
         modeOfWork: formData.modeOfWork,    
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        fields: fields,
       };
 
       const docRef = await addDoc(collection(db, 'companies'), newCompany);
@@ -302,7 +324,7 @@ const Dashboard = () => {
         companyName: '',
         description: '',
         website: '', // Add this line
-        industry: '',
+        field: '',
         address: '',
         email: '',
         skills: '',
@@ -311,6 +333,7 @@ const Dashboard = () => {
       });
 
       setSkills([]); // Clear skills array
+      setFields([]);
     } catch (err) {
       setError(err.message);
       return; // Stop execution if validation fails
@@ -398,11 +421,11 @@ const Dashboard = () => {
   const filteredData = tableData.filter(row => {
     const matchesSearch =
       row.companyName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      row.industry.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (Array.isArray(row.fields) && row.fields.some(f => f.toLowerCase().includes(searchQuery.toLowerCase()))) ||
       row.companyDescription.toLowerCase().includes(searchQuery.toLowerCase());
 
-    const matchesIndustry = filterValues.industry
-      ? row.industry.toLowerCase().includes(filterValues.industry.toLowerCase())
+    const matchesfield = filterValues.field
+      ? (Array.isArray(row.fields) && row.fields.some(f => f.toLowerCase().includes(filterValues.field.toLowerCase())))
       : true;
 
     const matchesModeOfWork = filterValues.modeOfWork
@@ -413,7 +436,7 @@ const Dashboard = () => {
       ? row.moa === filterValues.moa
       : true;
 
-    return matchesSearch && matchesIndustry && matchesModeOfWork && matchesMoa;
+    return matchesSearch && matchesfield && matchesModeOfWork && matchesMoa;
   });
 
   const totalPages = Math.ceil(filteredData.length / itemsPerPage);
@@ -434,7 +457,7 @@ const Dashboard = () => {
       companyName: company.companyName || '',
       description: company.companyDescription || '',
       website: company.companyWeb || '',
-      industry: company.industry || '',
+      field: company.field || '',
       address: company.companyAddress || '',
       email: company.companyEmail || '',
       skills: '',
@@ -445,6 +468,7 @@ const Dashboard = () => {
     setIsEditMode(true);
     setEditCompanyId(company.id);
     setIsModalOpen(true);
+    setFields(Array.isArray(company.fields) ? company.fields : []);
   };
 
   const handleUpdateEntry = async () => {
@@ -452,7 +476,7 @@ const Dashboard = () => {
       if (!formData.companyName.trim()) throw new Error("Company name is required");
       if (!formData.description.trim()) throw new Error("Description is required");
       if (!formData.website.trim()) throw new Error("Website is required");
-      if (!formData.industry.trim()) throw new Error("Industry is required");
+      if (fields.length === 0) throw new Error("At least one field is required");
       if (!formData.address.trim()) throw new Error("Address is required");
       if (!formData.email.trim()) throw new Error("Email is required");
       if (skills.length === 0) throw new Error("At least one skill is required");
@@ -463,12 +487,13 @@ const Dashboard = () => {
         companyName: formData.companyName,
         companyDescription: formData.description,
         companyWeb: formData.website,
-        industry: formData.industry,
+        field: formData.field,
         companyAddress: formData.address,
         companyEmail: formData.email,
         skillsREq: skills,
         moa: formData.moa ? "Yes" : "No",
         modeOfWork: formData.modeOfWork,
+        fields: fields,
       };
 
       await updateDoc(doc(db, 'companies', editCompanyId), updatedCompany);
@@ -485,7 +510,7 @@ const Dashboard = () => {
         companyName: '',
         description: '',
         website: '',
-        industry: '',
+        field: '',
         address: '',
         email: '',
         skills: '',
@@ -493,6 +518,7 @@ const Dashboard = () => {
         modeOfWork: [],
       });
       setSkills([]);
+      setFields([]);
     } catch (err) {
       setError(err.message);
       return;
@@ -500,6 +526,45 @@ const Dashboard = () => {
       setIsLoading(false);
     }
   };
+
+  const handleDeleteSingle = async (id) => {
+    try {
+      setIsDeleting(true);
+      await deleteDoc(doc(db, 'companies', id));
+      setTableData(prev => prev.filter(company => company.id !== id));
+      setSelectedRowId(null);
+      setOpenMenuId(null);
+    } catch (error) {
+      setError("Failed to delete company. Please try again.");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  useEffect(() => {
+    async function fetchData() {
+      // Fetch companies
+      const companySnapshot = await getDocs(collection(db, "companies"));
+      const companies = [];
+      companySnapshot.forEach((doc) => {
+        companies.push({ id: doc.id, ...doc.data() });
+      });
+
+      // Fetch students
+      const studentSnapshot = await getDocs(collection(db, "users")); // or your students collection name
+      const students = [];
+      studentSnapshot.forEach((doc) => {
+        students.push({ id: doc.id, ...doc.data() });
+      });
+
+      setTableData(companies);
+      setOverviewStats({
+        totalCompanies: companies.length,
+        totalStudents: students.length,
+      });
+    }
+    fetchData();
+  }, []);
 
   return (
     <div className="dashboard-container">
@@ -589,12 +654,12 @@ const Dashboard = () => {
               {showFilter && (
                 <div className="filter-dropdown">
                   <div>
-                    <label>Industry:</label>
+                    <label>field:</label>
                     <input
                       type="text"
-                      value={pendingFilterValues.industry}
-                      onChange={e => setPendingFilterValues(f => ({ ...f, industry: e.target.value }))}
-                      placeholder="Industry"
+                      value={pendingFilterValues.field}
+                      onChange={e => setPendingFilterValues(f => ({ ...f, field: e.target.value }))}
+                      placeholder="field"
                     />
                   </div>
                   <div>
@@ -630,6 +695,23 @@ const Dashboard = () => {
                   >
                     Apply
                   </button>
+                  <button
+                    className="apply-filter-btn"
+                    style={{ background: '#f44336', marginTop: 8 }}
+                    onClick={() => {
+                      const reset = {
+                        field: '',
+                        modeOfWork: '',
+                        moa: '',
+                      };
+                      setPendingFilterValues(reset);
+                      setFilterValues(reset);
+                      setShowFilter(false);
+                    }}
+                    type="button"
+                  >
+                    Reset
+                  </button>
                 </div>
               )}
             </div>
@@ -638,11 +720,13 @@ const Dashboard = () => {
             <table>
               <thead>
                 <tr>
-                  <th className="checkbox-cell"></th>
+                  <th className="checkbox-cell">
+                    {selectionMode && <span style={{ fontWeight: 500 }}>Select</span>}
+                  </th>
                   <th>Company Name</th>
                   <th>Description</th>
                   <th>Company Website</th>
-                  <th>Industry</th>
+                  <th>Field</th>
                   <th>Address</th>
                   <th>Email</th>
                   <th>Skills required</th>
@@ -655,11 +739,19 @@ const Dashboard = () => {
                 {currentItems.map((row) => (
                   <tr key={row.id} className={selectedItems.includes(row.id) ? 'selected-row' : ''}>
                     <td className="checkbox-cell">
-                      <input 
-                        type="checkbox" 
-                        checked={selectedItems.includes(row.id)} 
-                        onChange={() => handleSelectItem(row.id)} 
-                      />
+                      {selectionMode && (
+                        <input
+                          type="checkbox"
+                          checked={selectedItems.includes(row.id)}
+                          onChange={() => {
+                            setSelectedItems(prev =>
+                              prev.includes(row.id)
+                                ? prev.filter(item => item !== row.id)
+                                : [...prev, row.id]
+                            );
+                          }}
+                        />
+                      )}
                     </td>
                     <td>{row.companyName}</td>
                     <td className="description-cell">
@@ -680,13 +772,32 @@ const Dashboard = () => {
                         {row.companyWeb}
                       </a>
                     </td>
-                    <td>{row.industry}</td>
+                    <td>
+                      <div className="table-fields-tags">
+                        {Array.isArray(row.fields) && row.fields.map((field, index) => (
+                          <span key={field + index} className="table-field-tag">
+                            {field}
+                          </span>
+                        ))}
+                      </div>
+                    </td>
                     <td>{row.companyAddress}</td>
-                    <td>{row.companyEmail}</td>
+                    <td>
+                      {row.companyEmail ? (
+                        <a
+                          href={`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(row.companyEmail)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: '#1976d2', textDecoration: 'underline' }}
+                        >
+                          {row.companyEmail}
+                        </a>
+                      ) : ''}
+                    </td>
                     <td>
                       <div className="table-skills-tags">
                         {Array.isArray(row.skillsREq) && row.skillsREq.map((skill, index) => (
-                          <span key={index} className="table-skill-tag">
+                          <span key={skill + index} className="table-skill-tag">
                             {skill}
                           </span>
                         ))}
@@ -695,26 +806,38 @@ const Dashboard = () => {
                     <td>
                       <input type="checkbox" checked={row.moa === "Yes"} readOnly />
                     </td>
-                    <td>{Array.isArray(row.modeOfWork) ? row.modeOfWork.join(", ") : row.modeOfWork}</td>
+                    <td>
+                      <div className="table-mode-tags">
+                        {Array.isArray(row.modeOfWork)
+                          ? row.modeOfWork.map((mode, idx) => (
+                              <span
+                                key={mode + idx}
+                                className={`mode-tag mode-tag-${mode.replace(/\s+/g, '').toLowerCase()}`}
+                              >
+                                {mode}
+                              </span>
+                            ))
+                          : row.modeOfWork}
+                      </div>
+                    </td>
                     <td className="kebab-cell">
-                      <IoEllipsisVertical
-                        className="kebab-icon"
-                        onClick={() => setOpenMenuRow(openMenuRow === row.id ? null : row.id)}
-                        title="Options"
+                      <KebabCell
+                        row={row}
+                        openMenuId={openMenuId}
+                        setOpenMenuId={setOpenMenuId}
+                        selectedRowId={selectedRowId}
+                        setSelectedRowId={setSelectedRowId}
+                        handleDeleteSingle={handleDeleteSingle}
+                        isDeleting={isDeleting}
+                        selectionMode={selectionMode}
+                        setSelectedItems={setSelectedItems}
+                        setSelectionMode={setSelectionMode}
+                        setIsEditMode={setIsEditMode}
+                        setEditCompanyId={setEditCompanyId}
+                        setFormData={setFormData}
+                        setSkills={setSkills}
+                        setIsModalOpen={setIsModalOpen}
                       />
-                      {openMenuRow === row.id && (
-                        <div className="options-dropdown">
-                          <button
-                            className="edit-btn"
-                            onClick={() => {
-                              setOpenMenuRow(null);
-                              handleEdit(row);
-                            }}
-                          >
-                            Edit
-                          </button>
-                        </div>
-                      )}
                     </td>
                   </tr>
                 ))}
@@ -756,7 +879,7 @@ const Dashboard = () => {
                   companyName: '',
                   description: '',
                   website: '',
-                  industry: '',
+                  field: '',
                   address: '',
                   email: '',
                   skills: '',
@@ -764,17 +887,32 @@ const Dashboard = () => {
                   modeOfWork: [],
                 });
                 setSkills([]);
+                setFields([]);
               }}
             >
               Add Entry
             </button>
-            <button
-              className="delete"
-              onClick={handleDelete}
-              disabled={selectedItems.length === 0}
-            >
-              Delete
-            </button>
+            {selectionMode && selectedItems.length > 0 && (
+              <div style={{ margin: '1rem 0' }}>
+                <button
+                  className="delete"
+                  onClick={handleDelete}
+                  disabled={isDeleting}
+                >
+                  {isDeleting ? 'Deleting...' : `Delete (${selectedItems.length})`}
+                </button>
+                <button
+                  onClick={() => {
+                    setSelectionMode(false);
+                    setSelectedItems([]);
+                    setOpenMenuId(null);
+                  }}
+                  style={{ marginLeft: '1rem' }}
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
           </div>
           
         </div>
@@ -827,16 +965,52 @@ const Dashboard = () => {
                 />
               </div>
               <div className="form-group">
-                <label htmlFor="industry">Industry:</label>
-                <input
-                  id="industry"
-                  type="text"
-                  name="industry"
-                  value={formData.industry}
-                  onChange={handleInputChange}
-                  placeholder="Enter company industry"
-                  required
-                />
+                <label htmlFor="field">Field:</label>
+                <div className="fields-container">
+                  <div className="fields-input-wrapper">
+                    <input
+                      type="text"
+                      className="fields-input"
+                      placeholder="Search fields"
+                      value={fieldInput}
+                      onChange={e => {
+                        setFieldInput(e.target.value);
+                        setShowFieldDropdown(true);
+                      }}
+                    />
+                    {showFieldDropdown && fieldInput && (
+                      <div className="fields-dropdown">
+                        {filteredFields.map((field, index) => (
+                          <div
+                            key={field + index}
+                            className="fields-dropdown-item"
+                            onClick={() => {
+                              if (!fields.includes(field)) setFields([...fields, field]);
+                              setFieldInput('');
+                              setShowFieldDropdown(false);
+                            }}
+                          >
+                            {field}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="fields-tags">
+                    {fields.map((field, idx) => (
+                      <span key={field + idx} className="field-tag">
+                        {field}
+                        <IoCloseOutline
+                          className="remove-field"
+                          onClick={() => setFields(fields.filter(f => f !== field))}
+                        />
+                      </span>
+                    ))}
+                  </div>
+                  <div className="fields-limit">
+                    {fields.length}/15 fields added
+                  </div>
+                </div>
               </div>
               <div className="form-group">
                 <label htmlFor="address">Address:</label>
@@ -876,21 +1050,15 @@ const Dashboard = () => {
                     />
                     {showDropdown && skillInput && (
                       <div className="skills-dropdown">
-                        {suggestedSkills
-                          .filter(skill => 
-                            skill.toLowerCase().includes(skillInput.toLowerCase()) &&
-                            !skills.includes(skill)
-                          )
-                          .map((skill, index) => (
-                            <div
-                              key={index}
-                              className="skills-dropdown-item"
-                              onClick={() => addSkill(skill)}
-                            >
-                              {skill}
-                            </div>
-                          ))
-                        }
+                        {filtered.map((skill, index) => (
+                          <div
+                            key={skill + index}
+                            className="skills-dropdown-item"
+                            onClick={() => addSkill(skill)}
+                          >
+                            {skill}
+                          </div>
+                        ))}
                       </div>
                     )}
                   </div>
@@ -900,7 +1068,7 @@ const Dashboard = () => {
                   >
                     {skills.map((skill, idx) => (
                       <span
-                        key={idx}
+                        key={skill + idx}
                         className="skill-tag"
                         draggable
                         onDragStart={(e) => {
@@ -988,7 +1156,7 @@ const Dashboard = () => {
                     companyName: '',
                     description: '',
                     website: '',
-                    industry: '',
+                    field: '',
                     address: '',
                     email: '',
                     skills: '',
@@ -996,6 +1164,7 @@ const Dashboard = () => {
                     modeOfWork: [],
                   });
                   setSkills([]);
+                  setFields([]);
                 }}
               >
                 Cancel

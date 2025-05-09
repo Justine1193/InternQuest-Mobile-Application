@@ -1,11 +1,84 @@
-import React, { useState, useEffect } from 'react';
-import { IoSearchOutline, IoSettingsOutline, IoMenu, IoEllipsisVertical } from "react-icons/io5";
+import React, { useState, useEffect, useRef } from 'react';
+import { IoSearchOutline, IoSettingsOutline, IoEllipsisVertical, IoCloseOutline } from "react-icons/io5";
+import { FaFilter } from "react-icons/fa";
 import { db } from '../../../firebase'; 
 import { collection, getDocs, addDoc, deleteDoc, doc } from 'firebase/firestore';
 import logo from '../../assets/InternQuest_Logo.png';
 import { signOut } from 'firebase/auth';
 import { auth } from '../../../firebase';
+import PortalDropdown from '../PortalDropdown';
+import ConfirmModal from '../ConfirmModal/ConfirmModal.jsx';
 
+function KebabCell({
+  row,
+  openMenuId,
+  setOpenMenuId,
+  selectedRowId,
+  setSelectedRowId,
+  handleDeleteSingle,
+  isDeleting,
+  selectionMode,
+  setSelectedItems,
+  setSelectionMode,
+}) {
+  const kebabRef = useRef(null);
+
+  return (
+    <span
+      ref={kebabRef}
+      className="kebab-icon-wrapper"
+      style={{ position: 'relative', display: 'inline-block' }}
+    >
+      <IoEllipsisVertical
+        className="kebab-icon"
+        onClick={() => {
+          setOpenMenuId(row.id);
+          setSelectedRowId(null);
+          if (selectionMode) {
+            setSelectionMode(false);
+            setSelectedItems([]);
+          }
+        }}
+        title="Options"
+      />
+      <PortalDropdown
+        anchorRef={kebabRef}
+        open={openMenuId === row.id}
+        onClose={() => setOpenMenuId(null)}
+      >
+        {selectedRowId !== row.id ? (
+          <button
+            className="select-btn"
+            onClick={() => {
+              setSelectionMode(true);
+              setSelectedItems([row.id]);
+              setOpenMenuId(null);
+              setSelectedRowId(null);
+            }}
+          >
+            Select
+          </button>
+        ) : (
+          <button
+            className="delete"
+            onClick={async () => {
+              setIsDeleting(true);
+              if (window.confirm('Are you sure you want to delete this student?')) {
+                await handleDeleteSingle(row.id);
+              }
+              setIsDeleting(false);
+              setOpenMenuId(null);
+              setSelectedRowId(null);
+            }}
+            disabled={isDeleting}
+          >
+            {isDeleting ? 'Deleting...' : 'Delete'}
+          </button>
+        )}
+      </PortalDropdown>
+    </span>
+  );
+}
 
 const StudentDashboard = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -21,11 +94,34 @@ const StudentDashboard = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(8);
   const [showLogout, setShowLogout] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [selectionMode, setSelectionMode] = useState(false);
-  const [selectedItems, setSelectedItems] = useState([]);
+  
+  // Add new state variables for kebab menu functionality
   const [openMenuId, setOpenMenuId] = useState(null);
   const [selectedRowId, setSelectedRowId] = useState(null);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedItems, setSelectedItems] = useState([]);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+
+  // Add filter states
+  const [showFilter, setShowFilter] = useState(false);
+  const [filterValues, setFilterValues] = useState({
+    program: '',
+    field: '',
+    email: '',
+    contact: '',
+    hired: '',
+    locationPreference: '',
+  });
+
+  const [pendingFilterValues, setPendingFilterValues] = useState({
+    program: '',
+    field: '',
+    email: '',
+    contact: '',
+    hired: '',
+    locationPreference: '',
+  });
 
   useEffect(() => {
     const fetchData = async () => {
@@ -76,12 +172,40 @@ const StudentDashboard = () => {
     }
   };
 
-  // Pagination and search logic
-  const filteredData = students.filter(student =>
-    (student.firstName && student.firstName.toLowerCase().includes(searchQuery.toLowerCase())) ||
-    (student.lastName && student.lastName.toLowerCase().includes(searchQuery.toLowerCase())) ||
-    (student.program && student.program.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  // Update the filteredData to include filters
+  const filteredData = students.filter(student => {
+    const matchesSearch =
+      (student.firstName && student.firstName.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (student.lastName && student.lastName.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (student.program && student.program.toLowerCase().includes(searchQuery.toLowerCase()));
+
+    const matchesProgram = filterValues.program
+      ? student.program && student.program.toLowerCase().includes(filterValues.program.toLowerCase())
+      : true;
+
+    const matchesField = filterValues.field
+      ? student.field && student.field.toLowerCase().includes(filterValues.field.toLowerCase())
+      : true;
+
+    const matchesEmail = filterValues.email
+      ? student.email && student.email.toLowerCase().includes(filterValues.email.toLowerCase())
+      : true;
+
+    const matchesContact = filterValues.contact
+      ? student.contact && student.contact.toLowerCase().includes(filterValues.contact.toLowerCase())
+      : true;
+
+    const matchesHired = filterValues.hired
+      ? (filterValues.hired === 'Yes' ? student.hired === true : student.hired !== true)
+      : true;
+
+    const matchesLocation = filterValues.locationPreference
+      ? student.locationPreference && student.locationPreference[filterValues.locationPreference.toLowerCase()]
+      : true;
+
+    return matchesSearch && matchesProgram && matchesField && matchesEmail && matchesContact && matchesHired && matchesLocation;
+  });
+
   const totalPages = Math.ceil(filteredData.length / itemsPerPage);
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
@@ -96,17 +220,13 @@ const StudentDashboard = () => {
     }
   };
 
-  const handleSelectItem = (id) => {
-    setSelectedItems(prev =>
-      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
-    );
-  };
-
   const handleDeleteSingle = async (id) => {
     try {
       setIsDeleting(true);
-      await deleteDoc(doc(db, 'users', id)); // Use 'users' for students
+      await deleteDoc(doc(db, 'users', id));
       setStudents(prev => prev.filter(student => student.id !== id));
+      setSelectedRowId(null);
+      setOpenMenuId(null);
     } catch (error) {
       setError("Failed to delete student. Please try again.");
     } finally {
@@ -115,23 +235,33 @@ const StudentDashboard = () => {
   };
 
   const handleDelete = async () => {
+    setShowConfirm(true);
+  };
+
+  const confirmDelete = async () => {
+    setShowConfirm(false);
     try {
       setIsDeleting(true);
-      if (!window.confirm(`Are you sure you want to delete ${selectedItems.length} item(s)?`)) {
-        setIsDeleting(false);
-        return;
-      }
+      
+      // Delete from Firestore
       for (const id of selectedItems) {
-        await deleteDoc(doc(db, 'companies', id));
+        await deleteDoc(doc(db, 'users', id));
       }
-      setCompanies(prevCompanies => prevCompanies.filter(company => !selectedItems.includes(company.id)));
+  
+      // Update local state
+      setStudents(prevData => prevData.filter(item => !selectedItems.includes(item.id)));
       setSelectedItems([]);
-      setSelectionMode(false);
+      
     } catch (error) {
+      console.error("Error deleting items:", error);
       setError("Failed to delete items. Please try again.");
     } finally {
       setIsDeleting(false);
     }
+  };
+
+  const cancelDelete = () => {
+    setShowConfirm(false);
   };
 
   return (
@@ -153,8 +283,36 @@ const StudentDashboard = () => {
             style={{ cursor: 'pointer' }}
           />
           {showLogout && (
-            <div className="logout-dropdown">
-              <button onClick={handleLogout}>Logout</button>
+            <div
+              style={{
+                position: 'absolute',
+                right: 0,
+                top: '40px',
+                background: '#fff',
+                border: '1px solid #ddd',
+                borderRadius: '4px',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                zIndex: 1000,
+                minWidth: '120px',
+                padding: '8px 0',
+              }}
+            >
+              <button
+                onClick={handleLogout}
+                style={{
+                  width: '100%',
+                  background: 'none',
+                  border: 'none',
+                  padding: '10px 16px',
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  fontSize: '16px',
+                  color: '#333',
+                  outline: 'none'
+                }}
+              >
+                Logout
+              </button>
             </div>
           )}
         </div>
@@ -199,100 +357,208 @@ const StudentDashboard = () => {
         <div className="internships-section">
           <h2>Manage Students</h2>
           <div className="search-wrapper">
-            <div className="search-container">
-              <IoSearchOutline className="search-icon" />
+            <div className="searchbar-container">
+              <span className="searchbar-icon">
+                <IoSearchOutline />
+              </span>
               <input
                 type="text"
+                className="searchbar-input"
                 placeholder="Search student..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                className="search-input"
               />
+              <div className="filter-wrapper">
+                <button
+                  className="searchbar-filter-btn"
+                  onClick={() => {
+                    setPendingFilterValues(filterValues);
+                    setShowFilter((prev) => !prev);
+                  }}
+                  title="Filter"
+                >
+                  <FaFilter size={18} />
+                </button>
+                {showFilter && (
+                  <div className="filter-dropdown">
+                    <div>
+                      <label>Program:</label>
+                      <input
+                        type="text"
+                        value={pendingFilterValues.program}
+                        onChange={e => setPendingFilterValues(f => ({ ...f, program: e.target.value }))}
+                        placeholder="Program"
+                      />
+                    </div>
+                    <div>
+                      <label>Field:</label>
+                      <input
+                        type="text"
+                        value={pendingFilterValues.field}
+                        onChange={e => setPendingFilterValues(f => ({ ...f, field: e.target.value }))}
+                        placeholder="Field"
+                      />
+                    </div>
+                    <div>
+                      <label>Email:</label>
+                      <input
+                        type="text"
+                        value={pendingFilterValues.email}
+                        onChange={e => setPendingFilterValues(f => ({ ...f, email: e.target.value }))}
+                        placeholder="Email"
+                      />
+                    </div>
+                    <div>
+                      <label>Contact:</label>
+                      <input
+                        type="text"
+                        value={pendingFilterValues.contact}
+                        onChange={e => setPendingFilterValues(f => ({ ...f, contact: e.target.value }))}
+                        placeholder="Contact"
+                      />
+                    </div>
+                    <div>
+                      <label>Hired:</label>
+                      <select
+                        value={pendingFilterValues.hired}
+                        onChange={e => setPendingFilterValues(f => ({ ...f, hired: e.target.value }))}
+                      >
+                        <option value="">All</option>
+                        <option value="Yes">Yes</option>
+                        <option value="No">No</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label>Location Preference:</label>
+                      <select
+                        value={pendingFilterValues.locationPreference}
+                        onChange={e => setPendingFilterValues(f => ({ ...f, locationPreference: e.target.value }))}
+                      >
+                        <option value="">All</option>
+                        <option value="Onsite">On-site</option>
+                        <option value="Remote">Remote</option>
+                        <option value="Hybrid">Hybrid</option>
+                      </select>
+                    </div>
+                    <button
+                      className="apply-filter-btn"
+                      onClick={() => {
+                        setFilterValues(pendingFilterValues);
+                        setShowFilter(false);
+                      }}
+                      type="button"
+                    >
+                      Apply
+                    </button>
+                    <button
+                      className="apply-filter-btn"
+                      style={{ background: '#f44336', marginTop: 8 }}
+                      onClick={() => {
+                        const reset = {
+                          program: '',
+                          field: '',
+                          email: '',
+                          contact: '',
+                          hired: '',
+                          locationPreference: '',
+                        };
+                        setPendingFilterValues(reset);
+                        setFilterValues(reset);
+                        setShowFilter(false);
+                      }}
+                      type="button"
+                    >
+                      Reset
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
           <div className="table-container">
             <table>
               <thead>
                 <tr>
-                  <th className="checkbox-cell"></th>
+                  <th className="checkbox-cell">
+                    {selectionMode && <span style={{ fontWeight: 500 }}>Select</span>}
+                  </th>
                   <th>First Name</th>
                   <th>Last Name</th>
                   <th>Gender</th>
                   <th>Program</th>
-                  <th>Skills</th>
+                  <th>Field</th>
+                  <th>Email</th>
+                  <th>Contact</th>
+                  <th>Hired</th>
                   <th>Location Preference</th>
+                  <th>Skills</th>
                   <th className="kebab-cell"></th>
                 </tr>
               </thead>
               <tbody>
-                {currentItems.map((row) => (
-                  <tr key={row.id} className={selectedItems.includes(row.id) ? 'selected-row' : ''}>
+                {currentItems.map((student) => (
+                  <tr key={student.id} className={selectedItems.includes(student.id) ? 'selected-row' : ''}>
                     <td className="checkbox-cell">
-                      {selectedRowId === row.id && (
+                      {selectionMode && (
                         <input
                           type="checkbox"
-                          checked={true}
-                          readOnly
+                          checked={selectedItems.includes(student.id)}
+                          onChange={() => {
+                            setSelectedItems(prev =>
+                              prev.includes(student.id)
+                                ? prev.filter(item => item !== student.id)
+                                : [...prev, student.id]
+                            );
+                          }}
                         />
                       )}
                     </td>
-                    <td>{row.firstName}</td>
-                    <td>{row.lastName}</td>
-                    <td>{row.gender}</td>
-                    <td>{row.program}</td>
+                    <td>{student.firstName}</td>
+                    <td>{student.lastName}</td>
+                    <td>{student.gender}</td>
+                    <td>{student.program}</td>
+                    <td>{student.field}</td>
                     <td>
-                      {Array.isArray(row.skills) && row.skills.map((skill, idx) => (
-                        <span key={idx} className="table-skill-tag">{skill}</span>
-                      ))}
+                      {student.email ? (
+                        <a
+                          href={`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(student.email)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: '#1976d2', textDecoration: 'underline' }}
+                        >
+                          {student.email}
+                        </a>
+                      ) : ''}
                     </td>
+                    <td>{student.contact || ''}</td>
+                    <td>{student.hired ? 'Yes' : 'No'}</td>
                     <td>
-                      {row.locationPreference && (
+                      {student.locationPreference && (
                         <>
-                          {row.locationPreference.hybrid && "Hybrid "}
-                          {row.locationPreference.onsite && "Onsite "}
-                          {row.locationPreference.remote && "Remote "}
+                          {student.locationPreference.hybrid && "Hybrid "}
+                          {student.locationPreference.onsite && "Onsite "}
+                          {student.locationPreference.remote && "Remote "}
                         </>
                       )}
                     </td>
+                    <td>
+                      {Array.isArray(student.skills) && student.skills.map((skill, idx) => (
+                        <span key={idx} className="table-skill-tag">{skill}</span>
+                      ))}
+                    </td>
                     <td className="kebab-cell">
-                      <span className="kebab-icon-wrapper" style={{ position: 'relative', display: 'inline-block' }}>
-                        <IoEllipsisVertical
-                          className="kebab-icon"
-                          onClick={() => {
-                            if (openMenuId === row.id) {
-                              setOpenMenuId(null);
-                              setSelectedRowId(null);
-                            } else {
-                              setOpenMenuId(row.id);
-                              setSelectedRowId(null);
-                            }
-                          }}
-                          title="Options"
-                        />
-                        {openMenuId === row.id && (
-                          <div className="kebab-dropdown">
-                            {selectedRowId !== row.id ? (
-                              <button onClick={() => setSelectedRowId(row.id)}>Select</button>
-                            ) : (
-                              <button
-                                className="delete"
-                                onClick={async () => {
-                                  setIsDeleting(true);
-                                  if (window.confirm('Are you sure you want to delete this student?')) {
-                                    await handleDeleteSingle(row.id);
-                                  }
-                                  setIsDeleting(false);
-                                  setOpenMenuId(null);
-                                  setSelectedRowId(null);
-                                }}
-                                disabled={isDeleting}
-                              >
-                                {isDeleting ? 'Deleting...' : 'Delete'}
-                              </button>
-                            )}
-                          </div>
-                        )}
-                      </span>
+                      <KebabCell
+                        row={student}
+                        openMenuId={openMenuId}
+                        setOpenMenuId={setOpenMenuId}
+                        selectedRowId={selectedRowId}
+                        setSelectedRowId={setSelectedRowId}
+                        handleDeleteSingle={handleDeleteSingle}
+                        isDeleting={isDeleting}
+                        selectionMode={selectionMode}
+                        setSelectedItems={setSelectedItems}
+                        setSelectionMode={setSelectionMode}
+                      />
                     </td>
                   </tr>
                 ))}
@@ -324,28 +590,15 @@ const StudentDashboard = () => {
               &gt;
             </button>
           </div>
-          {selectedItems.length > 0 && (
-            <div style={{ margin: '1rem 0' }}>
-              <button
-                className="delete"
-                onClick={handleDelete}
-                disabled={isDeleting}
-              >
-                {isDeleting ? 'Deleting...' : `Delete (${selectedItems.length})`}
-              </button>
-              <button
-                onClick={() => {
-                  setSelectedItems([]);
-                  setOpenMenuId(null);
-                }}
-                style={{ marginLeft: '1rem' }}
-              >
-                Cancel
-              </button>
-            </div>
-          )}
         </div>
       </div>
+
+      <ConfirmModal
+        open={showConfirm}
+        message={`Are you sure you want to delete ${selectedItems.length} item(s)?`}
+        onConfirm={confirmDelete}
+        onCancel={cancelDelete}
+      />
     </div>
   );
 };

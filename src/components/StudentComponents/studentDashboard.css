@@ -1,61 +1,15 @@
-.kebab-dropdown {
-    position: absolute;
-    left: 50%;
-    top: 28px;
-    transform: translateX(-50%);
-    background: #fff;
-    border: 1px solid #eee;
-    border-radius: 8px;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.08);
-    z-index: 10;
-    min-width: 100px;
-    padding: 8px 0;
-    white-space: nowrap;
-  }
-  
-  .table-container table td:last-child {
-    vertical-align: top;
-    text-align: right;
-    width: 40px;
-    padding-top: 0;
-    padding-bottom: 0;
-  }
-  
-  .checkbox-cell,
-  .kebab-cell {
-    width: 32px;
-    min-width: 28px;
-    max-width: 36px;
-    padding-left: 0;
-    padding-right: 0;
-    text-align: center;
-    vertical-align: middle;
-  }
-  
-  .kebab-cell {
+.search-container {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    max-width: 1000px;
     position: relative;
-    text-align: right;
-    width: 32px;
-    vertical-align: top;
-    padding: 0;
   }
-  
-  .kebab-icon {
-    cursor: pointer;
-    font-size: 20px;
-    display: inline-block;
-    vertical-align: top;
+  .search-input {
+    flex: 1;
   }
-  
-  .table-container table td {
-    padding-top: 8px;
-    padding-bottom: 8px;
+  .filter-wrapper {
+    display: flex;
+    align-items: center;
+    position: relative;
   }
-  
-  .table-container table td,
-  .table-container table th {
-    padding-left: 8px;
-    padding-right: 8px;
-  }
-  
-  

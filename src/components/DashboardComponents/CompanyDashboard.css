@@ -325,7 +325,19 @@
   .table-skill-tag {
     display: inline-flex;
     align-items: center;
-    background-color: #1976d2;
+    background-color: #1976d2; /* Blue */
+    color: white;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    white-space: nowrap;
+    margin: 2px;
+  }
+  
+  .table-field-tag {
+    display: inline-flex;
+    align-items: center;
+    background-color: #009688; /* Teal */
     color: white;
     padding: 2px 8px;
     border-radius: 12px;
@@ -1137,7 +1149,7 @@ table th input[type="checkbox"] {
 
 .filter-wrapper {
   position: relative;
-  display: inline-block; /* So the dropdown is positioned relative to the icon */
+  display: inline-block;
 }
 
 .filter-dropdown {
@@ -1555,4 +1567,134 @@ table th input[type="checkbox"] {
   font-size: 20px;
   display: inline-block;
   vertical-align: middle;
+}
+
+.kebab-dropdown {
+  position: absolute;
+  right: 2;
+  top: 28px;
+  background: #fff;
+  border: 1px solid #eee;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+  z-index: 1000;
+  padding: 8px 0;
+  white-space: nowrap;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.kebab-dropdown .select-btn {
+  background: #fff;
+  color: #000000;
+  font-weight: 600;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  padding: 8px 28px;
+  margin: 0 auto;
+  text-align: center;
+  font-size: 1rem;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+  width: auto;
+}
+.kebab-dropdown .select-btn:hover {
+  border-color: #000000;
+}
+
+.kebab-dropdown .edit-btn {
+  background: #fff;
+  color: #000000;
+  font-weight: 600;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  padding: 8px 28px;
+  margin: 0 auto 6px auto;
+  text-align: center;
+  font-size: 1rem;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+  width: auto;
+}
+.kebab-dropdown .edit-btn:hover {
+  background: #e3f2fd;
+  border-color: #020202;
+}
+
+.mode-tag {
+  display: inline-block;
+  padding: 0.25em 0.9em;
+  border-radius: 16px;
+  color: #fff;
+  font-size: 0.95em;
+  margin-right: 0.3em;
+  margin-bottom: 0.2em;
+  font-weight: 500;
+}
+
+.mode-tag-onsite {
+  background: #43a047; /* Green */
+}
+.mode-tag-remote {
+  background: #fb8c00; /* Orange */
+}
+.mode-tag-hybrid {
+  background: #8e24aa; /* Purple */
+}
+
+.fields-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 40px;
+  padding: 8px;
+  background-color: #f8f9fa;
+  border-radius: 4px;
+}
+
+.field-tag {
+  display: flex;
+  align-items: center;
+  background-color: #009688; /* Teal */
+  border: 1px solid #00796b;
+  border-radius: 20px;
+  padding: 4px 12px;
+  font-size: 14px;
+  color: #ffffff;
+  cursor: grab;
+  user-select: none;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.field-tag.dragging {
+  transform: scale(1.05);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.field-tag:active {
+  cursor: grabbing;
+}
+
+.field-tag .remove-field {
+  margin-left: 8px;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  color: #ffffff;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  transition: transform 0.2s ease;
+}
+
+.field-tag .remove-field:hover {
+  color: #dc3545;
+}
+
+.field-tag .remove-field svg {
+  font-size: 16px;
+  transition: transform 0.2s ease;
+}
+
+.field-tag .remove-field:hover svg {
+  transform: scale(1.5);
 }

@@ -9,11 +9,12 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import BottomNavbar from '../components/BottomNav';
 import { useNavigation } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
-import type { RootStackParamList } from '../App'; // Import RootStackParamList
+import type { RootStackParamList } from '../App';
 import { auth, firestore } from '../firebase/config';
 import { doc, setDoc, deleteDoc, collection, getDocs } from 'firebase/firestore';
 import { Picker } from '@react-native-picker/picker';
 
+// Types
 type TimeLog = {
   date: string;
   clockIn: string;
@@ -21,46 +22,191 @@ type TimeLog = {
   hours: string;
 };
 
-const OJTTrackerScreen = () => {
-  const navigation = useNavigation<StackNavigationProp<RootStackParamList, 'OJTTracker'>>(); // Typed navigation
+type FormData = TimeLog;
+
+type AmPm = 'AM' | 'PM';
+
+// Constants
+const DEFAULT_REQUIRED_HOURS = 300;
+const MAX_HOURS = 24;
+
+const OJTTrackerScreen: React.FC = () => {
+  // Navigation
+  const navigation = useNavigation<StackNavigationProp<RootStackParamList, 'OJTTracker'>>();
+
+  // State
   const [timeLogs, setTimeLogs] = useState<TimeLog[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
-  const [formData, setFormData] = useState<TimeLog>({ date: '', clockIn: '', clockOut: '', hours: '' });
+  const [formData, setFormData] = useState<FormData>({ date: '', clockIn: '', clockOut: '', hours: '' });
   const [editIndex, setEditIndex] = useState<number | null>(null);
   const [isDropdownVisible, setIsDropdownVisible] = useState(false);
-  const [clockInAmPm, setClockInAmPm] = useState('AM');
-  const [clockOutAmPm, setClockOutAmPm] = useState('PM');
-  const [requiredHours, setRequiredHours] = useState(300);
+  const [clockInAmPm, setClockInAmPm] = useState<AmPm>('AM');
+  const [clockOutAmPm, setClockOutAmPm] = useState<AmPm>('PM');
+  const [requiredHours, setRequiredHours] = useState(DEFAULT_REQUIRED_HOURS);
   const [goalModalVisible, setGoalModalVisible] = useState(false);
   const [goalInput, setGoalInput] = useState('300');
   const [totalHours, setTotalHours] = useState(0);
 
+  // Load initial data
   useEffect(() => {
-    const loadGoal = async () => {
-      const savedGoal = await AsyncStorage.getItem('OJT_REQUIRED_HOURS');
-      if (savedGoal) setRequiredHours(Number(savedGoal));
-    };
-    loadGoal();
-    loadLogsFromFirestore();
+    loadInitialData();
   }, []);
+
+  const loadInitialData = async () => {
+    await Promise.all([
+      loadRequiredHours(),
+      loadLogsFromFirestore()
+    ]);
+  };
+
+  // Data loading functions
+  const loadRequiredHours = async () => {
+    const savedGoal = await AsyncStorage.getItem('OJT_REQUIRED_HOURS');
+    if (savedGoal) setRequiredHours(Number(savedGoal));
+  };
 
   const loadLogsFromFirestore = async () => {
     if (!auth.currentUser) return;
-    const userId = auth.currentUser.uid;
-    const logsCol = collection(firestore, `users/${userId}/ojtLogs`);
-    const logsSnap = await getDocs(logsCol);
-    const logs: TimeLog[] = [];
-    logsSnap.forEach(doc => logs.push(doc.data() as TimeLog));
-    setTimeLogs(logs);
+    try {
+      const userId = auth.currentUser.uid;
+      const logsCol = collection(firestore, `users/${userId}/ojtLogs`);
+      const logsSnap = await getDocs(logsCol);
+      const logs: TimeLog[] = [];
+      logsSnap.forEach(doc => logs.push(doc.data() as TimeLog));
+      setTimeLogs(logs.sort((a, b) => b.date.localeCompare(a.date)));
+    } catch (error) {
+      console.error('Error loading logs:', error);
+      Alert.alert('Error', 'Failed to load time logs.');
+    }
   };
 
-  const saveLogsToStorage = async () => {
+  // Validation functions
+  const validateTime = (time: string): boolean => {
+    const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+    return timeRegex.test(time);
+  };
+
+  const validateDate = (date: string): boolean => {
+    const [year, month, day] = date.split('/').map(num => parseInt(num));
+    if (isNaN(year) || isNaN(month) || isNaN(day)) return false;
+    const dateObj = new Date(year, month - 1, day);
+    return dateObj.getFullYear() === year &&
+      dateObj.getMonth() === month - 1 &&
+      dateObj.getDate() === day;
+  };
+
+  // Firestore operations
+  const syncLogToFirestore = async (log: TimeLog) => {
+    if (!auth.currentUser) return;
     try {
-      await AsyncStorage.setItem('OJT_TIME_LOGS', JSON.stringify(timeLogs));
-      Alert.alert('Success', 'Time logs saved locally!');
+      const userId = auth.currentUser.uid;
+      const logId = `${log.date}_${log.clockIn}`.replace(/\W/g, '');
+      const logRef = doc(firestore, `users/${userId}/ojtLogs/${logId}`);
+      await setDoc(logRef, log);
     } catch (error) {
-      Alert.alert('Error', 'Failed to save time logs.');
+      console.error('Error syncing log:', error);
+      throw error;
     }
+  };
+
+  const deleteLogFromFirestore = async (log: TimeLog) => {
+    if (!auth.currentUser) return;
+    try {
+      const userId = auth.currentUser.uid;
+      const logId = `${log.date}_${log.clockIn}`.replace(/\W/g, '');
+      const logRef = doc(firestore, `users/${userId}/ojtLogs/${logId}`);
+      await deleteDoc(logRef);
+    } catch (error) {
+      console.error('Error deleting log:', error);
+      throw error;
+    }
+  };
+
+  // Event handlers
+  const handleSave = async () => {
+    try {
+      // Validate inputs
+      if (!formData.date || !formData.clockIn || !formData.clockOut || !formData.hours) {
+        Alert.alert('Error', 'Please fill in all fields.');
+        return;
+      }
+
+      if (!validateDate(formData.date)) {
+        Alert.alert('Error', 'Please enter a valid date in YYYY/MM/DD format.');
+        return;
+      }
+
+      // Validate time format (HH:MM)
+      const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+      if (!timeRegex.test(formData.clockIn) || !timeRegex.test(formData.clockOut)) {
+        Alert.alert('Error', 'Please enter valid times in HH:MM format.');
+        return;
+      }
+
+      const hours = Number(formData.hours);
+      if (isNaN(hours) || hours <= 0 || hours > MAX_HOURS) {
+        Alert.alert('Error', `Please enter a valid number of hours (1-${MAX_HOURS}).`);
+        return;
+      }
+
+      // Check for duplicates
+      const logId = `${formData.date}_${formData.clockIn}`.replace(/\W/g, '');
+      const duplicate = timeLogs.find(
+        log => `${log.date}_${log.clockIn}`.replace(/\W/g, '') === logId && editIndex === null
+      );
+      if (duplicate) {
+        Alert.alert('Error', 'A log for this date and clock-in time already exists.');
+        return;
+      }
+
+      // Save log
+      const logToSave = {
+        ...formData,
+        clockIn: `${formData.clockIn} ${clockInAmPm}`,
+        clockOut: `${formData.clockOut} ${clockOutAmPm}`,
+      };
+
+      if (editIndex !== null) {
+        const updatedLogs = [...timeLogs];
+        updatedLogs[editIndex] = logToSave;
+        setTimeLogs(updatedLogs);
+        await syncLogToFirestore(logToSave);
+      } else {
+        const newLogs = [...timeLogs, logToSave];
+        setTimeLogs(newLogs);
+        await syncLogToFirestore(logToSave);
+      }
+
+      // Update UI
+      await loadLogsFromFirestore();
+      setModalVisible(false);
+      setFormData({ date: '', clockIn: '', clockOut: '', hours: '' });
+      Alert.alert('Success', 'Time log saved successfully!');
+    } catch (error) {
+      console.error('Error saving log:', error);
+      Alert.alert('Error', 'Failed to save time log. Please try again.');
+    }
+  };
+
+  const handleDelete = async (index: number) => {
+    Alert.alert("Confirm", "Delete this time log?", [
+      { text: "Cancel" },
+      {
+        text: "Delete",
+        onPress: async () => {
+          try {
+            const logToDelete = timeLogs[index];
+            await deleteLogFromFirestore(logToDelete);
+            const filtered = timeLogs.filter((_, i) => i !== index);
+            setTimeLogs(filtered);
+            await loadLogsFromFirestore();
+          } catch (error) {
+            console.error('Error deleting log:', error);
+            Alert.alert('Error', 'Failed to delete time log.');
+          }
+        }
+      }
+    ]);
   };
 
   const saveGoal = useCallback(async () => {
@@ -74,25 +220,7 @@ const OJTTrackerScreen = () => {
     setGoalModalVisible(false);
   }, [goalInput]);
 
-  // Helper to sync a log to Firestore
-  const syncLogToFirestore = async (log: TimeLog) => {
-    if (!auth.currentUser) return;
-    const userId = auth.currentUser.uid;
-    // Use date+clockIn as a unique log ID (or use a better unique ID if needed)
-    const logId = `${log.date}_${log.clockIn}`.replace(/\W/g, '');
-    const logRef = doc(firestore, `users/${userId}/ojtLogs/${logId}`);
-    await setDoc(logRef, log);
-  };
-
-  // Helper to delete a log from Firestore
-  const deleteLogFromFirestore = async (log: TimeLog) => {
-    if (!auth.currentUser) return;
-    const userId = auth.currentUser.uid;
-    const logId = `${log.date}_${log.clockIn}`.replace(/\W/g, '');
-    const logRef = doc(firestore, `users/${userId}/ojtLogs/${logId}`);
-    await deleteDoc(logRef);
-  };
-
+  // UI handlers
   const openModal = (log?: TimeLog, index?: number) => {
     if (log && index !== undefined) {
       setFormData(log);
@@ -104,71 +232,62 @@ const OJTTrackerScreen = () => {
     setModalVisible(true);
   };
 
-  const handleSave = async () => {
-    if (!formData.date || !formData.clockIn || !formData.clockOut || !formData.hours) {
-      Alert.alert('Error', 'Please fill in all fields.');
-      return;
-    }
-    if (isNaN(Number(formData.hours))) {
-      Alert.alert('Error', 'Hours must be a valid number.');
-      return;
-    }
-    const logId = `${formData.date}_${formData.clockIn}`.replace(/\W/g, '');
-    const duplicate = timeLogs.find(
-      log => `${log.date}_${log.clockIn}`.replace(/\W/g, '') === logId && editIndex === null
-    );
-    if (duplicate) {
-      Alert.alert('Error', 'A log for this date and clock-in time already exists.');
-      return;
-    }
-    // Combine time and AM/PM
-    const logToSave = {
-      ...formData,
-      clockIn: formData.clockIn + ' ' + clockInAmPm,
-      clockOut: formData.clockOut + ' ' + clockOutAmPm,
-    };
-    if (editIndex !== null) {
-      const updatedLogs = [...timeLogs];
-      updatedLogs[editIndex] = logToSave;
-      setTimeLogs(updatedLogs);
-      await syncLogToFirestore(logToSave);
-    } else {
-      const newLogs = [...timeLogs, logToSave];
-      setTimeLogs(newLogs);
-      await syncLogToFirestore(logToSave);
-    }
-    await loadLogsFromFirestore();
-    setTimeLogs(prev => [...prev].sort((a, b) => b.date.localeCompare(a.date)));
-    setModalVisible(false);
-    setFormData({ date: '', clockIn: '', clockOut: '', hours: '' });
-  };
+  const toggleDropdown = () => setIsDropdownVisible(!isDropdownVisible);
 
-  const handleDelete = async (index: number) => {
-    Alert.alert("Confirm", "Delete this time log?", [
-      { text: "Cancel" },
-      {
-        text: "Delete", onPress: async () => {
-          const logToDelete = timeLogs[index];
-          const filtered = timeLogs.filter((_, i) => i !== index);
-          setTimeLogs(filtered);
-          // Delete from Firestore
-          await deleteLogFromFirestore(logToDelete);
-          // Reload logs from Firestore to ensure UI is in sync
-          await loadLogsFromFirestore();
-        }
-      }
-    ]);
-  };
-
-  const toggleDropdown = () => {
-    setIsDropdownVisible(!isDropdownVisible);
-  };
-
-  // Calculate total hours whenever logs change
+  // Calculate total hours
   useEffect(() => {
     const sum = timeLogs.reduce((acc, log) => acc + Number(log.hours), 0);
     setTotalHours(sum);
   }, [timeLogs]);
+
+  // Add this new function to format time display
+  const formatTimeDisplay = (time: string, amPm: AmPm) => {
+    return `${time} ${amPm}`;
+  };
+
+  // Add this new function to handle hours input
+  const handleHoursInput = (text: string) => {
+    // Remove any non-numeric characters
+    const numericValue = text.replace(/[^0-9]/g, '');
+
+    // Convert to number and validate
+    const hours = parseInt(numericValue);
+
+    // Only update if it's a valid number between 1 and 24
+    if (!isNaN(hours) && hours >= 1 && hours <= 24) {
+      setFormData({ ...formData, hours: numericValue });
+    } else if (numericValue === '') {
+      // Allow empty input for better UX
+      setFormData({ ...formData, hours: '' });
+    }
+  };
+
+  // Add these new functions to handle formatted inputs
+  const formatTimeInput = (text: string) => {
+    // Remove any non-numeric characters
+    const numbers = text.replace(/[^0-9]/g, '');
+
+    // Format as HH:MM
+    if (numbers.length <= 2) {
+      return numbers;
+    } else {
+      return `${numbers.slice(0, 2)}:${numbers.slice(2, 4)}`;
+    }
+  };
+
+  const formatDateInput = (text: string) => {
+    // Remove any non-numeric characters
+    const numbers = text.replace(/[^0-9]/g, '');
+
+    // Format as YYYY/MM/DD
+    if (numbers.length <= 4) {
+      return numbers;
+    } else if (numbers.length <= 6) {
+      return `${numbers.slice(0, 4)}/${numbers.slice(4)}`;
+    } else {
+      return `${numbers.slice(0, 4)}/${numbers.slice(4, 6)}/${numbers.slice(6, 8)}`;
+    }
+  };
 
   return (
     <><ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
@@ -238,7 +357,7 @@ const OJTTrackerScreen = () => {
             style={styles.dropdownButton}
             icon="content-save"
             label="Save"
-            onPress={saveLogsToStorage} />
+            onPress={() => { }} />
           <FAB
             style={styles.dropdownButton}
             icon="plus"
@@ -262,62 +381,133 @@ const OJTTrackerScreen = () => {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>{editIndex !== null ? 'Edit Log' : 'Add Time Log'}</Text>
+
             {/* Date Field */}
-            <TextInput
-              placeholder="Date (YYYY/MM/DD)"
-              style={styles.input}
-              value={formData.date}
-              onChangeText={text => setFormData({ ...formData, date: text })}
-              keyboardType="phone-pad"
-              maxLength={10}
-            />
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Date (YYYY/MM/DD)</Text>
+              <TextInput
+                placeholder="YYYY/MM/DD"
+                style={styles.input}
+                value={formData.date}
+                onChangeText={text => {
+                  const formatted = formatDateInput(text);
+                  setFormData({ ...formData, date: formatted });
+                }}
+                keyboardType="number-pad"
+                maxLength={10}
+              />
+              <Text style={styles.helperText}>Enter date in YYYY/MM/DD format</Text>
+            </View>
+
             {/* Clock In Field */}
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <TextInput
-                placeholder="Clock In (HH/MM)"
-                style={[styles.input, { flex: 1 }]}
-                value={formData.clockIn}
-                onChangeText={text => setFormData({ ...formData, clockIn: text })}
-                keyboardType="phone-pad"
-                maxLength={5}
-              />
-              <Picker
-                selectedValue={clockInAmPm}
-                style={{ width: 80 }}
-                onValueChange={value => setClockInAmPm(value)}
-              >
-                <Picker.Item label="AM" value="AM" />
-                <Picker.Item label="PM" value="PM" />
-              </Picker>
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Clock In</Text>
+              <View style={styles.timeInputContainer}>
+                <TextInput
+                  placeholder="HH:MM"
+                  style={[styles.input, { flex: 1 }]}
+                  value={formData.clockIn}
+                  onChangeText={text => {
+                    const formatted = formatTimeInput(text);
+                    setFormData({ ...formData, clockIn: formatted });
+                  }}
+                  keyboardType="number-pad"
+                  maxLength={5}
+                />
+                <View style={styles.amPmContainer}>
+                  <TouchableOpacity
+                    style={[
+                      styles.amPmButton,
+                      clockInAmPm === 'AM' && styles.amPmButtonActive
+                    ]}
+                    onPress={() => setClockInAmPm('AM')}
+                  >
+                    <Text style={[
+                      styles.amPmText,
+                      clockInAmPm === 'AM' && styles.amPmTextActive
+                    ]}>AM</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.amPmButton,
+                      clockInAmPm === 'PM' && styles.amPmButtonActive
+                    ]}
+                    onPress={() => setClockInAmPm('PM')}
+                  >
+                    <Text style={[
+                      styles.amPmText,
+                      clockInAmPm === 'PM' && styles.amPmTextActive
+                    ]}>PM</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+              <Text style={styles.helperText}>Enter time in HH:MM format</Text>
             </View>
+
             {/* Clock Out Field */}
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <TextInput
-                placeholder="Clock Out (HH/MM)"
-                style={[styles.input, { flex: 1 }]}
-                value={formData.clockOut}
-                onChangeText={text => setFormData({ ...formData, clockOut: text })}
-                keyboardType="phone-pad"
-                maxLength={5}
-              />
-              <Picker
-                selectedValue={clockOutAmPm}
-                style={{ width: 80 }}
-                onValueChange={value => setClockOutAmPm(value)}
-              >
-                <Picker.Item label="AM" value="AM" />
-                <Picker.Item label="PM" value="PM" />
-              </Picker>
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Clock Out</Text>
+              <View style={styles.timeInputContainer}>
+                <TextInput
+                  placeholder="HH:MM"
+                  style={[styles.input, { flex: 1 }]}
+                  value={formData.clockOut}
+                  onChangeText={text => {
+                    const formatted = formatTimeInput(text);
+                    setFormData({ ...formData, clockOut: formatted });
+                  }}
+                  keyboardType="number-pad"
+                  maxLength={5}
+                />
+                <View style={styles.amPmContainer}>
+                  <TouchableOpacity
+                    style={[
+                      styles.amPmButton,
+                      clockOutAmPm === 'AM' && styles.amPmButtonActive
+                    ]}
+                    onPress={() => setClockOutAmPm('AM')}
+                  >
+                    <Text style={[
+                      styles.amPmText,
+                      clockOutAmPm === 'AM' && styles.amPmTextActive
+                    ]}>AM</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.amPmButton,
+                      clockOutAmPm === 'PM' && styles.amPmButtonActive
+                    ]}
+                    onPress={() => setClockOutAmPm('PM')}
+                  >
+                    <Text style={[
+                      styles.amPmText,
+                      clockOutAmPm === 'PM' && styles.amPmTextActive
+                    ]}>PM</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+              <Text style={styles.helperText}>Enter time in HH:MM format</Text>
             </View>
+
             {/* Hours Field */}
-            <TextInput
-              placeholder="Hours (e.g. 8)"
-              style={styles.input}
-              value={formData.hours}
-              onChangeText={text => setFormData({ ...formData, hours: text })}
-              keyboardType="phone-pad"
-              maxLength={4}
-            />
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Hours (1-24)</Text>
+              <View style={styles.hoursInputContainer}>
+                <TextInput
+                  placeholder="Enter hours"
+                  style={[styles.input, styles.hoursInput]}
+                  value={formData.hours}
+                  onChangeText={handleHoursInput}
+                  keyboardType="number-pad"
+                  maxLength={2}
+                />
+                <Text style={styles.hoursLabel}>hours</Text>
+              </View>
+              <Text style={styles.hoursHelperText}>
+                Please enter a number between 1 and 24
+              </Text>
+            </View>
+
             <View style={styles.modalButtons}>
               <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.cancelBtn}>
                 <Text>Cancel</Text>
@@ -440,6 +630,75 @@ const styles = StyleSheet.create({
   },
   saveBtn: {
     padding: 10, backgroundColor: '#007bff', borderRadius: 5,
+  },
+  inputContainer: {
+    marginBottom: 15,
+  },
+  inputLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 5,
+  },
+  timeInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  amPmContainer: {
+    flexDirection: 'row',
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 6,
+    overflow: 'hidden',
+  },
+  amPmButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#f5f5f5',
+  },
+  amPmButtonActive: {
+    backgroundColor: '#007bff',
+  },
+  amPmText: {
+    fontSize: 14,
+    color: '#333',
+  },
+  amPmTextActive: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  hoursInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 6,
+    paddingHorizontal: 10,
+  },
+  hoursInput: {
+    flex: 1,
+    borderBottomWidth: 0,
+    marginBottom: 0,
+    textAlign: 'center',
+    fontSize: 16,
+    paddingVertical: 8,
+  },
+  hoursLabel: {
+    color: '#666',
+    marginLeft: 8,
+    fontSize: 14,
+  },
+  hoursHelperText: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+  helperText: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
+    fontStyle: 'italic',
   },
 });
 

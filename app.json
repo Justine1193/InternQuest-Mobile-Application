@@ -1,18 +1,29 @@
 {
   "expo": {
-    "extra": {
-      "eas": {
-        "projectId": "689f32c9-1322-4012-9df6-739adc309663"
-      }
+    "name": "InternQuest",
+    "slug": "internquest",
+    "version": "1.0.4",
+    "orientation": "portrait",
+    "icon": "./assets/phone_logo.png",
+    "splash": {
+      "image": "./assets/phone_logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
     },
-    "owner": "internquest",
     "android": {
       "package": "com.internquest.internquest",
+      "versionCode": 1,
       "config": {
         "googleMaps": {
           "apiKey": "AIzaSyBqKcbvrNZzqs8G43VkWb-THJYVozjI9T0"
         }
       }
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "689f32c9-1322-4012-9df6-739adc309663"
+      }
+    },
+    "owner": "internquest"
   }
 }

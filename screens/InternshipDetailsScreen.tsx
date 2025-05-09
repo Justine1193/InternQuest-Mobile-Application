@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,14 +8,19 @@ import {
   TouchableOpacity,
   Linking,
   Alert,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { RouteProp, useNavigation } from '@react-navigation/native';
 import { RootStackParamList } from '../App';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useSavedInternships } from '../context/SavedInternshipsContext';
 import MapView, { Marker } from 'react-native-maps';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, serverTimestamp, collection, query, where, getDocs } from 'firebase/firestore';
 import { auth, firestore } from '../firebase/config';
+
+// Types
+import type { NavigationProp } from '@react-navigation/native';
 
 type InternshipDetailsScreenRouteProp = RouteProp<RootStackParamList, 'InternshipDetails'>;
 
@@ -23,48 +28,123 @@ type Props = {
   route: InternshipDetailsScreenRouteProp;
 };
 
+type WorkMode = {
+  type: string;
+  description: string;
+  icon: string;
+};
+
+const modeConfig: Record<string, WorkMode> = {
+  hybrid: {
+    type: 'Hybrid',
+    description: 'Combination of remote and on-site work',
+    icon: 'home-city',
+  },
+  remote: {
+    type: 'Remote',
+    description: 'Work from anywhere',
+    icon: 'laptop',
+  },
+  onsite: {
+    type: 'On-Site',
+    description: 'Work at company location',
+    icon: 'office-building',
+  },
+};
+
 const InternshipDetailsScreen: React.FC<Props> = ({ route }) => {
   const { post } = route.params;
-  const navigation = useNavigation<import('@react-navigation/native').NavigationProp<RootStackParamList>>();
+  const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   const { savedInternships, toggleSaveInternship } = useSavedInternships();
-
   const isSaved = savedInternships.some(saved => saved.id === post.id);
 
+  // State
   const [coordinates, setCoordinates] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [isHired, setIsHired] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [workMode, setWorkMode] = useState<WorkMode>({
+    type: 'Loading...',
+    description: 'Loading work mode...',
+    icon: 'home-city',
+  });
+  const [refreshing, setRefreshing] = useState(false);
 
   // Geocode the location to get latitude and longitude
   useEffect(() => {
     const geocodeLocation = async () => {
+      if (!post.location) {
+        Alert.alert('Error', 'No location provided for this internship.');
+        return;
+      }
       try {
-        if (!post.location) {
-          console.error('No location provided');
-          Alert.alert('Error', 'No location provided for this internship.');
-          return;
-        }
-
-        console.log('Geocoding location:', post.location); // Debug log for location
-
         const response = await fetch(
           `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(post.location)}&key=AIzaSyBqKcbvrNZzqs8G43VkWb-THJYVozjI9T0`
         );
         const data = await response.json();
-
         if (data.status === 'OK' && data.results.length > 0) {
           const { lat, lng } = data.results[0].geometry.location;
           setCoordinates({ latitude: lat, longitude: lng });
         } else {
-          console.error('Geocoding failed: No results found for', post.location);
           Alert.alert('Geocoding Error', 'Unable to find coordinates for the given location.');
         }
       } catch (error) {
-        console.error('Geocoding error:', error);
         Alert.alert('Geocoding Error', 'There was an issue with retrieving the location.');
       }
     };
-
     geocodeLocation();
   }, [post.location]);
 
+  // Check if user is already hired
+  useEffect(() => {
+    const checkHiredStatus = async () => {
+      if (!auth.currentUser) return;
+      try {
+        const userDocRef = doc(firestore, 'users', auth.currentUser.uid);
+        const userDoc = await getDoc(userDocRef);
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          const status = typeof userData.status === 'string' ? userData.status.toLowerCase() : '';
+          setIsHired(status === 'hired');
+        }
+      } catch (error) {
+        console.error('Error checking hired status:', error);
+      }
+    };
+    checkHiredStatus();
+  }, []);
+
+  // Fetch work mode (company info)
+  const fetchWorkMode = useCallback(async () => {
+    try {
+      const companyRef = doc(firestore, 'companies', post.id);
+      const companyDoc = await getDoc(companyRef);
+      if (companyDoc.exists()) {
+        const data = companyDoc.data();
+        // Get the mode from the array or fallback to 'hybrid'
+        const modeRaw = Array.isArray(data.modeOfWork) ? data.modeOfWork[0] : data.modeOfWork || 'hybrid';
+        const modeKey = (modeRaw as string).toLowerCase().replace(/\s|-/g, '');
+        const validKeys = ['hybrid', 'remote', 'onsite'];
+        const safeModeKey = validKeys.includes(modeKey) ? (modeKey as keyof typeof modeConfig) : 'hybrid';
+        setWorkMode(modeConfig[safeModeKey]);
+      }
+    } catch (error) {
+      console.error('Error fetching work mode:', error);
+      Alert.alert('Error', 'Failed to load work mode information');
+    }
+  }, [post.id]);
+
+  useEffect(() => {
+    fetchWorkMode();
+  }, [fetchWorkMode]);
+
+  // Pull-to-refresh handler
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchWorkMode();
+    setRefreshing(false);
+  };
+
+  // UI Handlers
   const openWebsite = () => {
     if (post.website) {
       Linking.openURL(post.website);
@@ -72,11 +152,7 @@ const InternshipDetailsScreen: React.FC<Props> = ({ route }) => {
       Alert.alert('Website not available');
     }
   };
-
-  const openEmail = () => {
-    Linking.openURL(`mailto:${post.email}`);
-  };
-
+  const openEmail = () => Linking.openURL(`mailto:${post.email}`);
   const openLocationInMaps = () => {
     const query = encodeURIComponent(post.location);
     Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${query}`);
@@ -88,50 +164,83 @@ const InternshipDetailsScreen: React.FC<Props> = ({ route }) => {
       return;
     }
 
-    const userId = auth.currentUser.uid; // Store uid in a variable after null check
+    if (isHired) {
+      Alert.alert(
+        'Already Hired',
+        'You have already been hired by another company. Please update your status in your profile if you want to change companies.',
+        [
+          {
+            text: 'Go to Profile',
+            onPress: () => navigation.navigate('Profile')
+          },
+          {
+            text: 'Cancel',
+            style: 'cancel'
+          }
+        ]
+      );
+      return;
+    }
 
-    // First show confirmation dialog
-    Alert.alert(
-      'Confirm Status Update',
-      'Are you sure you want to update your status to "Hired" for ' + post.company + '?',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel'
-        },
-        {
-          text: 'Yes, Update Status',
-          onPress: async () => {
-            try {
-              // Update status in Firestore
-              const userDocRef = doc(firestore, "users", userId);
-              await setDoc(userDocRef, {
-                status: 'hired',
-                company: post.company
-              }, { merge: true });
+    setIsLoading(true);
+    try {
+      // First show confirmation dialog
+      Alert.alert(
+        'Confirm Status Update',
+        'Are you sure you want to update your status to "Hired" for ' + post.company + '? This can only be changed from your profile.',
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+            onPress: () => setIsLoading(false)
+          },
+          {
+            text: 'Yes, Update Status',
+            onPress: async () => {
+              try {
+                const userId = auth.currentUser!.uid;
+                const userDocRef = doc(firestore, "users", userId);
 
-              // Show success message
-              Alert.alert(
-                'Success!',
-                'Your status has been updated to "Hired". You can now track your OJT hours.',
-                [
-                  {
-                    text: 'Go to OJT Tracker',
-                    onPress: () => {
-                      navigation.navigate('OJTTracker', {
-                        post, // Pass the internship details
-                      });
+                // Update status in Firestore
+                await setDoc(userDocRef, {
+                  status: 'hired',
+                  company: post.company,
+                  hiredAt: serverTimestamp(),
+                  lastUpdated: serverTimestamp()
+                }, { merge: true });
+
+                setIsHired(true);
+
+                // Show success message
+                Alert.alert(
+                  'Success!',
+                  'Your status has been updated to "Hired". You can now track your OJT hours.',
+                  [
+                    {
+                      text: 'Go to OJT Tracker',
+                      onPress: () => {
+                        navigation.navigate('OJTTracker', {
+                          post,
+                        });
+                      }
                     }
-                  }
-                ]
-              );
-            } catch (error) {
-              Alert.alert('Error', 'Failed to update status. Please try again.');
+                  ]
+                );
+              } catch (error) {
+                console.error('Error updating status:', error);
+                Alert.alert('Error', 'Failed to update status. Please try again.');
+              } finally {
+                setIsLoading(false);
+              }
             }
           }
-        }
-      ]
-    );
+        ]
+      );
+    } catch (error) {
+      console.error('Error in handleGotHiredPress:', error);
+      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+      setIsLoading(false);
+    }
   };
 
   const handleSaveInternship = () => {
@@ -173,7 +282,12 @@ const InternshipDetailsScreen: React.FC<Props> = ({ route }) => {
         <Icon name={isSaved ? "bookmark" : "bookmark-outline"} size={24} color="#000" />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
         {/* Company Name */}
         <View style={styles.companyHeader}>
           <Text style={styles.companyName}>{post.company}</Text>
@@ -204,7 +318,7 @@ const InternshipDetailsScreen: React.FC<Props> = ({ route }) => {
           </View>
 
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Industry:</Text>
+            <Text style={styles.infoLabel}>Field:</Text>
             <Text style={styles.detailText}>{post.industry || 'N/A'}</Text>
           </View>
 
@@ -239,14 +353,20 @@ const InternshipDetailsScreen: React.FC<Props> = ({ route }) => {
 
         {/* Tags */}
         <View style={styles.tagRow}>
-          <TouchableOpacity style={styles.tagBox} onPress={() => Alert.alert('NDA Info', 'This internship requires an NDA.')}>
-            <Image source={require('../assets/approved.png')} style={styles.tagIcon} />
+          <TouchableOpacity
+            style={styles.tagBox}
+            onPress={() => Alert.alert('NDA Info', 'This internship requires an NDA.')}
+          >
+            <Icon name="file-document-check" size={32} color="#0056b3" style={styles.tagIcon} />
             <Text style={styles.tagLabel}>Approved</Text>
             <Text style={styles.tagSubLabel}>MOA</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.tagBox} onPress={() => Alert.alert('Mode', 'This internship is Hybrid.')}>
-            <Image source={require('../assets/hybrid.png')} style={styles.tagIcon} />
-            <Text style={styles.tagLabel}>Hybrid</Text>
+          <TouchableOpacity
+            style={styles.tagBox}
+            onPress={() => Alert.alert('Work Mode', workMode.description)}
+          >
+            <Icon name={workMode.icon} size={32} color="#0056b3" style={styles.tagIcon} />
+            <Text style={styles.tagLabel}>{workMode.type}</Text>
             <Text style={styles.tagSubLabel}>Mode of Work</Text>
           </TouchableOpacity>
         </View>
@@ -298,8 +418,22 @@ const InternshipDetailsScreen: React.FC<Props> = ({ route }) => {
 
         {/* Bottom Buttons */}
         <View style={styles.bottomButtons}>
-          <TouchableOpacity style={styles.hiredButton} onPress={handleGotHiredPress}>
-            <Text style={styles.hiredButtonText}>Got Hired</Text>
+          <TouchableOpacity
+            style={[
+              styles.hiredButton,
+              isHired && styles.disabledButton,
+              isLoading && styles.loadingButton
+            ]}
+            onPress={handleGotHiredPress}
+            disabled={isHired || isLoading}
+          >
+            {isLoading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.hiredButtonText}>
+                {isHired ? 'Already Hired' : 'Got Hired'}
+              </Text>
+            )}
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.saveButton, isSaved && styles.savedButton]}
@@ -359,8 +493,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#e6f0ff',
     flex: 1,
     marginHorizontal: 6,
+    minHeight: 100,
   },
-  tagIcon: { width: 32, height: 32, marginBottom: 8 },
+  tagIcon: {
+    marginBottom: 8,
+  },
   tagLabel: { fontWeight: 'bold', color: '#0056b3' },
   tagSubLabel: { fontSize: 12, color: '#555' },
   map: {
@@ -444,6 +581,13 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     textAlign: 'center',
     marginTop: 8,
+  },
+  disabledButton: {
+    backgroundColor: '#ccc',
+    opacity: 0.7,
+  },
+  loadingButton: {
+    opacity: 0.8,
   },
 });
 

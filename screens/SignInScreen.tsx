@@ -19,6 +19,7 @@ import { useNavigation } from "@react-navigation/native";
 import { signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
 import { auth } from "../firebase/config";
 
+// Types
 type RootStackParamList = {
   SignIn: undefined;
   SignUp: undefined;
@@ -26,55 +27,55 @@ type RootStackParamList = {
   Profile: undefined;
 };
 
-type SignInScreenNavigationProp = NativeStackNavigationProp<
-  RootStackParamList,
-  "SignIn"
->;
+type SignInScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, "SignIn">;
 
 type Props = {
   setIsLoggedIn: (value: boolean) => void;
 };
 
+// Theme
+const theme = {
+  background: "#fff",
+  text: "#333",
+  border: "#ccc",
+  buttonText: "#fff",
+  buttonBg: "#007bff",
+  link: "#0077cc",
+} as const;
+
 const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
+  // Navigation
   const navigation = useNavigation<SignInScreenNavigationProp>();
 
-  const theme = {
-    background: "#fff",
-    text: "#333",
-    border: "#ccc",
-    buttonText: "#fff",
-    buttonBg: "#007bff",
-    link: "#0077cc",
-  };
-
+  // State
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
+  // Handlers
   const handleLogin = async () => {
-    if (!email || !password) {
-      Alert.alert("Error", "Please fill in both fields.");
-      return;
-    }
-
     try {
+      if (!email || !password) {
+        throw new Error("Please fill in both fields.");
+      }
+
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       console.log("✅ User signed in:", userCredential.user.uid);
       setIsLoggedIn(true);
-      navigation.replace("Home"); // Navigate to Home after login
+      navigation.replace("Home");
     } catch (error: any) {
-      Alert.alert("Login Failed", error.message || "Invalid email or password.");
+      const errorMessage = error.message || "Invalid email or password.";
+      Alert.alert("Login Failed", errorMessage);
       console.error("Login error:", error.message);
     }
   };
 
   const handleForgotPassword = async () => {
-    if (!email) {
-      Alert.alert("Error", "Please enter your email address first.");
-      return;
-    }
-
     try {
+      if (!email) {
+        throw new Error("Please enter your email address first.");
+      }
+
       await sendPasswordResetEmail(auth, email);
       Alert.alert(
         "Password Reset",
@@ -82,11 +83,16 @@ const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
         [{ text: "OK" }]
       );
     } catch (error: any) {
-      Alert.alert("Error", error.message || "Failed to send password reset email.");
+      const errorMessage = error.message || "Failed to send password reset email.";
+      Alert.alert("Error", errorMessage);
       console.error("Password reset error:", error.message);
     }
   };
 
+  const handleSignUp = () => navigation.navigate("SignUp");
+  const togglePasswordVisibility = () => setShowPassword(!showPassword);
+
+  // Render
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -101,6 +107,7 @@ const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
               resizeMode="contain"
             />
 
+            {/* Email Input */}
             <Text style={[styles.label, { color: theme.text }]}>Email</Text>
             <View style={[styles.inputContainer, { borderColor: theme.border }]}>
               <Icon name="email-outline" size={20} style={[styles.icon, { color: theme.text }]} />
@@ -117,6 +124,7 @@ const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
               />
             </View>
 
+            {/* Password Input */}
             <Text style={[styles.label, { color: theme.text }]}>Password</Text>
             <View style={[styles.inputContainer, { borderColor: theme.border }]}>
               <Icon name="lock-outline" size={20} style={[styles.icon, { color: theme.text }]} />
@@ -130,7 +138,7 @@ const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
                 autoCorrect={false}
                 textContentType="password"
               />
-              <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+              <TouchableOpacity onPress={togglePasswordVisibility}>
                 <Icon
                   name={showPassword ? "eye-off-outline" : "eye-outline"}
                   size={20}
@@ -139,20 +147,26 @@ const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
               </TouchableOpacity>
             </View>
 
+            {/* Forgot Password */}
             <TouchableOpacity onPress={handleForgotPassword}>
               <Text style={[styles.forgotPassword, { color: theme.link }]}>Forgot password?</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity onPress={handleLogin} style={[styles.button, { backgroundColor: theme.buttonBg }]}>
+            {/* Sign In Button */}
+            <TouchableOpacity
+              onPress={handleLogin}
+              style={[styles.button, { backgroundColor: theme.buttonBg }]}
+            >
               <Text style={[styles.buttonText, { color: theme.buttonText }]}>Sign In</Text>
             </TouchableOpacity>
 
+            {/* Sign Up Link */}
             <View style={styles.signupContainer}>
               <Text style={[styles.signupText, { color: theme.text }]}>
                 Don't have an account?{" "}
                 <Text
                   style={[styles.signupLink, { color: theme.link }]}
-                  onPress={() => navigation.navigate("SignUp")}
+                  onPress={handleSignUp}
                 >
                   Sign up
                 </Text>
@@ -165,6 +179,7 @@ const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
   );
 };
 
+// Styles
 const styles = StyleSheet.create({
   scroll: {
     flexGrow: 1,

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,13 +8,20 @@ import {
   TextInput,
   ScrollView,
   Alert,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  findNodeHandle,
+  UIManager,
+  Dimensions,
 } from 'react-native';
 import RNPickerSelect from 'react-native-picker-select';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../App';
-import { doc, setDoc, serverTimestamp, collection, query, where, getDocs, updateDoc } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, collection, query, where, getDocs, updateDoc, getDoc } from 'firebase/firestore';
 import { auth, firestore } from '../firebase/config';
 import { updatePassword } from "firebase/auth";
+import { Portal } from 'react-native-portalize';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'SetupAccount'>;
 
@@ -22,6 +29,16 @@ type SetupAccountScreenProps = {
   navigation: any;
   route: any;
   onSetupComplete: () => void;
+};
+
+type ProgramCategory = {
+  category: string;
+  programs: { label: string; value: string }[];
+};
+
+type FieldCategory = {
+  category: string;
+  fields: { label: string; value: string }[];
 };
 
 export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
@@ -45,6 +62,17 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
   const [fieldSearch, setFieldSearch] = useState('');
   const [showProgramOptions, setShowProgramOptions] = useState(false);
   const [showFieldOptions, setShowFieldOptions] = useState(false);
+  const [programCategories, setProgramCategories] = useState<ProgramCategory[]>([]);
+  const [fieldCategories, setFieldCategories] = useState<FieldCategory[]>([]);
+  const [programList, setProgramList] = useState<string[]>([]);
+  const [fieldList, setFieldList] = useState<string[]>([]);
+  const [loadingMeta, setLoadingMeta] = useState(true);
+  const [parentScrollEnabled, setParentScrollEnabled] = useState(true);
+  const [programInputLayout, setProgramInputLayout] = useState({ x: 0, y: 0, width: 0, height: 0 });
+  const [fieldInputLayout, setFieldInputLayout] = useState({ x: 0, y: 0, width: 0, height: 0 });
+  const [programDropdownPos, setProgramDropdownPos] = useState({ x: 0, y: 0, width: 0, height: 0 });
+  const [fieldDropdownPos, setFieldDropdownPos] = useState({ x: 0, y: 0, width: 0, height: 0 });
+  const windowHeight = Dimensions.get('window').height;
 
   const availableSkills = [
     // Business, Accountancy, and Entrepreneurship
@@ -157,153 +185,78 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
     'Audio Mixing'
   ];
 
-  // Add program categories and options
-  const programCategories = [
-    {
-      category: '💼 Business & Management',
-      programs: [
-        { label: 'BS in Business Administration', value: 'bsba' },
-        { label: 'BS in Real Estate Management', value: 'bsrem' },
-        { label: 'BS in Entrepreneurship', value: 'bsent' },
-      ]
-    },
-    {
-      category: '💻 Information Technology & Computing',
-      programs: [
-        { label: 'BS in Information Technology', value: 'bsit' },
-        { label: 'BS in Information System', value: 'bsis' },
-        { label: 'BS in Computer Science', value: 'bscs' },
-        { label: 'BS in Entertainment and Multimedia Computing', value: 'bsemc' },
-      ]
-    },
-    {
-      category: '🧪 Health Sciences',
-      programs: [
-        { label: 'BS in Medical Technology', value: 'bsmt' },
-        { label: 'BS in Nursing', value: 'bsn' },
-        { label: 'BS in Respiratory Therapy', value: 'bsrt' },
-        { label: 'BS in Physical Therapy', value: 'bspt' },
-      ]
-    },
-    {
-      category: '🧠 Psychology & Social Sciences',
-      programs: [
-        { label: 'BS in Psychology', value: 'bspsych' },
-        { label: 'BA in Political Science', value: 'baps' },
-        { label: 'Bachelor of Public Administration', value: 'bpa' },
-      ]
-    },
-    {
-      category: '🧰 Engineering & Architecture',
-      programs: [
-        { label: 'BS in Civil Engineering', value: 'bsce' },
-        { label: 'BS in Electrical Engineering', value: 'bsee' },
-        { label: 'BS in Mechanical Engineering', value: 'bsme' },
-        { label: 'BS in Electronics Engineering', value: 'bsece' },
-        { label: 'BS in Industrial Engineering', value: 'bsie' },
-        { label: 'BS in Architecture', value: 'bsarch' },
-      ]
-    },
-    {
-      category: '🎙️ Communication & Media',
-      programs: [
-        { label: 'BA in Broadcasting', value: 'bab' },
-        { label: 'BA in Journalism', value: 'baj' },
-        { label: 'BA in Communication', value: 'bac' },
-      ]
-    },
-    {
-      category: '🧑‍🏫 Education',
-      programs: [
-        { label: 'Bachelor in Elementary Education', value: 'beed' },
-        { label: 'Bachelor in Secondary Education', value: 'bsed' },
-      ]
+  const scrollViewRef = useRef<ScrollView>(null);
+  const firstNameRef = useRef<TextInput>(null);
+  const lastNameRef = useRef<TextInput>(null);
+  const programRef = useRef<TextInput>(null);
+  const fieldRef = useRef<TextInput>(null);
+  const skillRef = useRef<TextInput>(null);
+
+  const scrollToInput = (inputRef: React.RefObject<TextInput>) => {
+    if (inputRef.current && scrollViewRef.current) {
+      const inputHandle = findNodeHandle(inputRef.current);
+      const scrollHandle = findNodeHandle(scrollViewRef.current);
+      if (inputHandle && scrollHandle) {
+        UIManager.measureLayout(
+          inputHandle,
+          scrollHandle,
+          () => { },
+          (x, y) => {
+            scrollViewRef.current?.scrollTo({ y: y - 20, animated: true });
+          }
+        );
+      }
     }
-  ];
+  };
 
-  // Add field categories and options
-  const fieldCategories = [
-    {
-      category: '💼 Business & Management',
-      fields: [
-        { label: 'Corporate Management', value: 'corporate' },
-        { label: 'Sales & Marketing', value: 'sales' },
-        { label: 'Human Resources', value: 'hr' },
-        { label: 'Finance & Accounting', value: 'finance' },
-        { label: 'Real Estate', value: 'realestate' },
-      ]
-    },
-    {
-      category: '💻 Information Technology',
-      fields: [
-        { label: 'Software Development', value: 'software' },
-        { label: 'Web Development', value: 'web' },
-        { label: 'IT Support', value: 'itsupport' },
-        { label: 'Multimedia & Design', value: 'multimedia' },
-        { label: 'Data Science', value: 'data' },
-      ]
-    },
-    {
-      category: '🧪 Healthcare',
-      fields: [
-        { label: 'Hospital', value: 'hospital' },
-        { label: 'Clinical Laboratory', value: 'lab' },
-        { label: 'Medical Research', value: 'research' },
-        { label: 'Healthcare Administration', value: 'healthadmin' },
-      ]
-    },
-    {
-      category: '🧠 Social Services',
-      fields: [
-        { label: 'Clinical Psychology', value: 'clinical' },
-        { label: 'Government Agency', value: 'government' },
-        { label: 'Community Organization', value: 'community' },
-        { label: 'Social Work', value: 'socialwork' },
-      ]
-    },
-    {
-      category: '🧰 Engineering & Construction',
-      fields: [
-        { label: 'Construction', value: 'construction' },
-        { label: 'Utilities', value: 'utilities' },
-        { label: 'Engineering Consultancy', value: 'consultancy' },
-        { label: 'Architecture Firm', value: 'architecture' },
-      ]
-    },
-    {
-      category: '🎙️ Media & Communication',
-      fields: [
-        { label: 'Media Outlet', value: 'media' },
-        { label: 'Production Company', value: 'production' },
-        { label: 'Public Relations', value: 'pr' },
-        { label: 'Digital Media', value: 'digital' },
-      ]
-    },
-    {
-      category: '🧑‍🏫 Education',
-      fields: [
-        { label: 'Elementary School', value: 'elementary' },
-        { label: 'Secondary School', value: 'secondary' },
-        { label: 'Educational Administration', value: 'eduadmin' },
-      ]
+  const CARD_HORIZONTAL_PADDING = 20;
+
+  const measureProgramInput = () => {
+    if (programRef.current) {
+      programRef.current.measureInWindow((x, y, width, height) => {
+        setProgramDropdownPos({
+          x: x - CARD_HORIZONTAL_PADDING,
+          y: y + height + 4,
+          width,
+          height: 220,
+        });
+      });
     }
-  ];
+  };
 
-  // Flatten program options for the picker
-  const programOptions = programCategories.flatMap(category => [
-    { label: category.category, value: null, disabled: true },
-    ...category.programs
-  ]);
+  const measureFieldInput = () => {
+    if (fieldRef.current) {
+      fieldRef.current.measureInWindow((x, y, width, height) => {
+        setFieldDropdownPos({
+          x: x - CARD_HORIZONTAL_PADDING,
+          y: y + height + 4,
+          width,
+          height: 220,
+        });
+      });
+    }
+  };
 
-  // Flatten field options for the picker
-  const fieldOptions = fieldCategories.flatMap(category => [
-    { label: category.category, value: null, disabled: true },
-    ...category.fields
-  ]);
-
-  // Add this helper function to flatten all program options
-  const allPrograms = programCategories.flatMap(cat => cat.programs);
-  const allFields = fieldCategories.flatMap(cat => cat.fields);
+  useEffect(() => {
+    const fetchMeta = async () => {
+      try {
+        // Fetch programs as a flat list
+        const programDoc = await getDoc(doc(firestore, 'meta', 'programs'));
+        if (programDoc.exists()) {
+          setProgramList(programDoc.data().list || []);
+        }
+        // Fetch fields as a flat list
+        const fieldDoc = await getDoc(doc(firestore, 'meta', 'field'));
+        if (fieldDoc.exists()) {
+          setFieldList(fieldDoc.data().list || []);
+        }
+      } catch (error) {
+        console.error('Failed to fetch meta:', error);
+      }
+      setLoadingMeta(false);
+    };
+    fetchMeta();
+  }, []);
 
   const toggleCheckbox = (type: 'remote' | 'onsite' | 'hybrid') => {
     setLocationPreference((prev) => ({ ...prev, [type]: !prev[type] }));
@@ -324,8 +277,8 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
       const userRef = doc(firestore, 'users', userId);
 
       // Get the selected program and field details
-      const selectedProgram = programOptions.find(p => p.value === program);
-      const selectedField = fieldOptions.find(f => f.value === field);
+      const selectedProgram = programList.find(p => p === program);
+      const selectedField = fieldList.find(f => f === field);
       const programCategory = programCategories.find(cat =>
         cat.programs.some(p => p.value === program)
       );
@@ -344,7 +297,7 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
         // Academic Information
         program: {
           id: program,
-          name: selectedProgram?.label || '',
+          name: selectedProgram || '',
           category: programCategory?.category || '',
           categoryEmoji: programCategory?.category.split(' ')[0] || '',
         },
@@ -352,7 +305,7 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
         // Career Information
         field: {
           id: field,
-          name: selectedField?.label || '',
+          name: selectedField || '',
           category: fieldCategory?.category || '',
           categoryEmoji: fieldCategory?.category.split(' ')[0] || '',
         },
@@ -369,8 +322,8 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
         skills: skills.map(skill => ({
           name: skill,
           category: availableSkills.find(s => s === skill) ? 'Technical' : 'Soft Skills',
-          addedAt: serverTimestamp(),
         })),
+        skillsUpdatedAt: serverTimestamp(),
 
         // Profile Status
         profileStatus: {
@@ -468,184 +421,328 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
     return true;
   };
 
+  // Improved normalization and matching for search
+  const normalize = (str: string) =>
+    str
+      .toLowerCase()
+      .replace(/b[.]?s[.]?/g, 'bachelor of science')
+      .replace(/bachelor\s+of\s+science/g, 'bachelor of science')
+      .replace(/bachelor/g, 'bachelor of science')
+      .replace(/[^a-z0-9 ]/g, '') // remove punctuation
+      .replace(/\s+/g, ' ')
+      .trim();
+
+  const smartMatch = (option: string, input: string) => {
+    const normOption = normalize(option);
+    const normInput = normalize(input);
+    if (normOption.includes(normInput)) return true;
+    // Match any word in input to any word in option
+    const inputWords = normInput.split(' ');
+    const optionWords = normOption.split(' ');
+    return inputWords.some(word => word && optionWords.some(optWord => optWord.startsWith(word)));
+  };
+
+  if (loadingMeta) {
+    return <ActivityIndicator size="large" color="#007aff" />;
+  }
+
   return (
-    <SafeAreaView style={styles.container}>
-      <Text style={styles.header}>Setup Account</Text>
-      <ScrollView contentContainerStyle={styles.card}>
-        <Text style={styles.title}>Set up Your Profile</Text>
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 24}
+    >
+      <SafeAreaView style={styles.container}>
+        <Text style={styles.header}>Setup Account</Text>
+        <ScrollView
+          ref={scrollViewRef}
+          contentContainerStyle={styles.card}
+          scrollEnabled={parentScrollEnabled}
+          keyboardShouldPersistTaps="handled"
+        >
+          <Text style={styles.title}>Set up Your Profile</Text>
 
-        <Text style={styles.label}>First Name</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Enter Your First Name"
-          value={firstName}
-          onChangeText={setFirstName}
-        />
+          <Text style={styles.label}>First Name</Text>
+          <TextInput
+            ref={firstNameRef}
+            style={styles.input}
+            placeholder="Enter Your First Name"
+            value={firstName}
+            onChangeText={setFirstName}
+            onFocus={() => scrollToInput(firstNameRef)}
+          />
 
-        <Text style={styles.label}>Last Name</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Enter Your Last Name"
-          value={lastName}
-          onChangeText={setLastName}
-        />
+          <Text style={styles.label}>Last Name</Text>
+          <TextInput
+            ref={lastNameRef}
+            style={styles.input}
+            placeholder="Enter Your Last Name"
+            value={lastName}
+            onChangeText={setLastName}
+            onFocus={() => scrollToInput(lastNameRef)}
+          />
 
-        <Text style={styles.label}>Gender</Text>
-        <View style={styles.genderContainer}>
-          {['Male', 'Female', 'Others'].map((g) => (
-            <TouchableOpacity
-              key={g}
-              style={styles.genderRow}
-              onPress={() => setGender(g)}
-            >
-              <View
-                style={[
-                  styles.radioCircle,
-                  gender === g && styles.selectedRadio,
-                ]}
-              />
-              <Text style={styles.genderLabel}>{g}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <Text style={[styles.title, { marginTop: 20 }]}>Internship Preference</Text>
-
-        <Text style={styles.label}>Program</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Search your program"
-          value={programSearch}
-          onChangeText={text => {
-            setProgramSearch(text);
-            setShowProgramOptions(true);
-          }}
-          onFocus={() => setShowProgramOptions(true)}
-        />
-        {showProgramOptions && (
-          <View style={styles.dropdown}>
-            {allPrograms
-              .filter(p => p.label.toLowerCase().includes(programSearch.toLowerCase()))
-              .map(p => (
-                <TouchableOpacity
-                  key={p.value}
-                  style={styles.dropdownItem}
-                  onPress={() => {
-                    setProgram(p.value);
-                    setProgramSearch(p.label);
-                    setShowProgramOptions(false);
-                  }}
-                >
-                  <Text>{p.label}</Text>
-                </TouchableOpacity>
-              ))}
-          </View>
-        )}
-
-        <Text style={styles.label}>Preferred Field / Industry</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Search your preferred field"
-          value={fieldSearch}
-          onChangeText={text => {
-            setFieldSearch(text);
-            setShowFieldOptions(true);
-          }}
-          onFocus={() => setShowFieldOptions(true)}
-        />
-        {showFieldOptions && (
-          <View style={styles.dropdown}>
-            {allFields
-              .filter(f => f.label.toLowerCase().includes(fieldSearch.toLowerCase()))
-              .map(f => (
-                <TouchableOpacity
-                  key={f.value}
-                  style={styles.dropdownItem}
-                  onPress={() => {
-                    setField(f.value);
-                    setFieldSearch(f.label);
-                    setShowFieldOptions(false);
-                  }}
-                >
-                  <Text>{f.label}</Text>
-                </TouchableOpacity>
-              ))}
-          </View>
-        )}
-
-        <Text style={styles.label}>Location Preference</Text>
-        <View style={styles.checkboxContainer}>
-          {['remote', 'onsite', 'hybrid'].map((type) => (
-            <TouchableOpacity
-              key={type}
-              style={styles.checkboxRow}
-              onPress={() => toggleCheckbox(type as keyof typeof locationPreference)}
-            >
-              <View
-                style={[
-                  styles.checkbox,
-                  locationPreference[type as keyof typeof locationPreference] &&
-                  styles.checkedBox,
-                ]}
-              />
-              <Text style={styles.checkboxLabel}>
-                {type.charAt(0).toUpperCase() + type.slice(1)}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <Text style={styles.label}>Skills</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Search skills"
-          value={skillSearch}
-          onChangeText={setSkillSearch}
-        />
-
-        <View style={styles.skillPillContainer}>
-          {availableSkills
-            .filter(
-              (skill) =>
-                skill.toLowerCase().includes(skillSearch.toLowerCase()) &&
-                (skillSearch.length > 0 ? true : skills.includes(skill))
-            )
-            .map((skill) => (
+          <Text style={styles.label}>Gender</Text>
+          <View style={styles.genderContainer}>
+            {['Male', 'Female', 'Others'].map((g) => (
               <TouchableOpacity
-                key={skill}
-                style={[
-                  styles.skillPillSelected,
-                  !skills.includes(skill) && { opacity: 0.5 },
-                ]}
-                onPress={() => {
-                  if (skills.includes(skill)) {
-                    setSkills((prev) => prev.filter((s) => s !== skill));
-                  } else {
-                    setSkills((prev) => [...prev, skill]);
-                  }
-                }}
+                key={g}
+                style={styles.genderRow}
+                onPress={() => setGender(g)}
               >
-                <Text style={styles.skillText}>
-                  {skill}
-                  {skills.includes(skill) ? ' ✕' : ' ＋'}
+                <View
+                  style={[
+                    styles.radioCircle,
+                    gender === g && styles.selectedRadio,
+                  ]}
+                />
+                <Text style={styles.genderLabel}>{g}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <Text style={[styles.title, { marginTop: 20 }]}>Internship Preference</Text>
+
+          <Text style={styles.label}>Program</Text>
+          <View style={[styles.inputContainer, { zIndex: 2 }]}>
+            <TextInput
+              ref={programRef}
+              style={[
+                styles.input,
+                showProgramOptions && styles.inputFocused
+              ]}
+              placeholder="Search your program"
+              placeholderTextColor="#999"
+              value={programSearch}
+              onChangeText={text => {
+                setProgramSearch(text);
+                setShowProgramOptions(true);
+                setParentScrollEnabled(false);
+              }}
+              onFocus={() => {
+                scrollToInput(programRef);
+                measureProgramInput();
+                setShowProgramOptions(true);
+                setParentScrollEnabled(false);
+              }}
+              onBlur={() => {
+                setTimeout(() => {
+                  setShowProgramOptions(false);
+                  setParentScrollEnabled(true);
+                }, 100);
+              }}
+            />
+            {showProgramOptions && programSearch.length > 0 && (
+              <Portal>
+                <View
+                  style={[
+                    styles.dropdown,
+                    {
+                      position: 'absolute',
+                      top: programDropdownPos.y,
+                      left: programDropdownPos.x,
+                      width: programDropdownPos.width,
+                      maxHeight: 220,
+                      zIndex: 9999,
+                      elevation: 20,
+                      overflow: 'hidden',
+                    }
+                  ]}
+                  pointerEvents="auto"
+                >
+                  <ScrollView
+                    keyboardShouldPersistTaps="handled"
+                    showsVerticalScrollIndicator={true}
+                    style={{ maxHeight: 220 }}
+                  >
+                    {programList
+                      .filter(p => programSearch && smartMatch(p, programSearch))
+                      .map((p, idx) => (
+                        <TouchableOpacity
+                          key={idx}
+                          style={[
+                            styles.dropdownItem,
+                            program === p && styles.dropdownItemSelected
+                          ]}
+                          activeOpacity={0.7}
+                          onPress={() => {
+                            setProgram(p);
+                            setProgramSearch(p);
+                            setShowProgramOptions(false);
+                            setParentScrollEnabled(true);
+                            programRef.current?.blur();
+                          }}
+                        >
+                          <Text style={styles.dropdownItemText}>{p}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    {programList.filter(p => programSearch && smartMatch(p, programSearch)).length === 0 && (
+                      <Text style={styles.noResultsText}>No results found</Text>
+                    )}
+                  </ScrollView>
+                </View>
+              </Portal>
+            )}
+          </View>
+
+          <Text style={styles.label}>Preferred Field / Industry</Text>
+          <View style={[styles.inputContainer, { zIndex: 1 }]}>
+            <TextInput
+              ref={fieldRef}
+              style={[
+                styles.input,
+                showFieldOptions && styles.inputFocused
+              ]}
+              placeholder="Search your preferred field"
+              placeholderTextColor="#999"
+              value={fieldSearch}
+              onChangeText={text => {
+                setFieldSearch(text);
+                setShowFieldOptions(true);
+                setParentScrollEnabled(false);
+              }}
+              onFocus={() => {
+                scrollToInput(fieldRef);
+                measureFieldInput();
+                setShowFieldOptions(true);
+                setParentScrollEnabled(false);
+              }}
+              onBlur={() => {
+                setTimeout(() => {
+                  setShowFieldOptions(false);
+                  setParentScrollEnabled(true);
+                }, 100);
+              }}
+            />
+            {showFieldOptions && fieldSearch.length > 0 && (
+              <Portal>
+                <View
+                  style={[
+                    styles.dropdown,
+                    {
+                      position: 'absolute',
+                      top: fieldDropdownPos.y,
+                      left: fieldDropdownPos.x,
+                      width: fieldDropdownPos.width,
+                      maxHeight: 220,
+                      zIndex: 9998,
+                      elevation: 20,
+                      overflow: 'hidden',
+                    }
+                  ]}
+                  pointerEvents="auto"
+                >
+                  <ScrollView
+                    keyboardShouldPersistTaps="handled"
+                    showsVerticalScrollIndicator={true}
+                    style={{ maxHeight: 220 }}
+                  >
+                    {fieldList
+                      .filter(f => fieldSearch && smartMatch(f, fieldSearch))
+                      .map((f, idx) => (
+                        <TouchableOpacity
+                          key={idx}
+                          style={[
+                            styles.dropdownItem,
+                            field === f && styles.dropdownItemSelected
+                          ]}
+                          activeOpacity={0.7}
+                          onPress={() => {
+                            setField(f);
+                            setFieldSearch(f);
+                            setShowFieldOptions(false);
+                            setParentScrollEnabled(true);
+                            fieldRef.current?.blur();
+                          }}
+                        >
+                          <Text style={styles.dropdownItemText}>{f}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    {fieldList.filter(f => fieldSearch && smartMatch(f, fieldSearch)).length === 0 && (
+                      <Text style={styles.noResultsText}>No results found</Text>
+                    )}
+                  </ScrollView>
+                </View>
+              </Portal>
+            )}
+          </View>
+
+          <Text style={styles.label}>Location Preference</Text>
+          <View style={styles.checkboxContainer}>
+            {['remote', 'onsite', 'hybrid'].map((type) => (
+              <TouchableOpacity
+                key={type}
+                style={styles.checkboxRow}
+                onPress={() => toggleCheckbox(type as keyof typeof locationPreference)}
+              >
+                <View
+                  style={[
+                    styles.checkbox,
+                    locationPreference[type as keyof typeof locationPreference] &&
+                    styles.checkedBox,
+                  ]}
+                />
+                <Text style={styles.checkboxLabel}>
+                  {type.charAt(0).toUpperCase() + type.slice(1)}
                 </Text>
               </TouchableOpacity>
             ))}
-        </View>
+          </View>
 
-        <TouchableOpacity
-          style={[
-            styles.button,
-            (!firstName || !lastName || !gender || !program || !field || skills.length === 0) &&
-            styles.buttonDisabled
-          ]}
-          onPress={finishSetup}
-          disabled={!firstName || !lastName || !gender || !program || !field || skills.length === 0}
-        >
-          <Text style={styles.buttonText}>Complete Setup</Text>
-        </TouchableOpacity>
-      </ScrollView>
-    </SafeAreaView>
+          <Text style={styles.label}>Skills</Text>
+          <TextInput
+            ref={skillRef}
+            style={styles.input}
+            placeholder="Search skills"
+            value={skillSearch}
+            onChangeText={setSkillSearch}
+            onFocus={() => scrollToInput(skillRef)}
+          />
+
+          <View style={styles.skillPillContainer}>
+            {availableSkills
+              .filter(
+                (skill) =>
+                  skill.toLowerCase().includes(skillSearch.toLowerCase()) &&
+                  (skillSearch.length > 0 ? true : skills.includes(skill))
+              )
+              .map((skill) => (
+                <TouchableOpacity
+                  key={skill}
+                  style={[
+                    styles.skillPillSelected,
+                    !skills.includes(skill) && { opacity: 0.5 },
+                  ]}
+                  onPress={() => {
+                    if (skills.includes(skill)) {
+                      setSkills((prev) => prev.filter((s) => s !== skill));
+                    } else {
+                      setSkills((prev) => [...prev, skill]);
+                    }
+                  }}
+                >
+                  <Text style={styles.skillText}>
+                    {skill}
+                    {skills.includes(skill) ? ' ✕' : ' ＋'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+          </View>
+
+          <TouchableOpacity
+            style={[
+              styles.button,
+              (!firstName || !lastName || !gender || !program || !field || skills.length === 0) &&
+              styles.buttonDisabled
+            ]}
+            onPress={finishSetup}
+            disabled={!firstName || !lastName || !gender || !program || !field || skills.length === 0}
+          >
+            <Text style={styles.buttonText}>Complete Setup</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </SafeAreaView>
+    </KeyboardAvoidingView>
   );
 };
 
@@ -683,14 +780,18 @@ const styles = StyleSheet.create({
   },
   input: {
     fontSize: 14,
-    paddingVertical: 10,
-    paddingHorizontal: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 5,
-    backgroundColor: '#F4F5F9',
-    color: 'black',
+    borderColor: '#E0E0E0',
+    borderRadius: 8,
+    backgroundColor: '#F8F9FA',
+    color: '#333',
     marginBottom: 10,
+  },
+  inputFocused: {
+    borderColor: '#00A8E8',
+    backgroundColor: '#FFFFFF',
   },
   genderContainer: {
     flexDirection: 'column',
@@ -771,19 +872,47 @@ const styles = StyleSheet.create({
     backgroundColor: '#ccc',
     opacity: 0.7,
   },
+  inputContainer: {
+    position: 'relative',
+    zIndex: 1,
+    marginBottom: 15,
+  },
   dropdown: {
+    position: 'absolute',
     backgroundColor: '#fff',
     borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 5,
-    maxHeight: 150,
-    marginBottom: 10,
-    zIndex: 10,
+    borderColor: '#E0E0E0',
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 20,
+    zIndex: 9999,
+    overflow: 'hidden',
   },
   dropdownItem: {
-    padding: 10,
+    padding: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: '#F5F5F5',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  dropdownItemSelected: {
+    backgroundColor: '#F8F9FA',
+  },
+  dropdownItemText: {
+    fontSize: 14,
+    color: '#333',
+    flex: 1,
+  },
+  noResultsText: {
+    padding: 12,
+    color: '#888',
+    fontSize: 14,
+    textAlign: 'center',
+    fontStyle: 'italic',
   },
 });
 

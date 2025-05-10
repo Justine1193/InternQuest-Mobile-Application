@@ -5,11 +5,6 @@
     "version": "1.0.4",
     "orientation": "portrait",
     "icon": "./assets/phone_logo.png",
-    "splash": {
-      "image": "./assets/phone_logo.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
-    },
     "android": {
       "package": "com.internquest.internquest",
       "versionCode": 1,

@@ -303,10 +303,14 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
 
         {/* Stats Section */}
         <View style={styles.statsContainer}>
-          <View style={styles.statCard}>
+          <TouchableOpacity
+            style={styles.statCard}
+            onPress={() => navigation.navigate('OJTTracker')}
+            activeOpacity={0.7}
+          >
             <Text style={styles.statLabel}>Remaining Hours</Text>
             <Text style={styles.statValue}>{Math.max(0, requiredHours - totalHours)} hours</Text>
-          </View>
+          </TouchableOpacity>
           <View style={styles.statCard}>
             <Text style={styles.statLabel}>Company</Text>
             <Text style={styles.statValue}>

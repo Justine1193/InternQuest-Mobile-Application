@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { StatusBar } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
+import { Host } from 'react-native-portalize';
 
 // Context
 import { SavedInternshipsProvider } from './context/SavedInternshipsContext';
@@ -60,41 +61,43 @@ const App: React.FC = () => {
   }, []);
 
   return (
-    <SavedInternshipsProvider>
-      <NavigationContainer>
-        {/* Global StatusBar configuration */}
-        <StatusBar translucent backgroundColor="transparent" barStyle="dark-content" />
-        <Stack.Navigator screenOptions={{ headerShown: false }}>
-          {isLoading ? (
-            <Stack.Screen name="Launch" component={LaunchScreen} />
-          ) : (
-            <>
-              <Stack.Screen name="SignIn">
-                {props => <SignInScreen {...props} setIsLoggedIn={setIsLoggedIn} />}
-              </Stack.Screen>
-              <Stack.Screen name="SignUp" component={SignUpScreen} />
-              <Stack.Screen name="SetupAccount">
-                {props => (
-                  <SetupAccountScreen
-                    {...props}
-                    onSetupComplete={() => {
-                      setIsLoggedIn(true);
-                      props.navigation.replace('Home');
-                    }}
-                  />
-                )}
-              </Stack.Screen>
-              <Stack.Screen name="Home" component={HomeScreen} />
-              <Stack.Screen name="Profile" component={ProfileScreen} />
-              <Stack.Screen name="Notifications" component={NotificationsScreen} />
-              <Stack.Screen name="Settings" component={SettingsScreen} />
-              <Stack.Screen name="InternshipDetails" component={InternshipDetailsScreen} />
-              <Stack.Screen name="OJTTracker" component={OJTTrackerScreen} />
-            </>
-          )}
-        </Stack.Navigator>
-      </NavigationContainer>
-    </SavedInternshipsProvider>
+    <Host>
+      <SavedInternshipsProvider>
+        <NavigationContainer>
+          {/* Global StatusBar configuration */}
+          <StatusBar translucent backgroundColor="transparent" barStyle="dark-content" />
+          <Stack.Navigator screenOptions={{ headerShown: false }}>
+            {isLoading ? (
+              <Stack.Screen name="Launch" component={LaunchScreen} />
+            ) : (
+              <>
+                <Stack.Screen name="SignIn">
+                  {props => <SignInScreen {...props} setIsLoggedIn={setIsLoggedIn} />}
+                </Stack.Screen>
+                <Stack.Screen name="SignUp" component={SignUpScreen} />
+                <Stack.Screen name="SetupAccount">
+                  {props => (
+                    <SetupAccountScreen
+                      {...props}
+                      onSetupComplete={() => {
+                        setIsLoggedIn(true);
+                        props.navigation.replace('Home');
+                      }}
+                    />
+                  )}
+                </Stack.Screen>
+                <Stack.Screen name="Home" component={HomeScreen} />
+                <Stack.Screen name="Profile" component={ProfileScreen} />
+                <Stack.Screen name="Notifications" component={NotificationsScreen} />
+                <Stack.Screen name="Settings" component={SettingsScreen} />
+                <Stack.Screen name="InternshipDetails" component={InternshipDetailsScreen} />
+                <Stack.Screen name="OJTTracker" component={OJTTrackerScreen} />
+              </>
+            )}
+          </Stack.Navigator>
+        </NavigationContainer>
+      </SavedInternshipsProvider>
+    </Host>
   );
 };
 

@@ -287,6 +287,17 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
       );
 
       // Prepare user data with detailed structure
+      const { name, ...programWithoutName } = {
+        id: program,
+        name: selectedProgram || '',
+        category: programCategory?.category || '',
+      };
+      const { name: fieldName, ...fieldWithoutName } = {
+        id: field,
+        name: selectedField || '',
+        category: fieldCategory?.category || '',
+        categoryEmoji: fieldCategory?.category.split(' ')[0] || '',
+      };
       const userData = {
         // Basic Information
         firstName: firstName.trim(),
@@ -295,20 +306,10 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
         email: auth.currentUser.email,
 
         // Academic Information
-        program: {
-          id: program,
-          name: selectedProgram || '',
-          category: programCategory?.category || '',
-          categoryEmoji: programCategory?.category.split(' ')[0] || '',
-        },
+        program: programWithoutName,
 
         // Career Information
-        field: {
-          id: field,
-          name: selectedField || '',
-          category: fieldCategory?.category || '',
-          categoryEmoji: fieldCategory?.category.split(' ')[0] || '',
-        },
+        field: [fieldWithoutName],
 
         // Preferences
         locationPreference: {

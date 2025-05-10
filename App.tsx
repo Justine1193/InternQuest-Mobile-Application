@@ -3,6 +3,8 @@ import { StatusBar } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { Host } from 'react-native-portalize';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from './firebase/config';
 
 // Context
 import { SavedInternshipsProvider } from './context/SavedInternshipsContext';
@@ -33,6 +35,7 @@ export type Post = {
   website?: string; // ✅ Added
   email?: string;   // ✅ Added
   skills?: string[]; // <-- Add this line
+  createdAt?: Date;
 };
 
 // Stack Param List
@@ -43,7 +46,7 @@ export type RootStackParamList = {
   SignUp: undefined;
   SetupAccount: undefined;
   InternshipDetails: { post: Post };
-  OJTTracker: { post: Post };
+  OJTTracker: { post?: Post };
   Notifications: undefined;
   Settings: undefined;
   Profile: undefined;
@@ -56,8 +59,11 @@ const App: React.FC = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   useEffect(() => {
-    const timer = setTimeout(() => setIsLoading(false), 2000); // Simulate splash
-    return () => clearTimeout(timer);
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setIsLoggedIn(!!user);
+      setIsLoading(false);
+    });
+    return () => unsubscribe();
   }, []);
 
   return (
@@ -69,6 +75,15 @@ const App: React.FC = () => {
           <Stack.Navigator screenOptions={{ headerShown: false }}>
             {isLoading ? (
               <Stack.Screen name="Launch" component={LaunchScreen} />
+            ) : isLoggedIn ? (
+              <>
+                <Stack.Screen name="Home" component={HomeScreen} />
+                <Stack.Screen name="Profile" component={ProfileScreen} />
+                <Stack.Screen name="Notifications" component={NotificationsScreen} />
+                <Stack.Screen name="Settings" component={SettingsScreen} />
+                <Stack.Screen name="InternshipDetails" component={InternshipDetailsScreen} />
+                <Stack.Screen name="OJTTracker" component={OJTTrackerScreen} />
+              </>
             ) : (
               <>
                 <Stack.Screen name="SignIn">
@@ -86,12 +101,6 @@ const App: React.FC = () => {
                     />
                   )}
                 </Stack.Screen>
-                <Stack.Screen name="Home" component={HomeScreen} />
-                <Stack.Screen name="Profile" component={ProfileScreen} />
-                <Stack.Screen name="Notifications" component={NotificationsScreen} />
-                <Stack.Screen name="Settings" component={SettingsScreen} />
-                <Stack.Screen name="InternshipDetails" component={InternshipDetailsScreen} />
-                <Stack.Screen name="OJTTracker" component={OJTTrackerScreen} />
               </>
             )}
           </Stack.Navigator>

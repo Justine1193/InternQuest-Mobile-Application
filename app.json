@@ -4,7 +4,7 @@
     "slug": "internquest",
     "version": "1.0.4",
     "orientation": "portrait",
-    "icon": "./assets/phone_logo.png",
+    "icon": "./assets/ship.png",
     "android": {
       "package": "com.internquest.internquest",
       "versionCode": 1,

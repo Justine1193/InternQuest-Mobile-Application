@@ -15,9 +15,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import BottomNavbar from '../components/BottomNav';
-import { auth, db, firestore } from '../firebase/config';
-import { ref, onValue, update } from 'firebase/database';
-import { getDoc, doc, setDoc, collection, getDocs } from "firebase/firestore";
+import { auth, firestore } from '../firebase/config';
+import { doc, setDoc, collection, getDoc, getDocs } from "firebase/firestore";
 import * as ImagePicker from 'expo-image-picker';
 import * as Progress from 'react-native-progress';
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
@@ -89,10 +88,11 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
   };
 
   const handlePhonePress = () => {
-    if (userData.phone) {
-      Linking.openURL(`tel:${userData.phone}`);
+    const phone = userData.phone || userData.contact;
+    if (phone && /^\d{10,}$/.test(phone)) {
+      Linking.openURL(`tel:${phone}`);
     } else {
-      Alert.alert('Error', 'Phone number not available.');
+      Alert.alert('Error', 'Phone number not available or invalid.');
     }
   };
 
@@ -304,26 +304,33 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
         {/* Stats Section */}
         <View style={styles.statsContainer}>
           <TouchableOpacity
-            style={styles.statCard}
+            style={[styles.statCard, { backgroundColor: '#007bff', flexDirection: 'row', alignItems: 'center' }]}
             onPress={() => navigation.navigate('OJTTracker')}
             activeOpacity={0.7}
           >
-            <Text style={styles.statLabel}>Remaining Hours</Text>
-            <Text style={styles.statValue}>{Math.max(0, requiredHours - totalHours)} hours</Text>
+            <Ionicons name="time-outline" size={24} color="#fff" style={{ marginRight: 10 }} />
+            <View>
+              <Text style={[styles.statLabel, { color: '#fff' }]}>Remaining Hours</Text>
+              <Text style={[styles.statValue, { color: '#fff' }]}>{Math.max(0, requiredHours - totalHours)} hours</Text>
+            </View>
           </TouchableOpacity>
-          <View style={styles.statCard}>
-            <Text style={styles.statLabel}>Company</Text>
-            <Text style={styles.statValue}>
-              {userData.status === 'hired' ? userData.company || 'Not Set' : 'Not Hired'}
-            </Text>
-            {userData.status === 'hired' && (
-              <TouchableOpacity
-                style={styles.undoButton}
-                onPress={handleUndoCompany}
-              >
-                <Text style={styles.undoButtonText}>Undo Hired Status</Text>
-              </TouchableOpacity>
-            )}
+          <View style={[styles.statCard, { backgroundColor: '#007bff', flexDirection: 'row', alignItems: 'center' }]}>
+            <Ionicons name="business-outline" size={24} color="#fff" style={{ marginRight: 10 }} />
+            <View>
+              <Text style={[styles.statLabel, { color: '#fff' }]}>Company</Text>
+              <Text style={[styles.statValue, { color: '#fff' }]}>
+                {userData.status === 'hired' ? userData.company || 'Not Set' : 'Not Hired'}
+              </Text>
+              {userData.status === 'hired' && (
+                <TouchableOpacity
+                  style={styles.undoButton}
+                  onPress={handleUndoCompany}
+                >
+                  <Ionicons name="arrow-undo-outline" size={18} color="#007bff" />
+                  <Text style={styles.undoButtonText}>Undo</Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
         </View>
 
@@ -481,7 +488,7 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
       )}
 
       {/* Bottom Navbar */}
-      <BottomNavbar navigation={navigation} />
+      <BottomNavbar navigation={navigation} currentRoute="Profile" />
     </View>
   );
 };
@@ -535,26 +542,28 @@ const styles = StyleSheet.create({
   },
   statsContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginVertical: 20,
+    justifyContent: 'space-between',
+    alignItems: 'stretch',
+    marginVertical: 28,
   },
   statCard: {
     backgroundColor: '#f9f9f9',
     borderRadius: 10,
-    padding: 15,
-    width: '40%',
+    padding: 20,
+    width: '48%',
     alignItems: 'center',
+    justifyContent: 'center',
     shadowColor: '#000',
     shadowOpacity: 0.1,
     shadowRadius: 5,
     elevation: 3,
   },
   statLabel: {
-    fontSize: 14,
+    fontSize: 16,
     color: '#888',
   },
   statValue: {
-    fontSize: 16,
+    fontSize: 20,
     fontWeight: 'bold',
     marginTop: 5,
   },
@@ -678,14 +687,23 @@ const styles = StyleSheet.create({
     textDecorationLine: 'underline',
   },
   undoButton: {
-    marginTop: 5,
-    padding: 5,
-    backgroundColor: '#f0f0f0',
-    borderRadius: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    backgroundColor: '#e6f0ff',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#007bff',
+    alignSelf: 'flex-start',
   },
   undoButtonText: {
-    color: '#666',
-    fontSize: 12,
+    color: '#007bff',
+    fontWeight: 'bold',
+    fontSize: 13,
+    marginLeft: 6,
   },
   undoSnackbar: {
     position: 'absolute',

@@ -49,7 +49,6 @@ const SettingsScreen: React.FC = () => {
   const handleLogout = async () => {
     try {
       await signOut(auth);
-      navigation.navigate('SignIn');
     } catch (error: any) {
       Alert.alert('Error', error.message);
     }
@@ -169,7 +168,7 @@ const SettingsScreen: React.FC = () => {
           <Text style={styles.logoutText}>Log Out</Text>
         </TouchableOpacity>
       </ScrollView>
-      <BottomNavbar navigation={navigation} />
+      <BottomNavbar navigation={navigation} currentRoute="Settings" />
     </>
   );
 };

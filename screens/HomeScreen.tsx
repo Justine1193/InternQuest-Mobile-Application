@@ -11,11 +11,13 @@ import {
 } from 'react-native';
 import BottomNavbar from '../components/BottomNav';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { RootStackParamList, Post } from '../App';
+import { RootStackParamList, Post as BasePost } from '../App';
 import { Ionicons } from '@expo/vector-icons';
 import { useSavedInternships } from '../context/SavedInternshipsContext';
 import { collection, getDocs } from 'firebase/firestore';
 import { firestore } from '../firebase/config';
+
+type Post = BasePost & { createdAt?: Date };
 
 type Props = {
   navigation: StackNavigationProp<RootStackParamList, 'Home'>;
@@ -53,6 +55,7 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
           modeOfWork: Array.isArray(data.modeofwork) ? data.modeofwork[0] : data.modeofwork || '',
           latitude: data.latitude || 0,
           longitude: data.longitude || 0,
+          createdAt: data.createdAt ? (data.createdAt.toDate ? data.createdAt.toDate() : new Date(data.createdAt)) : new Date(),
         };
       });
       setCompanies(companyData);
@@ -97,6 +100,20 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
   const handleToggleExpand = (id: string) => {
     setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
   };
+
+  // Helper function to format 'time ago'
+  function timeAgo(date: Date) {
+    if (!date) return '';
+    const now = new Date();
+    const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+    if (seconds < 60) return 'Just now';
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+    const days = Math.floor(hours / 24);
+    return `${days} day${days > 1 ? 's' : ''} ago`;
+  }
 
   return (
     <View style={styles.container}>
@@ -185,12 +202,19 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
                 <Text key={idx} style={styles.tag}>{tag}</Text>
               ))}
             </View>
-            <Text style={styles.timeStamp}>Posted 1 hour ago</Text>
+            <Text style={styles.timeStamp}>Posted {timeAgo(post.createdAt ?? new Date())}</Text>
           </TouchableOpacity>
         ))}
       </ScrollView>
 
-      <BottomNavbar navigation={navigation} />
+      <TouchableOpacity
+        style={styles.ojtTrackerButton}
+        onPress={() => navigation.navigate('OJTTracker', {})}
+      >
+        <Ionicons name="calendar" size={24} color="#fff" />
+      </TouchableOpacity>
+
+      <BottomNavbar navigation={navigation} currentRoute="Home" />
     </View>
   );
 };
@@ -297,6 +321,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 8,
     gap: 8,
+  },
+  ojtTrackerButton: {
+    position: 'absolute',
+    right: 20,
+    bottom: 80, // Positioned above the bottom navbar
+    backgroundColor: '#007aff',
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
   },
 });
 

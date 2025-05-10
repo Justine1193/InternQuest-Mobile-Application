@@ -167,7 +167,7 @@ const NotificationsScreen: React.FC<Props> = ({ navigation }) => {
       </Modal>
 
       {/* Bottom Navbar */}
-      <BottomNavbar navigation={navigation} />
+      <BottomNavbar navigation={navigation} currentRoute="Notifications" />
     </>
   );
 };

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, ScrollView, Modal, TextInput,
-  TouchableOpacity, Alert, StyleSheet
+  TouchableOpacity, Alert, StyleSheet, Platform, PermissionsAndroid, Linking, Share
 } from 'react-native';
 import { Card, FAB } from 'react-native-paper';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -13,6 +13,10 @@ import type { RootStackParamList } from '../App';
 import { auth, firestore } from '../firebase/config';
 import { doc, setDoc, deleteDoc, collection, getDocs } from 'firebase/firestore';
 import { Picker } from '@react-native-picker/picker';
+import RNBlobUtil from 'react-native-blob-util';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+import Feather from 'react-native-vector-icons/Feather';
 
 // Types
 type TimeLog = {
@@ -46,6 +50,16 @@ const OJTTrackerScreen: React.FC = () => {
   const [goalModalVisible, setGoalModalVisible] = useState(false);
   const [goalInput, setGoalInput] = useState('300');
   const [totalHours, setTotalHours] = useState(0);
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [selectedDate, setSelectedDate] = useState('');
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [tempDate, setTempDate] = useState({
+    year: new Date().getFullYear(),
+    month: new Date().getMonth() + 1,
+    day: new Date().getDate()
+  });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(5);
 
   // Load initial data
   useEffect(() => {
@@ -123,11 +137,52 @@ const OJTTrackerScreen: React.FC = () => {
   };
 
   // Event handlers
+  const calculateHours = (clockIn: string, clockOut: string, clockInAmPm: AmPm, clockOutAmPm: AmPm) => {
+    if (!clockIn || !clockOut) return '';
+
+    // Convert times to 24-hour format
+    const convertTo24Hour = (time: string, amPm: AmPm) => {
+      const [hours, minutes] = time.split(':').map(Number);
+      let hour24 = hours;
+
+      if (amPm === 'PM' && hours !== 12) {
+        hour24 += 12;
+      } else if (amPm === 'AM' && hours === 12) {
+        hour24 = 0;
+      }
+
+      return hour24 + (minutes / 60);
+    };
+
+    const startTime = convertTo24Hour(clockIn, clockInAmPm);
+    const endTime = convertTo24Hour(clockOut, clockOutAmPm);
+
+    // Calculate hours difference
+    let hours = endTime - startTime;
+
+    // Handle overnight shifts (when clock out is earlier than clock in)
+    if (hours < 0) {
+      hours += 24;
+    }
+
+    // Handle invalid time ranges
+    if (hours > 24) {
+      Alert.alert('Warning', 'Time difference exceeds 24 hours. Please check your times.');
+      return '';
+    }
+
+    // Round to nearest whole number
+    const roundedHours = Math.round(hours);
+
+    // Return as string
+    return roundedHours.toString();
+  };
+
   const handleSave = async () => {
     try {
       // Validate inputs
-      if (!formData.date || !formData.clockIn || !formData.clockOut || !formData.hours) {
-        Alert.alert('Error', 'Please fill in all fields.');
+      if (!formData.date || !formData.clockIn || !formData.clockOut) {
+        Alert.alert('Error', 'Please fill in all required fields.');
         return;
       }
 
@@ -143,9 +198,19 @@ const OJTTrackerScreen: React.FC = () => {
         return;
       }
 
-      const hours = Number(formData.hours);
-      if (isNaN(hours) || hours <= 0 || hours > MAX_HOURS) {
-        Alert.alert('Error', `Please enter a valid number of hours (1-${MAX_HOURS}).`);
+      // Calculate hours if manual input is empty
+      const calculatedHours = calculateHours(
+        formData.clockIn,
+        formData.clockOut,
+        clockInAmPm,
+        clockOutAmPm
+      );
+
+      const hours = formData.hours || calculatedHours;
+      const hoursNum = parseInt(hours);
+
+      if (isNaN(hoursNum) || hoursNum <= 0 || hoursNum > MAX_HOURS) {
+        Alert.alert('Error', `Please enter a valid whole number of hours (1-${MAX_HOURS}).`);
         return;
       }
 
@@ -164,6 +229,7 @@ const OJTTrackerScreen: React.FC = () => {
         ...formData,
         clockIn: `${formData.clockIn} ${clockInAmPm}`,
         clockOut: `${formData.clockOut} ${clockOutAmPm}`,
+        hours: hours,
       };
 
       if (editIndex !== null) {
@@ -220,6 +286,70 @@ const OJTTrackerScreen: React.FC = () => {
     setGoalModalVisible(false);
   }, [goalInput]);
 
+  const requestStoragePermission = async () => {
+    try {
+      const granted = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
+        {
+          title: "Storage Permission",
+          message: "App needs access to storage to save your OJT logs.",
+          buttonNeutral: "Ask Me Later",
+          buttonNegative: "Cancel",
+          buttonPositive: "OK"
+        }
+      );
+      return granted === PermissionsAndroid.RESULTS.GRANTED;
+    } catch (err) {
+      console.warn(err);
+      return false;
+    }
+  };
+
+  const handleSaveCSV = async () => {
+    try {
+      const csvContent = generateCSV();
+      const fileName = `OJT_Logs_${new Date().toISOString().split('T')[0]}.csv`;
+
+      // Create a data URL for the CSV content
+      const csvData = `data:text/csv;charset=utf-8,${encodeURIComponent(csvContent)}`;
+
+      // Share the file
+      await Share.share({
+        url: csvData,
+        title: fileName,
+        message: 'Here is my OJT Logs CSV file',
+      });
+
+      Alert.alert('Success', 'CSV file has been prepared for download.');
+    } catch (error) {
+      console.error('Error preparing CSV:', error);
+      Alert.alert('Error', 'Failed to prepare CSV file for download.');
+    }
+  };
+
+  const generateCSV = () => {
+    // CSV Header
+    const headers = ['Date', 'Clock In', 'Clock Out', 'Hours'];
+    const csvRows = [headers];
+
+    // Add data rows
+    timeLogs.forEach(log => {
+      csvRows.push([
+        log.date,
+        log.clockIn,
+        log.clockOut,
+        log.hours
+      ]);
+    });
+
+    // Convert to CSV string with proper escaping
+    const csvContent = csvRows.map(row =>
+      row.map(cell => `"${cell}"`).join(',')
+    ).join('\n');
+
+    return csvContent;
+  };
+
   // UI handlers
   const openModal = (log?: TimeLog, index?: number) => {
     if (log && index !== undefined) {
@@ -238,7 +368,21 @@ const OJTTrackerScreen: React.FC = () => {
   useEffect(() => {
     const sum = timeLogs.reduce((acc, log) => acc + Number(log.hours), 0);
     setTotalHours(sum);
+    (async () => {
+      await updateTotalHoursInFirestore(sum);
+    })();
   }, [timeLogs]);
+
+  const updateTotalHoursInFirestore = async (totalHours: number) => {
+    if (!auth.currentUser) return;
+    try {
+      const userDocRef = doc(firestore, "users", auth.currentUser.uid);
+      await setDoc(userDocRef, { totalHours }, { merge: true });
+      console.log('totalHours updated in Firestore:', totalHours);
+    } catch (error) {
+      console.error('Error updating totalHours in Firestore:', error);
+    }
+  };
 
   // Add this new function to format time display
   const formatTimeDisplay = (time: string, amPm: AmPm) => {
@@ -289,6 +433,85 @@ const OJTTrackerScreen: React.FC = () => {
     }
   };
 
+  // Add useEffect to update hours when clock in/out times change
+  useEffect(() => {
+    if (formData.clockIn && formData.clockOut) {
+      const calculatedHours = calculateHours(
+        formData.clockIn,
+        formData.clockOut,
+        clockInAmPm,
+        clockOutAmPm
+      );
+
+      // Only update if manual input is empty or if the calculated hours are different
+      if (!formData.hours || formData.hours !== calculatedHours) {
+        setFormData(prev => ({
+          ...prev,
+          hours: calculatedHours
+        }));
+      }
+    }
+  }, [formData.clockIn, formData.clockOut, clockInAmPm, clockOutAmPm]);
+
+  // Add function to format date for calendar
+  const formatDateForCalendar = (date: string) => {
+    if (!date) return '';
+    const [year, month, day] = date.split('/');
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  };
+
+  // Add function to format date for display
+  const formatDateForDisplay = (date: string) => {
+    if (!date) return '';
+    const [year, month, day] = date.split('-');
+    return `${year}/${month}/${day}`;
+  };
+
+  // Update the handleDateSelect function
+  const handleDateSelect = (day: number) => {
+    const currentDate = new Date();
+    const formattedDate = `${currentDate.getFullYear()}/${String(currentDate.getMonth() + 1).padStart(2, '0')}/${String(day).padStart(2, '0')}`;
+    setFormData(prev => ({
+      ...prev,
+      date: formattedDate
+    }));
+    setShowDatePicker(false);
+  };
+
+  // Update the handleMonthChange function
+  const handleMonthChange = (increment: number) => {
+    const currentDate = new Date();
+    const currentYear = currentDate.getFullYear();
+    const currentMonth = currentDate.getMonth() + 1;
+
+    // Only allow viewing the current month
+    setTempDate(prev => ({
+      ...prev,
+      month: currentMonth,
+      year: currentYear
+    }));
+  };
+
+  const generateDaysInMonth = (year: number, month: number) => {
+    return new Date(year, month, 0).getDate();
+  };
+
+  const getPaginatedLogs = () => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return timeLogs.slice(startIndex, endIndex);
+  };
+
+  const getTotalPages = () => {
+    return Math.ceil(timeLogs.length / itemsPerPage);
+  };
+
+  const handlePageChange = (page: number) => {
+    if (page >= 1 && page <= getTotalPages()) {
+      setCurrentPage(page);
+    }
+  };
+
   return (
     <><ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
       <View style={styles.header}>
@@ -327,7 +550,7 @@ const OJTTrackerScreen: React.FC = () => {
           <Text style={styles.tableHeaderText}>Hours</Text>
         </View>
 
-        {timeLogs.map((item, index) => (
+        {getPaginatedLogs().map((item, index) => (
           <View key={index} style={styles.tableRow}>
             <Text style={styles.tableCell}>{item.date}</Text>
             <Text style={styles.tableCell}>{item.clockIn}</Text>
@@ -344,9 +567,41 @@ const OJTTrackerScreen: React.FC = () => {
       </Card>
 
       <View style={styles.pagination}>
-        <Text>‹ Previous</Text>
-        <Text style={styles.pageIndicator}>Page 1 ▾</Text>
-        <Text>Next ›</Text>
+        <TouchableOpacity
+          onPress={() => handlePageChange(currentPage - 1)}
+          disabled={currentPage === 1}
+          style={[styles.paginationButton, currentPage === 1 && styles.paginationButtonDisabled]}
+        >
+          <Text style={[styles.paginationText, currentPage === 1 && styles.paginationTextDisabled]}>‹ Previous</Text>
+        </TouchableOpacity>
+
+        <View style={styles.pageNumbers}>
+          {Array.from({ length: getTotalPages() }, (_, i) => i + 1).map(pageNum => (
+            <TouchableOpacity
+              key={pageNum}
+              onPress={() => handlePageChange(pageNum)}
+              style={[
+                styles.pageNumberButton,
+                currentPage === pageNum && styles.pageNumberButtonActive
+              ]}
+            >
+              <Text style={[
+                styles.pageNumberText,
+                currentPage === pageNum && styles.pageNumberTextActive
+              ]}>
+                {pageNum}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <TouchableOpacity
+          onPress={() => handlePageChange(currentPage + 1)}
+          disabled={currentPage === getTotalPages()}
+          style={[styles.paginationButton, currentPage === getTotalPages() && styles.paginationButtonDisabled]}
+        >
+          <Text style={[styles.paginationText, currentPage === getTotalPages() && styles.paginationTextDisabled]}>Next ›</Text>
+        </TouchableOpacity>
       </View>
     </ScrollView>
 
@@ -354,22 +609,25 @@ const OJTTrackerScreen: React.FC = () => {
       {isDropdownVisible && (
         <View style={styles.dropdownContainer}>
           <FAB
-            style={styles.dropdownButton}
-            icon="content-save"
-            label="Save"
-            onPress={() => { }} />
+            style={[styles.dropdownButton, { backgroundColor: '#888', borderRadius: 24, width: 48, height: 48, justifyContent: 'center', alignItems: 'center' }]}
+            icon="download"
+            color="#fff"
+            onPress={handleSaveCSV} />
           <FAB
-            style={styles.dropdownButton}
-            icon="plus"
-            label="Add Log"
+            style={[styles.dropdownButton, { backgroundColor: '#4CAF50', borderRadius: 24, width: 48, height: 48, justifyContent: 'center', alignItems: 'center' }]}
+            icon={({ color, size }) => (
+              <Feather name="file-plus" size={size} color={color} />
+            )}
+            color="#fff"
             onPress={() => openModal()} />
         </View>
       )}
 
       {/* Plus Button */}
       <FAB
-        style={styles.fabPlus}
+        style={[styles.fabPlus, { backgroundColor: '#007bff' }]}
         icon="plus"
+        color="#fff"
         onPress={toggleDropdown} />
 
       {/* Bottom Navbar */}
@@ -382,22 +640,84 @@ const OJTTrackerScreen: React.FC = () => {
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>{editIndex !== null ? 'Edit Log' : 'Add Time Log'}</Text>
 
-            {/* Date Field */}
+            {/* Date Field with Calendar */}
             <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Date (YYYY/MM/DD)</Text>
-              <TextInput
-                placeholder="YYYY/MM/DD"
-                style={styles.input}
-                value={formData.date}
-                onChangeText={text => {
-                  const formatted = formatDateInput(text);
-                  setFormData({ ...formData, date: formatted });
-                }}
-                keyboardType="number-pad"
-                maxLength={10}
-              />
-              <Text style={styles.helperText}>Enter date in YYYY/MM/DD format</Text>
+              <Text style={styles.inputLabel}>Date</Text>
+              <TouchableOpacity
+                style={styles.dateInput}
+                onPress={() => setShowDatePicker(true)}
+              >
+                <View style={styles.dateInputContent}>
+                  <Icon name="calendar-outline" size={20} color="#007bff" style={styles.dateIcon} />
+                  <Text style={[
+                    styles.dateInputText,
+                    !formData.date && styles.dateInputPlaceholder
+                  ]}>
+                    {formData.date || 'Select Date'}
+                  </Text>
+                </View>
+                <Icon name="chevron-down" size={20} color="#666" />
+              </TouchableOpacity>
             </View>
+
+            {/* Custom Date Picker Modal */}
+            <Modal
+              visible={showDatePicker}
+              transparent
+              animationType="fade"
+            >
+              <View style={styles.datePickerOverlay}>
+                <View style={styles.datePickerContainer}>
+                  <View style={styles.datePickerHeader}>
+                    <Text style={styles.datePickerTitle}>
+                      {new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}
+                    </Text>
+                    <Text style={styles.datePickerSubtitle}>Select a date from this month</Text>
+                  </View>
+                  <View style={styles.datePickerGrid}>
+                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                      <Text key={day} style={styles.datePickerDayHeader}>{day}</Text>
+                    ))}
+                    {Array.from({ length: generateDaysInMonth(new Date().getFullYear(), new Date().getMonth() + 1) }, (_, i) => {
+                      const day = i + 1;
+                      const date = new Date(new Date().getFullYear(), new Date().getMonth(), day);
+                      const isToday = new Date().toDateString() === date.toDateString();
+                      const isSelected = formData.date === `${new Date().getFullYear()}/${String(new Date().getMonth() + 1).padStart(2, '0')}/${String(day).padStart(2, '0')}`;
+                      const isPastDate = date < new Date(new Date().setHours(0, 0, 0, 0));
+
+                      return (
+                        <TouchableOpacity
+                          key={day}
+                          style={[
+                            styles.datePickerDay,
+                            isToday && styles.datePickerToday,
+                            isSelected && styles.datePickerSelected,
+                            isPastDate && styles.datePickerPastDay
+                          ]}
+                          onPress={() => !isPastDate && handleDateSelect(day)}
+                          disabled={isPastDate}
+                        >
+                          <Text style={[
+                            styles.datePickerDayText,
+                            isToday && styles.datePickerTodayText,
+                            isSelected && styles.datePickerSelectedText,
+                            isPastDate && styles.datePickerPastDayText
+                          ]}>
+                            {day}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                  <TouchableOpacity
+                    style={styles.datePickerCloseButton}
+                    onPress={() => setShowDatePicker(false)}
+                  >
+                    <Text style={styles.datePickerCloseButtonText}>Close</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </Modal>
 
             {/* Clock In Field */}
             <View style={styles.inputContainer}>
@@ -491,20 +811,18 @@ const OJTTrackerScreen: React.FC = () => {
 
             {/* Hours Field */}
             <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Hours (1-24)</Text>
+              <Text style={styles.inputLabel}>Hours</Text>
               <View style={styles.hoursInputContainer}>
                 <TextInput
-                  placeholder="Enter hours"
-                  style={[styles.input, styles.hoursInput]}
+                  style={[styles.input, styles.hoursInput, styles.readOnlyInput]}
                   value={formData.hours}
-                  onChangeText={handleHoursInput}
-                  keyboardType="number-pad"
-                  maxLength={2}
+                  editable={false}
+                  placeholder="Calculated from clock in/out"
                 />
                 <Text style={styles.hoursLabel}>hours</Text>
               </View>
               <Text style={styles.hoursHelperText}>
-                Please enter a number between 1 and 24
+                Hours are automatically calculated from clock in and out times
               </Text>
             </View>
 
@@ -568,18 +886,74 @@ const styles = StyleSheet.create({
   },
   noteText: { color: '#ff8800', marginLeft: 8, fontSize: 13 },
   tableCard: { borderRadius: 10, overflow: 'hidden', marginTop: 10, marginBottom: 20 },
-  tableHeader: { flexDirection: 'row', backgroundColor: '#007bff', padding: 10 },
-  tableHeaderText: { color: 'white', flex: 1, fontWeight: 'bold', fontSize: 12 },
+  tableHeader: {
+    flexDirection: 'row',
+    backgroundColor: '#007bff',
+    padding: 10,
+    alignItems: 'flex-start'
+  },
+  tableHeaderText: {
+    color: 'white',
+    flex: 1,
+    fontWeight: 'bold',
+    fontSize: 12,
+    textAlign: 'left'
+  },
   tableRow: {
-    flexDirection: 'row', padding: 10, borderBottomColor: '#eee',
-    borderBottomWidth: 1, alignItems: 'center',
+    flexDirection: 'row',
+    padding: 10,
+    borderBottomColor: '#eee',
+    borderBottomWidth: 1,
+    alignItems: 'center'
   },
-  tableCell: { flex: 1, fontSize: 12 },
+  tableCell: {
+    flex: 1,
+    fontSize: 12,
+    textAlign: 'center'
+  },
   pagination: {
-    flexDirection: 'row', justifyContent: 'space-between',
-    paddingHorizontal: 32, alignItems: 'center', marginBottom: 80,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    marginVertical: 20,
   },
-  pageIndicator: { fontWeight: 'bold' },
+  paginationButton: {
+    padding: 8,
+    borderRadius: 4,
+  },
+  paginationButtonDisabled: {
+    opacity: 0.5,
+  },
+  paginationText: {
+    color: '#007bff',
+    fontSize: 14,
+  },
+  paginationTextDisabled: {
+    color: '#999',
+  },
+  pageNumbers: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  pageNumberButton: {
+    padding: 8,
+    marginHorizontal: 4,
+    borderRadius: 4,
+    minWidth: 32,
+    alignItems: 'center',
+  },
+  pageNumberButtonActive: {
+    backgroundColor: '#007bff',
+  },
+  pageNumberText: {
+    color: '#333',
+    fontSize: 14,
+  },
+  pageNumberTextActive: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
   fabSave: {
     position: 'absolute', bottom: 160, right: 20, backgroundColor: '#4CAF50',
   },
@@ -699,6 +1073,133 @@ const styles = StyleSheet.create({
     color: '#666',
     marginTop: 4,
     fontStyle: 'italic',
+  },
+  dateInput: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: '#fff',
+  },
+  dateInputContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  dateIcon: {
+    marginRight: 8,
+  },
+  dateInputText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  dateInputPlaceholder: {
+    color: '#999',
+  },
+  datePickerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  datePickerContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    width: '90%',
+    maxWidth: 400,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  datePickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  datePickerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  datePickerSubtitle: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  datePickerGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  datePickerDayHeader: {
+    width: '14.28%',
+    textAlign: 'center',
+    paddingVertical: 8,
+    color: '#666',
+    fontWeight: 'bold',
+  },
+  datePickerDay: {
+    width: '14.28%',
+    aspectRatio: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginVertical: 2,
+  },
+  datePickerDayText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  datePickerToday: {
+    backgroundColor: '#e6f3ff',
+    borderRadius: 20,
+  },
+  datePickerTodayText: {
+    color: '#007bff',
+    fontWeight: 'bold',
+  },
+  datePickerSelected: {
+    backgroundColor: '#007bff',
+    borderRadius: 20,
+  },
+  datePickerSelectedText: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  datePickerCloseButton: {
+    marginTop: 16,
+    padding: 12,
+    backgroundColor: '#007bff',
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  datePickerCloseButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  readOnlyInput: {
+    backgroundColor: '#f5f5f5',
+    color: '#666',
+  },
+  monthButton: {
+    padding: 8,
+  },
+  monthButtonDisabled: {
+    opacity: 0.5,
+  },
+  datePickerPastDay: {
+    opacity: 0.5,
+  },
+  datePickerPastDayText: {
+    color: '#999',
   },
 });
 

@@ -62,7 +62,6 @@ const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       console.log("✅ User signed in:", userCredential.user.uid);
       setIsLoggedIn(true);
-      navigation.replace("Home");
     } catch (error: any) {
       const errorMessage = error.message || "Invalid email or password.";
       Alert.alert("Login Failed", errorMessage);

@@ -72,6 +72,7 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
   const [fieldInputLayout, setFieldInputLayout] = useState({ x: 0, y: 0, width: 0, height: 0 });
   const [programDropdownPos, setProgramDropdownPos] = useState({ x: 0, y: 0, width: 0, height: 0 });
   const [fieldDropdownPos, setFieldDropdownPos] = useState({ x: 0, y: 0, width: 0, height: 0 });
+  const [isLoading, setIsLoading] = useState(false);
   const windowHeight = Dimensions.get('window').height;
 
   const availableSkills = [
@@ -258,6 +259,22 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
     fetchMeta();
   }, []);
 
+  // Check if user is authenticated
+  useEffect(() => {
+    if (!auth.currentUser) {
+      Alert.alert(
+        'Authentication Required',
+        'Please sign in to continue.',
+        [
+          {
+            text: 'OK',
+            onPress: () => navigation.replace('SignIn')
+          }
+        ]
+      );
+    }
+  }, []);
+
   const toggleCheckbox = (type: 'remote' | 'onsite' | 'hybrid') => {
     setLocationPreference((prev) => ({ ...prev, [type]: !prev[type] }));
   };
@@ -268,10 +285,9 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
       return;
     }
 
-    if (!validateForm()) {
-      return;
-    }
+    if (!validateForm()) return;
 
+    setIsLoading(true);
     try {
       const userId = auth.currentUser.uid;
       const userRef = doc(firestore, 'users', userId);
@@ -306,7 +322,7 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
         email: auth.currentUser.email,
 
         // Academic Information
-        program: programWithoutName,
+        program: program,
 
         // Career Information
         field: [fieldWithoutName],
@@ -351,6 +367,7 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
         }
       };
 
+      console.log('Saving userData to Firestore:', userData);
       // Save to Firestore
       await setDoc(userRef, userData, { merge: true });
 
@@ -368,7 +385,6 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
           {
             text: 'OK',
             onPress: () => {
-              navigation.navigate('SignIn');
               onSetupComplete();
             }
           }
@@ -381,6 +397,8 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
         'Failed to save your profile. Please try again.',
         [{ text: 'OK' }]
       );
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -443,8 +461,12 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
     return inputWords.some(word => word && optionWords.some(optWord => optWord.startsWith(word)));
   };
 
-  if (loadingMeta) {
-    return <ActivityIndicator size="large" color="#007aff" />;
+  if (loadingMeta || isLoading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color="#007aff" />
+      </View>
+    );
   }
 
   return (

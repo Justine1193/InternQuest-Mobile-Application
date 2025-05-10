@@ -75,21 +75,25 @@ const App: React.FC = () => {
           <Stack.Navigator screenOptions={{ headerShown: false }}>
             {isLoading ? (
               <Stack.Screen name="Launch" component={LaunchScreen} />
-            ) : isLoggedIn ? (
-              <>
-                <Stack.Screen name="Home" component={HomeScreen} />
-                <Stack.Screen name="Profile" component={ProfileScreen} />
-                <Stack.Screen name="Notifications" component={NotificationsScreen} />
-                <Stack.Screen name="Settings" component={SettingsScreen} />
-                <Stack.Screen name="InternshipDetails" component={InternshipDetailsScreen} />
-                <Stack.Screen name="OJTTracker" component={OJTTrackerScreen} />
-              </>
             ) : (
               <>
-                <Stack.Screen name="SignIn">
-                  {props => <SignInScreen {...props} setIsLoggedIn={setIsLoggedIn} />}
-                </Stack.Screen>
-                <Stack.Screen name="SignUp" component={SignUpScreen} />
+                {isLoggedIn ? (
+                  <>
+                    <Stack.Screen name="Home" component={HomeScreen} />
+                    <Stack.Screen name="Profile" component={ProfileScreen} />
+                    <Stack.Screen name="Notifications" component={NotificationsScreen} />
+                    <Stack.Screen name="Settings" component={SettingsScreen} />
+                    <Stack.Screen name="InternshipDetails" component={InternshipDetailsScreen} />
+                    <Stack.Screen name="OJTTracker" component={OJTTrackerScreen} />
+                  </>
+                ) : (
+                  <>
+                    <Stack.Screen name="SignIn">
+                      {props => <SignInScreen {...props} setIsLoggedIn={setIsLoggedIn} />}
+                    </Stack.Screen>
+                    <Stack.Screen name="SignUp" component={SignUpScreen} />
+                  </>
+                )}
                 <Stack.Screen name="SetupAccount">
                   {props => (
                     <SetupAccountScreen

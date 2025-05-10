@@ -111,16 +111,8 @@ const SignUpScreen: React.FC = () => {
 
       await setDoc(userDocRef, userData, { merge: true });
 
-      Alert.alert(
-        "Success",
-        "Account created successfully!",
-        [
-          {
-            text: "OK",
-            onPress: () => navigation.navigate("SetupAccount")
-          }
-        ]
-      );
+      // Navigate to SetupAccount immediately after successful sign up
+      navigation.replace("SetupAccount");
     } catch (error: any) {
       let errorMessage = "An error occurred during sign up.";
 

@@ -273,13 +273,15 @@ const InternshipDetailsScreen: React.FC<Props> = ({ route }) => {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
+      {/* Fixed Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Icon name="arrow-left" size={24} color="#000" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Internship Details</Text>
-        <Icon name={isSaved ? "bookmark" : "bookmark-outline"} size={24} color="#000" />
+        <TouchableOpacity onPress={handleSaveInternship}>
+          <Icon name={isSaved ? "bookmark" : "bookmark-outline"} size={24} color="#000" />
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -287,23 +289,30 @@ const InternshipDetailsScreen: React.FC<Props> = ({ route }) => {
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
+        showsVerticalScrollIndicator={true}
+        bounces={true}
+        overScrollMode="always"
+        scrollEventThrottle={16}
       >
-        {/* Company Name */}
-        <View style={styles.companyHeader}>
-          <Text style={styles.companyName}>{post.company}</Text>
-          <TouchableOpacity onPress={openWebsite}>
-            <Text style={styles.companyLink}>{post.website || 'Company Site'}</Text>
-          </TouchableOpacity>
-          <View style={styles.locationRow}>
-            <Icon name="map-marker" size={16} color="#888" />
-            <Text style={styles.locationText}>{post.location}</Text>
+        {/* Content starts here */}
+        <View style={styles.contentContainer}>
+          {/* Company Name */}
+          <View style={styles.companyHeader}>
+            <Text style={styles.companyName}>{post.company}</Text>
+            <TouchableOpacity onPress={openWebsite}>
+              <Text style={styles.companyLink}>{post.website || 'Company Site'}</Text>
+            </TouchableOpacity>
+            <View style={styles.locationRow}>
+              <Icon name="map-marker" size={16} color="#888" />
+              <Text style={styles.locationText}>{post.location}</Text>
+            </View>
           </View>
-        </View>
 
-        {/* Company Details */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Company Details</Text>
-          <Text style={styles.cardContent}>{post.description}</Text>
+          {/* Company Details */}
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Company Details</Text>
+            <Text style={styles.cardContent}>{post.description}</Text>
+          </View>
         </View>
 
         {/* Company Overview */}
@@ -372,17 +381,25 @@ const InternshipDetailsScreen: React.FC<Props> = ({ route }) => {
         </View>
 
         {/* Map Preview */}
-        <TouchableOpacity onPress={openLocationInMaps}>
-          <View style={styles.map}>
+        <View style={styles.mapContainer}>
+          <TouchableOpacity
+            style={styles.map}
+            onPress={openLocationInMaps}
+            activeOpacity={0.9}
+          >
             {coordinates ? (
               <MapView
-                style={{ flex: 1, borderRadius: 12 }}
+                style={styles.mapView}
                 initialRegion={{
                   latitude: coordinates.latitude,
                   longitude: coordinates.longitude,
                   latitudeDelta: 0.01,
                   longitudeDelta: 0.01,
                 }}
+                scrollEnabled={false}
+                zoomEnabled={false}
+                pitchEnabled={false}
+                rotateEnabled={false}
               >
                 <Marker
                   coordinate={{
@@ -395,13 +412,17 @@ const InternshipDetailsScreen: React.FC<Props> = ({ route }) => {
               </MapView>
             ) : (
               <MapView
-                style={{ flex: 1, borderRadius: 12 }}
+                style={styles.mapView}
                 initialRegion={{
                   latitude: 14.5995, // Default to Manila
                   longitude: 120.9842,
                   latitudeDelta: 0.01,
                   longitudeDelta: 0.01,
                 }}
+                scrollEnabled={false}
+                zoomEnabled={false}
+                pitchEnabled={false}
+                rotateEnabled={false}
               >
                 <Marker
                   coordinate={{
@@ -413,8 +434,8 @@ const InternshipDetailsScreen: React.FC<Props> = ({ route }) => {
                 />
               </MapView>
             )}
-          </View>
-        </TouchableOpacity>
+          </TouchableOpacity>
+        </View>
 
         {/* Bottom Buttons */}
         <View style={styles.bottomButtons}>
@@ -444,14 +465,27 @@ const InternshipDetailsScreen: React.FC<Props> = ({ route }) => {
             </Text>
           </TouchableOpacity>
         </View>
+
+        {/* Extra padding at the bottom for better scrolling */}
+        <View style={{ height: 30 }} />
       </ScrollView>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  scrollContent: { padding: 16 },
+  container: {
+    flex: 1,
+    backgroundColor: '#fff'
+  },
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 20,
+    flexGrow: 1,
+  },
+  contentContainer: {
+    width: '100%',
+  },
   header: {
     paddingTop: 50,
     paddingBottom: 16,
@@ -462,6 +496,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderColor: '#eee',
+    zIndex: 10,
   },
   headerTitle: { fontSize: 16, fontWeight: 'bold' },
   companyHeader: { marginBottom: 16 },
@@ -500,11 +535,21 @@ const styles = StyleSheet.create({
   },
   tagLabel: { fontWeight: 'bold', color: '#0056b3' },
   tagSubLabel: { fontSize: 12, color: '#555' },
-  map: {
+  mapContainer: {
     height: 200,
-    borderRadius: 12,
     marginBottom: 20,
     width: '100%',
+  },
+  map: {
+    height: 200,
+    width: '100%',
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  mapView: {
+    height: 200,
+    width: '100%',
+    borderRadius: 12,
   },
   bottomButtons: {
     flexDirection: 'row',

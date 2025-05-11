@@ -3,18 +3,33 @@ import { View, TouchableOpacity, StyleSheet, Text } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../App';
+import { useNavigation } from '@react-navigation/native';
 
 type Props = {
-  navigation: StackNavigationProp<RootStackParamList>;
+  navigation?: StackNavigationProp<RootStackParamList>;
   currentRoute?: string;
 };
 
-const BottomNavbar: React.FC<Props> = ({ navigation, currentRoute }) => {
+const BottomNavbar: React.FC<Props> = ({ currentRoute }) => {
+  // Get the navigation object directly from useNavigation hook
+  // This ensures we always have the most up-to-date navigation context
+  const navigation = useNavigation();
+
   const isActive = (route: string) => currentRoute === route;
+
+  // Use the most direct approach possible for navigation
+  const handleNavigation = (screenName: string) => {
+    try {
+      // @ts-ignore - This is a workaround for TypeScript strict checking
+      navigation.navigate(screenName);
+    } catch (error) {
+      console.error(`Navigation error to ${screenName}:`, error);
+    }
+  };
 
   return (
     <View style={styles.container}>
-      <TouchableOpacity onPress={() => navigation.navigate('Home')} style={styles.tab}>
+      <TouchableOpacity onPress={() => handleNavigation('Home')} style={styles.tab}>
         <Icon
           name={isActive('Home') ? "home" : "home-outline"}
           size={24}
@@ -23,7 +38,7 @@ const BottomNavbar: React.FC<Props> = ({ navigation, currentRoute }) => {
         <Text style={[styles.label, isActive('Home') && styles.activeLabel]}>Home</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity onPress={() => navigation.navigate('Notifications')} style={styles.tab}>
+      <TouchableOpacity onPress={() => handleNavigation('Notifications')} style={styles.tab}>
         <Icon
           name={isActive('Notifications') ? "bell" : "bell-outline"}
           size={24}
@@ -32,7 +47,7 @@ const BottomNavbar: React.FC<Props> = ({ navigation, currentRoute }) => {
         <Text style={[styles.label, isActive('Notifications') && styles.activeLabel]}>Notifications</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity onPress={() => navigation.navigate('Settings')} style={styles.tab}>
+      <TouchableOpacity onPress={() => handleNavigation('Settings')} style={styles.tab}>
         <Icon
           name={isActive('Settings') ? "cog" : "cog-outline"}
           size={24}
@@ -41,7 +56,7 @@ const BottomNavbar: React.FC<Props> = ({ navigation, currentRoute }) => {
         <Text style={[styles.label, isActive('Settings') && styles.activeLabel]}>Settings</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity onPress={() => navigation.navigate('Profile')} style={styles.tab}>
+      <TouchableOpacity onPress={() => handleNavigation('Profile')} style={styles.tab}>
         <Icon
           name={isActive('Profile') ? "account" : "account-outline"}
           size={24}

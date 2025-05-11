@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { StatusBar, ActivityIndicator, View, Text } from 'react-native';
+import { StatusBar, ActivityIndicator, View, Text, StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { Host } from 'react-native-portalize';
@@ -22,6 +22,7 @@ import NotificationsScreen from './screens/NotificationsScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import InternshipDetailsScreen from './screens/InternshipDetailsScreen';
 import OJTTrackerScreen from './screens/OJTTrackerScreen';
+import BottomNavbar from './components/BottomNav';
 
 // Shared Post Type
 export type Post = {
@@ -60,6 +61,7 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isProfileComplete, setIsProfileComplete] = useState<boolean | null>(null);
+  const [currentScreen, setCurrentScreen] = useState<string>('Home');
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -85,60 +87,119 @@ const App: React.FC = () => {
     return () => unsubscribe();
   }, []);
 
+  // Helper to handle screen changes
+  const handleScreenChange = (screenName: string) => {
+    setCurrentScreen(screenName);
+  };
+
+  const renderMainContent = () => {
+    if (isLoading) {
+      return <Stack.Screen name="Launch" component={LaunchScreen} />;
+    }
+
+    if (!isLoggedIn) {
+      return (
+        <>
+          <Stack.Screen name="SignIn">
+            {props => <SignInScreen {...props} setIsLoggedIn={setIsLoggedIn} />}
+          </Stack.Screen>
+          <Stack.Screen name="SignUp" component={SignUpScreen} />
+        </>
+      );
+    }
+
+    if (isProfileComplete === false) {
+      return (
+        <Stack.Screen name="SetupAccount">
+          {props => (
+            <SetupAccountScreen
+              {...props}
+              onSetupComplete={async () => {
+                // Update Firestore and local state
+                if (auth.currentUser) {
+                  await getDoc(doc(firestore, 'users', auth.currentUser.uid)).then(userDoc => {
+                    if (userDoc.exists()) {
+                      setIsProfileComplete(true);
+                    }
+                  });
+                }
+              }}
+            />
+          )}
+        </Stack.Screen>
+      );
+    }
+
+    // Main app screens
+    return (
+      <>
+        <Stack.Screen
+          name="Home"
+          component={HomeScreen}
+          listeners={{ focus: () => handleScreenChange('Home') }}
+        />
+        <Stack.Screen
+          name="Profile"
+          component={ProfileScreen}
+          listeners={{ focus: () => handleScreenChange('Profile') }}
+        />
+        <Stack.Screen
+          name="Notifications"
+          component={NotificationsScreen}
+          listeners={{ focus: () => handleScreenChange('Notifications') }}
+        />
+        <Stack.Screen
+          name="Settings"
+          component={SettingsScreen}
+          listeners={{ focus: () => handleScreenChange('Settings') }}
+        />
+        <Stack.Screen
+          name="InternshipDetails"
+          component={InternshipDetailsScreen}
+        />
+        <Stack.Screen
+          name="OJTTracker"
+          component={OJTTrackerScreen}
+        />
+      </>
+    );
+  };
+
   return (
     <Host>
       <SavedInternshipsProvider>
         <NavigationContainer>
           {/* Global StatusBar configuration */}
           <StatusBar translucent backgroundColor="transparent" barStyle="dark-content" />
-          <Stack.Navigator screenOptions={{ headerShown: false }}>
-            {isLoading ? (
-              <Stack.Screen name="Launch" component={LaunchScreen} />
-            ) : (
-              <>
-                {!isLoggedIn ? (
-                  <>
-                    <Stack.Screen name="SignIn">
-                      {props => <SignInScreen {...props} setIsLoggedIn={setIsLoggedIn} />}
-                    </Stack.Screen>
-                    <Stack.Screen name="SignUp" component={SignUpScreen} />
-                  </>
-                ) : isProfileComplete === false ? (
-                  <Stack.Screen name="SetupAccount">
-                    {props => (
-                      <SetupAccountScreen
-                        {...props}
-                        onSetupComplete={async () => {
-                          // Update Firestore and local state
-                          if (auth.currentUser) {
-                            await getDoc(doc(firestore, 'users', auth.currentUser.uid)).then(userDoc => {
-                              if (userDoc.exists()) {
-                                setIsProfileComplete(true);
-                              }
-                            });
-                          }
-                        }}
-                      />
-                    )}
-                  </Stack.Screen>
-                ) : (
-                  <>
-                    <Stack.Screen name="Home" component={HomeScreen} />
-                    <Stack.Screen name="Profile" component={ProfileScreen} />
-                    <Stack.Screen name="Notifications" component={NotificationsScreen} />
-                    <Stack.Screen name="Settings" component={SettingsScreen} />
-                    <Stack.Screen name="InternshipDetails" component={InternshipDetailsScreen} />
-                    <Stack.Screen name="OJTTracker" component={OJTTrackerScreen} />
-                  </>
-                )}
-                {/* Always include SetupAccount for navigation safety, but only show when needed */}
-              </>
+          <View style={{ flex: 1 }}>
+            <Stack.Navigator screenOptions={{ headerShown: false }}>
+              {renderMainContent()}
+            </Stack.Navigator>
+
+            {/* Only show bottom navbar when logged in and profile is complete */}
+            {isLoggedIn && isProfileComplete && (
+              <View style={styles.bottomNavWrapper}>
+                <BottomNavbar currentRoute={currentScreen} />
+              </View>
             )}
-          </Stack.Navigator>
+          </View>
         </NavigationContainer>
       </SavedInternshipsProvider>
     </Host>
   );
 };
+
+const styles = StyleSheet.create({
+  bottomNavWrapper: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#fff',
+    borderTopWidth: 1,
+    borderTopColor: '#ddd',
+    zIndex: 100,
+  },
+});
 
 export default App;

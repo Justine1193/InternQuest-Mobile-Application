@@ -41,117 +41,6 @@ type FieldCategory = {
   fields: { label: string; value: string }[];
 };
 
-const availableSkills = [
-  // Business, Accountancy, and Entrepreneurship
-  'Financial Analysis',
-  'Financial Reporting',
-  'QuickBooks',
-  'Xero',
-  'Market Research',
-  'Market Analysis',
-  'Sales',
-  'Negotiation',
-  'Microsoft Excel (Advanced)',
-  'Business Communication',
-  'Strategic Planning',
-  'CRM Tools',
-
-  // IT, Computer Science, and Multimedia
-  'HTML',
-  'CSS',
-  'JavaScript',
-  'React',
-  'Node.js',
-  'PHP',
-  'Python',
-  'MySQL',
-  'Firebase',
-  'MongoDB',
-  'UI Design',
-  'UX Design',
-  'Figma',
-  'Adobe XD',
-  'Git',
-  'GitHub',
-  'Unity',
-  'Unreal Engine',
-  'Blender',
-  'Maya',
-  'Cybersecurity',
-
-  // Psychology, Education, and Public Administration
-  'Psychological Assessment',
-  'Report Writing',
-  'Documentation',
-  'Classroom Management',
-  'Lesson Planning',
-  'Google Forms',
-  'SurveyMonkey',
-  'Community Outreach',
-  'Public Speaking',
-  'Facilitation',
-  'Active Listening',
-
-  // Medical, Nursing, and Science
-  'Laboratory Safety',
-  'Diagnostic Skills',
-  'Vital Signs',
-  'Health Documentation',
-  'EHR Systems',
-  'Patient Communication',
-  'Research Methods',
-  'Data Interpretation',
-  'Specimen Handling',
-  'First Aid',
-  'Emergency Response',
-
-  // Communication, Journalism, and Arts
-  'Copywriting',
-  'Editing',
-  'Photography',
-  'Videography',
-  'Adobe Photoshop',
-  'Adobe Premiere Pro',
-  'Adobe InDesign',
-  'Social Media Content',
-  'News Writing',
-  'Press Releases',
-  'Public Relations',
-  'Media Strategy',
-  'Storyboarding',
-  'Scriptwriting',
-  'Podcasting',
-  'Audio Editing',
-
-  // Engineering and Architecture
-  'AutoCAD',
-  'SketchUp',
-  'Revit',
-  'Structural Design',
-  'Project Documentation',
-  'Technical Drawing',
-  'Blueprint Reading',
-  'MS Project',
-  'Safety Compliance',
-  'Problem Solving',
-  'Critical Thinking',
-  'Technical Writing',
-
-  // Music and Performing Arts
-  'Instrumental Proficiency',
-  'Vocal Proficiency',
-  'Music Notation',
-  'Music Arrangement',
-  'FL Studio',
-  'Logic Pro',
-  'Event Coordination',
-  'Ensemble Collaboration',
-  'Conducting',
-  'Music Teaching',
-  'Audio Recording',
-  'Audio Mixing'
-];
-
 const CARD_HORIZONTAL_PADDING = 20;
 
 export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
@@ -166,6 +55,7 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
   const [program, setProgram] = useState('');
   const [field, setField] = useState('');
   const [skills, setSkills] = useState<string[]>([]);
+  const [availableSkills, setAvailableSkills] = useState<string[]>([]);
 
   // --- State: Preferences ---
   const [locationPreference, setLocationPreference] = useState({
@@ -189,6 +79,8 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
   const [programDropdownPos, setProgramDropdownPos] = useState({ x: 0, y: 0, width: 0, height: 0 });
   const [fieldDropdownPos, setFieldDropdownPos] = useState({ x: 0, y: 0, width: 0, height: 0 });
   const [isLoading, setIsLoading] = useState(false);
+  const [skillDropdownPos, setSkillDropdownPos] = useState({ x: 0, y: 0, width: 0, height: 0 });
+  const [showSkillOptions, setShowSkillOptions] = useState(false);
   const windowHeight = Dimensions.get('window').height;
 
   // --- Refs ---
@@ -242,6 +134,18 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
       });
     }
   };
+  const measureSkillInput = () => {
+    if (skillRef.current) {
+      skillRef.current.measureInWindow((x, y, width, height) => {
+        setSkillDropdownPos({
+          x: x - CARD_HORIZONTAL_PADDING,
+          y: y + height + 4,
+          width,
+          height: 220,
+        });
+      });
+    }
+  };
 
   // --- Fetch meta data for dropdowns ---
   useEffect(() => {
@@ -251,6 +155,19 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
         if (programDoc.exists()) setProgramList(programDoc.data().list || []);
         const fieldDoc = await getDoc(doc(firestore, 'meta', 'field'));
         if (fieldDoc.exists()) setFieldList(fieldDoc.data().list || []);
+        // Fetch skills for dropdown
+        const skillsDoc = await getDoc(doc(firestore, 'meta', 'suggestionSkills'));
+        if (skillsDoc.exists()) {
+          const skillsData = skillsDoc.data();
+          let skillsArray: string[] = [];
+          if (Array.isArray(skillsData.list)) {
+            // Remove duplicates and trim whitespace
+            skillsArray = [...new Set(skillsData.list.map(skill => String(skill).trim()))];
+          } else {
+            skillsArray = [...new Set(Object.values(skillsData).map(skill => String(skill).trim()))];
+          }
+          setAvailableSkills(skillsArray);
+        }
       } catch (error) {
         console.error('Failed to fetch meta:', error);
       }
@@ -305,13 +222,12 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
       const { name, ...programWithoutName } = {
         id: program,
         name: selectedProgram || '',
-        category: programCategory?.category || '',
+
       };
       const { name: fieldName, ...fieldWithoutName } = {
         id: field,
         name: selectedField || '',
-        category: fieldCategory?.category || '',
-        categoryEmoji: fieldCategory?.category.split(' ')[0] || '',
+
       };
       const userData = {
         // Basic Information
@@ -337,7 +253,6 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
         // Skills
         skills: skills.map(skill => ({
           name: skill,
-          category: availableSkills.find(s => s === skill) ? 'Technical' : 'Soft Skills',
         })),
         skillsUpdatedAt: serverTimestamp(),
 
@@ -406,7 +321,7 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
 
   // --- Validation ---
   const validateForm = () => {
-    const errors = [];
+    const errors: string[] = [];
     if (!firstName.trim()) errors.push('First name is required');
     if (!lastName.trim()) errors.push('Last name is required');
     if (!gender) errors.push('Gender is required');
@@ -532,53 +447,51 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
               }}
             />
             {showProgramOptions && programSearch.length > 0 && (
-              <Portal>
-                <View
-                  style={[
-                    styles.dropdownContainer,
-                    {
-                      position: 'absolute',
-                      top: programDropdownPos.y,
-                      left: programDropdownPos.x,
-                      width: programDropdownPos.width,
-                      maxHeight: 220,
-                      zIndex: 9999,
-                    }
-                  ]}
-                  pointerEvents="auto"
+              <View
+                style={[
+                  styles.dropdownContainer,
+                  {
+                    position: 'relative',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    maxHeight: 220,
+                    zIndex: 9999,
+                  }
+                ]}
+                pointerEvents="auto"
+              >
+                <ScrollView
+                  keyboardShouldPersistTaps="handled"
+                  showsVerticalScrollIndicator={true}
+                  style={{ maxHeight: 220 }}
                 >
-                  <ScrollView
-                    keyboardShouldPersistTaps="handled"
-                    showsVerticalScrollIndicator={true}
-                    style={{ maxHeight: 220 }}
-                  >
-                    {programList
-                      .filter(p => programSearch && smartMatch(p, programSearch))
-                      .map((p, idx) => (
-                        <TouchableOpacity
-                          key={idx}
-                          style={[
-                            styles.dropdownItem,
-                            program === p && styles.dropdownItemSelected
-                          ]}
-                          activeOpacity={0.7}
-                          onPress={() => {
-                            setProgram(p);
-                            setProgramSearch(p);
-                            setShowProgramOptions(false);
-                            setParentScrollEnabled(true);
-                            programRef.current?.blur();
-                          }}
-                        >
-                          <Text style={styles.dropdownItemText}>{p}</Text>
-                        </TouchableOpacity>
-                      ))}
-                    {programList.filter(p => programSearch && smartMatch(p, programSearch)).length === 0 && (
-                      <Text style={styles.noResultsText}>No results found</Text>
-                    )}
-                  </ScrollView>
-                </View>
-              </Portal>
+                  {programList
+                    .filter(p => programSearch && smartMatch(p, programSearch))
+                    .map((p, idx) => (
+                      <TouchableOpacity
+                        key={idx}
+                        style={[
+                          styles.dropdownItem,
+                          program === p && styles.dropdownItemSelected
+                        ]}
+                        activeOpacity={0.7}
+                        onPress={() => {
+                          setProgram(p);
+                          setProgramSearch(p);
+                          setShowProgramOptions(false);
+                          setParentScrollEnabled(true);
+                          programRef.current?.blur();
+                        }}
+                      >
+                        <Text style={styles.dropdownItemText}>{p}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  {programList.filter(p => programSearch && smartMatch(p, programSearch)).length === 0 && (
+                    <Text style={styles.noResultsText}>No results found</Text>
+                  )}
+                </ScrollView>
+              </View>
             )}
           </View>
 
@@ -612,53 +525,51 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
               }}
             />
             {showFieldOptions && fieldSearch.length > 0 && (
-              <Portal>
-                <View
-                  style={[
-                    styles.dropdownContainer,
-                    {
-                      position: 'absolute',
-                      top: fieldDropdownPos.y,
-                      left: fieldDropdownPos.x,
-                      width: fieldDropdownPos.width,
-                      maxHeight: 220,
-                      zIndex: 9998,
-                    }
-                  ]}
-                  pointerEvents="auto"
+              <View
+                style={[
+                  styles.dropdownContainer,
+                  {
+                    position: 'relative',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    maxHeight: 220,
+                    zIndex: 9998,
+                  }
+                ]}
+                pointerEvents="auto"
+              >
+                <ScrollView
+                  keyboardShouldPersistTaps="handled"
+                  showsVerticalScrollIndicator={true}
+                  style={{ maxHeight: 220 }}
                 >
-                  <ScrollView
-                    keyboardShouldPersistTaps="handled"
-                    showsVerticalScrollIndicator={true}
-                    style={{ maxHeight: 220 }}
-                  >
-                    {fieldList
-                      .filter(f => fieldSearch && smartMatch(f, fieldSearch))
-                      .map((f, idx) => (
-                        <TouchableOpacity
-                          key={idx}
-                          style={[
-                            styles.dropdownItem,
-                            field === f && styles.dropdownItemSelected
-                          ]}
-                          activeOpacity={0.7}
-                          onPress={() => {
-                            setField(f);
-                            setFieldSearch(f);
-                            setShowFieldOptions(false);
-                            setParentScrollEnabled(true);
-                            fieldRef.current?.blur();
-                          }}
-                        >
-                          <Text style={styles.dropdownItemText}>{f}</Text>
-                        </TouchableOpacity>
-                      ))}
-                    {fieldList.filter(f => fieldSearch && smartMatch(f, fieldSearch)).length === 0 && (
-                      <Text style={styles.noResultsText}>No results found</Text>
-                    )}
-                  </ScrollView>
-                </View>
-              </Portal>
+                  {fieldList
+                    .filter(f => fieldSearch && smartMatch(f, fieldSearch))
+                    .map((f, idx) => (
+                      <TouchableOpacity
+                        key={idx}
+                        style={[
+                          styles.dropdownItem,
+                          field === f && styles.dropdownItemSelected
+                        ]}
+                        activeOpacity={0.7}
+                        onPress={() => {
+                          setField(f);
+                          setFieldSearch(f);
+                          setShowFieldOptions(false);
+                          setParentScrollEnabled(true);
+                          fieldRef.current?.blur();
+                        }}
+                      >
+                        <Text style={styles.dropdownItemText}>{f}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  {fieldList.filter(f => fieldSearch && smartMatch(f, fieldSearch)).length === 0 && (
+                    <Text style={styles.noResultsText}>No results found</Text>
+                  )}
+                </ScrollView>
+              </View>
             )}
           </View>
 
@@ -685,43 +596,58 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
           </View>
 
           <Text style={styles.label}>Skills</Text>
-          <TextInput
-            ref={skillRef}
-            style={styles.input}
-            placeholder="Search skills"
-            value={skillSearch}
-            onChangeText={setSkillSearch}
-            onFocus={() => scrollToInput(skillRef)}
-          />
-
-          <View style={styles.skillPillContainer}>
-            {availableSkills
-              .filter(
-                (skill) =>
-                  skill.toLowerCase().includes(skillSearch.toLowerCase()) &&
-                  (skillSearch.length > 0 ? true : skills.includes(skill))
-              )
-              .map((skill) => (
+          <View style={styles.inputContainer}>
+            <View style={styles.skillPillContainer}>
+              {skills.map((skill, index) => (
                 <TouchableOpacity
-                  key={skill}
-                  style={[
-                    styles.skillPillSelected,
-                    !skills.includes(skill) && { opacity: 0.5 },
-                  ]}
-                  onPress={() => {
-                    if (skills.includes(skill)) {
-                      setSkills((prev) => prev.filter((s) => s !== skill));
-                    } else {
-                      setSkills((prev) => [...prev, skill]);
-                    }
-                  }}
+                  key={`selected-${skill}-${index}`}
+                  style={styles.skillPillSelected}
+                  onPress={() => setSkills(prev => prev.filter(s => s !== skill))}
                 >
-                  <Text style={styles.skillText}>
-                    {skill}
-                    {skills.includes(skill) ? ' ✕' : ' ＋'}
-                  </Text>
+                  <Text style={styles.skillText}>{skill}</Text>
+                  <Text style={styles.removeSkillText}>  ×</Text>
                 </TouchableOpacity>
               ))}
+            </View>
+            <TextInput
+              ref={skillRef}
+              style={styles.input}
+              placeholder="Search skills"
+              value={skillSearch}
+              onChangeText={setSkillSearch}
+              onFocus={() => {
+                scrollToInput(skillRef);
+              }}
+            />
+            {skillSearch.length > 0 && (
+              <View style={styles.skillPillContainerVertical}>
+                {availableSkills
+                  .filter((skill) => skill.toLowerCase().includes(skillSearch.toLowerCase()))
+                  .map((skill, index) => (
+                    <TouchableOpacity
+                      key={`skill-${skill}-${index}`}
+                      style={[
+                        skills.includes(skill) ? styles.skillPillSelected : styles.skillPillUnselected,
+                        { alignSelf: 'flex-start', width: '100%', marginVertical: 4 },
+                      ]}
+                      onPress={() => {
+                        if (skills.includes(skill)) {
+                          setSkills((prev) => prev.filter((s) => s !== skill));
+                        } else {
+                          setSkills((prev) => [...prev, skill]);
+                        }
+                      }}
+                    >
+                      <Text style={skills.includes(skill) ? styles.skillText : styles.skillTextUnselected}>
+                        {skill} {skills.includes(skill) ? '✕' : '＋'}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                {availableSkills.filter((skill) => skill.toLowerCase().includes(skillSearch.toLowerCase())).length === 0 && (
+                  <Text style={styles.noResultsText}>No results found</Text>
+                )}
+              </View>
+            )}
           </View>
 
           <TouchableOpacity
@@ -838,19 +764,36 @@ const styles = StyleSheet.create({
   skillPillContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginBottom: 20,
+    marginBottom: 10,
+    gap: 8,
   },
   skillPillSelected: {
     backgroundColor: '#00A8E8',
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: 20,
-    marginVertical: 4,
-    marginRight: 8,
+    marginVertical: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  skillPillUnselected: {
+    backgroundColor: '#EAEAEA',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 20,
+    marginVertical: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   skillText: {
     color: '#fff',
     fontSize: 13,
+    fontWeight: '500',
+  },
+  skillTextUnselected: {
+    color: '#333',
+    fontSize: 13,
+    fontWeight: '500',
   },
   button: {
     backgroundColor: '#00A8E8',
@@ -908,6 +851,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
     fontStyle: 'italic',
+  },
+  skillPillContainerVertical: {
+    flexDirection: 'column',
+    marginBottom: 20,
+  },
+  removeSkillText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '500',
+    marginLeft: 4,
   },
 });
 

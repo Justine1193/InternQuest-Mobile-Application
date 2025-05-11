@@ -25,12 +25,14 @@ type NavigationProp = StackNavigationProp<RootStackParamList, "SignUp">;
 
 // Constants
 const PHONE_REGEX = /^09\d{9}$/;
+const PHONE_REGEX_INTL = /^\+63\d{10}$/;
 const PASSWORD_MIN_LENGTH = 6;
 
 const SignUpScreen: React.FC = () => {
   // --- State ---
   const [email, setEmail] = useState("");
   const [contact, setContact] = useState("");
+  const [prefix, setPrefix] = useState("09"); // "09" or "+63"
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -54,8 +56,17 @@ const SignUpScreen: React.FC = () => {
     const newErrors: typeof errors = {};
     if (!email) newErrors.email = "Email is required";
     else if (!validateEmail(email)) newErrors.email = "Please enter a valid email";
-    if (!contact) newErrors.contact = "Contact number is required";
-    else if (!PHONE_REGEX.test(contact)) newErrors.contact = "Please enter a valid 11-digit phone number starting with 09";
+
+    // Validate phone number based on prefix
+    const fullContact = prefix + contact;
+    if (!contact) {
+      newErrors.contact = "Contact number is required";
+    } else if (prefix === "09" && contact.length !== 9) {
+      newErrors.contact = "Please enter a valid 11-digit phone number (9 digits after 09)";
+    } else if (prefix === "+63" && contact.length !== 10) {
+      newErrors.contact = "Please enter a valid phone number (10 digits after +63)";
+    }
+
     if (!password) newErrors.password = "Password is required";
     else if (password.length < PASSWORD_MIN_LENGTH) newErrors.password = `Password must be at least ${PASSWORD_MIN_LENGTH} characters`;
     if (!confirmPassword) newErrors.confirmPassword = "Please confirm your password";
@@ -72,13 +83,13 @@ const SignUpScreen: React.FC = () => {
       // Create user in Firebase Auth
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
-      // Save user data to Firestore
+      // Save user data to Firestore with full contact number
       const userDocRef = doc(firestore, "users", user.uid);
       const existingDoc = await getDoc(userDocRef);
       const existingContact = existingDoc.exists() ? existingDoc.data().contact || "" : "";
       const userData = {
         email,
-        contact,
+        contact: prefix + contact, // Save the full phone number with prefix
         createdAt: serverTimestamp(),
         lastLogin: serverTimestamp(),
         isProfileComplete: false,
@@ -156,7 +167,7 @@ const SignUpScreen: React.FC = () => {
           <View style={[styles.inputWrapper, errors.contact && styles.inputError]}>
             <Icon name="phone-outline" size={20} color="#555" style={styles.icon} />
             <TextInput
-              placeholder="Enter contact number (09XXXXXXXXX)"
+              placeholder="Enter contact number"
               style={styles.input}
               value={contact}
               keyboardType="phone-pad"

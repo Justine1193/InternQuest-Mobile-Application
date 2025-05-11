@@ -70,19 +70,6 @@ const StudentTable = ({
                       zIndex: 10,
                     }}
                   />
-                  <span
-                    className="select-all-link"
-                    style={{
-                      cursor: "pointer",
-                      color: "#111",
-                      fontWeight: 600,
-                      userSelect: "none",
-                      whiteSpace: "nowrap",
-                    }}
-                    onClick={() => setSelectionMode(false)}
-                  >
-                    Select
-                  </span>
                 </div>
               </th>
             )}

@@ -40,19 +40,6 @@ const Table = ({
                     }
                     onChange={onSelectAll}
                   />
-                  <span
-                    className="select-all-link"
-                    style={{
-                      cursor: "pointer",
-                      color: "#111",
-                      fontWeight: 600,
-                      userSelect: "none",
-                      marginLeft: "10px",
-                    }}
-                    onClick={() => setSelectionMode(false)}
-                  >
-                    Select
-                  </span>
                 </div>
               </th>
             )}

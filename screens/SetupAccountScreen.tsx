@@ -41,22 +41,140 @@ type FieldCategory = {
   fields: { label: string; value: string }[];
 };
 
+const availableSkills = [
+  // Business, Accountancy, and Entrepreneurship
+  'Financial Analysis',
+  'Financial Reporting',
+  'QuickBooks',
+  'Xero',
+  'Market Research',
+  'Market Analysis',
+  'Sales',
+  'Negotiation',
+  'Microsoft Excel (Advanced)',
+  'Business Communication',
+  'Strategic Planning',
+  'CRM Tools',
+
+  // IT, Computer Science, and Multimedia
+  'HTML',
+  'CSS',
+  'JavaScript',
+  'React',
+  'Node.js',
+  'PHP',
+  'Python',
+  'MySQL',
+  'Firebase',
+  'MongoDB',
+  'UI Design',
+  'UX Design',
+  'Figma',
+  'Adobe XD',
+  'Git',
+  'GitHub',
+  'Unity',
+  'Unreal Engine',
+  'Blender',
+  'Maya',
+  'Cybersecurity',
+
+  // Psychology, Education, and Public Administration
+  'Psychological Assessment',
+  'Report Writing',
+  'Documentation',
+  'Classroom Management',
+  'Lesson Planning',
+  'Google Forms',
+  'SurveyMonkey',
+  'Community Outreach',
+  'Public Speaking',
+  'Facilitation',
+  'Active Listening',
+
+  // Medical, Nursing, and Science
+  'Laboratory Safety',
+  'Diagnostic Skills',
+  'Vital Signs',
+  'Health Documentation',
+  'EHR Systems',
+  'Patient Communication',
+  'Research Methods',
+  'Data Interpretation',
+  'Specimen Handling',
+  'First Aid',
+  'Emergency Response',
+
+  // Communication, Journalism, and Arts
+  'Copywriting',
+  'Editing',
+  'Photography',
+  'Videography',
+  'Adobe Photoshop',
+  'Adobe Premiere Pro',
+  'Adobe InDesign',
+  'Social Media Content',
+  'News Writing',
+  'Press Releases',
+  'Public Relations',
+  'Media Strategy',
+  'Storyboarding',
+  'Scriptwriting',
+  'Podcasting',
+  'Audio Editing',
+
+  // Engineering and Architecture
+  'AutoCAD',
+  'SketchUp',
+  'Revit',
+  'Structural Design',
+  'Project Documentation',
+  'Technical Drawing',
+  'Blueprint Reading',
+  'MS Project',
+  'Safety Compliance',
+  'Problem Solving',
+  'Critical Thinking',
+  'Technical Writing',
+
+  // Music and Performing Arts
+  'Instrumental Proficiency',
+  'Vocal Proficiency',
+  'Music Notation',
+  'Music Arrangement',
+  'FL Studio',
+  'Logic Pro',
+  'Event Coordination',
+  'Ensemble Collaboration',
+  'Conducting',
+  'Music Teaching',
+  'Audio Recording',
+  'Audio Mixing'
+];
+
+const CARD_HORIZONTAL_PADDING = 20;
+
 export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
   navigation,
   route,
   onSetupComplete,
 }) => {
+  // --- State: Personal Info ---
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [gender, setGender] = useState('');
   const [program, setProgram] = useState('');
   const [field, setField] = useState('');
+  const [skills, setSkills] = useState<string[]>([]);
+
+  // --- State: Preferences ---
   const [locationPreference, setLocationPreference] = useState({
     remote: false,
     onsite: false,
     hybrid: false,
   });
-  const [skills, setSkills] = useState<string[]>([]);
+
+  // --- State: Dropdowns & Search ---
   const [skillSearch, setSkillSearch] = useState('');
   const [programSearch, setProgramSearch] = useState('');
   const [fieldSearch, setFieldSearch] = useState('');
@@ -68,124 +186,12 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
   const [fieldList, setFieldList] = useState<string[]>([]);
   const [loadingMeta, setLoadingMeta] = useState(true);
   const [parentScrollEnabled, setParentScrollEnabled] = useState(true);
-  const [programInputLayout, setProgramInputLayout] = useState({ x: 0, y: 0, width: 0, height: 0 });
-  const [fieldInputLayout, setFieldInputLayout] = useState({ x: 0, y: 0, width: 0, height: 0 });
   const [programDropdownPos, setProgramDropdownPos] = useState({ x: 0, y: 0, width: 0, height: 0 });
   const [fieldDropdownPos, setFieldDropdownPos] = useState({ x: 0, y: 0, width: 0, height: 0 });
   const [isLoading, setIsLoading] = useState(false);
   const windowHeight = Dimensions.get('window').height;
 
-  const availableSkills = [
-    // Business, Accountancy, and Entrepreneurship
-    'Financial Analysis',
-    'Financial Reporting',
-    'QuickBooks',
-    'Xero',
-    'Market Research',
-    'Market Analysis',
-    'Sales',
-    'Negotiation',
-    'Microsoft Excel (Advanced)',
-    'Business Communication',
-    'Strategic Planning',
-    'CRM Tools',
-
-    // IT, Computer Science, and Multimedia
-    'HTML',
-    'CSS',
-    'JavaScript',
-    'React',
-    'Node.js',
-    'PHP',
-    'Python',
-    'MySQL',
-    'Firebase',
-    'MongoDB',
-    'UI Design',
-    'UX Design',
-    'Figma',
-    'Adobe XD',
-    'Git',
-    'GitHub',
-    'Unity',
-    'Unreal Engine',
-    'Blender',
-    'Maya',
-    'Cybersecurity',
-
-    // Psychology, Education, and Public Administration
-    'Psychological Assessment',
-    'Report Writing',
-    'Documentation',
-    'Classroom Management',
-    'Lesson Planning',
-    'Google Forms',
-    'SurveyMonkey',
-    'Community Outreach',
-    'Public Speaking',
-    'Facilitation',
-    'Active Listening',
-
-    // Medical, Nursing, and Science
-    'Laboratory Safety',
-    'Diagnostic Skills',
-    'Vital Signs',
-    'Health Documentation',
-    'EHR Systems',
-    'Patient Communication',
-    'Research Methods',
-    'Data Interpretation',
-    'Specimen Handling',
-    'First Aid',
-    'Emergency Response',
-
-    // Communication, Journalism, and Arts
-    'Copywriting',
-    'Editing',
-    'Photography',
-    'Videography',
-    'Adobe Photoshop',
-    'Adobe Premiere Pro',
-    'Adobe InDesign',
-    'Social Media Content',
-    'News Writing',
-    'Press Releases',
-    'Public Relations',
-    'Media Strategy',
-    'Storyboarding',
-    'Scriptwriting',
-    'Podcasting',
-    'Audio Editing',
-
-    // Engineering and Architecture
-    'AutoCAD',
-    'SketchUp',
-    'Revit',
-    'Structural Design',
-    'Project Documentation',
-    'Technical Drawing',
-    'Blueprint Reading',
-    'MS Project',
-    'Safety Compliance',
-    'Problem Solving',
-    'Critical Thinking',
-    'Technical Writing',
-
-    // Music and Performing Arts
-    'Instrumental Proficiency',
-    'Vocal Proficiency',
-    'Music Notation',
-    'Music Arrangement',
-    'FL Studio',
-    'Logic Pro',
-    'Event Coordination',
-    'Ensemble Collaboration',
-    'Conducting',
-    'Music Teaching',
-    'Audio Recording',
-    'Audio Mixing'
-  ];
-
+  // --- Refs ---
   const scrollViewRef = useRef<ScrollView>(null);
   const firstNameRef = useRef<TextInput>(null);
   const lastNameRef = useRef<TextInput>(null);
@@ -193,6 +199,7 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
   const fieldRef = useRef<TextInput>(null);
   const skillRef = useRef<TextInput>(null);
 
+  // --- Utility: Scroll to input ---
   const scrollToInput = (inputRef: React.RefObject<TextInput>) => {
     if (inputRef.current && scrollViewRef.current) {
       const inputHandle = findNodeHandle(inputRef.current);
@@ -210,8 +217,7 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
     }
   };
 
-  const CARD_HORIZONTAL_PADDING = 20;
-
+  // --- Utility: Measure dropdown positions ---
   const measureProgramInput = () => {
     if (programRef.current) {
       programRef.current.measureInWindow((x, y, width, height) => {
@@ -224,7 +230,6 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
       });
     }
   };
-
   const measureFieldInput = () => {
     if (fieldRef.current) {
       fieldRef.current.measureInWindow((x, y, width, height) => {
@@ -238,19 +243,14 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
     }
   };
 
+  // --- Fetch meta data for dropdowns ---
   useEffect(() => {
     const fetchMeta = async () => {
       try {
-        // Fetch programs as a flat list
         const programDoc = await getDoc(doc(firestore, 'meta', 'programs'));
-        if (programDoc.exists()) {
-          setProgramList(programDoc.data().list || []);
-        }
-        // Fetch fields as a flat list
+        if (programDoc.exists()) setProgramList(programDoc.data().list || []);
         const fieldDoc = await getDoc(doc(firestore, 'meta', 'field'));
-        if (fieldDoc.exists()) {
-          setFieldList(fieldDoc.data().list || []);
-        }
+        if (fieldDoc.exists()) setFieldList(fieldDoc.data().list || []);
       } catch (error) {
         console.error('Failed to fetch meta:', error);
       }
@@ -259,7 +259,7 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
     fetchMeta();
   }, []);
 
-  // Check if user is authenticated
+  // --- Auth check ---
   useEffect(() => {
     if (!auth.currentUser) {
       Alert.alert(
@@ -275,23 +275,22 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
     }
   }, []);
 
+  // --- Checkbox toggle ---
   const toggleCheckbox = (type: 'remote' | 'onsite' | 'hybrid') => {
     setLocationPreference((prev) => ({ ...prev, [type]: !prev[type] }));
   };
 
+  // --- Finish Setup: Save to Firestore and mark profile complete ---
   const finishSetup = async () => {
     if (!auth.currentUser) {
       Alert.alert('Error', 'You must be logged in to complete setup.');
       return;
     }
-
     if (!validateForm()) return;
-
     setIsLoading(true);
     try {
       const userId = auth.currentUser.uid;
       const userRef = doc(firestore, 'users', userId);
-
       // Get the selected program and field details
       const selectedProgram = programList.find(p => p === program);
       const selectedField = fieldList.find(f => f === field);
@@ -371,7 +370,10 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
       // Save to Firestore
       await setDoc(userRef, userData, { merge: true });
 
-      // Update user's profile completion status
+      // Ensure top-level isProfileComplete is set to true
+      await setDoc(userRef, { isProfileComplete: true }, { merge: true });
+
+      // Update user's profile completion status (nested)
       await updateDoc(userRef, {
         'profileStatus.isComplete': true,
         'profileStatus.setupCompletedAt': serverTimestamp(),
@@ -402,65 +404,39 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
     }
   };
 
-  // Enhanced validation function
+  // --- Validation ---
   const validateForm = () => {
     const errors = [];
-
-    if (!firstName.trim()) {
-      errors.push('First name is required');
-    }
-    if (!lastName.trim()) {
-      errors.push('Last name is required');
-    }
-    if (!gender) {
-      errors.push('Gender is required');
-    }
-    if (!program) {
-      errors.push('Program is required');
-    }
-    if (!field) {
-      errors.push('Preferred field is required');
-    }
-    if (skills.length === 0) {
-      errors.push('At least one skill is required');
-    }
-    if (!locationPreference.remote && !locationPreference.onsite && !locationPreference.hybrid) {
-      errors.push('At least one location preference is required');
-    }
-
+    if (!firstName.trim()) errors.push('First name is required');
+    if (!lastName.trim()) errors.push('Last name is required');
+    if (!gender) errors.push('Gender is required');
+    if (!program) errors.push('Program is required');
+    if (!field) errors.push('Preferred field is required');
+    if (skills.length === 0) errors.push('At least one skill is required');
+    if (!locationPreference.remote && !locationPreference.onsite && !locationPreference.hybrid) errors.push('At least one location preference is required');
     if (errors.length > 0) {
-      Alert.alert(
-        'Validation Error',
-        errors.join('\n'),
-        [{ text: 'OK' }]
-      );
+      Alert.alert('Validation Error', errors.join('\n'), [{ text: 'OK' }]);
       return false;
     }
-
     return true;
   };
 
-  // Improved normalization and matching for search
+  // --- Utility: Normalization and smart match for search ---
   const normalize = (str: string) =>
-    str
-      .toLowerCase()
-      .replace(/b[.]?s[.]?/g, 'bachelor of science')
+    str.toLowerCase().replace(/b[.]?s[.]?/g, 'bachelor of science')
       .replace(/bachelor\s+of\s+science/g, 'bachelor of science')
       .replace(/bachelor/g, 'bachelor of science')
-      .replace(/[^a-z0-9 ]/g, '') // remove punctuation
-      .replace(/\s+/g, ' ')
-      .trim();
-
+      .replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
   const smartMatch = (option: string, input: string) => {
     const normOption = normalize(option);
     const normInput = normalize(input);
     if (normOption.includes(normInput)) return true;
-    // Match any word in input to any word in option
     const inputWords = normInput.split(' ');
     const optionWords = normOption.split(' ');
     return inputWords.some(word => word && optionWords.some(optWord => optWord.startsWith(word)));
   };
 
+  // --- Loading indicator ---
   if (loadingMeta || isLoading) {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
@@ -559,7 +535,7 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
               <Portal>
                 <View
                   style={[
-                    styles.dropdown,
+                    styles.dropdownContainer,
                     {
                       position: 'absolute',
                       top: programDropdownPos.y,
@@ -567,8 +543,6 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
                       width: programDropdownPos.width,
                       maxHeight: 220,
                       zIndex: 9999,
-                      elevation: 20,
-                      overflow: 'hidden',
                     }
                   ]}
                   pointerEvents="auto"
@@ -641,7 +615,7 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
               <Portal>
                 <View
                   style={[
-                    styles.dropdown,
+                    styles.dropdownContainer,
                     {
                       position: 'absolute',
                       top: fieldDropdownPos.y,
@@ -649,8 +623,6 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
                       width: fieldDropdownPos.width,
                       maxHeight: 220,
                       zIndex: 9998,
-                      elevation: 20,
-                      overflow: 'hidden',
                     }
                   ]}
                   pointerEvents="auto"
@@ -900,35 +872,35 @@ const styles = StyleSheet.create({
     zIndex: 1,
     marginBottom: 15,
   },
-  dropdown: {
+  dropdownContainer: {
     position: 'absolute',
-    backgroundColor: '#fff',
+    backgroundColor: 'white',
+    borderRadius: 8,
+    padding: 8,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+    zIndex: 1000,
+    maxHeight: 220,
     borderWidth: 1,
     borderColor: '#E0E0E0',
-    borderRadius: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 20,
-    zIndex: 9999,
-    overflow: 'hidden',
   },
   dropdownItem: {
     padding: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#F5F5F5',
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
+    borderBottomColor: '#f0f0f0',
   },
   dropdownItemSelected: {
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#F0F8FF',
   },
   dropdownItemText: {
     fontSize: 14,
     color: '#333',
-    flex: 1,
   },
   noResultsText: {
     padding: 12,

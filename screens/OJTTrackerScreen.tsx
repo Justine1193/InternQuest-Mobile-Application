@@ -11,7 +11,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import type { RootStackParamList } from '../App';
 import { auth, firestore } from '../firebase/config';
-import { doc, setDoc, deleteDoc, collection, getDocs } from 'firebase/firestore';
+import { doc, setDoc, deleteDoc, collection, getDocs, getDoc } from 'firebase/firestore';
 import { Picker } from '@react-native-picker/picker';
 import RNBlobUtil from 'react-native-blob-util';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -60,10 +60,13 @@ const OJTTrackerScreen: React.FC = () => {
   });
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(5);
+  const [userStatus, setUserStatus] = useState<string | null>(null);
+  const [userCompany, setUserCompany] = useState<string | null>(null);
 
   // Load initial data
   useEffect(() => {
     loadInitialData();
+    fetchUserStatusAndCompany();
   }, []);
 
   const loadInitialData = async () => {
@@ -71,6 +74,21 @@ const OJTTrackerScreen: React.FC = () => {
       loadRequiredHours(),
       loadLogsFromFirestore()
     ]);
+  };
+
+  const fetchUserStatusAndCompany = async () => {
+    if (!auth.currentUser) return;
+    try {
+      const userDoc = await getDoc(doc(firestore, 'users', auth.currentUser.uid));
+      if (userDoc.exists()) {
+        const data = userDoc.data();
+        setUserStatus(data.status || null);
+        setUserCompany(data.company || null);
+      }
+    } catch (error) {
+      setUserStatus(null);
+      setUserCompany(null);
+    }
   };
 
   // Data loading functions
@@ -531,7 +549,9 @@ const OJTTrackerScreen: React.FC = () => {
         </View>
         <View style={styles.infoBox}>
           <Text style={styles.infoLabel}>Company</Text>
-          <Text style={styles.infoValue}>Google Inc.</Text>
+          <Text style={styles.infoValue}>
+            {userStatus === 'hired' && userCompany ? userCompany : 'Not Hired'}
+          </Text>
         </View>
       </View>
 

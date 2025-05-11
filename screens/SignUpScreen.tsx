@@ -28,7 +28,7 @@ const PHONE_REGEX = /^09\d{9}$/;
 const PASSWORD_MIN_LENGTH = 6;
 
 const SignUpScreen: React.FC = () => {
-  // State
+  // --- State ---
   const [email, setEmail] = useState("");
   const [contact, setContact] = useState("");
   const [password, setPassword] = useState("");
@@ -44,7 +44,7 @@ const SignUpScreen: React.FC = () => {
 
   const navigation = useNavigation<NavigationProp>();
 
-  // Validation functions
+  // --- Validation functions ---
   const validateEmail = (email: string): boolean => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailRegex.test(email);
@@ -52,52 +52,30 @@ const SignUpScreen: React.FC = () => {
 
   const validateForm = (): boolean => {
     const newErrors: typeof errors = {};
-
-    if (!email) {
-      newErrors.email = "Email is required";
-    } else if (!validateEmail(email)) {
-      newErrors.email = "Please enter a valid email";
-    }
-
-    if (!contact) {
-      newErrors.contact = "Contact number is required";
-    } else if (!PHONE_REGEX.test(contact)) {
-      newErrors.contact = "Please enter a valid 11-digit phone number starting with 09";
-    }
-
-    if (!password) {
-      newErrors.password = "Password is required";
-    } else if (password.length < PASSWORD_MIN_LENGTH) {
-      newErrors.password = `Password must be at least ${PASSWORD_MIN_LENGTH} characters`;
-    }
-
-    if (!confirmPassword) {
-      newErrors.confirmPassword = "Please confirm your password";
-    } else if (password !== confirmPassword) {
-      newErrors.confirmPassword = "Passwords do not match";
-    }
-
+    if (!email) newErrors.email = "Email is required";
+    else if (!validateEmail(email)) newErrors.email = "Please enter a valid email";
+    if (!contact) newErrors.contact = "Contact number is required";
+    else if (!PHONE_REGEX.test(contact)) newErrors.contact = "Please enter a valid 11-digit phone number starting with 09";
+    if (!password) newErrors.password = "Password is required";
+    else if (password.length < PASSWORD_MIN_LENGTH) newErrors.password = `Password must be at least ${PASSWORD_MIN_LENGTH} characters`;
+    if (!confirmPassword) newErrors.confirmPassword = "Please confirm your password";
+    else if (password !== confirmPassword) newErrors.confirmPassword = "Passwords do not match";
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  // Handlers
+  // --- Handlers ---
   const handleSignUp = async () => {
-    if (!validateForm()) {
-      return;
-    }
-
+    if (!validateForm()) return;
     setIsLoading(true);
     try {
       // Create user in Firebase Auth
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
-
       // Save user data to Firestore
       const userDocRef = doc(firestore, "users", user.uid);
       const existingDoc = await getDoc(userDocRef);
       const existingContact = existingDoc.exists() ? existingDoc.data().contact || "" : "";
-
       const userData = {
         email,
         contact,
@@ -108,14 +86,10 @@ const SignUpScreen: React.FC = () => {
         status: "active",
         existingContact,
       };
-
       await setDoc(userDocRef, userData, { merge: true });
-
-      // Navigate to SetupAccount immediately after successful sign up
-      navigation.replace("SetupAccount");
+      // navigation.replace("SetupAccount");
     } catch (error: any) {
       let errorMessage = "An error occurred during sign up.";
-
       switch (error.code) {
         case 'auth/email-already-in-use':
           errorMessage = "This email is already registered.";
@@ -129,7 +103,6 @@ const SignUpScreen: React.FC = () => {
         default:
           errorMessage = error.message;
       }
-
       Alert.alert("Error", errorMessage);
       console.error("Sign up error:", error);
     } finally {
@@ -140,9 +113,7 @@ const SignUpScreen: React.FC = () => {
   const handleContactChange = useCallback((text: string) => {
     if (/^\d{0,11}$/.test(text)) {
       setContact(text);
-      if (errors.contact) {
-        setErrors(prev => ({ ...prev, contact: undefined }));
-      }
+      if (errors.contact) setErrors(prev => ({ ...prev, contact: undefined }));
     }
   }, [errors]);
 
@@ -150,7 +121,7 @@ const SignUpScreen: React.FC = () => {
     setShowPassword(prev => !prev);
   }, []);
 
-  // Render
+  // --- Render ---
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -163,10 +134,8 @@ const SignUpScreen: React.FC = () => {
             style={styles.logo}
             resizeMode="contain"
           />
-
           <Text style={styles.title}>Welcome</Text>
           <Text style={styles.subtitle}>Create your Account here!!</Text>
-
           {/* Email Input */}
           <View style={[styles.inputWrapper, errors.email && styles.inputError]}>
             <Icon name="email-outline" size={20} color="#555" style={styles.icon} />
@@ -178,14 +147,11 @@ const SignUpScreen: React.FC = () => {
               keyboardType="email-address"
               onChangeText={(text) => {
                 setEmail(text);
-                if (errors.email) {
-                  setErrors(prev => ({ ...prev, email: undefined }));
-                }
+                if (errors.email) setErrors(prev => ({ ...prev, email: undefined }));
               }}
             />
           </View>
           {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
-
           {/* Contact Input */}
           <View style={[styles.inputWrapper, errors.contact && styles.inputError]}>
             <Icon name="phone-outline" size={20} color="#555" style={styles.icon} />
@@ -199,7 +165,6 @@ const SignUpScreen: React.FC = () => {
             />
           </View>
           {errors.contact && <Text style={styles.errorText}>{errors.contact}</Text>}
-
           {/* Password Input */}
           <View style={[styles.inputWrapper, errors.password && styles.inputError]}>
             <Icon name="lock-outline" size={20} color="#555" style={styles.icon} />
@@ -210,9 +175,7 @@ const SignUpScreen: React.FC = () => {
               value={password}
               onChangeText={(text) => {
                 setPassword(text);
-                if (errors.password) {
-                  setErrors(prev => ({ ...prev, password: undefined }));
-                }
+                if (errors.password) setErrors(prev => ({ ...prev, password: undefined }));
               }}
             />
             <TouchableOpacity onPress={togglePasswordVisibility}>
@@ -224,7 +187,6 @@ const SignUpScreen: React.FC = () => {
             </TouchableOpacity>
           </View>
           {errors.password && <Text style={styles.errorText}>{errors.password}</Text>}
-
           {/* Confirm Password Input */}
           <View style={[styles.inputWrapper, errors.confirmPassword && styles.inputError]}>
             <Icon name="lock-check-outline" size={20} color="#555" style={styles.icon} />
@@ -235,14 +197,11 @@ const SignUpScreen: React.FC = () => {
               value={confirmPassword}
               onChangeText={(text) => {
                 setConfirmPassword(text);
-                if (errors.confirmPassword) {
-                  setErrors(prev => ({ ...prev, confirmPassword: undefined }));
-                }
+                if (errors.confirmPassword) setErrors(prev => ({ ...prev, confirmPassword: undefined }));
               }}
             />
           </View>
           {errors.confirmPassword && <Text style={styles.errorText}>{errors.confirmPassword}</Text>}
-
           {/* Sign Up Button */}
           <TouchableOpacity
             style={[styles.button, isLoading && styles.buttonDisabled]}
@@ -255,14 +214,11 @@ const SignUpScreen: React.FC = () => {
               <Text style={styles.buttonText}>Sign Up</Text>
             )}
           </TouchableOpacity>
-
           {/* Sign In Link */}
           <View style={styles.loginContainer}>
             <Text style={styles.loginText}>
               Already have an account?{" "}
-              <Text style={styles.loginLink} onPress={() => navigation.navigate("SignIn")}>
-                Sign In
-              </Text>
+              <Text style={styles.loginLink} onPress={() => navigation.navigate("SignIn")}>Sign In</Text>
             </Text>
           </View>
         </View>

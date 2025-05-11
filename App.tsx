@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { StatusBar } from 'react-native';
+import { StatusBar, ActivityIndicator, View, Text } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { Host } from 'react-native-portalize';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from './firebase/config';
+import { doc, getDoc } from 'firebase/firestore';
+import { firestore } from './firebase/config';
 
 // Context
 import { SavedInternshipsProvider } from './context/SavedInternshipsContext';
@@ -57,10 +59,27 @@ const Stack = createStackNavigator<RootStackParamList>();
 const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isProfileComplete, setIsProfileComplete] = useState<boolean | null>(null);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setIsLoggedIn(!!user);
+      if (user) {
+        // Fetch user profile from Firestore
+        try {
+          const userDoc = await getDoc(doc(firestore, 'users', user.uid));
+          if (userDoc.exists()) {
+            const data = userDoc.data();
+            setIsProfileComplete(!!data.isProfileComplete);
+          } else {
+            setIsProfileComplete(false);
+          }
+        } catch (e) {
+          setIsProfileComplete(false);
+        }
+      } else {
+        setIsProfileComplete(null);
+      }
       setIsLoading(false);
     });
     return () => unsubscribe();
@@ -74,10 +93,42 @@ const App: React.FC = () => {
           <StatusBar translucent backgroundColor="transparent" barStyle="dark-content" />
           <Stack.Navigator screenOptions={{ headerShown: false }}>
             {isLoading ? (
-              <Stack.Screen name="Launch" component={LaunchScreen} />
+              <Stack.Screen name="Launch">
+                {() => (
+                  <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}>
+                    <ActivityIndicator size="large" color="#007aff" />
+                    <Text style={{ marginTop: 20, fontSize: 16, color: '#007aff' }}>Setting up your account...</Text>
+                  </View>
+                )}
+              </Stack.Screen>
             ) : (
               <>
-                {isLoggedIn ? (
+                {!isLoggedIn ? (
+                  <>
+                    <Stack.Screen name="SignIn">
+                      {props => <SignInScreen {...props} setIsLoggedIn={setIsLoggedIn} />}
+                    </Stack.Screen>
+                    <Stack.Screen name="SignUp" component={SignUpScreen} />
+                  </>
+                ) : isProfileComplete === false ? (
+                  <Stack.Screen name="SetupAccount">
+                    {props => (
+                      <SetupAccountScreen
+                        {...props}
+                        onSetupComplete={async () => {
+                          // Update Firestore and local state
+                          if (auth.currentUser) {
+                            await getDoc(doc(firestore, 'users', auth.currentUser.uid)).then(userDoc => {
+                              if (userDoc.exists()) {
+                                setIsProfileComplete(true);
+                              }
+                            });
+                          }
+                        }}
+                      />
+                    )}
+                  </Stack.Screen>
+                ) : (
                   <>
                     <Stack.Screen name="Home" component={HomeScreen} />
                     <Stack.Screen name="Profile" component={ProfileScreen} />
@@ -86,25 +137,8 @@ const App: React.FC = () => {
                     <Stack.Screen name="InternshipDetails" component={InternshipDetailsScreen} />
                     <Stack.Screen name="OJTTracker" component={OJTTrackerScreen} />
                   </>
-                ) : (
-                  <>
-                    <Stack.Screen name="SignIn">
-                      {props => <SignInScreen {...props} setIsLoggedIn={setIsLoggedIn} />}
-                    </Stack.Screen>
-                    <Stack.Screen name="SignUp" component={SignUpScreen} />
-                  </>
                 )}
-                <Stack.Screen name="SetupAccount">
-                  {props => (
-                    <SetupAccountScreen
-                      {...props}
-                      onSetupComplete={() => {
-                        setIsLoggedIn(true);
-                        props.navigation.replace('Home');
-                      }}
-                    />
-                  )}
-                </Stack.Screen>
+                {/* Always include SetupAccount for navigation safety, but only show when needed */}
               </>
             )}
           </Stack.Navigator>

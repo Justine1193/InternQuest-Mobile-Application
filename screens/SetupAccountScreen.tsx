@@ -53,7 +53,7 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
   const [lastName, setLastName] = useState('');
   const [gender, setGender] = useState('');
   const [program, setProgram] = useState('');
-  const [field, setField] = useState('');
+  const [fields, setFields] = useState<string[]>([]);
   const [skills, setSkills] = useState<string[]>([]);
   const [availableSkills, setAvailableSkills] = useState<string[]>([]);
 
@@ -81,6 +81,7 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [skillDropdownPos, setSkillDropdownPos] = useState({ x: 0, y: 0, width: 0, height: 0 });
   const [showSkillOptions, setShowSkillOptions] = useState(false);
+  const [field, setField] = useState('');
   const windowHeight = Dimensions.get('window').height;
 
   // --- Refs ---
@@ -210,24 +211,14 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
       const userRef = doc(firestore, 'users', userId);
       // Get the selected program and field details
       const selectedProgram = programList.find(p => p === program);
-      const selectedField = fieldList.find(f => f === field);
       const programCategory = programCategories.find(cat =>
         cat.programs.some(p => p.value === program)
-      );
-      const fieldCategory = fieldCategories.find(cat =>
-        cat.fields.some(f => f.value === field)
       );
 
       // Prepare user data with detailed structure
       const { name, ...programWithoutName } = {
         id: program,
         name: selectedProgram || '',
-
-      };
-      const { name: fieldName, ...fieldWithoutName } = {
-        id: field,
-        name: selectedField || '',
-
       };
       const userData = {
         // Basic Information
@@ -240,7 +231,7 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
         program: program,
 
         // Career Information
-        field: [fieldWithoutName],
+        field: field,
 
         // Preferences
         locationPreference: {
@@ -251,9 +242,7 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
         },
 
         // Skills
-        skills: skills.map(skill => ({
-          name: skill,
-        })),
+        skills: skills,
         skillsUpdatedAt: serverTimestamp(),
 
         // Profile Status
@@ -326,7 +315,7 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
     if (!lastName.trim()) errors.push('Last name is required');
     if (!gender) errors.push('Gender is required');
     if (!program) errors.push('Program is required');
-    if (!field) errors.push('Preferred field is required');
+    if (!field) errors.push('Field is required');
     if (skills.length === 0) errors.push('At least one skill is required');
     if (!locationPreference.remote && !locationPreference.onsite && !locationPreference.hybrid) errors.push('At least one location preference is required');
     if (errors.length > 0) {
@@ -523,6 +512,13 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
                   setParentScrollEnabled(true);
                 }, 100);
               }}
+              onSubmitEditing={() => {
+                const newField = fieldSearch.trim();
+                if (newField) {
+                  setField(newField);
+                  setFieldSearch(newField);
+                }
+              }}
             />
             {showFieldOptions && fieldSearch.length > 0 && (
               <View
@@ -612,11 +608,18 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
             <TextInput
               ref={skillRef}
               style={styles.input}
-              placeholder="Search skills"
+              placeholder="Search or add a skill"
               value={skillSearch}
               onChangeText={setSkillSearch}
               onFocus={() => {
                 scrollToInput(skillRef);
+              }}
+              onSubmitEditing={() => {
+                const newSkill = skillSearch.trim();
+                if (newSkill && !skills.includes(newSkill)) {
+                  setSkills(prev => [...prev, newSkill]);
+                  setSkillSearch("");
+                }
               }}
             />
             {skillSearch.length > 0 && (
@@ -628,7 +631,7 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
                       key={`skill-${skill}-${index}`}
                       style={[
                         skills.includes(skill) ? styles.skillPillSelected : styles.skillPillUnselected,
-                        { alignSelf: 'flex-start', width: '100%', marginVertical: 4 },
+                        { alignSelf: 'flex-start', width: '100%', marginVertical: 4 }
                       ]}
                       onPress={() => {
                         if (skills.includes(skill)) {

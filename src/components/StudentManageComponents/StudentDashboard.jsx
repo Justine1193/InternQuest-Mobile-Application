@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { IoSettingsOutline } from "react-icons/io5";
-import { db } from "../../../firebase";
+import { db } from "../../../firebase.js";
 import {
   collection,
   getDocs,
@@ -10,9 +10,9 @@ import {
 } from "firebase/firestore";
 import logo from "../../assets/InternQuest_Logo.png";
 import { signOut } from "firebase/auth";
-import { auth } from "../../../firebase";
+import { auth } from "../../../firebase.js";
 import SearchBar from "../SearchBar/SearchBar.jsx";
-import StudentTable from "./Table/StudentTable";
+import StudentTable from "./Table/StudentTable.jsx";
 import ConfirmModal from "../ConfirmModalComponents/ConfirmModal.jsx";
 import "./StudentDashboard.css";
 import Footer from "../Footer/Footer.jsx";

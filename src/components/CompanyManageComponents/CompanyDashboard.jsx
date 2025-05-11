@@ -96,15 +96,15 @@ const Dashboard = () => {
   // Fetch data on mount
   useEffect(() => {
     async function fetchData() {
-      const companySnapshot = await import("../../../firebase").then(({ db }) =>
-        getDocs(collection(db, "companies"))
+      const companySnapshot = await import("../../../firebase.js").then(
+        ({ db }) => getDocs(collection(db, "companies"))
       );
       const companies = [];
       companySnapshot.forEach((doc) => {
         companies.push({ id: doc.id, ...doc.data() });
       });
-      const studentSnapshot = await import("../../../firebase").then(({ db }) =>
-        getDocs(collection(db, "users"))
+      const studentSnapshot = await import("../../../firebase.js").then(
+        ({ db }) => getDocs(collection(db, "users"))
       );
       const students = [];
       studentSnapshot.forEach((doc) => {

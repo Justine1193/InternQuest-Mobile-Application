@@ -1,0 +1,120 @@
+.table-container {
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  padding: 1.5rem 1.5rem 0.5rem 1.5rem;
+  margin-top: 2rem;
+  overflow-x: auto;
+  width: 100%;
+  border: 1px solid #e3f2fd;
+}
+
+table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 1rem;
+  background: #fff;
+}
+
+table th {
+  background: #f5faff;
+  color: #111;
+  font-weight: 600;
+  font-size: 15px;
+  border-top: none;
+  border-bottom: 2px solid #e3f2fd;
+  padding: 18px 16px;
+  text-align: left;
+}
+
+table td {
+  color: #333;
+  font-size: 14px;
+  padding: 18px 16px;
+  text-align: left;
+  border-bottom: 1px solid #f0f0f0;
+  background: transparent;
+}
+
+.checkbox-cell,
+.kebab-cell {
+  width: 40px;
+  min-width: 40px;
+  max-width: 40px;
+  padding-left: 0;
+  padding-right: 0;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.select-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.select-header input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  margin: 0;
+}
+
+.select-header span {
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+}
+
+.selected-row {
+  background-color: #e3f2fd !important;
+}
+
+/* Make the skills column wider */
+.table-container table th:nth-child(7),
+.table-container table td:nth-child(7) {
+  min-width: 200px;
+  max-width: 300px;
+}
+
+/* Make the Mode of work column narrower */
+.table-container table th:nth-last-child(2),
+.table-container table td:nth-last-child(2) {
+  min-width: 40px;
+  max-width: 40px;
+  width: 40px;
+  text-align: center;
+  white-space: nowrap;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+/* Make the company name column a fixed width and truncate overflow */
+.table-container table th:nth-child(2),
+.table-container table td:nth-child(2) {
+  max-width: 200px;
+  min-width: 100px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Add responsive scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}

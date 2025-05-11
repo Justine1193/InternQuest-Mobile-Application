@@ -1,0 +1,86 @@
+/* Modern Minimal Filter Dropdown Styles */
+.new-filter-dropdown {
+  position: absolute;
+  top: 56px;
+  right: 0;
+  background: #fff;
+  border: 1.5px solid #e3eafc;
+  border-radius: 14px;
+  box-shadow: 0 8px 32px rgba(25, 118, 210, 0.1),
+    0 1.5px 6px rgba(0, 0, 0, 0.08);
+  padding: 18px 20px 14px 20px;
+  min-width: 240px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.new-filter-label {
+  font-size: 1em;
+  font-weight: 500;
+  color: #222;
+  margin-bottom: 2px;
+  letter-spacing: 0.01em;
+}
+
+.new-filter-input,
+.new-filter-select {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1.5px solid #e3eafc;
+  border-radius: 8px;
+  font-size: 1em;
+  background: #f7fafd;
+  color: #222;
+  margin-bottom: 0;
+  box-sizing: border-box;
+  transition: border 0.18s, box-shadow 0.18s;
+}
+
+.new-filter-input:focus,
+.new-filter-select:focus {
+  border-color: #1976d2;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.1);
+}
+
+.new-filter-btn {
+  width: 100%;
+  padding: 10px 0;
+  background: #1976d2;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 1em;
+  margin-top: 8px;
+  transition: background 0.18s, box-shadow 0.18s;
+  box-shadow: 0 2px 8px rgba(25, 118, 210, 0.08);
+}
+
+.new-filter-btn:hover,
+.new-filter-btn:focus {
+  background: #1565c0;
+  box-shadow: 0 4px 16px rgba(25, 118, 210, 0.13);
+}
+
+.new-filter-btn.reset {
+  background: #f5f5f5;
+  color: #1976d2;
+  border: 1.5px solid #e3eafc;
+  box-shadow: none;
+}
+
+.new-filter-btn.reset:hover,
+.new-filter-btn.reset:focus {
+  background: #e3eafc;
+  color: #1565c0;
+  border-color: #1565c0;
+}
+
+.filter-dropdown-container {
+  position: relative;
+  display: inline-block;
+}

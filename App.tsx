@@ -93,14 +93,7 @@ const App: React.FC = () => {
           <StatusBar translucent backgroundColor="transparent" barStyle="dark-content" />
           <Stack.Navigator screenOptions={{ headerShown: false }}>
             {isLoading ? (
-              <Stack.Screen name="Launch">
-                {() => (
-                  <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}>
-                    <ActivityIndicator size="large" color="#007aff" />
-                    <Text style={{ marginTop: 20, fontSize: 16, color: '#007aff' }}>Setting up your account...</Text>
-                  </View>
-                )}
-              </Stack.Screen>
+              <Stack.Screen name="Launch" component={LaunchScreen} />
             ) : (
               <>
                 {!isLoggedIn ? (

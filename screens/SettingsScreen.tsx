@@ -31,6 +31,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 
 const SettingsScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const [emailNotif, setEmailNotif] = useState(true);
   const [pushNotif, setPushNotif] = useState(true);
@@ -76,15 +77,66 @@ const SettingsScreen: React.FC = () => {
           style: 'destructive',
           onPress: async () => {
             try {
+              setIsDeleting(true);
               const user = auth.currentUser;
               if (!user) throw new Error('No user is currently signed in.');
-              // Delete Firestore user document
-              await deleteDoc(doc(firestore, 'users', user.uid));
-              // Delete Firebase Auth user
-              await deleteUser(user);
-              // No manual navigation needed; auth state will handle it
+
+              // First delete Firestore data
+              try {
+                await deleteDoc(doc(firestore, 'users', user.uid));
+              } catch (error) {
+                console.error('Error deleting Firestore data:', error);
+                // Continue with auth deletion even if Firestore fails
+              }
+
+              // Then delete Firebase Auth user
+              try {
+                await deleteUser(user);
+              } catch (error: any) {
+                // If the error is due to recent login, reauthenticate and try again
+                if (error.code === 'auth/requires-recent-login') {
+                  Alert.alert(
+                    'Authentication Required',
+                    'For security reasons, please sign in again before deleting your account.',
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      {
+                        text: 'Sign In Again',
+                        onPress: async () => {
+                          try {
+                            await signOut(auth);
+                            // Auth state change will handle navigation
+                          } catch (error: any) {
+                            Alert.alert('Error', error.message);
+                          }
+                        },
+                      },
+                    ]
+                  );
+                  return;
+                }
+                throw error;
+              }
+
+              // Clear any stored settings
+              try {
+                await AsyncStorage.multiRemove([
+                  'emailNotif',
+                  'pushNotif',
+                  'locationAccess',
+                  'autoUpdate'
+                ]);
+              } catch (error) {
+                console.error('Error clearing AsyncStorage:', error);
+              }
+
             } catch (error: any) {
-              Alert.alert('Error', error.message || 'Failed to delete account.');
+              Alert.alert(
+                'Error',
+                error.message || 'Failed to delete account. Please try again.'
+              );
+            } finally {
+              setIsDeleting(false);
             }
           },
         },
@@ -140,9 +192,19 @@ const SettingsScreen: React.FC = () => {
         {/* Account Management Section */}
         <Text style={styles.dropdownTitle}>Account Management</Text>
         <View>
-          <TouchableOpacity style={styles.deleteButton} onPress={handleDeleteAccount}>
-            <Text style={styles.deleteButtonText}>Delete Account</Text>
-            <Icon name="account-remove-outline" size={20} color="#fff" />
+          <TouchableOpacity
+            style={[styles.deleteButton, isDeleting && styles.deleteButtonDisabled]}
+            onPress={handleDeleteAccount}
+            disabled={isDeleting}
+          >
+            <Text style={styles.deleteButtonText}>
+              {isDeleting ? 'Deleting Account...' : 'Delete Account'}
+            </Text>
+            <Icon
+              name={isDeleting ? "loading" : "account-remove-outline"}
+              size={20}
+              color="#fff"
+            />
           </TouchableOpacity>
         </View>
         <View style={styles.sectionSeparator} />
@@ -199,6 +261,10 @@ const styles = StyleSheet.create({
   sectionSeparator: { height: 1, backgroundColor: '#eee', marginVertical: 18 },
   deleteButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#d9534f', paddingVertical: 12, borderRadius: 6, marginTop: 10 },
   deleteButtonText: { color: '#fff', fontSize: 16, fontWeight: '600', marginRight: 8 },
+  deleteButtonDisabled: {
+    opacity: 0.7,
+    backgroundColor: '#999',
+  },
 });
 
 export default SettingsScreen;

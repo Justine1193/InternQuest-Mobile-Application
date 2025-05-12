@@ -81,7 +81,6 @@ export const dashboardHandlers = {
         companyName: formData.companyName,
         companyDescription: formData.description,
         companyWeb: formData.website,
-        field: formData.field,
         companyAddress: formData.address,
         companyEmail: formData.email,
         skillsREq: skills,
@@ -97,7 +96,6 @@ export const dashboardHandlers = {
         companyName: '',
         description: '',
         website: '',
-        field: '',
         address: '',
         email: '',
         skills: '',
@@ -114,6 +112,10 @@ export const dashboardHandlers = {
     }
   },
   handleUpdateEntry: async (formData, fields, skills, setIsLoading, setTableData, setIsModalOpen, setIsEditMode, setEditCompanyId, setFormData, setSkills, setFields, setError, editCompanyId) => {
+    console.log("handleUpdateEntry called", { formData, fields, skills, editCompanyId });
+    if (typeof setError !== "function") {
+      throw new Error("setError is not a function!");
+    }
     try {
       if (!formData.companyName.trim()) throw new Error("Company name is required");
       if (!formData.description.trim()) throw new Error("Description is required");
@@ -128,7 +130,6 @@ export const dashboardHandlers = {
         companyName: formData.companyName,
         companyDescription: formData.description,
         companyWeb: formData.website,
-        field: formData.field,
         companyAddress: formData.address,
         companyEmail: formData.email,
         skillsREq: skills,
@@ -149,16 +150,16 @@ export const dashboardHandlers = {
         companyName: '',
         description: '',
         website: '',
-        field: '',
         address: '',
         email: '',
-        skills: '',
+        skills: '', 
         moa: false,
         modeOfWork: [],
       });
       setSkills([]);
       setFields([]);
     } catch (err) {
+      console.error("Update error:", err);
       setError(err.message);
       return;
     } finally {
@@ -183,7 +184,6 @@ export const dashboardHandlers = {
       companyName: company.companyName || '',
       description: company.companyDescription || '',
       website: company.companyWeb || '',
-      field: company.field || '',
       address: company.companyAddress || '',
       email: company.companyEmail || '',
       skills: '',
@@ -194,7 +194,7 @@ export const dashboardHandlers = {
     setIsEditMode(true);
     setEditCompanyId(company.id);
     setIsModalOpen(true);
-    setFields(Array.isArray(company.fields) ? company.fields : []);
+    setFields(company.fields && Array.isArray(company.fields) ? [...company.fields] : []);
   },
   handleDelete: (setShowConfirm) => {
     setShowConfirm(true);

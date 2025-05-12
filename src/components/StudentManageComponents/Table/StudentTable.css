@@ -147,64 +147,6 @@
   font-weight: 500;
 }
 
-.student-table-fields-tags {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 8px 10px;
-  max-width: 100%;
-  min-width: 0;
-  margin: 0;
-  padding: 0;
-}
-
-.student-table-field-tag {
-  background: #26a69a;
-  color: #fff;
-  border-radius: 16px;
-  padding: 4px 14px;
-  font-size: 14px;
-  font-weight: 700;
-  white-space: pre-line;
-  word-break: break-word;
-  display: inline-block;
-  line-height: 1.4;
-  margin: 0;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
-  letter-spacing: 0.02em;
-}
-
-.student-mode-tag {
-  background: #1976d2;
-  color: #fff;
-  border-radius: 12px;
-  padding: 2px 10px;
-  font-size: 13px;
-  font-weight: 500;
-  margin-right: 6px;
-  margin-bottom: 2px;
-  display: inline-block;
-}
-
-.student-mode-tag + .student-mode-tag {
-  margin-left: 0.3em;
-}
-
-.student-mode-tag-on-site {
-  background: #e8f5e9;
-  color: #43a047;
-}
-
-.student-mode-tag-remote {
-  background: #fff3e0;
-  color: #fb8c00;
-}
-
-.student-mode-tag-hybrid {
-  background: #f3e5f5;
-  color: #8e24aa;
-}
-
 /* Make sure the header cell is not too narrow for the checkbox */
 .student-checkbox-cell {
   min-width: 48px;
@@ -214,7 +156,8 @@
 
 .student-table-container table td:nth-child(10) {
   /* Kebab column is 11th, so Location Preference is 10th */
-  padding-right: 8px;
+  padding-right: 10px;
+  padding-left: 50px;
 }
 
 .student-selected-row td:nth-child(10) {

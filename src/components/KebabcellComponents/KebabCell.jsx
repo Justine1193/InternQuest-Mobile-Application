@@ -20,6 +20,7 @@ function KebabCell({
   setFormData,
   setSkills,
   setIsModalOpen,
+  onEdit,
 }) {
   const kebabRef = useRef(null);
   const [isClicked, setIsClicked] = useState(false);
@@ -64,23 +65,9 @@ function KebabCell({
             <button
               className="edit-btn"
               onClick={() => {
-                setIsEditMode(true);
-                setEditCompanyId(row.id);
-                setFormData({
-                  companyName: row.companyName || "",
-                  description: row.companyDescription || "",
-                  website: row.companyWeb || "",
-                  field: row.field || "",
-                  address: row.companyAddress || "",
-                  email: row.companyEmail || "",
-                  skills: "",
-                  moa: row.moa === "Yes",
-                  modeOfWork: Array.isArray(row.modeOfWork)
-                    ? row.modeOfWork
-                    : [],
-                });
-                setSkills(Array.isArray(row.skillsREq) ? row.skillsREq : []);
-                setIsModalOpen(true);
+                if (typeof onEdit === "function") {
+                  onEdit(row);
+                }
                 setOpenMenuId(null);
                 setSelectedRowId(null);
               }}

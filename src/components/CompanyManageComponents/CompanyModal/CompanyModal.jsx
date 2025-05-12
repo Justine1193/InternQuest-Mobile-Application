@@ -24,6 +24,9 @@ function CompanyModal({
   isLoading,
   suggestionSkills,
   suggestionFields,
+  setTableData,
+  editCompanyId,
+  setIsLoading,
 }) {
   const [skillInput, setSkillInput] = useState("");
   const [fieldInput, setFieldInput] = useState("");
@@ -88,8 +91,57 @@ function CompanyModal({
   };
   const handleValidatedUpdate = () => {
     if (validateForm()) {
-      handleUpdateEntry();
+      handleUpdateEntry(
+        formData,
+        fields,
+        skills,
+        setIsLoading,
+        setTableData,
+        setIsModalOpen,
+        setIsEditMode,
+        setEditCompanyId,
+        setFormData,
+        setSkills,
+        setFields,
+        setError,
+        editCompanyId
+      );
     }
+  };
+
+  // New minimal update handler
+  const handleUpdate = () => {
+    console.log("Update clicked", { formData, fields, skills, editCompanyId });
+    if (
+      !formData.companyName ||
+      !formData.description ||
+      !formData.website ||
+      !formData.address ||
+      !formData.email ||
+      skills.length === 0 ||
+      fields.length === 0 ||
+      !formData.modeOfWork ||
+      formData.modeOfWork.length === 0
+    ) {
+      setLocalError("Please fill in all required fields.");
+      return;
+    }
+    setLocalError("");
+    handleUpdateEntry(
+      formData,
+      fields,
+      skills,
+      setIsLoading,
+      setTableData,
+      setIsModalOpen,
+      setIsEditMode,
+      setEditCompanyId,
+      setFormData,
+      setSkills,
+      setFields,
+      setError,
+      editCompanyId
+    );
   };
 
   // Website status check function
@@ -129,6 +181,21 @@ function CompanyModal({
     setEmailValid(emailRegex.test(formData.email));
   }, [formData.email]);
 
+  // Only clear the field input when entering edit mode
+  useEffect(() => {
+    if (isEditMode) {
+      setFieldInput("");
+    }
+  }, [isEditMode]);
+
+  // Prefill tag inputs on edit
+  useEffect(() => {
+    if (isEditMode) {
+      setSkillInput("");
+      setFieldInput("");
+    }
+  }, [isEditMode]);
+
   if (!open) return null;
   return (
     <div className="modal">
@@ -140,7 +207,7 @@ function CompanyModal({
             <IoCloseOutline
               className="error-icon"
               onClick={() => {
-                setError(null);
+                setError && setError("");
                 setLocalError("");
               }}
             />
@@ -222,14 +289,15 @@ function CompanyModal({
                         !fields.includes(fieldInput.trim())
                       ) {
                         setFields([...fields, fieldInput.trim()]);
-                        setFieldInput("");
                       }
+                      setFieldInput("");
                     }
                   }}
                   onFocus={() => setShowFieldDropdown(true)}
                   onBlur={() =>
                     setTimeout(() => setShowFieldDropdown(false), 150)
                   }
+                  disabled={fields.length >= 5}
                 />
                 {showFieldDropdown && fieldInput && (
                   <div className="skills-dropdown">
@@ -239,7 +307,7 @@ function CompanyModal({
                           key={field + index}
                           className="skills-dropdown-item"
                           onClick={() => {
-                            if (fields.length < 15 && !fields.includes(field)) {
+                            if (fields.length < 5 && !fields.includes(field)) {
                               setFields([...fields, field]);
                             }
                             setFieldInput("");
@@ -415,13 +483,11 @@ function CompanyModal({
         <div className="modal-actions">
           {isEditMode ? (
             <button
-              key={localError ? shakeKey : undefined}
               type="button"
-              className={`modal-btn${localError ? " error" : ""}`}
-              onClick={handleValidatedUpdate}
+              className="modal-btn"
+              onClick={handleUpdate}
               disabled={isLoading}
             >
-              {isLoading ? <span className="spinner"></span> : null}
               {isLoading ? "Updating..." : "Update"}
             </button>
           ) : (

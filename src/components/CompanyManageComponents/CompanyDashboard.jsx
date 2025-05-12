@@ -91,8 +91,6 @@ const Dashboard = () => {
   const totalPages = Math.ceil(filteredData.length / itemsPerPage);
   const currentItems = filteredData.slice(indexOfFirstItem, indexOfLastItem);
 
-  console.log("Current Items:", currentItems);
-
   // Fetch data on mount
   useEffect(() => {
     async function fetchData() {
@@ -303,22 +301,7 @@ const Dashboard = () => {
               setError
             )
           }
-          handleUpdateEntry={() =>
-            dashboardHandlers.handleUpdateEntry(
-              formData,
-              fields,
-              skills,
-              setTableData,
-              setIsModalOpen,
-              setIsEditMode,
-              setEditCompanyId,
-              setFormData,
-              setSkills,
-              setFields,
-              setError,
-              editCompanyId
-            )
-          }
+          handleUpdateEntry={dashboardHandlers.handleUpdateEntry}
           setIsModalOpen={setIsModalOpen}
           setIsEditMode={setIsEditMode}
           setEditCompanyId={setEditCompanyId}
@@ -329,6 +312,9 @@ const Dashboard = () => {
           isLoading={isLoading}
           suggestionSkills={suggestionSkills}
           suggestionFields={suggestionFields}
+          setTableData={setTableData}
+          editCompanyId={editCompanyId}
+          setIsLoading={setIsLoading}
         />
       )}
       <ConfirmModal

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { IoEllipsisVertical } from "react-icons/io5";
 import KebabCell from "../../KebabcellComponents/KebabCell.jsx";
 import "./StudentTableRow.css";
@@ -24,6 +24,8 @@ const StudentTableRow = ({
   handleDeleteSingle,
   isDeleting,
 }) => {
+  const [showAllSkills, setShowAllSkills] = useState(false);
+
   return (
     <tr className={isSelected ? "student-selected-row" : ""}>
       {selectionMode && (
@@ -57,53 +59,87 @@ const StudentTableRow = ({
       <td>
         <div className="student-table-skills-tags">
           {Array.isArray(row.skills) &&
-            row.skills.map((skill, index) => {
-              let displayValue = "";
-              if (typeof skill === "object" && skill !== null) {
-                if (
-                  typeof skill.id === "string" ||
-                  typeof skill.id === "number"
+            (showAllSkills ? row.skills : row.skills.slice(0, 3)).map(
+              (skill, index) => {
+                let displayValue = "";
+                if (typeof skill === "object" && skill !== null) {
+                  if (
+                    typeof skill.id === "string" ||
+                    typeof skill.id === "number"
+                  ) {
+                    displayValue = String(skill.id);
+                  } else if (Object.keys(skill).length > 0) {
+                    displayValue = JSON.stringify(skill);
+                  } else {
+                    displayValue = "[object]";
+                  }
+                } else if (
+                  typeof skill === "string" ||
+                  typeof skill === "number"
                 ) {
-                  displayValue = skill.id;
+                  displayValue = String(skill);
                 } else {
-                  displayValue = JSON.stringify(skill);
+                  displayValue = String(skill);
                 }
-              } else if (
-                typeof skill === "string" ||
-                typeof skill === "number"
-              ) {
-                displayValue = skill;
-              } else {
-                displayValue = String(skill);
+                return (
+                  <span key={index} className="student-table-skill-tag">
+                    {displayValue}
+                  </span>
+                );
               }
-              return (
-                <span key={index} className="student-table-skill-tag">
-                  {displayValue}
-                </span>
-              );
-            })}
+            )}
+          {Array.isArray(row.skills) &&
+            row.skills.length > 3 &&
+            !showAllSkills && (
+              <span
+                className="student-table-skill-tag"
+                style={{ cursor: "pointer", background: "#555" }}
+                onClick={() => setShowAllSkills(true)}
+              >
+                +{row.skills.length - 3} more
+              </span>
+            )}
+          {Array.isArray(row.skills) &&
+            row.skills.length > 3 &&
+            showAllSkills && (
+              <span
+                className="student-table-skill-tag"
+                style={{ cursor: "pointer", background: "#aaa", color: "#222" }}
+                onClick={() => setShowAllSkills(false)}
+              >
+                Show less
+              </span>
+            )}
         </div>
       </td>
       <td>
-        <div className="student-mode-tags">
-          {(Array.isArray(row.locationPreference)
-            ? row.locationPreference
-            : typeof row.locationPreference === "object" &&
-              row.locationPreference !== null
-            ? Object.entries(row.locationPreference)
-                .filter(([_, value]) => value)
-                .map(([key]) => key.charAt(0).toUpperCase() + key.slice(1))
-            : []
-          ).map((mode, idx) => (
-            <span
-              key={mode + idx}
-              className={`student-mode-tag student-mode-tag-${mode
-                .replace(/\s+/g, "")
-                .toLowerCase()}`}
-            >
-              {mode}
-            </span>
-          ))}
+        <div className="student-table-mode-tags">
+          {
+            // Convert object to array if needed
+            (Array.isArray(row.locationPreference)
+              ? row.locationPreference
+              : typeof row.locationPreference === "object" &&
+                row.locationPreference !== null
+              ? Object.entries(row.locationPreference)
+                  .filter(
+                    ([key, value]) =>
+                      ["onsite", "remote", "hybrid"].includes(
+                        key.toLowerCase()
+                      ) && value
+                  )
+                  .map(([key]) => key.charAt(0).toUpperCase() + key.slice(1))
+              : []
+            ).map((mode, idx) => (
+              <span
+                key={mode + idx}
+                className={`student-table-mode-tag-${mode
+                  .replace(/\s+/g, "")
+                  .toLowerCase()}`}
+              >
+                {mode}
+              </span>
+            ))
+          }
         </div>
       </td>
       <td className="student-kebab-cell">

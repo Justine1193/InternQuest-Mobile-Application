@@ -118,7 +118,6 @@
 
 /* Modern MOA tag */
 .mode-tag {
-  background: #1976d2;
   color: #fff;
   border-radius: 12px;
   padding: 2px 10px;
@@ -129,21 +128,33 @@
   display: inline-block;
 }
 
-.mode-tag + .mode-tag {
+.company-mode-tag {
   margin-left: 0.3em;
 }
 
-.mode-tag-on-site {
+.company-table-mode-tag-onsite {
   background: #e8f5e9;
   color: #43a047;
+  border-radius: 12px;
+  padding: 2px 10px;
+  font-size: 13px;
+  font-weight: 500;
 }
 
-.mode-tag-remote {
+.company-table-mode-tag-remote {
   background: #fff3e0;
   color: #fb8c00;
+  border-radius: 12px;
+  padding: 2px 10px;
+  font-size: 13px;
+  font-weight: 500;
 }
 
-.mode-tag-hybrid {
+.company-table-mode-tag-hybrid {
   background: #f3e5f5;
   color: #8e24aa;
+  border-radius: 12px;
+  padding: 2px 10px;
+  font-size: 13px;
+  font-weight: 500;
 }

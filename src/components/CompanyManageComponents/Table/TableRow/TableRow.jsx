@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { IoEllipsisVertical } from "react-icons/io5";
 import KebabCell from "../../../KebabcellComponents/KebabCell.jsx";
 import "./TableRow.css";
@@ -24,6 +24,12 @@ const TableRow = ({
   handleDeleteSingle,
   isDeleting,
 }) => {
+  const [showAllSkills, setShowAllSkills] = useState(false);
+  const skillsToShow = showAllSkills
+    ? row.skillsREq
+    : Array.isArray(row.skillsREq)
+    ? row.skillsREq.slice(0, 3)
+    : [];
   return (
     <tr className={isSelected ? "selected-row" : ""}>
       {selectionMode && (
@@ -94,12 +100,34 @@ const TableRow = ({
       </td>
       <td>
         <div className="table-skills-tags">
-          {Array.isArray(row.skillsREq) &&
-            row.skillsREq.map((skill, index) => (
+          {Array.isArray(skillsToShow) &&
+            skillsToShow.map((skill, index) => (
               <span key={skill + index} className="table-skill-tag">
                 {skill}
               </span>
             ))}
+          {Array.isArray(row.skillsREq) &&
+            row.skillsREq.length > 3 &&
+            !showAllSkills && (
+              <span
+                className="table-skill-tag"
+                style={{ cursor: "pointer", background: "#555" }}
+                onClick={() => setShowAllSkills(true)}
+              >
+                +{row.skillsREq.length - 3} more
+              </span>
+            )}
+          {Array.isArray(row.skillsREq) &&
+            row.skillsREq.length > 3 &&
+            showAllSkills && (
+              <span
+                className="table-skill-tag"
+                style={{ cursor: "pointer", background: "#aaa", color: "#222" }}
+                onClick={() => setShowAllSkills(false)}
+              >
+                Show less
+              </span>
+            )}
         </div>
       </td>
       <td>
@@ -108,7 +136,7 @@ const TableRow = ({
             ? row.modeOfWork.map((mode, idx) => (
                 <span
                   key={mode + idx}
-                  className={`mode-tag mode-tag-${mode
+                  className={`company-table-mode-tag-${mode
                     .replace(/\s+/g, "")
                     .toLowerCase()}`}
                 >
@@ -142,6 +170,7 @@ const TableRow = ({
           setSelectedItems={setSelectedItems}
           handleDeleteSingle={handleDeleteSingle}
           isDeleting={isDeleting}
+          onEdit={onEdit}
         />
       </td>
     </tr>

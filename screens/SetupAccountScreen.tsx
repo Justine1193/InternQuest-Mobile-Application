@@ -58,11 +58,7 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
   const [availableSkills, setAvailableSkills] = useState<string[]>([]);
 
   // --- State: Preferences ---
-  const [locationPreference, setLocationPreference] = useState({
-    remote: false,
-    onsite: false,
-    hybrid: false,
-  });
+  const [locationPreference, setLocationPreference] = useState('');
 
   // --- State: Dropdowns & Search ---
   const [skillSearch, setSkillSearch] = useState('');
@@ -194,8 +190,8 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
   }, []);
 
   // --- Checkbox toggle ---
-  const toggleCheckbox = (type: 'remote' | 'onsite' | 'hybrid') => {
-    setLocationPreference((prev) => ({ ...prev, [type]: !prev[type] }));
+  const selectLocationPreference = (type: 'remote' | 'onsite' | 'hybrid') => {
+    setLocationPreference(type);
   };
 
   // --- Finish Setup: Save to Firestore and mark profile complete ---
@@ -234,12 +230,7 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
         field: field,
 
         // Preferences
-        locationPreference: {
-          remote: locationPreference.remote,
-          onsite: locationPreference.onsite,
-          hybrid: locationPreference.hybrid,
-          lastUpdated: serverTimestamp(),
-        },
+        locationPreference: locationPreference,
 
         // Skills
         skills: skills,
@@ -317,7 +308,7 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
     if (!program) errors.push('Program is required');
     if (!field) errors.push('Field is required');
     if (skills.length === 0) errors.push('At least one skill is required');
-    if (!locationPreference.remote && !locationPreference.onsite && !locationPreference.hybrid) errors.push('At least one location preference is required');
+    if (!locationPreference) errors.push('Location preference is required');
     if (errors.length > 0) {
       Alert.alert('Validation Error', errors.join('\n'), [{ text: 'OK' }]);
       return false;
@@ -575,13 +566,12 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
               <TouchableOpacity
                 key={type}
                 style={styles.checkboxRow}
-                onPress={() => toggleCheckbox(type as keyof typeof locationPreference)}
+                onPress={() => selectLocationPreference(type as 'remote' | 'onsite' | 'hybrid')}
               >
                 <View
                   style={[
                     styles.checkbox,
-                    locationPreference[type as keyof typeof locationPreference] &&
-                    styles.checkedBox,
+                    locationPreference === type && styles.checkedBox,
                   ]}
                 />
                 <Text style={styles.checkboxLabel}>

@@ -318,29 +318,34 @@ const InternshipDetailsScreen: React.FC<Props> = ({ route }) => {
         {/* Company Overview */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Company Overview</Text>
-
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Website:</Text>
-            <TouchableOpacity onPress={openWebsite}>
-              <Text style={styles.link}>{post.website || 'N/A'}</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Field:</Text>
-            <Text style={styles.detailText}>{post.industry || 'N/A'}</Text>
-          </View>
-
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Location:</Text>
-            <Text style={styles.detailText}>{post.location || 'N/A'}</Text>
-          </View>
-
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Email:</Text>
-            <TouchableOpacity onPress={openEmail}>
-              <Text style={styles.link}>{post.email || 'N/A'}</Text>
-            </TouchableOpacity>
+          <View style={styles.infoTable}>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Website:</Text>
+              <TouchableOpacity onPress={openWebsite} style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Text style={styles.link}>{post.website || 'N/A'}</Text>
+                {post.website && (
+                  <Icon name="open-in-new" size={16} color="#007bff" style={{ marginLeft: 4 }} />
+                )}
+              </TouchableOpacity>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Field:</Text>
+              <Text style={styles.detailText}>
+                {Array.isArray(post.industry)
+                  ? post.industry.join(', ')
+                  : post.industry || 'N/A'}
+              </Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Location:</Text>
+              <Text style={styles.detailText}>{post.location || 'N/A'}</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Email:</Text>
+              <TouchableOpacity onPress={openEmail}>
+                <Text style={styles.link}>{post.email || 'N/A'}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
 
@@ -514,8 +519,33 @@ const styles = StyleSheet.create({
   },
   cardTitle: { fontSize: 16, fontWeight: 'bold', marginBottom: 8 },
   cardContent: { fontSize: 14, color: '#444' },
-  detailText: { fontSize: 14, color: '#444', marginBottom: 4 },
-  link: { color: '#007bff', textDecorationLine: 'underline', marginBottom: 4 },
+  infoTable: {
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  infoLabel: {
+    fontWeight: 'bold',
+    color: '#333',
+    fontSize: 14,
+    minWidth: 80,
+    marginRight: 8,
+  },
+  detailText: {
+    fontSize: 14,
+    color: '#444',
+    flex: 1,
+    flexWrap: 'wrap',
+  },
+  link: {
+    color: '#007bff',
+    textDecorationLine: 'underline',
+    fontSize: 14,
+  },
   tagRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',
@@ -585,20 +615,6 @@ const styles = StyleSheet.create({
   savedText: {
     color: '#fff',
   },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 6,
-    flexWrap: 'wrap',
-  },
-  infoLabel: {
-    fontWeight: 'bold',
-    color: '#333',
-    fontSize: 14,
-    marginRight: 8,
-    maxWidth: 100,
-  },
-
   skillsContainer: {
     marginTop: 8,
     flexDirection: 'row',
@@ -607,14 +623,14 @@ const styles = StyleSheet.create({
   },
   skillPill: {
     backgroundColor: '#e0f2f1',
-    borderRadius: 16,
-    marginRight: 8,
-    marginBottom: 8,
-    paddingHorizontal: 12,
+    borderRadius: 10,
+    marginRight: 2,
+    marginBottom: 2,
+    paddingHorizontal: 6,
     paddingVertical: 6,
   },
   skillPillText: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#00796b',
     fontWeight: 'bold',
     paddingHorizontal: 10,

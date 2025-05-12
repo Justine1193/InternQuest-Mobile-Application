@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,8 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../App';
 import BottomNavbar from '../components/BottomNav';
 import { Swipeable } from 'react-native-gesture-handler';
+import { auth, firestore } from '../firebase/config';
+import { doc, getDoc } from 'firebase/firestore';
 
 type Props = {
   navigation: StackNavigationProp<RootStackParamList, 'Notifications'>;
@@ -67,6 +69,25 @@ const NotificationsScreen: React.FC<Props> = ({ navigation }) => {
   const [notifications, setNotifications] = useState(initialNotifications);
   const [selectedNotification, setSelectedNotification] = useState<NotificationItem | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
+  const [userName, setUserName] = useState('');
+
+  useEffect(() => {
+    const fetchUserName = async () => {
+      if (!auth.currentUser) return;
+      try {
+        const userDoc = await getDoc(doc(firestore, 'users', auth.currentUser.uid));
+        if (userDoc.exists()) {
+          const data = userDoc.data();
+          setUserName(data.firstName && data.lastName
+            ? `${data.firstName} ${data.lastName}`
+            : data.name || '');
+        }
+      } catch (error) {
+        console.error('Failed to fetch user name:', error);
+      }
+    };
+    fetchUserName();
+  }, []);
 
   const handleDelete = (id: string) => {
     setNotifications((prev) => prev.filter((item) => item.id !== id));
@@ -122,7 +143,7 @@ const NotificationsScreen: React.FC<Props> = ({ navigation }) => {
             source={{ uri: 'https://via.placeholder.com/40' }}
             style={styles.profileImage}
           />
-          <Text style={styles.profileName}>{'Jordan Mendez'}</Text>
+          <Text style={styles.profileName}>{userName || 'User'}</Text>
           <TouchableOpacity>
             <Icon name="magnify" size={24} color="#007aff" />
           </TouchableOpacity>
@@ -177,6 +198,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f9f9f9',
     padding: 16,
+    paddingTop: 30,
   },
   header: {
     flexDirection: 'row',

@@ -47,7 +47,7 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
           description: data.companyDescription || '',
           category: data.category || '',
           location: data.companyAddress || '',
-          industry: data.industry || '',
+          industry: data.fields || '',
           tags: data.skillsREq || [],
           website: data.companyWeb || '',
           email: data.companyEmail || '',
@@ -157,13 +157,13 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
             {Array.from(new Set(companies.flatMap(post => post.tags))).map((tag, idx) => (
               <TouchableOpacity
                 key={idx}
-                style={[styles.filterPill, selectedTags.includes(tag) && styles.activeFilter]}
+                style={[styles.tag, selectedTags.includes(tag) && styles.activeFilter]}
                 onPress={() => handleTagToggle(tag)}
               >
                 <Text style={[styles.filterPillText, selectedTags.includes(tag) && styles.activeFilterText]}>
                   {tag}
                 </Text>
-                {selectedTags.includes(tag) && <Ionicons name="checkmark" size={16} color="#fff" />}
+                {selectedTags.includes(tag) && <Ionicons name="checkmark" size={12} color="#fff" style={{ marginLeft: 2 }} />}
               </TouchableOpacity>
             ))}
           </View>
@@ -185,7 +185,7 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
                 />
               </TouchableOpacity>
             </View>
-            <Text style={styles.metaText}>Industry: {post.industry}</Text>
+            <Text style={styles.metaText}>Fields: {post.industry}</Text>
             <Text style={styles.metaText}>Location: {post.location}</Text>
 
             <View style={styles.descriptionContainer}>
@@ -261,7 +261,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 16,
     padding: 16,
-    marginBottom: 16,
+    marginTop: 3,
+    marginBottom: 28,
     shadowColor: '#000',
     shadowOpacity: 0.05,
     shadowRadius: 8,
@@ -299,28 +300,40 @@ const styles = StyleSheet.create({
   tagContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginTop: 10,
+    marginTop: 5,
     gap: 6,
   },
   tag: {
     backgroundColor: '#e0f2f1',
     color: '#00796b',
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: 12,
-    fontSize: 12,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: 10,
+    fontSize: 11,
+    marginRight: 3,
+    marginBottom: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   timeStamp: {
     fontSize: 11,
     color: '#888',
-    marginTop: 10,
+    marginTop: 5,
   },
   tagDropdown: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
-    marginTop: 8,
-    gap: 8,
+    padding: 8,
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
+    marginTop: 0,
+    marginBottom: 0,
+    borderWidth: 1,
+    borderColor: '#eee',
+    borderTopWidth: 0,
   },
   ojtTrackerButton: {
     position: 'absolute',

@@ -1,3 +1,6 @@
+/* Company TableRow Component Styles */
+
+/* Description Cell and Tooltip */
 .description-cell {
   max-width: 300px;
   position: relative;
@@ -31,6 +34,7 @@
   color: #333;
 }
 
+/* Skills and Fields Tags */
 .table-skills-tags {
   display: flex;
   flex-wrap: wrap;
@@ -116,7 +120,7 @@
   box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.12);
 }
 
-/* Modern MOA tag */
+/* Mode Tags */
 .mode-tag {
   color: #fff;
   border-radius: 12px;

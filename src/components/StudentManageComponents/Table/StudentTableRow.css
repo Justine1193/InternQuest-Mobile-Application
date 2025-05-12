@@ -1,3 +1,6 @@
+/* StudentTableRow Component Styles */
+
+/* Mode Tag Styles */
 .student-mode-tag + .student-mode-tag {
   margin-left: 0.5em;
 }
@@ -28,6 +31,7 @@
   font-weight: 500;
 }
 
+/* Mode Tag Container */
 .student-table-mode-tags {
   display: flex;
   align-items: center;

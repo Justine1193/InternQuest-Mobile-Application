@@ -1,3 +1,6 @@
+/* SearchBar Component Styles */
+
+/* Container Styles */
 .new-searchbar-wrapper {
   display: flex;
   justify-content: center;
@@ -5,6 +8,7 @@
   margin-bottom: 2rem;
 }
 
+/* Search Form Styles */
 .new-searchbar {
   display: flex;
   align-items: center;
@@ -17,7 +21,7 @@
   min-width: 340px;
   max-width: 780px;
   width: 100%;
-  transition: box-shadow 0.2s, border 0.2s;
+  transition: all 0.2s ease;
 }
 
 .new-searchbar:focus-within {
@@ -26,6 +30,7 @@
   border: 1.5px solid #1976d2;
 }
 
+/* Input Styles */
 .new-searchbar-input {
   border: none;
   outline: none;
@@ -34,6 +39,7 @@
   padding: 0.7rem 0.5rem;
   flex: 1;
   color: #222;
+  width: 100%;
 }
 
 .new-searchbar-input::placeholder {
@@ -42,6 +48,7 @@
   letter-spacing: 0.01em;
 }
 
+/* Button Styles */
 .new-searchbar-btn {
   background: none;
   border: none;
@@ -52,14 +59,45 @@
   align-items: center;
   color: #1976d2;
   font-size: 1.2rem;
-  transition: color 0.2s;
+  transition: all 0.2s ease;
 }
 
 .new-searchbar-btn:hover {
   color: #1565c0;
+  transform: scale(1.05);
 }
 
+.new-searchbar-btn:active {
+  transform: scale(0.95);
+}
+
+/* Filter Dropdown Container */
 .filter-dropdown-container {
   display: flex;
   align-items: center;
+  position: relative;
+}
+
+/* Focus and Hover States */
+.new-searchbar-input:focus {
+  outline: none;
+}
+
+.new-searchbar-btn:focus-visible {
+  outline: 2px solid #1976d2;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Responsive Adjustments */
+@media (max-width: 480px) {
+  .new-searchbar {
+    min-width: 280px;
+    padding: 0.25rem 0.75rem 0.25rem 0.5rem;
+  }
+
+  .new-searchbar-input {
+    font-size: 1rem;
+    padding: 0.5rem 0.3rem;
+  }
 }

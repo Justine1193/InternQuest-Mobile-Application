@@ -1,13 +1,26 @@
-import React, { useState } from 'react';
-import './DashboardOverview.css';
+/**
+ * DashboardOverview - Displays dashboard statistics and a notification sender
+ *
+ * @component
+ * @param {object} stats - Dashboard statistics (totalCompanies, totalStudents)
+ * @param {function} onSendNotification - Handler for sending notifications
+ * @example
+ * <DashboardOverview stats={{ totalCompanies: 10, totalStudents: 50 }} onSendNotification={handleSend} />
+ */
+
+import React, { useState } from "react";
+import PropTypes from "prop-types";
+import "./DashboardOverview.css";
 
 const DashboardOverview = ({ stats, onSendNotification }) => {
-  const [notificationText, setNotificationText] = useState('');
+  // State for notification input
+  const [notificationText, setNotificationText] = useState("");
 
+  // Handles sending a notification
   const handleSendNotification = () => {
     if (notificationText.trim()) {
       onSendNotification(notificationText);
-      setNotificationText('');
+      setNotificationText("");
     }
   };
 
@@ -29,14 +42,14 @@ const DashboardOverview = ({ stats, onSendNotification }) => {
           <h3>Notifications</h3>
           <p>Quick Notifications</p>
           <div className="notification-content">
-            <input 
-              type="text" 
-              placeholder="Send alerts..." 
+            <input
+              type="text"
+              placeholder="Send alerts..."
               value={notificationText}
               onChange={(e) => setNotificationText(e.target.value)}
               className="notification-input"
             />
-            <button 
+            <button
               className="send-notification-btn"
               onClick={handleSendNotification}
             >
@@ -49,4 +62,14 @@ const DashboardOverview = ({ stats, onSendNotification }) => {
   );
 };
 
-export default DashboardOverview; 
+DashboardOverview.propTypes = {
+  /** Dashboard statistics */
+  stats: PropTypes.shape({
+    totalCompanies: PropTypes.number.isRequired,
+    totalStudents: PropTypes.number.isRequired,
+  }).isRequired,
+  /** Handler for sending notifications */
+  onSendNotification: PropTypes.func.isRequired,
+};
+
+export default DashboardOverview;

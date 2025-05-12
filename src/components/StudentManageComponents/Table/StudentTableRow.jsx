@@ -1,8 +1,37 @@
+/**
+ * StudentTableRow - Renders a single row in the student table, including skills, location, and kebab menu
+ *
+ * @component
+ * @param {object} row - The student data for this row
+ * @param {function} onEdit - Handler for editing this student
+ * @param {function} onDelete - Handler for deleting this student
+ * @param {boolean} isSelected - Whether this row is selected
+ * @param {function} onSelect - Handler for selecting this row
+ * @param {boolean} selectionMode - Whether selection mode is active
+ * @param {any} openMenuId - ID of the open kebab menu
+ * @param {function} setOpenMenuId - Setter for openMenuId
+ * @param {any} selectedRowId - ID of the selected row
+ * @param {function} setSelectedRowId - Setter for selectedRowId
+ * @param {function} setIsEditMode - Setter for edit mode
+ * @param {function} setEditStudentId - Setter for edit student ID
+ * @param {function} setFormData - Setter for form data
+ * @param {function} setSkills - Setter for skills
+ * @param {function} setIsModalOpen - Setter for modal open state
+ * @param {function} setSelectionMode - Setter for selection mode
+ * @param {function} setSelectedItems - Setter for selected items
+ * @param {function} handleDeleteSingle - Handler for deleting a single student
+ * @param {boolean} isDeleting - Whether a delete operation is in progress
+ * @example
+ * <StudentTableRow row={row} ...props />
+ */
+
 import React, { useState } from "react";
+import PropTypes from "prop-types";
 import { IoEllipsisVertical } from "react-icons/io5";
 import KebabCell from "../../KebabcellComponents/KebabCell.jsx";
 import "./StudentTableRow.css";
 
+// Renders a single student table row, including skills, location, and kebab menu
 const StudentTableRow = ({
   row,
   onEdit,
@@ -24,6 +53,7 @@ const StudentTableRow = ({
   handleDeleteSingle,
   isDeleting,
 }) => {
+  // State for toggling skill tag expansion
   const [showAllSkills, setShowAllSkills] = useState(false);
 
   return (
@@ -58,6 +88,7 @@ const StudentTableRow = ({
       <td>{row.status === "hired" ? "Yes" : "No"}</td>
       <td>
         <div className="student-table-skills-tags">
+          {/* Render up to 3 skills, with show more/less toggle */}
           {Array.isArray(row.skills) &&
             (showAllSkills ? row.skills : row.skills.slice(0, 3)).map(
               (skill, index) => {
@@ -88,6 +119,7 @@ const StudentTableRow = ({
                 );
               }
             )}
+          {/* Show more/less toggle for skills */}
           {Array.isArray(row.skills) &&
             row.skills.length > 3 &&
             !showAllSkills && (
@@ -114,6 +146,7 @@ const StudentTableRow = ({
       </td>
       <td>
         <div className="student-table-mode-tags">
+          {/* Render location preference tags */}
           {
             // Convert object to array if needed
             (Array.isArray(row.locationPreference)
@@ -162,6 +195,28 @@ const StudentTableRow = ({
       </td>
     </tr>
   );
+};
+
+StudentTableRow.propTypes = {
+  row: PropTypes.object.isRequired,
+  onEdit: PropTypes.func,
+  onDelete: PropTypes.func,
+  isSelected: PropTypes.bool,
+  onSelect: PropTypes.func,
+  selectionMode: PropTypes.bool,
+  openMenuId: PropTypes.any,
+  setOpenMenuId: PropTypes.func,
+  selectedRowId: PropTypes.any,
+  setSelectedRowId: PropTypes.func,
+  setIsEditMode: PropTypes.func,
+  setEditStudentId: PropTypes.func,
+  setFormData: PropTypes.func,
+  setSkills: PropTypes.func,
+  setIsModalOpen: PropTypes.func,
+  setSelectionMode: PropTypes.func,
+  setSelectedItems: PropTypes.func,
+  handleDeleteSingle: PropTypes.func,
+  isDeleting: PropTypes.bool,
 };
 
 export default StudentTableRow;

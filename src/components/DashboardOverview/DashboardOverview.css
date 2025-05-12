@@ -1,3 +1,6 @@
+/* DashboardOverview Component Styles */
+
+/* Section Container */
 .overview-section {
   background-color: #3498db;
   padding: 2rem;
@@ -17,6 +20,7 @@
   font-family: "Arial", sans-serif;
 }
 
+/* Cards Grid */
 .overview-cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -25,6 +29,7 @@
   width: 100%;
 }
 
+/* Card Styles */
 .card {
   background: white;
   padding: 1.5rem;
@@ -52,6 +57,7 @@
   font-weight: 600;
 }
 
+/* Notification Card */
 .notification-card {
   display: flex;
   flex-direction: column;
@@ -72,6 +78,7 @@
   display: none; /* Chrome, Safari and Opera */
 }
 
+/* Notification Input */
 .notification-input {
   padding: 0.8rem 1rem;
   border: 1px solid #e0e0e0;
@@ -96,6 +103,7 @@
   font-weight: 400;
 }
 
+/* Send Notification Button */
 .send-notification-btn {
   background-color: #1976d2;
   color: white;

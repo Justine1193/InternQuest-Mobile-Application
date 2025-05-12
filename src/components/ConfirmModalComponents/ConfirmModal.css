@@ -1,9 +1,15 @@
 /* src/components/ConfirmModal.css */
 
+/* ConfirmModal Component Styles */
+
+/* Backdrop Styles */
 .confirm-modal-backdrop {
   position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0,0,0,0.3);
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.3);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -11,29 +17,33 @@
   animation: fadeInBackdrop 0.25s;
 }
 
+/* Modal Container */
 .confirm-modal {
   background: #fff;
   border-radius: 12px;
   padding: 32px 24px 24px 24px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
   min-width: 320px;
   max-width: 90vw;
   text-align: center;
   animation: scaleFadeIn 0.25s;
 }
 
+/* Message Styles */
 .confirm-modal-message {
   font-size: 1.1rem;
   margin-bottom: 24px;
   color: #222;
 }
 
+/* Actions Row */
 .confirm-modal-actions {
   display: flex;
   justify-content: center;
   gap: 16px;
 }
 
+/* Confirm Button */
 .confirm-btn {
   background: #d32f2f;
   color: #fff;
@@ -42,13 +52,16 @@
   padding: 8px 24px;
   font-size: 1rem;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background 0.2s, box-shadow 0.18s;
+  outline: none;
 }
-
-.confirm-btn:hover {
+.confirm-btn:hover,
+.confirm-btn:focus-visible {
   background: #b71c1c;
+  box-shadow: 0 2px 8px rgba(211, 47, 47, 0.13);
 }
 
+/* Cancel Button */
 .cancel-btn {
   background: #f5f5f5;
   color: #333;
@@ -57,13 +70,16 @@
   padding: 8px 24px;
   font-size: 1rem;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background 0.2s, box-shadow 0.18s;
+  outline: none;
 }
-
-.cancel-btn:hover {
+.cancel-btn:hover,
+.cancel-btn:focus-visible {
   background: #e0e0e0;
+  box-shadow: 0 2px 8px rgba(33, 33, 33, 0.08);
 }
 
+/* Animations */
 @keyframes scaleFadeIn {
   from {
     opacity: 0;

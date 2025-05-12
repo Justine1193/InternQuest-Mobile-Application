@@ -1,3 +1,12 @@
+/**
+ * StudentDashboard - Admin dashboard for managing students
+ * Fetches and displays student/company data, supports search, filter, selection, notification, and deletion.
+ *
+ * @component
+ * @example
+ * <StudentDashboard />
+ */
+
 import React, { useState, useEffect } from "react";
 import { IoSettingsOutline } from "react-icons/io5";
 import { db } from "../../../firebase.js";
@@ -14,11 +23,13 @@ import { auth } from "../../../firebase.js";
 import SearchBar from "../SearchBar/SearchBar.jsx";
 import StudentTable from "./Table/StudentTable.jsx";
 import ConfirmModal from "../ConfirmModalComponents/ConfirmModal.jsx";
+import LoadingSpinner from "../LoadingSpinner.jsx";
 import "./StudentDashboard.css";
 import Footer from "../Footer/Footer.jsx";
 
 // --- Student Dashboard Main Component ---
 const StudentDashboard = () => {
+  // Set document title on mount
   useEffect(() => {
     document.title = "Student Dashboard | InternQuest Admin";
   }, []);
@@ -63,7 +74,7 @@ const StudentDashboard = () => {
     locationPreference: "",
   });
 
-  // --- Fetch Data ---
+  // Fetch companies and students from Firestore on mount
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -93,13 +104,14 @@ const StudentDashboard = () => {
     fetchData();
   }, []);
 
+  // Exit selection mode if no items are selected
   useEffect(() => {
     if (selectionMode && selectedItems.length === 0) {
       setSelectionMode(false);
     }
   }, [selectedItems, selectionMode]);
 
-  // --- Notification ---
+  // Handles sending a notification to Firestore
   const handleSendNotification = async () => {
     if (!notificationText.trim()) return;
     try {
@@ -114,7 +126,7 @@ const StudentDashboard = () => {
     }
   };
 
-  // --- Filtering ---
+  // --- Filtering logic for students table ---
   const filteredData = students.filter((student) => {
     const matchesSearch =
       (typeof student.firstName === "string" &&
@@ -169,7 +181,7 @@ const StudentDashboard = () => {
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentItems = filteredData.slice(indexOfFirstItem, indexOfLastItem);
 
-  // --- Handlers ---
+  // Handles logout for admin
   const handleLogout = async () => {
     try {
       await signOut(auth);
@@ -178,6 +190,8 @@ const StudentDashboard = () => {
       alert("Logout failed!");
     }
   };
+
+  // Handles deleting a single student
   const handleDeleteSingle = async (id) => {
     try {
       setIsDeleting(true);
@@ -191,7 +205,11 @@ const StudentDashboard = () => {
       setIsDeleting(false);
     }
   };
+
+  // Shows the confirm modal for bulk delete
   const handleDelete = async () => setShowConfirm(true);
+
+  // Confirms and deletes selected students
   const confirmDelete = async () => {
     setShowConfirm(false);
     try {
@@ -209,7 +227,11 @@ const StudentDashboard = () => {
       setIsDeleting(false);
     }
   };
+
+  // Cancels the delete confirmation modal
   const cancelDelete = () => setShowConfirm(false);
+
+  // Handles selection of a student row
   const handleSelectItem = (id) => {
     setSelectedItems((prev) =>
       prev.includes(id) ? prev.filter((itemId) => itemId !== id) : [...prev, id]
@@ -219,6 +241,7 @@ const StudentDashboard = () => {
   // --- Render ---
   return (
     <div className="dashboard-container">
+      <LoadingSpinner isLoading={isLoading} message="Loading student data..." />
       <nav className="top-nav">
         <div className="nav-left">
           <div className="logo">
@@ -234,11 +257,14 @@ const StudentDashboard = () => {
           </div>
         </div>
         <div className="nav-right">
-          <IoSettingsOutline
+          <button
             className="settings-icon"
             onClick={() => setShowLogout((prev) => !prev)}
-            style={{ cursor: "pointer" }}
-          />
+            aria-label="Settings"
+            style={{ fontSize: "28px" }}
+          >
+            <IoSettingsOutline />
+          </button>
           {showLogout && (
             <div className="logout-dropdown">
               <button onClick={handleLogout} className="logout-btn">

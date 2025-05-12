@@ -1,4 +1,14 @@
+/**
+ * AdminLogin - Login page for admin users
+ * Handles authentication against Firestore adminusers collection
+ *
+ * @component
+ * @example
+ * <AdminLogin />
+ */
+
 import React, { useState, useEffect } from "react";
+import PropTypes from "prop-types";
 import { useNavigate } from "react-router-dom";
 import "./AdminLogin.css";
 import { FaRegEye, FaRegEyeSlash } from "react-icons/fa";
@@ -6,7 +16,7 @@ import { collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "../../../firebase";
 import InternQuestLogo from "../../assets/InternQuest_with_text_white.png";
 
-const Login = () => {
+const AdminLogin = () => {
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -16,10 +26,12 @@ const Login = () => {
   });
   const [error, setError] = useState("");
 
+  // Set the document title on mount
   useEffect(() => {
     document.title = "Login";
   }, []);
 
+  // Handles changes to input fields (username, password)
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prevState) => ({
@@ -28,38 +40,34 @@ const Login = () => {
     }));
   };
 
+  // Toggles the visibility of the password input
   const togglePasswordVisibility = () => {
-    setShowPassword(!showPassword);
+    setShowPassword((prev) => !prev);
   };
 
+  // Handles form submission and authentication logic
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.username || !formData.password) {
       setError("Please fill in all fields");
       return;
     }
-
     setIsLoading(true);
     setError("");
-
     try {
       // Query the admins collection for the username
       const adminsRef = collection(db, "adminusers");
       const q = query(adminsRef, where("username", "==", formData.username));
       const querySnapshot = await getDocs(q);
-
       if (querySnapshot.empty) {
         setError("Invalid username or password");
         return;
       }
-
       // Get the admin document
       const adminDoc = querySnapshot.docs[0];
       const adminData = adminDoc.data();
-
       // Check if password matches
       if (adminData.password === formData.password) {
-        // If credentials are correct, navigate to dashboard
         navigate("/dashboard");
       } else {
         setError("Invalid username or password");
@@ -85,11 +93,21 @@ const Login = () => {
         <div className="right-container">
           <div className="login-card">
             <h1>Admin Management System</h1>
-            <form className="login-form" onSubmit={handleSubmit}>
-              {error && <div className="error-message">{error}</div>}
+            <form
+              className="login-form"
+              onSubmit={handleSubmit}
+              autoComplete="off"
+              aria-label="Admin login form"
+            >
+              {error && (
+                <div className="error-message" role="alert">
+                  {error}
+                </div>
+              )}
               <div className="form-group">
-                <label>Username</label>
+                <label htmlFor="username-input">Username</label>
                 <input
+                  id="username-input"
                   type="text"
                   name="username"
                   placeholder="Enter Your Username"
@@ -97,12 +115,15 @@ const Login = () => {
                   value={formData.username}
                   onChange={handleChange}
                   disabled={isLoading}
+                  autoComplete="username"
+                  aria-required="true"
                 />
               </div>
               <div className="form-group">
-                <label>Password</label>
+                <label htmlFor="password-input">Password</label>
                 <div className="password-input-container">
                   <input
+                    id="password-input"
                     type={showPassword ? "text" : "password"}
                     name="password"
                     placeholder="Enter your password"
@@ -110,21 +131,29 @@ const Login = () => {
                     value={formData.password}
                     onChange={handleChange}
                     disabled={isLoading}
+                    autoComplete="current-password"
+                    aria-required="true"
                   />
-                  <span
+                  <button
+                    type="button"
                     className="password-toggle"
                     onClick={togglePasswordVisibility}
+                    tabIndex={0}
+                    aria-label={
+                      showPassword ? "Hide password" : "Show password"
+                    }
                   >
                     {showPassword ? <FaRegEyeSlash /> : <FaRegEye />}
-                  </span>
+                  </button>
                 </div>
               </div>
               <button
                 type="submit"
-                className={`sign-in-button ${isLoading ? "loading" : ""}`}
+                className={`sign-in-button${isLoading ? " loading" : ""}`}
                 disabled={isLoading}
+                aria-busy={isLoading}
               >
-                Sign in as Admin
+                {isLoading ? "Signing in..." : "Sign in as Admin"}
               </button>
             </form>
           </div>
@@ -134,4 +163,7 @@ const Login = () => {
   );
 };
 
-export default Login;
+// No props are required for this component, but PropTypes is included for consistency
+AdminLogin.propTypes = {};
+
+export default AdminLogin;

@@ -1,3 +1,6 @@
+/* StudentTable Component Styles */
+
+/* Table Container */
 .student-table-container {
   background: #fff;
   border-radius: 16px;
@@ -9,6 +12,7 @@
   border: 1px solid #e3f2fd;
 }
 
+/* Table Styles */
 .student-table-container table {
   width: 100%;
   border-collapse: separate;
@@ -37,6 +41,7 @@
   background: transparent;
 }
 
+/* Checkbox and Kebab Columns */
 .student-checkbox-cell,
 .student-kebab-cell {
   width: 40px;
@@ -74,14 +79,13 @@
   background-color: #e3f2fd !important;
 }
 
-/* Make the skills column wider */
+/* Column Widths and Truncation */
 .student-table-container table th:nth-child(8),
 .student-table-container table td:nth-child(8) {
   min-width: 200px;
   max-width: 300px;
 }
 
-/* Make the Location Preference column narrower */
 .student-table-container table th:nth-child(9),
 .student-table-container table td:nth-child(9) {
   min-width: 40px;
@@ -92,7 +96,6 @@
   padding-bottom: 8px;
 }
 
-/* Make the Hired column narrower */
 .student-table-container table th:nth-child(7),
 .student-table-container table td:nth-child(7) {
   min-width: 40px;
@@ -103,7 +106,6 @@
   padding-bottom: 8px;
 }
 
-/* Make the first name column a fixed width and truncate overflow */
 .student-table-container table th:nth-child(2),
 .student-table-container table td:nth-child(2) {
   max-width: 200px;
@@ -113,7 +115,7 @@
   text-overflow: ellipsis;
 }
 
-/* Add responsive scrollbars */
+/* Responsive Scrollbars */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -132,6 +134,7 @@
   background: #555;
 }
 
+/* Skills Tags */
 .student-table-skills-tags {
   display: flex;
   flex-wrap: wrap;
@@ -147,13 +150,14 @@
   font-weight: 500;
 }
 
-/* Make sure the header cell is not too narrow for the checkbox */
+/* Checkbox Header Cell */
 .student-checkbox-cell {
   min-width: 48px;
   width: 48px;
   text-align: center;
 }
 
+/* Kebab Column Padding */
 .student-table-container table td:nth-child(10) {
   /* Kebab column is 11th, so Location Preference is 10th */
   padding-right: 10px;

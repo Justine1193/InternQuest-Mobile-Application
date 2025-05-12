@@ -1,3 +1,12 @@
+/**
+ * CompanyDashboard - Admin dashboard for managing companies
+ * Fetches and displays company/student data, supports search, filter, selection, notification, and CRUD operations.
+ *
+ * @component
+ * @example
+ * <CompanyDashboard />
+ */
+
 import React, { useState, useRef, useEffect } from "react";
 import "./CompanyDashboard.css";
 import Navbar from "../Navbar/Navbar.jsx";
@@ -6,6 +15,7 @@ import SearchBar from "../SearchBar/SearchBar.jsx";
 import Table from "./Table/Table.jsx";
 import CompanyModal from "./CompanyModal/CompanyModal.jsx";
 import ConfirmModal from "../ConfirmModalComponents/ConfirmModal.jsx";
+import LoadingSpinner from "../LoadingSpinner.jsx";
 import {
   useSuggestionSkills,
   useSuggestionFields,
@@ -14,6 +24,7 @@ import {
 import { getDocs, collection } from "firebase/firestore";
 import Footer from "../Footer/Footer.jsx";
 
+// --- Company Dashboard Main Component ---
 const Dashboard = () => {
   // --- State declarations ---
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -54,7 +65,7 @@ const Dashboard = () => {
   const [selectedRowId, setSelectedRowId] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Suggestions
+  // Suggestions for skills and fields
   const suggestionSkills = useSuggestionSkills();
   const suggestionFields = useSuggestionFields();
 
@@ -62,7 +73,7 @@ const Dashboard = () => {
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
 
-  // Filtering
+  // --- Filtering logic for companies table ---
   const filteredData = Array.isArray(tableData)
     ? tableData.filter((row) => {
         const matchesSearch =
@@ -91,44 +102,55 @@ const Dashboard = () => {
   const totalPages = Math.ceil(filteredData.length / itemsPerPage);
   const currentItems = filteredData.slice(indexOfFirstItem, indexOfLastItem);
 
-  // Fetch data on mount
+  // Fetch companies and students from Firestore on mount
   useEffect(() => {
     async function fetchData() {
-      const companySnapshot = await import("../../../firebase.js").then(
-        ({ db }) => getDocs(collection(db, "companies"))
-      );
-      const companies = [];
-      companySnapshot.forEach((doc) => {
-        companies.push({ id: doc.id, ...doc.data() });
-      });
-      const studentSnapshot = await import("../../../firebase.js").then(
-        ({ db }) => getDocs(collection(db, "users"))
-      );
-      const students = [];
-      studentSnapshot.forEach((doc) => {
-        students.push({ id: doc.id, ...doc.data() });
-      });
-      setTableData(companies);
-      setOverviewStats({
-        totalCompanies: companies.length,
-        totalStudents: students.length,
-      });
+      try {
+        setIsLoading(true); // Set loading state to true before fetching
+        const { db } = await import("../../../firebase.js");
+        const companySnapshot = await getDocs(collection(db, "companies"));
+        const companies = [];
+        companySnapshot.forEach((doc) => {
+          companies.push({ id: doc.id, ...doc.data() });
+        });
+        const studentSnapshot = await getDocs(collection(db, "users"));
+        const students = [];
+        studentSnapshot.forEach((doc) => {
+          students.push({ id: doc.id, ...doc.data() });
+        });
+        setTableData(companies);
+        setOverviewStats({
+          totalCompanies: companies.length,
+          totalStudents: students.length,
+        });
+      } catch (error) {
+        setError("Failed to fetch data. Please try again.");
+      } finally {
+        setIsLoading(false); // Set loading state to false after fetching
+      }
     }
     fetchData();
   }, []);
 
+  // Exit selection mode if no items are selected
   useEffect(() => {
     if (selectionMode && selectedItems.length === 0) {
       setSelectionMode(false);
     }
   }, [selectedItems, selectionMode]);
 
+  // Set document title on mount
   useEffect(() => {
     document.title = "Dashboard | InternQuest Admin";
   }, []);
 
+  // --- Render ---
   return (
     <div className="dashboard-container">
+      <LoadingSpinner
+        isLoading={isLoading}
+        message="Loading dashboard data..."
+      />
       <Navbar onLogout={dashboardHandlers.handleLogout} />
       <div className="dashboard-content">
         <DashboardOverview

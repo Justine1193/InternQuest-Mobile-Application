@@ -6,6 +6,7 @@ import Navbar from "../Navbar/Navbar";
 import DashboardOverview from "../DashboardOverview/DashboardOverview";
 import SearchBar from "../SearchBar/SearchBar";
 import ConfirmModal from "../ConfirmModalComponents/ConfirmModal";
+import LoadingSpinner from "../LoadingSpinner";
 
 const BaseDashboard = ({
   title,
@@ -56,6 +57,10 @@ const BaseDashboard = ({
 
   return (
     <div className="dashboard-container">
+      <LoadingSpinner
+        isLoading={isLoading}
+        message={`Loading ${title.toLowerCase()}...`}
+      />
       <Navbar />
       <div className="dashboard-content">
         {OverviewComponent ? (

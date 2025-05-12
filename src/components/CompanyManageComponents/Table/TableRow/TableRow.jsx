@@ -1,8 +1,37 @@
+/**
+ * TableRow - Renders a single row in the company table, including fields, skills, mode, MOA, and kebab menu
+ *
+ * @component
+ * @param {object} row - The company data for this row
+ * @param {function} onEdit - Handler for editing this company
+ * @param {function} onDelete - Handler for deleting this company
+ * @param {boolean} isSelected - Whether this row is selected
+ * @param {function} onSelect - Handler for selecting this row
+ * @param {boolean} selectionMode - Whether selection mode is active
+ * @param {any} openMenuId - ID of the open kebab menu
+ * @param {function} setOpenMenuId - Setter for openMenuId
+ * @param {any} selectedRowId - ID of the selected row
+ * @param {function} setSelectedRowId - Setter for selectedRowId
+ * @param {function} setIsEditMode - Setter for edit mode
+ * @param {function} setEditCompanyId - Setter for edit company ID
+ * @param {function} setFormData - Setter for form data
+ * @param {function} setSkills - Setter for skills
+ * @param {function} setIsModalOpen - Setter for modal open state
+ * @param {function} setSelectionMode - Setter for selection mode
+ * @param {function} setSelectedItems - Setter for selected items
+ * @param {function} handleDeleteSingle - Handler for deleting a single company
+ * @param {boolean} isDeleting - Whether a delete operation is in progress
+ * @example
+ * <TableRow row={row} ...props />
+ */
+
 import React, { useState } from "react";
+import PropTypes from "prop-types";
 import { IoEllipsisVertical } from "react-icons/io5";
 import KebabCell from "../../../KebabcellComponents/KebabCell.jsx";
 import "./TableRow.css";
 
+// Renders a single company table row, including fields, skills, mode, MOA, and kebab menu
 const TableRow = ({
   row,
   onEdit,
@@ -24,7 +53,9 @@ const TableRow = ({
   handleDeleteSingle,
   isDeleting,
 }) => {
+  // State for toggling skill tag expansion
   const [showAllSkills, setShowAllSkills] = useState(false);
+  // Determine which skills to show (first 3 or all)
   const skillsToShow = showAllSkills
     ? row.skillsREq
     : Array.isArray(row.skillsREq)
@@ -175,6 +206,28 @@ const TableRow = ({
       </td>
     </tr>
   );
+};
+
+TableRow.propTypes = {
+  row: PropTypes.object.isRequired,
+  onEdit: PropTypes.func,
+  onDelete: PropTypes.func,
+  isSelected: PropTypes.bool,
+  onSelect: PropTypes.func,
+  selectionMode: PropTypes.bool,
+  openMenuId: PropTypes.any,
+  setOpenMenuId: PropTypes.func,
+  selectedRowId: PropTypes.any,
+  setSelectedRowId: PropTypes.func,
+  setIsEditMode: PropTypes.func,
+  setEditCompanyId: PropTypes.func,
+  setFormData: PropTypes.func,
+  setSkills: PropTypes.func,
+  setIsModalOpen: PropTypes.func,
+  setSelectionMode: PropTypes.func,
+  setSelectedItems: PropTypes.func,
+  handleDeleteSingle: PropTypes.func,
+  isDeleting: PropTypes.bool,
 };
 
 export default TableRow;

@@ -1,3 +1,6 @@
+/* Company Table Component Styles */
+
+/* Table Container */
 .table-container {
   background: #fff;
   border-radius: 16px;
@@ -9,6 +12,7 @@
   border: 1px solid #e3f2fd;
 }
 
+/* Table Styles */
 table {
   width: 100%;
   border-collapse: separate;
@@ -37,6 +41,7 @@ table td {
   background: transparent;
 }
 
+/* Checkbox and Kebab Columns */
 .checkbox-cell,
 .kebab-cell {
   width: 40px;
@@ -72,14 +77,13 @@ table td {
   background-color: #e3f2fd !important;
 }
 
-/* Make the skills column wider */
+/* Column Widths and Truncation */
 .table-container table th:nth-child(7),
 .table-container table td:nth-child(7) {
   min-width: 200px;
   max-width: 300px;
 }
 
-/* Make the Mode of work column narrower */
 .table-container table th:nth-last-child(2),
 .table-container table td:nth-last-child(2) {
   min-width: 40px;
@@ -91,7 +95,6 @@ table td {
   padding-right: 0;
 }
 
-/* Make the company name column a fixed width and truncate overflow */
 .table-container table th:nth-child(2),
 .table-container table td:nth-child(2) {
   max-width: 200px;
@@ -101,7 +104,7 @@ table td {
   text-overflow: ellipsis;
 }
 
-/* Add responsive scrollbars */
+/* Responsive Scrollbars */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;

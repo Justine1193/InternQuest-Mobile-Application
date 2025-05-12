@@ -1,3 +1,6 @@
+/* Navbar Component Styles */
+
+/* Container Styles */
 .top-nav {
   background-color: #fff;
   padding: 0.75rem 2rem;
@@ -5,9 +8,11 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  z-index: 100;
 }
 
+/* Left Section */
 .nav-left {
   display: flex;
   align-items: center;
@@ -23,6 +28,7 @@
   color: #1976d2;
 }
 
+/* Navigation Links */
 .nav-links {
   display: flex;
   gap: 2rem;
@@ -35,33 +41,52 @@
   font-size: 14px;
   font-weight: 500;
   transition: color 0.2s;
+  position: relative;
 }
 
-.nav-link:hover {
+.nav-link:hover,
+.nav-link:focus {
   color: #1976d2;
+  outline: none;
 }
 
 .nav-link.active {
   color: #1976d2;
 }
 
+/* Right Section */
 .nav-right {
   display: flex;
   align-items: center;
   position: relative;
 }
 
+/* Settings Icon Button */
 .settings-icon {
-  font-size: 20px;
+  font-size: 28px;
   color: #333;
   cursor: pointer;
-  transition: color 0.2s;
+  transition: color 0.2s, transform 0.15s;
+  background: none;
+  border: none;
+  outline: none;
+  padding: 10px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.settings-icon:hover {
+.settings-icon:hover,
+.settings-icon:focus-visible {
   color: #1976d2;
+  background: #e3f2fd;
+  outline: 2px solid #1976d2;
+  outline-offset: 2px;
+  transform: scale(1.08);
 }
 
+/* Logout Dropdown */
 .logout-dropdown {
   position: absolute;
   right: 0;
@@ -69,13 +94,14 @@
   background: #fff;
   border: 1px solid #ddd;
   border-radius: 6px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   z-index: 1000;
   min-width: 120px;
   padding: 0;
   display: flex;
   flex-direction: column;
   align-items: stretch;
+  animation: fadeIn 0.18s ease;
 }
 
 .logout-dropdown button {
@@ -89,11 +115,37 @@
   color: #333;
   outline: none;
   border-radius: 0 0 6px 6px;
-  transition: background 0.2s;
+  transition: background 0.2s, color 0.2s;
   font-weight: normal;
 }
 
-.logout-dropdown button:hover {
+.logout-dropdown button:hover,
+.logout-dropdown button:focus {
   background: #f5f5f5;
   color: #1976d2;
-} 
+}
+
+/* Animation */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Responsive Adjustments */
+@media (max-width: 600px) {
+  .top-nav {
+    padding: 0.75rem 0.5rem;
+  }
+  .nav-links {
+    gap: 1rem;
+  }
+  .nav-left {
+    gap: 1rem;
+  }
+}

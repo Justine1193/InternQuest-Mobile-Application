@@ -16,6 +16,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSavedInternships } from '../context/SavedInternshipsContext';
 import { collection, getDocs } from 'firebase/firestore';
 import { firestore } from '../firebase/config';
+import { auth } from '../firebase/config';
+import { doc, getDoc } from 'firebase/firestore';
 
 type Post = BasePost & { createdAt?: Date };
 
@@ -34,6 +36,8 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
   const { savedInternships, toggleSaveInternship } = useSavedInternships();
   const [expanded, setExpanded] = useState<{ [key: string]: boolean }>({});
   const [refreshing, setRefreshing] = useState(false);
+  const [userFields, setUserFields] = useState<string[]>([]);
+  const [userSkills, setUserSkills] = useState<string[]>([]);
 
   const fetchCompanies = async () => {
     try {
@@ -70,6 +74,25 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
     fetchCompanies();
   }, []);
 
+  useEffect(() => {
+    const fetchUserFieldsAndSkills = async () => {
+      if (!auth.currentUser) return;
+      try {
+        const userDoc = await getDoc(doc(firestore, 'users', auth.currentUser.uid));
+        if (userDoc.exists()) {
+          const data = userDoc.data();
+          const fields = Array.isArray(data.field) ? data.field : [data.field];
+          setUserFields(fields.filter(Boolean));
+          const skills = Array.isArray(data.skills) ? data.skills : [];
+          setUserSkills(skills.filter(Boolean));
+        }
+      } catch (error) {
+        console.error('Failed to fetch user fields/skills:', error);
+      }
+    };
+    fetchUserFieldsAndSkills();
+  }, []);
+
   const handleFilterPress = (filter: string) => {
     setActiveFilter(activeFilter === filter ? null : filter);
     setShowDropdown(false);
@@ -90,9 +113,41 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
     })
     .sort((a, b) => {
       if (activeFilter === 'Best Matches') {
+        // Field match
+        const aFieldMatch = userFields.some(field =>
+          Array.isArray(a.industry)
+            ? a.industry.includes(field)
+            : a.industry === field
+        );
+        const bFieldMatch = userFields.some(field =>
+          Array.isArray(b.industry)
+            ? b.industry.includes(field)
+            : b.industry === field
+        );
+        if (aFieldMatch && !bFieldMatch) return -1;
+        if (!aFieldMatch && bFieldMatch) return 1;
+
+        // Skill match (if no field match)
+        const aSkillMatch = userSkills.some(skill =>
+          Array.isArray(a.tags)
+            ? a.tags.includes(skill)
+            : a.tags === skill
+        );
+        const bSkillMatch = userSkills.some(skill =>
+          Array.isArray(b.tags)
+            ? b.tags.includes(skill)
+            : b.tags === skill
+        );
+        if (aSkillMatch && !bSkillMatch) return -1;
+        if (!aSkillMatch && bSkillMatch) return 1;
+
+        // Fallback: sort by number of user preference matches
         const aMatches = a.tags.filter(tag => userPreferences.includes(tag)).length;
         const bMatches = b.tags.filter(tag => userPreferences.includes(tag)).length;
         return bMatches - aMatches;
+      }
+      if (activeFilter === 'Most Recent') {
+        return (b.createdAt?.getTime?.() || 0) - (a.createdAt?.getTime?.() || 0);
       }
       return 0;
     });

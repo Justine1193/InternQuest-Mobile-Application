@@ -18,7 +18,7 @@ import {
 import RNPickerSelect from 'react-native-picker-select';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../App';
-import { doc, setDoc, serverTimestamp, collection, query, where, getDocs, updateDoc, getDoc } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, collection, query, where, getDocs, updateDoc, getDoc, orderBy, startAt, endAt, addDoc } from 'firebase/firestore';
 import { auth, firestore } from '../firebase/config';
 import { updatePassword } from "firebase/auth";
 import { Portal } from 'react-native-portalize';
@@ -55,7 +55,6 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
   const [program, setProgram] = useState('');
   const [fields, setFields] = useState<string[]>([]);
   const [skills, setSkills] = useState<string[]>([]);
-  const [availableSkills, setAvailableSkills] = useState<string[]>([]);
 
   // --- State: Preferences ---
   const [locationPreference, setLocationPreference] = useState('');
@@ -70,7 +69,7 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
   const [fieldCategories, setFieldCategories] = useState<FieldCategory[]>([]);
   const [programList, setProgramList] = useState<string[]>([]);
   const [fieldList, setFieldList] = useState<string[]>([]);
-  const [loadingMeta, setLoadingMeta] = useState(true);
+  const [availableSkills, setAvailableSkills] = useState<string[]>([]);
   const [parentScrollEnabled, setParentScrollEnabled] = useState(true);
   const [programDropdownPos, setProgramDropdownPos] = useState({ x: 0, y: 0, width: 0, height: 0 });
   const [fieldDropdownPos, setFieldDropdownPos] = useState({ x: 0, y: 0, width: 0, height: 0 });
@@ -79,6 +78,13 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
   const [showSkillOptions, setShowSkillOptions] = useState(false);
   const [field, setField] = useState('');
   const windowHeight = Dimensions.get('window').height;
+  // New state for Firestore search
+  const [programOptions, setProgramOptions] = useState<string[]>([]);
+  const [fieldOptions, setFieldOptions] = useState<string[]>([]);
+  const [skillOptions, setSkillOptions] = useState<string[]>([]);
+  const [programLoading, setProgramLoading] = useState(false);
+  const [fieldLoading, setFieldLoading] = useState(false);
+  const [skillLoading, setSkillLoading] = useState(false);
 
   // --- Refs ---
   const scrollViewRef = useRef<ScrollView>(null);
@@ -144,6 +150,68 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
     }
   };
 
+  // --- Debounce utility ---
+  const debounce = (func: (...args: any[]) => void, delay: number) => {
+    let timer: NodeJS.Timeout;
+    return (...args: any[]) => {
+      clearTimeout(timer);
+      timer = setTimeout(() => func(...args), delay);
+    };
+  };
+
+  // --- Firestore prefix search ---
+  const fetchFirestoreOptions = async (collectionName: string, searchText: string) => {
+    if (!searchText) return [];
+    const q = query(
+      collection(firestore, collectionName),
+      orderBy('name'),
+      startAt(searchText),
+      endAt(searchText + '\uf8ff')
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => doc.data().name);
+  };
+
+  // --- Handlers for dropdown search ---
+  const debouncedFetchPrograms = useRef(debounce(async (text: string) => {
+    setProgramLoading(true);
+    setProgramOptions(await fetchFirestoreOptions('programs', text));
+    setProgramLoading(false);
+  }, 300)).current;
+  const debouncedFetchFields = useRef(debounce(async (text: string) => {
+    setFieldLoading(true);
+    setFieldOptions(await fetchFirestoreOptions('fields', text));
+    setFieldLoading(false);
+  }, 300)).current;
+  const debouncedFetchSkills = useRef(debounce(async (text: string) => {
+    setSkillLoading(true);
+    setSkillOptions(await fetchFirestoreOptions('skills', text));
+    setSkillLoading(false);
+  }, 300)).current;
+
+  // --- Update search handlers ---
+  useEffect(() => {
+    if (programSearch.trim().length > 0) {
+      debouncedFetchPrograms(programSearch.trim());
+    } else {
+      setProgramOptions([]);
+    }
+  }, [programSearch]);
+  useEffect(() => {
+    if (fieldSearch.trim().length > 0) {
+      debouncedFetchFields(fieldSearch.trim());
+    } else {
+      setFieldOptions([]);
+    }
+  }, [fieldSearch]);
+  useEffect(() => {
+    if (skillSearch.trim().length > 0) {
+      debouncedFetchSkills(skillSearch.trim());
+    } else {
+      setSkillOptions([]);
+    }
+  }, [skillSearch]);
+
   // --- Fetch meta data for dropdowns ---
   useEffect(() => {
     const fetchMeta = async () => {
@@ -168,7 +236,7 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
       } catch (error) {
         console.error('Failed to fetch meta:', error);
       }
-      setLoadingMeta(false);
+      setIsLoading(false);
     };
     fetchMeta();
   }, []);
@@ -332,7 +400,7 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
   };
 
   // --- Loading indicator ---
-  if (loadingMeta || isLoading) {
+  if (isLoading) {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
         <ActivityIndicator size="large" color="#007aff" />
@@ -467,8 +535,23 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
                         <Text style={styles.dropdownItemText}>{p}</Text>
                       </TouchableOpacity>
                     ))}
-                  {programList.filter(p => programSearch && smartMatch(p, programSearch)).length === 0 && (
-                    <Text style={styles.noResultsText}>No results found</Text>
+                  {programList.filter(p => programSearch && smartMatch(p, programSearch)).length === 0 && programSearch.trim().length > 0 && (
+                    <TouchableOpacity
+                      style={[styles.skillPillUnselected, { alignSelf: 'flex-start', width: '100%', marginVertical: 4 }]}
+                      onPress={() => {
+                        const newProgram = programSearch.trim();
+                        if (newProgram && !programList.includes(newProgram)) {
+                          setProgramList(prev => [...prev, newProgram]);
+                          setProgram(newProgram);
+                          setProgramSearch(newProgram);
+                          setShowProgramOptions(false);
+                          setParentScrollEnabled(true);
+                          programRef.current?.blur();
+                        }
+                      }}
+                    >
+                      <Text style={styles.skillTextUnselected}>Add "{programSearch.trim()}"</Text>
+                    </TouchableOpacity>
                   )}
                 </ScrollView>
               </View>
@@ -552,8 +635,23 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
                         <Text style={styles.dropdownItemText}>{f}</Text>
                       </TouchableOpacity>
                     ))}
-                  {fieldList.filter(f => fieldSearch && smartMatch(f, fieldSearch)).length === 0 && (
-                    <Text style={styles.noResultsText}>No results found</Text>
+                  {fieldList.filter(f => fieldSearch && smartMatch(f, fieldSearch)).length === 0 && fieldSearch.trim().length > 0 && (
+                    <TouchableOpacity
+                      style={[styles.skillPillUnselected, { alignSelf: 'flex-start', width: '100%', marginVertical: 4 }]}
+                      onPress={() => {
+                        const newField = fieldSearch.trim();
+                        if (newField && !fieldList.includes(newField)) {
+                          setFieldList(prev => [...prev, newField]);
+                          setField(newField);
+                          setFieldSearch(newField);
+                          setShowFieldOptions(false);
+                          setParentScrollEnabled(true);
+                          fieldRef.current?.blur();
+                        }
+                      }}
+                    >
+                      <Text style={styles.skillTextUnselected}>Add "{fieldSearch.trim()}"</Text>
+                    </TouchableOpacity>
                   )}
                 </ScrollView>
               </View>
@@ -615,29 +713,33 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
             {skillSearch.length > 0 && (
               <View style={styles.skillPillContainerVertical}>
                 {availableSkills
-                  .filter((skill) => skill.toLowerCase().includes(skillSearch.toLowerCase()))
+                  .filter((skill) => skill.toLowerCase().includes(skillSearch.toLowerCase()) && !skills.includes(skill))
                   .map((skill, index) => (
                     <TouchableOpacity
                       key={`skill-${skill}-${index}`}
-                      style={[
-                        skills.includes(skill) ? styles.skillPillSelected : styles.skillPillUnselected,
-                        { alignSelf: 'flex-start', width: '100%', marginVertical: 4 }
-                      ]}
+                      style={styles.skillPillUnselected}
                       onPress={() => {
-                        if (skills.includes(skill)) {
-                          setSkills((prev) => prev.filter((s) => s !== skill));
-                        } else {
-                          setSkills((prev) => [...prev, skill]);
-                        }
+                        setSkills((prev) => [...prev, skill]);
+                        setSkillSearch("");
                       }}
                     >
-                      <Text style={skills.includes(skill) ? styles.skillText : styles.skillTextUnselected}>
-                        {skill} {skills.includes(skill) ? '✕' : '＋'}
-                      </Text>
+                      <Text style={styles.skillTextUnselected}>{skill} ＋</Text>
                     </TouchableOpacity>
                   ))}
-                {availableSkills.filter((skill) => skill.toLowerCase().includes(skillSearch.toLowerCase())).length === 0 && (
-                  <Text style={styles.noResultsText}>No results found</Text>
+                {availableSkills.filter((skill) => skill.toLowerCase().includes(skillSearch.toLowerCase()) && !skills.includes(skill)).length === 0 && skillSearch.trim().length > 0 && (
+                  <TouchableOpacity
+                    style={[styles.skillPillUnselected, { alignSelf: 'flex-start', width: '100%', marginVertical: 4 }]}
+                    onPress={() => {
+                      const newSkill = skillSearch.trim();
+                      if (newSkill && !skills.includes(newSkill)) {
+                        setAvailableSkills(prev => [...prev, newSkill]);
+                        setSkills(prev => [...prev, newSkill]);
+                        setSkillSearch("");
+                      }
+                    }}
+                  >
+                    <Text style={styles.skillTextUnselected}>Add "{skillSearch.trim()}"</Text>
+                  </TouchableOpacity>
                 )}
               </View>
             )}

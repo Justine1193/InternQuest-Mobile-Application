@@ -13,6 +13,7 @@ import {
   Keyboard,
   TouchableWithoutFeedback,
   ActivityIndicator,
+  Linking,
 } from "react-native";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -58,6 +59,7 @@ const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
     email?: string;
     password?: string;
   }>({});
+  const [forgotPasswordSent, setForgotPasswordSent] = useState(false);
 
   // Validation
   const validateEmail = (email: string): boolean => {
@@ -148,9 +150,10 @@ const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
     try {
       const sanitizedEmail = email.trim().toLowerCase();
       await sendPasswordResetEmail(auth, sanitizedEmail);
+      setForgotPasswordSent(true);
       Alert.alert(
         "Password Reset",
-        "A password reset link has been sent to your NEU email address.",
+        "A password reset link has been sent to your NEU email address. Please check your inbox and follow the instructions to reset your password.",
         [{ text: "OK" }]
       );
     } catch (error: any) {
@@ -254,6 +257,24 @@ const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
             <TouchableOpacity onPress={handleForgotPassword} disabled={isLoading}>
               <Text style={[styles.forgotPassword, { color: theme.link }]}>Forgot password?</Text>
             </TouchableOpacity>
+            {forgotPasswordSent && (
+              <View style={styles.forgotPasswordInfoBox}>
+                <Text style={styles.forgotPasswordInfoText}>
+                  A password reset link has been sent to your NEU email address. Please check your inbox and follow the instructions to reset your password.
+                </Text>
+                <TouchableOpacity
+                  style={styles.openEmailButton}
+                  onPress={() => {
+                    // Open NEU webmail in browser
+                    // You can change this to the actual NEU webmail URL if different
+                    const url = 'https://mail.google.com/a/neu.edu.ph';
+                    Linking.openURL(url);
+                  }}
+                >
+                  <Text style={styles.openEmailButtonText}>Open NEU Email</Text>
+                </TouchableOpacity>
+              </View>
+            )}
 
             {/* Sign In Button */}
             <TouchableOpacity
@@ -376,6 +397,31 @@ const styles = StyleSheet.create({
   signupLink: {
     fontWeight: "500",
     textDecorationLine: "underline",
+  },
+  forgotPasswordInfoBox: {
+    backgroundColor: '#e6f7ff',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+    marginTop: 8,
+    alignItems: 'center',
+  },
+  forgotPasswordInfoText: {
+    color: '#0077cc',
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  openEmailButton: {
+    backgroundColor: '#0077cc',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+  },
+  openEmailButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 14,
   },
 });
 

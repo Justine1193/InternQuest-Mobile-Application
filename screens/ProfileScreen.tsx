@@ -22,6 +22,7 @@ import * as Progress from 'react-native-progress';
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
+import { updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
 
 // Add type for userData
 type UserData = {
@@ -48,6 +49,16 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
   const [totalHours, setTotalHours] = useState(0);
   const [progress, setProgress] = useState(0);
   const [requiredHours, setRequiredHours] = useState(300);
+
+  const [changePasswordModalVisible, setChangePasswordModalVisible] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [changePasswordLoading, setChangePasswordLoading] = useState(false);
+  const [changePasswordError, setChangePasswordError] = useState('');
+  const [changePasswordSuccess, setChangePasswordSuccess] = useState('');
+
+  const [avatarUploading, setAvatarUploading] = useState(false);
 
   const handleSaveProfile = async () => {
     if (!auth.currentUser) return;
@@ -122,32 +133,29 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
         return;
       }
       try {
+        setAvatarUploading(true);
         const localUri = result.assets[0].uri;
-        console.log('Selected image URI:', localUri);
+        // Convert to blob (ScanConnect style)
         const response = await fetch(localUri);
         const blob = await response.blob();
+        // Upload to Firebase Storage
         const storage = getStorage();
-        const fileName = `avatars/${auth.currentUser.uid}_${Date.now()}`;
+        const fileName = `avatars/${auth.currentUser.uid}`;
         const avatarRef = storageRef(storage, fileName);
-        console.log('Uploading image to Firebase Storage...');
         await uploadBytes(avatarRef, blob);
-        console.log('Getting download URL...');
+        // Get download URL
         const downloadURL = await getDownloadURL(avatarRef);
-        console.log('Download URL:', downloadURL);
-        // Save to Firestore immediately after upload
+        // Save to Firestore
         const userDocRef = doc(firestore, "users", auth.currentUser.uid);
-        console.log('Saving avatar URL to Firestore...');
         await setDoc(userDocRef, { avatar: downloadURL }, { merge: true });
-        console.log('Saved avatar to Firestore!');
         setUserData({ ...userData, avatar: downloadURL });
         setAvatarChanged(true);
         Alert.alert('Success', 'Profile picture updated!');
       } catch (error) {
         Alert.alert('Error', 'Failed to upload profile picture.');
         console.error('Firebase Storage upload error:', error);
-        if (error && typeof error === 'object') {
-          console.log('Error details:', JSON.stringify(error, null, 2));
-        }
+      } finally {
+        setAvatarUploading(false);
       }
     }
   };
@@ -280,62 +288,56 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        <Text style={styles.header}>Profile</Text>
-
-        {/* Profile Header */}
-        <View style={styles.profileHeader}>
-          <View style={styles.avatarContainer}>
-            {userData.avatar ? (
-              <Image source={{ uri: userData.avatar }} style={styles.avatar} />
-            ) : (
-              <View style={[styles.avatar, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#eee' }]}>
-                <Ionicons name="person-circle" size={100} color="#bbb" />
+        {/* Profile Header Card */}
+        <View style={styles.headerCardShadow}>
+          <View style={styles.headerCard}>
+            <TouchableOpacity
+              style={styles.avatarContainer}
+              onPress={handlePickImage}
+              accessibilityLabel="Edit profile picture"
+              accessibilityRole="button"
+              activeOpacity={0.7}
+            >
+              {userData.avatar ? (
+                <Image source={{ uri: userData.avatar }} style={styles.avatar} />
+              ) : (
+                <View style={[styles.avatar, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#eee' }]}>
+                  <Ionicons name="person-circle" size={100} color="#bbb" />
+                </View>
+              )}
+              {/* Edit Icon Overlay */}
+              <View style={styles.editIconOverlay}>
+                {avatarUploading ? (
+                  <ActivityIndicator size="small" color="#007bff" />
+                ) : (
+                  <Ionicons name="camera" size={28} color="#fff" style={styles.editIcon} />
+                )}
               </View>
+            </TouchableOpacity>
+            <Text style={styles.name}>{userData.name || (userData.firstName && userData.lastName ? userData.firstName + ' ' + userData.lastName : '')}</Text>
+            <Text style={styles.subtext}>{userData.course}</Text>
+            {userData.status === 'hired' && userData.company && (
+              <Text style={styles.subtext}>Company: {userData.company}</Text>
             )}
           </View>
-          <Text style={styles.name}>{userData.name || (userData.firstName && userData.lastName ? userData.firstName + ' ' + userData.lastName : '')}</Text>
-          <Text style={styles.subtext}>{userData.course}</Text>
-          {/* Show company if hired */}
-          {userData.status === 'hired' && userData.company && (
-            <Text style={styles.subtext}>Company: {userData.company}</Text>
-          )}
         </View>
 
         {/* Stats Section */}
-        <View style={styles.statsContainer}>
-          <TouchableOpacity
-            style={[styles.statCard, { backgroundColor: '#007bff', flexDirection: 'row', alignItems: 'center' }]}
-            onPress={() => navigation.navigate('OJTTracker')}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="time-outline" size={24} color="#fff" style={{ marginRight: 10 }} />
-            <View>
-              <Text style={[styles.statLabel, { color: '#fff' }]}>Remaining Hours</Text>
-              <Text style={[styles.statValue, { color: '#fff' }]}>{Math.max(0, requiredHours - totalHours)} hours</Text>
-            </View>
-          </TouchableOpacity>
-          <View style={[styles.statCard, { backgroundColor: '#007bff', flexDirection: 'row', alignItems: 'center' }]}>
-            <Ionicons name="business-outline" size={24} color="#fff" style={{ marginRight: 10 }} />
-            <View>
-              <Text style={[styles.statLabel, { color: '#fff' }]}>Company</Text>
-              <Text style={[styles.statValue, { color: '#fff' }]}>
-                {userData.status === 'hired' ? userData.company || 'Not Set' : 'Not Hired'}
-              </Text>
-              {userData.status === 'hired' && (
-                <TouchableOpacity
-                  style={styles.undoButton}
-                  onPress={handleUndoCompany}
-                >
-                  <Ionicons name="arrow-undo-outline" size={18} color="#007bff" />
-                  <Text style={styles.undoButtonText}>Undo</Text>
-                </TouchableOpacity>
-              )}
-            </View>
+        <View style={styles.statsRow}>
+          <View style={styles.statCard}>
+            <Ionicons name="time-outline" size={24} color="#007bff" style={{ marginBottom: 4 }} />
+            <Text style={styles.statLabel}>Remaining Hours</Text>
+            <Text style={styles.statValue}>{Math.max(0, requiredHours - totalHours)} hrs</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Ionicons name="business-outline" size={24} color="#007bff" style={{ marginBottom: 4 }} />
+            <Text style={styles.statLabel}>Company</Text>
+            <Text style={styles.statValue}>{userData.status === 'hired' ? userData.company || 'Not Set' : 'Not Hired'}</Text>
           </View>
         </View>
 
         {/* Internship Progress Section */}
-        <View style={styles.progressContainer}>
+        <View style={styles.sectionCard}>
           <Text style={styles.sectionHeader}>Internship Progress</Text>
           <Progress.Bar
             progress={progress}
@@ -351,33 +353,47 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
           </Text>
         </View>
 
-        {/* Work Details Section */}
-        <View style={styles.workDetails}>
-          <Text style={styles.sectionHeader}>Work Details</Text>
-          <Text style={styles.detailLabel}>Email:</Text>
-          <TouchableOpacity onPress={handleEmailPress}>
-            <Text style={[styles.detailValue, styles.link]}>{userData.email}</Text>
+        {/* Contact & Details Section */}
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionHeader}>Contact & Details</Text>
+          <TouchableOpacity style={styles.detailRow} onPress={handleEmailPress} activeOpacity={0.7}>
+            <Ionicons name="mail-outline" size={20} color="#007bff" style={styles.detailIcon} />
+            <Text style={styles.detailValue}>{userData.email}</Text>
           </TouchableOpacity>
-
-          <Text style={styles.detailLabel}>Phone:</Text>
-          <TouchableOpacity onPress={handlePhonePress}>
-            <Text style={[styles.detailValue, styles.link]}>{userData.contact}</Text>
+          <TouchableOpacity style={styles.detailRow} onPress={handlePhonePress} activeOpacity={0.7}>
+            <Ionicons name="call-outline" size={20} color="#007bff" style={styles.detailIcon} />
+            <Text style={styles.detailValue}>{userData.contact}</Text>
           </TouchableOpacity>
-
-          <Text style={styles.detailLabel}>LinkedIn:</Text>
-          <TouchableOpacity onPress={handleLinkedInPress}>
-            <Text style={[styles.detailValue, styles.link]}>{userData.linkedin}</Text>
+          <TouchableOpacity style={styles.detailRow} onPress={handleLinkedInPress} activeOpacity={0.7}>
+            <Ionicons name="logo-linkedin" size={20} color="#007bff" style={styles.detailIcon} />
+            <Text style={styles.detailValue}>{userData.linkedin}</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Edit Profile Button */}
-        <TouchableOpacity
-          style={styles.button}
-          onPress={() => setModalVisible(true)}
-        >
-          <Ionicons name="pencil" size={20} color="#fff" />
-          <Text style={styles.buttonText}>Edit Profile</Text>
-        </TouchableOpacity>
+        {/* Action Buttons */}
+        <View style={styles.buttonGroup}>
+          <TouchableOpacity
+            style={[styles.actionButton, { backgroundColor: '#007bff' }]}
+            onPress={() => setModalVisible(true)}
+          >
+            <Ionicons name="pencil" size={20} color="#fff" />
+            <Text style={styles.buttonText}>Edit Profile</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.actionButton, { backgroundColor: '#ff9800' }]}
+            onPress={() => setChangePasswordModalVisible(true)}
+          >
+            <Ionicons name="key-outline" size={20} color="#fff" />
+            <Text style={styles.buttonText}>Change Password</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.actionButton, { backgroundColor: '#4CAF50' }]}
+            onPress={() => navigation.navigate('RequirementsChecklist')}
+          >
+            <Ionicons name="checkmark-circle-outline" size={20} color="#fff" />
+            <Text style={styles.buttonText}>Requirements Checklist</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
 
       {/* Edit Profile Modal */}
@@ -487,6 +503,116 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
         </View>
       )}
 
+      {/* Change Password Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={changePasswordModalVisible}
+        onRequestClose={() => setChangePasswordModalVisible(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalHeader}>Change Password</Text>
+            {changePasswordSuccess ? (
+              <Text style={styles.successText}>{changePasswordSuccess}</Text>
+            ) : null}
+            {changePasswordError ? (
+              <Text style={styles.errorText}>{changePasswordError}</Text>
+            ) : null}
+            <Text style={styles.label}>Current Password</Text>
+            <TextInput
+              style={styles.input}
+              value={currentPassword}
+              onChangeText={setCurrentPassword}
+              secureTextEntry
+              placeholder="Enter current password"
+            />
+            <Text style={styles.label}>New Password</Text>
+            <TextInput
+              style={styles.input}
+              value={newPassword}
+              onChangeText={setNewPassword}
+              secureTextEntry
+              placeholder="Enter new password"
+            />
+            <Text style={styles.label}>Confirm New Password</Text>
+            <TextInput
+              style={styles.input}
+              value={confirmNewPassword}
+              onChangeText={setConfirmNewPassword}
+              secureTextEntry
+              placeholder="Confirm new password"
+            />
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 20 }}>
+              <TouchableOpacity
+                style={[styles.button, { backgroundColor: '#bbb', flex: 1, marginRight: 8 }]}
+                onPress={() => {
+                  setChangePasswordModalVisible(false);
+                  setCurrentPassword('');
+                  setNewPassword('');
+                  setConfirmNewPassword('');
+                  setChangePasswordError('');
+                  setChangePasswordSuccess('');
+                }}
+                disabled={changePasswordLoading}
+              >
+                <Text style={styles.buttonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.button, { backgroundColor: '#007bff', flex: 1, marginLeft: 8 }]}
+                onPress={async () => {
+                  setChangePasswordError('');
+                  setChangePasswordSuccess('');
+                  if (!currentPassword || !newPassword || !confirmNewPassword) {
+                    setChangePasswordError('All fields are required.');
+                    return;
+                  }
+                  if (newPassword.length < 8) {
+                    setChangePasswordError('New password must be at least 8 characters.');
+                    return;
+                  }
+                  if (newPassword !== confirmNewPassword) {
+                    setChangePasswordError('New passwords do not match.');
+                    return;
+                  }
+                  if (!auth.currentUser || !auth.currentUser.email) {
+                    setChangePasswordError('User not authenticated.');
+                    return;
+                  }
+                  setChangePasswordLoading(true);
+                  try {
+                    const credential = EmailAuthProvider.credential(auth.currentUser.email, currentPassword);
+                    await reauthenticateWithCredential(auth.currentUser, credential);
+                    await updatePassword(auth.currentUser, newPassword);
+                    setChangePasswordSuccess('Password changed successfully!');
+                    setCurrentPassword('');
+                    setNewPassword('');
+                    setConfirmNewPassword('');
+                  } catch (error: any) {
+                    let msg = 'Failed to change password.';
+                    if (error.code === 'auth/wrong-password') {
+                      msg = 'Current password is incorrect.';
+                    } else if (error.code === 'auth/weak-password') {
+                      msg = 'New password is too weak.';
+                    } else if (error.code === 'auth/too-many-requests') {
+                      msg = 'Too many attempts. Please try again later.';
+                    } else if (error.message) {
+                      msg = error.message;
+                    }
+                    setChangePasswordError(msg);
+                  } finally {
+                    setChangePasswordLoading(false);
+                  }
+                }}
+                disabled={changePasswordLoading}
+              >
+                <Text style={styles.buttonText}>{changePasswordLoading ? 'Saving...' : 'Save'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* Bottom Navbar */}
       <BottomNavbar navigation={navigation} currentRoute="Profile" />
     </View>
@@ -514,31 +640,44 @@ const styles = StyleSheet.create({
     marginVertical: 25,
   },
   avatarContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignSelf: 'center',
+    marginBottom: 12,
     position: 'relative',
   },
   avatar: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    borderWidth: 2,
+    borderColor: '#007bff',
+    backgroundColor: '#fff',
   },
-  editAvatarOverlay: {
+  editIconOverlay: {
     position: 'absolute',
-    bottom: 0,
     right: 0,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    borderRadius: 16,
+    bottom: 0,
+    backgroundColor: '#007bff',
+    borderRadius: 20,
     padding: 4,
+    borderWidth: 2,
+    borderColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
+  editIcon: {},
   name: {
-    marginTop: 10,
+    fontSize: 22,
     fontWeight: 'bold',
-    fontSize: 20,
+    color: '#222',
+    marginTop: 12,
+    marginBottom: 2,
+    textAlign: 'center',
   },
   subtext: {
-    fontSize: 14,
-    color: '#777',
+    fontSize: 15,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 2,
   },
   statsContainer: {
     flexDirection: 'row',
@@ -547,35 +686,36 @@ const styles = StyleSheet.create({
     marginVertical: 28,
   },
   statCard: {
-    backgroundColor: '#f9f9f9',
-    borderRadius: 10,
-    padding: 20,
-    width: '48%',
+    flex: 1,
+    backgroundColor: '#f5f8ff',
+    borderRadius: 16,
     alignItems: 'center',
-    justifyContent: 'center',
+    padding: 16,
     shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 5,
-    elevation: 3,
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
   },
   statLabel: {
-    fontSize: 16,
-    color: '#888',
+    fontSize: 13,
+    color: '#666',
+    marginBottom: 2,
   },
   statValue: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: 'bold',
-    marginTop: 5,
+    color: '#333',
   },
   workDetails: {
     marginTop: 20,
     marginBottom: 30,
   },
   sectionHeader: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
-    marginBottom: 10,
-    color: '#333',
+    color: '#007bff',
+    marginBottom: 12,
   },
   detailLabel: {
     fontSize: 14,
@@ -583,9 +723,8 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   detailValue: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    marginBottom: 10,
+    fontSize: 15,
+    color: '#333',
   },
   progressContainer: {
     marginTop: 20,
@@ -595,9 +734,9 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   progressText: {
-    marginTop: 10,
     fontSize: 14,
-    color: '#444',
+    color: '#666',
+    marginTop: 8,
     textAlign: 'center',
   },
   button: {
@@ -610,10 +749,10 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   buttonText: {
-    marginLeft: 10,
     color: '#fff',
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: 'bold',
+    marginLeft: 8,
   },
   modalContainer: {
     flex: 1,
@@ -728,6 +867,82 @@ const styles = StyleSheet.create({
   companyText: {
     color: '#007aff',
     textDecorationLine: 'underline',
+  },
+  successText: {
+    color: '#4CAF50',
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  errorText: {
+    color: '#f44336',
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  headerCardShadow: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 4,
+    marginBottom: 16,
+    marginTop: 16,
+    borderRadius: 20,
+    alignSelf: 'center',
+  },
+  headerCard: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    alignItems: 'center',
+    paddingVertical: 24,
+    paddingHorizontal: 16,
+    width: 320,
+    alignSelf: 'center',
+  },
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+    gap: 12,
+    paddingHorizontal: 16,
+  },
+  buttonGroup: {
+    marginTop: 16,
+    marginBottom: 32,
+    gap: 12,
+    paddingHorizontal: 16,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 24,
+    paddingVertical: 14,
+    marginBottom: 0,
+    gap: 8,
+  },
+  sectionCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    marginHorizontal: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  detailIcon: {
+    marginRight: 12,
   },
 });
 

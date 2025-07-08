@@ -562,6 +562,14 @@ const OJTTrackerScreen: React.FC = () => {
         </Text>
       </View>
 
+      <TouchableOpacity
+        style={styles.weeklyReportButton}
+        onPress={() => navigation.navigate('WeeklyReport')}
+      >
+        <Icon name="document-text-outline" size={20} color="#fff" />
+        <Text style={styles.weeklyReportButtonText}>Submit Weekly Report</Text>
+      </TouchableOpacity>
+
       <Card style={styles.tableCard}>
         <View style={styles.tableHeader}>
           <Text style={styles.tableHeaderText}>Date</Text>
@@ -1220,6 +1228,27 @@ const styles = StyleSheet.create({
   },
   datePickerPastDayText: {
     color: '#999',
+  },
+  weeklyReportButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#2196F3',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    marginBottom: 16,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  weeklyReportButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
   },
 });
 

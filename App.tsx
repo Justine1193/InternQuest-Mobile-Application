@@ -22,6 +22,9 @@ import NotificationsScreen from './screens/NotificationsScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import InternshipDetailsScreen from './screens/InternshipDetailsScreen';
 import OJTTrackerScreen from './screens/OJTTrackerScreen';
+import WeeklyReportScreen from './screens/WeeklyReportScreen';
+import CompanyProfileScreen from './screens/CompanyProfileScreen';
+import RequirementsChecklistScreen from './screens/RequirementsChecklistScreen';
 import BottomNavbar from './components/BottomNav';
 
 // Shared Post Type
@@ -35,9 +38,11 @@ export type Post = {
   location: string;
   industry: string;
   tags: string[];
-  website?: string; // ✅ Added
-  email?: string;   // ✅ Added
-  skills?: string[]; // <-- Add this line
+  website?: string;
+  email?: string;
+  skills?: string[];
+  modeOfWork?: string;
+  moa?: string;
   createdAt?: Date;
 };
 
@@ -49,7 +54,10 @@ export type RootStackParamList = {
   SignUp: undefined;
   SetupAccount: undefined;
   InternshipDetails: { post: Post };
+  CompanyProfile: { company: Post };
+  RequirementsChecklist: undefined;
   OJTTracker: { post?: Post };
+  WeeklyReport: undefined;
   Notifications: undefined;
   Settings: undefined;
   Profile: undefined;
@@ -160,6 +168,18 @@ const App: React.FC = () => {
         <Stack.Screen
           name="OJTTracker"
           component={OJTTrackerScreen}
+        />
+        <Stack.Screen
+          name="CompanyProfile"
+          component={CompanyProfileScreen}
+        />
+        <Stack.Screen
+          name="RequirementsChecklist"
+          component={RequirementsChecklistScreen}
+        />
+        <Stack.Screen
+          name="WeeklyReport"
+          component={WeeklyReportScreen}
         />
       </>
     );

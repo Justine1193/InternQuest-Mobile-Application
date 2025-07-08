@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Image,
   Modal,
+  ScrollView,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -14,7 +15,8 @@ import { RootStackParamList } from '../App';
 import BottomNavbar from '../components/BottomNav';
 import { Swipeable } from 'react-native-gesture-handler';
 import { auth, firestore } from '../firebase/config';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, getDocs } from 'firebase/firestore';
+import Ionicons from 'react-native-vector-icons/Ionicons';
 
 type Props = {
   navigation: StackNavigationProp<RootStackParamList, 'Notifications'>;
@@ -70,6 +72,7 @@ const NotificationsScreen: React.FC<Props> = ({ navigation }) => {
   const [selectedNotification, setSelectedNotification] = useState<NotificationItem | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [userName, setUserName] = useState('');
+  const [reminders, setReminders] = useState<string[]>([]);
 
   useEffect(() => {
     const fetchUserName = async () => {
@@ -87,7 +90,62 @@ const NotificationsScreen: React.FC<Props> = ({ navigation }) => {
       }
     };
     fetchUserName();
+    fetchReminders();
   }, []);
+
+  const fetchReminders = async () => {
+    if (!auth.currentUser) return;
+    const userId = auth.currentUser.uid;
+    const reminderList: string[] = [];
+
+    // Check requirements
+    try {
+      const userDoc = await getDoc(doc(firestore, 'users', userId));
+      if (userDoc.exists()) {
+        const data = userDoc.data();
+        const requirements = data.requirements || [];
+        requirements.forEach((req: any) => {
+          if (!req.uploadedFiles || req.uploadedFiles.length === 0) {
+            reminderList.push(`Reminder: Please upload your ${req.title}.`);
+          }
+        });
+      }
+    } catch (e) {
+      // ignore
+    }
+
+    // Check weekly report for current week
+    try {
+      const reportsCol = collection(firestore, `users/${userId}/weeklyReports`);
+      const reportsSnap = await getDocs(reportsCol);
+      const now = new Date();
+      const startOfWeek = new Date(now);
+      startOfWeek.setDate(now.getDate() - now.getDay());
+      startOfWeek.setHours(0, 0, 0, 0);
+      const endOfWeek = new Date(startOfWeek);
+      endOfWeek.setDate(startOfWeek.getDate() + 6);
+      endOfWeek.setHours(23, 59, 59, 999);
+      let hasReport = false;
+      reportsSnap.forEach(doc => {
+        const data = doc.data();
+        const weekStart = new Date(data.weekStartDate);
+        const weekEnd = new Date(data.weekEndDate);
+        if (
+          weekStart.getTime() === startOfWeek.getTime() &&
+          weekEnd.getTime() === endOfWeek.getTime()
+        ) {
+          hasReport = true;
+        }
+      });
+      if (!hasReport) {
+        reminderList.push('Reminder: Don’t forget to submit your weekly accomplishment report!');
+      }
+    } catch (e) {
+      // ignore
+    }
+
+    setReminders(reminderList);
+  };
 
   const handleDelete = (id: string) => {
     setNotifications((prev) => prev.filter((item) => item.id !== id));
@@ -134,27 +192,49 @@ const NotificationsScreen: React.FC<Props> = ({ navigation }) => {
     </Swipeable>
   );
 
+  // Combine reminders and notifications into a single feed
+  const feed = [
+    ...reminders.map((reminder) => ({ type: 'reminder', text: reminder })),
+    ...notifications.map((notif) => ({ type: 'notification', ...notif })),
+  ];
+
   return (
     <>
       <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-          <Image
-            source={{ uri: 'https://via.placeholder.com/40' }}
-            style={styles.profileImage}
-          />
-          <Text style={styles.profileName}>{userName || 'User'}</Text>
-          <TouchableOpacity>
-            <Icon name="magnify" size={24} color="#007aff" />
-          </TouchableOpacity>
         </View>
 
-        {/* Notifications List */}
+        {/* Reminders & Notifications */}
+        <Text style={styles.sectionHeader}>Notifications</Text>
         <FlatList
-          data={notifications}
-          keyExtractor={(item) => item.id}
-          renderItem={renderItem}
-          contentContainerStyle={styles.list}
+          data={feed}
+          keyExtractor={(_, idx) => idx.toString()}
+          contentContainerStyle={styles.scrollContent}
+          renderItem={({ item }) => {
+            if (item.type === 'reminder' && 'text' in item) {
+              return (
+                <View style={styles.reminderCard}>
+                  <Ionicons name="alert-circle" size={20} color="#ff9800" style={{ marginRight: 8 }} />
+                  <Text style={styles.reminderText}>{item.text}</Text>
+                </View>
+              );
+            } else if (item.type === 'notification' && 'title' in item && 'description' in item && 'id' in item) {
+              return (
+                <Swipeable renderRightActions={() => renderRightActions(item.id)}>
+                  <View style={styles.notificationCard}>
+                    <Icon name="bell" size={20} color="#007bff" style={{ marginRight: 8 }} />
+                    <View>
+                      <Text style={styles.notificationTitle}>{item.title}</Text>
+                      <Text style={styles.notificationText}>{item.description}</Text>
+                    </View>
+                  </View>
+                </Swipeable>
+              );
+            } else {
+              return null;
+            }
+          }}
         />
       </View>
 
@@ -332,6 +412,55 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: 'bold',
+  },
+  reminderSection: {
+    marginBottom: 16,
+    paddingHorizontal: 16,
+  },
+  reminderCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fffbe6',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#ff9800',
+  },
+  reminderText: {
+    color: '#b26a00',
+    fontSize: 15,
+    flex: 1,
+  },
+  sectionHeader: {
+    fontSize: 24, // Increased from 18 for better prominence
+    fontWeight: 'bold',
+    color: '#333',
+    marginTop: 24,
+    marginBottom: 12,
+    paddingHorizontal: 16,
+  },
+  notificationCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f5f8ff',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#007bff',
+  },
+  notificationTitle: {
+    color: '#222',
+    fontSize: 15,
+    fontWeight: 'bold',
+  },
+  notificationText: {
+    color: '#222',
+    fontSize: 14,
+  },
+  scrollContent: {
+    paddingBottom: 80, // Add padding to the bottom for the navbar
   },
 });
 

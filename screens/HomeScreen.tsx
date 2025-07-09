@@ -150,12 +150,6 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Find Internships</Text>
-        <TouchableOpacity
-          style={styles.filterButton}
-          onPress={() => setShowAdvancedFilters(true)}
-        >
-          <Ionicons name="filter" size={20} color="#333" />
-        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -165,16 +159,24 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
           <RefreshControl refreshing={refreshing} onRefresh={fetchCompanies} />
         }
       >
-        {/* Search Bar */}
-        <View style={styles.searchContainer}>
-          <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search companies, skills, or locations..."
-            value={searchText}
-            onChangeText={setSearchText}
-            placeholderTextColor="#999"
-          />
+        {/* Search Bar + Filter Icon Row */}
+        <View style={styles.searchRow}>
+          <View style={styles.searchContainer}>
+            <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search"
+              value={searchText}
+              onChangeText={setSearchText}
+              placeholderTextColor="#999"
+            />
+          </View>
+          <TouchableOpacity
+            style={styles.filterButtonNext}
+            onPress={() => setShowAdvancedFilters(true)}
+          >
+            <Ionicons name="filter" size={22} color="#333" />
+          </TouchableOpacity>
         </View>
 
         {/* Quick Filters */}
@@ -456,19 +458,22 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 100,
   },
-  searchContainer: {
+  searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
     marginBottom: 16,
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+    marginTop: 8,
+    paddingHorizontal: 16,
+  },
+  searchContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    marginRight: 8,
+    height: 44,
   },
   searchIcon: {
     marginRight: 12,
@@ -477,6 +482,22 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     color: '#333',
+    paddingVertical: 8,
+    backgroundColor: 'transparent',
+  },
+  filterButtonNext: {
+    backgroundColor: '#f5f5f5',
+    borderRadius: 12,
+    padding: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    height: 44,
+    width: 44,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
   },
   topFilters: {
     flexDirection: 'row',

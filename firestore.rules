@@ -1,0 +1,15 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Allow read access to adminusers collection
+    match /adminusers/{document} {
+      allow read: if true;  // Allow anyone to read admin users (for testing)
+      allow write: if true; // Allow anyone to write (for testing)
+    }
+    
+    // Allow read/write access to other collections
+    match /{document=**} {
+      allow read, write: if true;  // Allow all access (for testing)
+    }
+  }
+}

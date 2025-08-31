@@ -45,24 +45,7 @@ const AdminLogin = () => {
     setShowPassword((prev) => !prev);
   };
 
-  // Temporary function to create admin user (for testing)
-  const createAdminUser = async () => {
-    try {
-      setIsLoading(true);
-      const adminUser = {
-        username: "admin",
-        password: "admin123"
-      };
-
-      await addDoc(collection(db, "adminusers"), adminUser);
-      setError("✅ Admin user created! Try logging in with admin/admin123");
-    } catch (err) {
-      console.error("Error creating admin user:", err);
-      setError("❌ Failed to create admin user. Check Firebase permissions.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  
 
   // Handles form submission and authentication logic
   const handleSubmit = async (e) => {
@@ -74,10 +57,13 @@ const AdminLogin = () => {
     setIsLoading(true);
     setError("");
     try {
+      console.log("Attempting login with:", formData.username);
       // Query the admins collection for the username
       const adminsRef = collection(db, "adminusers");
       const q = query(adminsRef, where("username", "==", formData.username));
       const querySnapshot = await getDocs(q);
+      console.log("Query result:", querySnapshot.size, "documents found");
+      
       if (querySnapshot.empty) {
         setError("Invalid username or password");
         return;
@@ -85,15 +71,19 @@ const AdminLogin = () => {
       // Get the admin document
       const adminDoc = querySnapshot.docs[0];
       const adminData = adminDoc.data();
+      console.log("Admin data found:", adminData);
+      
       // Check if password matches
       if (adminData.password === formData.password) {
+        console.log("Password match successful, navigating to dashboard");
         navigate("/dashboard");
       } else {
+        console.log("Password mismatch");
         setError("Invalid username or password");
       }
     } catch (err) {
       console.error("Login error:", err);
-      setError("Invalid username or password");
+      setError(`Login error: ${err.message}`);
     } finally {
       setIsLoading(false);
     }
@@ -166,34 +156,13 @@ const AdminLogin = () => {
                   </button>
                 </div>
               </div>
-              <button
+                            <button
                 type="submit"
                 className={`sign-in-button${isLoading ? " loading" : ""}`}
                 disabled={isLoading}
                 aria-busy={isLoading}
               >
                 {isLoading ? "Signing in..." : "Sign in as Admin"}
-              </button>
-
-              {/* Temporary admin user creation button */}
-              <button
-                type="button"
-                onClick={createAdminUser}
-                className="create-admin-button"
-                disabled={isLoading}
-                style={{
-                  marginTop: "10px",
-                  width: "100%",
-                  padding: "12px",
-                  background: "#28a745",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "8px",
-                  cursor: "pointer",
-                  fontSize: "14px"
-                }}
-              >
-                Create Admin User (admin/admin123)
               </button>
             </form>
           </div>

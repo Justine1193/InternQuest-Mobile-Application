@@ -45,7 +45,7 @@ const AdminLogin = () => {
     setShowPassword((prev) => !prev);
   };
 
-  
+
 
   // Handles form submission and authentication logic
   const handleSubmit = async (e) => {
@@ -63,7 +63,7 @@ const AdminLogin = () => {
       const q = query(adminsRef, where("username", "==", formData.username));
       const querySnapshot = await getDocs(q);
       console.log("Query result:", querySnapshot.size, "documents found");
-      
+
       if (querySnapshot.empty) {
         setError("Invalid username or password");
         return;
@@ -72,7 +72,7 @@ const AdminLogin = () => {
       const adminDoc = querySnapshot.docs[0];
       const adminData = adminDoc.data();
       console.log("Admin data found:", adminData);
-      
+
       // Check if password matches
       if (adminData.password === formData.password) {
         console.log("Password match successful, navigating to dashboard");
@@ -156,7 +156,7 @@ const AdminLogin = () => {
                   </button>
                 </div>
               </div>
-                            <button
+              <button
                 type="submit"
                 className={`sign-in-button${isLoading ? " loading" : ""}`}
                 disabled={isLoading}

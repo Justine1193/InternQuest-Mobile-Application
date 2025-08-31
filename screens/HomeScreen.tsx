@@ -105,16 +105,52 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
     fetchUserFieldsAndSkills();
   }, []);
 
-  // Remove skills dropdown and best matches logic
-  // Only keep Most Recent and Saved Internship
+  // Enhanced search and filtering logic
   const filteredPosts = (activeFilter === 'Saved Internship' ? savedInternships : companies)
     .filter(post => {
-      // Search text filter
-      return post.company.toLowerCase().includes(searchText.toLowerCase()) ||
-        post.description.toLowerCase().includes(searchText.toLowerCase());
+      // If no search text, show all posts
+      if (!searchText.trim()) return true;
+
+      const searchLower = searchText.toLowerCase().trim();
+
+      // Search in multiple fields for better accuracy
+      const companyMatch = typeof post.company === 'string' ? post.company.toLowerCase().includes(searchLower) : false;
+      const descriptionMatch = typeof post.description === 'string' ? post.description.toLowerCase().includes(searchLower) : false;
+      const locationMatch = typeof post.location === 'string' ? post.location.toLowerCase().includes(searchLower) : false;
+      const industryMatch = typeof post.industry === 'string' ? post.industry.toLowerCase().includes(searchLower) : false;
+      const tagsMatch = Array.isArray(post.tags) ? post.tags.some(tag =>
+        typeof tag === 'string' && tag.toLowerCase().includes(searchLower)
+      ) : false;
+      const workModeMatch = typeof post.modeOfWork === 'string' ? post.modeOfWork.toLowerCase().includes(searchLower) : false;
+
+      // Return true if any field matches
+      return companyMatch || descriptionMatch || locationMatch ||
+        industryMatch || tagsMatch || workModeMatch;
+    })
+    .filter(post => {
+      // Apply advanced filters
+      if (selectedLocation !== 'All Locations' &&
+        typeof post.location === 'string' &&
+        !post.location.toLowerCase().includes(selectedLocation.toLowerCase())) {
+        return false;
+      }
+
+      if (selectedIndustry !== 'All Industries' &&
+        typeof post.industry === 'string' &&
+        !post.industry.toLowerCase().includes(selectedIndustry.toLowerCase())) {
+        return false;
+      }
+
+      if (selectedWorkMode !== 'All Modes' &&
+        typeof post.modeOfWork === 'string' &&
+        post.modeOfWork.toLowerCase() !== selectedWorkMode.toLowerCase()) {
+        return false;
+      }
+
+      return true;
     })
     .sort((a, b) => {
-      // Only sort by Most Recent
+      // Sort by Most Recent
       return (b.createdAt?.getTime?.() || 0) - (a.createdAt?.getTime?.() || 0);
     });
 
@@ -165,11 +201,20 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
             <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
             <TextInput
               style={styles.searchInput}
-              placeholder="Search"
+              placeholder="Search companies, skills, location..."
               value={searchText}
               onChangeText={setSearchText}
               placeholderTextColor="#999"
+              autoCapitalize="none"
+              autoCorrect={false}
+              clearButtonMode="while-editing"
+              returnKeyType="search"
             />
+            {searchText.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchText('')} style={styles.clearButton}>
+                <Ionicons name="close-circle" size={20} color="#999" />
+              </TouchableOpacity>
+            )}
           </View>
           <TouchableOpacity
             style={styles.filterButtonNext}
@@ -235,72 +280,85 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
         </Text>
 
         {/* Company Cards */}
-        {filteredPosts.map(post => {
-          const logo = getCompanyLogo(post.company);
-          return (
-            <TouchableOpacity
-              key={post.id}
-              style={styles.card}
-              onPress={() => navigation.navigate('CompanyProfile', { company: post })}
-            >
-              <View style={styles.cardHeader}>
-                <View style={styles.companyInfo}>
-                  <View style={[styles.companyLogo, { backgroundColor: logo.color }]}>
-                    <Text style={styles.companyLogoText}>{logo.letter}</Text>
-                  </View>
-                  <View style={styles.companyDetails}>
-                    <Text style={styles.companyName}>{post.company}</Text>
-                    <Text style={styles.companyLocation}>
-                      <Ionicons name="location" size={14} color="#666" />
-                      {' '}{post.location}
-                    </Text>
-                    <Text style={styles.companyIndustry}>
-                      <Ionicons name="briefcase" size={14} color="#666" />
-                      {' '}{post.industry}
-                    </Text>
-                  </View>
-                </View>
-                <TouchableOpacity
-                  onPress={() => toggleSaveInternship(post)}
-                  style={styles.bookmarkButton}
-                >
-                  <Ionicons
-                    name={savedInternships.some(saved => saved.id === post.id) ? 'bookmark' : 'bookmark-outline'}
-                    size={20}
-                    color="#007aff"
-                  />
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.descriptionContainer}>
-                <Text style={styles.description}>
-                  {expanded[post.id] ? post.description : post.description.substring(0, 120) + '...'}
-                </Text>
-                <TouchableOpacity onPress={() => handleToggleExpand(post.id)}>
-                  <Text style={styles.readMore}>{expanded[post.id] ? 'Show Less' : 'Read More'}</Text>
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.cardFooter}>
-                <View style={styles.tagContainer}>
-                  {post.tags.slice(0, 3).map((tag, idx) => (
-                    <View key={idx} style={styles.tag}>
-                      <Text style={styles.tagText}>{tag}</Text>
+        {filteredPosts.length === 0 && searchText.trim() !== '' ? (
+          <View style={styles.noResultsContainer}>
+            <Ionicons name="search" size={48} color="#ccc" />
+            <Text style={styles.noResultsText}>No internships found</Text>
+            <Text style={styles.noResultsSubtext}>
+              Try adjusting your search terms or filters
+            </Text>
+          </View>
+        ) : (
+          filteredPosts.map(post => {
+            const logo = getCompanyLogo(post.company);
+            return (
+              <TouchableOpacity
+                key={post.id}
+                style={styles.card}
+                onPress={() => navigation.navigate('CompanyProfile', { company: post })}
+              >
+                <View style={styles.cardHeader}>
+                  <View style={styles.companyInfo}>
+                    <View style={[styles.companyLogo, { backgroundColor: logo.color }]}>
+                      <Text style={styles.companyLogoText}>{logo.letter}</Text>
                     </View>
-                  ))}
-                  {post.tags.length > 3 && (
-                    <Text style={styles.moreTagsText}>+{post.tags.length - 3} more</Text>
+                    <View style={styles.companyDetails}>
+                      <Text style={styles.companyName}>{post.company}</Text>
+                      <Text style={styles.companyLocation}>
+                        <Ionicons name="location" size={14} color="#666" />
+                        {' '}{typeof post.location === 'string' ? post.location : 'Location not specified'}
+                      </Text>
+                      <Text style={styles.companyIndustry}>
+                        <Ionicons name="briefcase" size={14} color="#666" />
+                        {' '}{typeof post.industry === 'string' ? post.industry : 'Industry not specified'}
+                      </Text>
+                    </View>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => toggleSaveInternship(post)}
+                    style={styles.bookmarkButton}
+                  >
+                    <Ionicons
+                      name={savedInternships.some(saved => saved.id === post.id) ? 'bookmark' : 'bookmark-outline'}
+                      size={20}
+                      color="#007aff"
+                    />
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.descriptionContainer}>
+                  <Text style={styles.description}>
+                    {expanded[post.id] ? (typeof post.description === 'string' ? post.description : 'No description available') :
+                      (typeof post.description === 'string' ? (post.description.length > 120 ? post.description.substring(0, 120) + '...' : post.description) : 'No description available')}
+                  </Text>
+                  {typeof post.description === 'string' && post.description.length > 120 && (
+                    <TouchableOpacity onPress={() => handleToggleExpand(post.id)}>
+                      <Text style={styles.readMore}>{expanded[post.id] ? 'Show Less' : 'Read More'}</Text>
+                    </TouchableOpacity>
                   )}
                 </View>
 
-                <View style={styles.cardMeta}>
-                  <Text style={styles.workMode}>{post.modeOfWork}</Text>
-                  <Text style={styles.timeStamp}>{timeAgo(post.createdAt ?? new Date())}</Text>
+                <View style={styles.cardFooter}>
+                  <View style={styles.tagContainer}>
+                    {(Array.isArray(post.tags) ? post.tags.filter(tag => typeof tag === 'string') : []).slice(0, 3).map((tag, idx) => (
+                      <View key={idx} style={styles.tag}>
+                        <Text style={styles.tagText}>{tag}</Text>
+                      </View>
+                    ))}
+                    {Array.isArray(post.tags) && post.tags.filter(tag => typeof tag === 'string').length > 3 && (
+                      <Text style={styles.moreTagsText}>+{post.tags.filter(tag => typeof tag === 'string').length - 3} more</Text>
+                    )}
+                  </View>
+
+                  <View style={styles.cardMeta}>
+                    <Text style={styles.workMode}>{typeof post.modeOfWork === 'string' ? post.modeOfWork : 'Work mode not specified'}</Text>
+                    <Text style={styles.timeStamp}>{timeAgo(post.createdAt ?? new Date())}</Text>
+                  </View>
                 </View>
-              </View>
-            </TouchableOpacity>
-          );
-        })}
+              </TouchableOpacity>
+            );
+          })
+        )}
       </ScrollView>
 
       {/* Advanced Filters Modal */}
@@ -484,6 +542,28 @@ const styles = StyleSheet.create({
     color: '#333',
     paddingVertical: 8,
     backgroundColor: 'transparent',
+  },
+  clearButton: {
+    padding: 4,
+    marginLeft: 8,
+  },
+  noResultsContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    paddingHorizontal: 20,
+  },
+  noResultsText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#666',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  noResultsSubtext: {
+    fontSize: 14,
+    color: '#999',
+    textAlign: 'center',
   },
   filterButtonNext: {
     backgroundColor: '#f5f5f5',

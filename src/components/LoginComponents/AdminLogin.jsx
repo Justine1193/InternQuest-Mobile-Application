@@ -12,7 +12,7 @@ import PropTypes from "prop-types";
 import { useNavigate } from "react-router-dom";
 import "./AdminLogin.css";
 import { FaRegEye, FaRegEyeSlash } from "react-icons/fa";
-import { collection, query, where, getDocs } from "firebase/firestore";
+import { collection, query, where, getDocs, addDoc } from "firebase/firestore";
 import { db } from "../../../firebase";
 import InternQuestLogo from "../../assets/InternQuest_with_text_white.png";
 
@@ -43,6 +43,25 @@ const AdminLogin = () => {
   // Toggles the visibility of the password input
   const togglePasswordVisibility = () => {
     setShowPassword((prev) => !prev);
+  };
+
+  // Temporary function to create admin user (for testing)
+  const createAdminUser = async () => {
+    try {
+      setIsLoading(true);
+      const adminUser = {
+        username: "admin",
+        password: "admin123"
+      };
+
+      await addDoc(collection(db, "adminusers"), adminUser);
+      setError("✅ Admin user created! Try logging in with admin/admin123");
+    } catch (err) {
+      console.error("Error creating admin user:", err);
+      setError("❌ Failed to create admin user. Check Firebase permissions.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // Handles form submission and authentication logic
@@ -154,6 +173,27 @@ const AdminLogin = () => {
                 aria-busy={isLoading}
               >
                 {isLoading ? "Signing in..." : "Sign in as Admin"}
+              </button>
+
+              {/* Temporary admin user creation button */}
+              <button
+                type="button"
+                onClick={createAdminUser}
+                className="create-admin-button"
+                disabled={isLoading}
+                style={{
+                  marginTop: "10px",
+                  width: "100%",
+                  padding: "12px",
+                  background: "#28a745",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "8px",
+                  cursor: "pointer",
+                  fontSize: "14px"
+                }}
+              >
+                Create Admin User (admin/admin123)
               </button>
             </form>
           </div>

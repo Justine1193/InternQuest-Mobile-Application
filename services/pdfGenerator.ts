@@ -2,21 +2,30 @@ import { Platform } from 'react-native';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 
+export interface WeeklyReportEntry {
+  date: string;
+  timeIn: string;
+  timeOut: string;
+  hours: number;
+  taskCompleted: string;
+  remarks?: string;
+}
+
 export interface WeeklyReportData {
-  id: string;
-  weekNumber: number;
-  startDate: string;
-  endDate: string;
-  tasks: string[];
-  learnings: string[];
-  outcomes: string[];
-  challenges: string[];
-  nextWeekPlan: string[];
-  attachments: string[];
-  createdAt: Date;
-  studentName: string;
+  traineeName: string;
+  departmentAssigned: string;
   companyName: string;
-  supervisorName?: string;
+  monthCovered: string;
+  entries: WeeklyReportEntry[];
+  preparedByName?: string;
+  preparedByTitle?: string;
+  notedByName?: string;
+  notedByTitle?: string;
+  receivedByName?: string;
+  receivedByTitle?: string;
+  leftLogoUrl?: string;
+  rightLogoUrl?: string;
+  submittedDate?: string;
 }
 
 export class PDFGenerator {
@@ -56,392 +65,270 @@ export class PDFGenerator {
   }
 
   private static generateHTMLContent(reportData: WeeklyReportData): string {
-    const currentDate = new Date().toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
+    const currentDate = reportData.submittedDate
+      ? reportData.submittedDate
+      : new Date().toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        });
+    const totalHours = reportData.entries.reduce((sum, entry) => sum + (Number(entry.hours) || 0), 0);
+    const preparedByName = reportData.preparedByName || reportData.traineeName || '';
+    const preparedByTitle = reportData.preparedByTitle || 'Trainee';
+    const notedByName = reportData.notedByName || '';
+    const notedByTitle = reportData.notedByTitle || 'Job Title of Supervisor';
+    const receivedByName = reportData.receivedByName || '';
+    const receivedByTitle = reportData.receivedByTitle || 'OJT Adviser';
 
-    return `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="utf-8">
-          <title>Weekly Report - Week ${reportData.weekNumber}</title>
-          <style>
-            body {
-              font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-              margin: 0;
-              padding: 20px;
-              background-color: #f8f9fa;
-              color: #333;
-            }
-            .container {
-              max-width: 800px;
-              margin: 0 auto;
-              background-color: white;
-              padding: 40px;
-              border-radius: 8px;
-              box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            }
-            .header {
-              text-align: center;
-              border-bottom: 3px solid #007bff;
-              padding-bottom: 20px;
-              margin-bottom: 30px;
-            }
-            .header h1 {
-              color: #007bff;
-              margin: 0;
-              font-size: 28px;
-              font-weight: bold;
-            }
-            .header h2 {
-              color: #666;
-              margin: 10px 0 0 0;
-              font-size: 18px;
-              font-weight: normal;
-            }
-            .report-info {
-              display: flex;
-              justify-content: space-between;
-              margin-bottom: 30px;
-              padding: 15px;
-              background-color: #f8f9fa;
-              border-radius: 6px;
-            }
-            .info-item {
-              text-align: center;
-            }
-            .info-label {
-              font-size: 12px;
-              color: #666;
-              text-transform: uppercase;
-              font-weight: bold;
-              margin-bottom: 5px;
-            }
-            .info-value {
-              font-size: 14px;
-              color: #333;
-              font-weight: 600;
-            }
-            .section {
-              margin-bottom: 25px;
-            }
-            .section-title {
-              font-size: 18px;
-              font-weight: bold;
-              color: #007bff;
-              margin-bottom: 15px;
-              padding-bottom: 5px;
-              border-bottom: 2px solid #e9ecef;
-            }
-            .list-item {
-              margin-bottom: 8px;
-              padding-left: 20px;
-              position: relative;
-            }
-            .list-item:before {
-              content: "•";
-              color: #007bff;
-              font-weight: bold;
-              position: absolute;
-              left: 0;
-            }
-            .attachments {
-              margin-top: 30px;
-              padding: 15px;
-              background-color: #e8f5e8;
-              border-radius: 6px;
-              border-left: 4px solid #28a745;
-            }
-            .attachments h3 {
-              color: #28a745;
-              margin: 0 0 10px 0;
-              font-size: 16px;
-            }
-            .footer {
-              margin-top: 40px;
-              padding-top: 20px;
-              border-top: 1px solid #e9ecef;
-              text-align: center;
-              color: #666;
-              font-size: 12px;
-            }
-            .signature-section {
-              margin-top: 40px;
-              display: flex;
-              justify-content: space-between;
-            }
-            .signature-box {
-              width: 45%;
-              text-align: center;
-            }
-            .signature-line {
-              border-top: 1px solid #333;
-              margin-top: 50px;
-              padding-top: 5px;
-            }
-            .signature-label {
-              font-size: 12px;
-              color: #666;
-              text-transform: uppercase;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="header">
-              <h1>Weekly Accomplishment Report</h1>
-              <h2>Week ${reportData.weekNumber} - ${reportData.startDate} to ${reportData.endDate}</h2>
-            </div>
+    const entryRows = reportData.entries
+      .map(
+        (entry) => `
+        <tr>
+          <td>${entry.date || ''}</td>
+          <td>${entry.timeIn || ''}</td>
+          <td>${entry.timeOut || ''}</td>
+          <td>${entry.hours || ''}</td>
+          <td>${entry.taskCompleted || ''}</td>
+          <td>${entry.remarks || ''}</td>
+        </tr>`
+      )
+      .join('');
 
-            <div class="report-info">
-              <div class="info-item">
-                <div class="info-label">Student Name</div>
-                <div class="info-value">${reportData.studentName}</div>
-              </div>
-              <div class="info-item">
-                <div class="info-label">Company</div>
-                <div class="info-value">${reportData.companyName}</div>
-              </div>
-              <div class="info-item">
-                <div class="info-label">Report Date</div>
-                <div class="info-value">${currentDate}</div>
-              </div>
-            </div>
-
-            <div class="section">
-              <div class="section-title">Tasks Accomplished</div>
-              ${reportData.tasks.map(task => `<div class="list-item">${task}</div>`).join('')}
-            </div>
-
-            <div class="section">
-              <div class="section-title">Learnings and Insights</div>
-              ${reportData.learnings.map(learning => `<div class="list-item">${learning}</div>`).join('')}
-            </div>
-
-            <div class="section">
-              <div class="section-title">Outcomes and Achievements</div>
-              ${reportData.outcomes.map(outcome => `<div class="list-item">${outcome}</div>`).join('')}
-            </div>
-
-            <div class="section">
-              <div class="section-title">Challenges Faced</div>
-              ${reportData.challenges.map(challenge => `<div class="list-item">${challenge}</div>`).join('')}
-            </div>
-
-            <div class="section">
-              <div class="section-title">Plans for Next Week</div>
-              ${reportData.nextWeekPlan.map(plan => `<div class="list-item">${plan}</div>`).join('')}
-            </div>
-
-            ${reportData.attachments.length > 0 ? `
-              <div class="attachments">
-                <h3>📎 Attachments</h3>
-                ${reportData.attachments.map(attachment => `<div class="list-item">${attachment}</div>`).join('')}
-              </div>
-            ` : ''}
-
-            <div class="signature-section">
-              <div class="signature-box">
-                <div class="signature-line"></div>
-                <div class="signature-label">Student Signature</div>
-              </div>
-              <div class="signature-box">
-                <div class="signature-line"></div>
-                <div class="signature-label">Supervisor Signature</div>
-              </div>
-            </div>
-
-            <div class="footer">
-              <p>Generated on ${currentDate} | InternQuest Mobile Application</p>
-            </div>
-          </div>
-        </body>
-      </html>
-    `;
-  }
-
-  static async generateMultipleReportsPDF(reports: WeeklyReportData[]): Promise<string> {
-    const htmlContent = this.generateMultipleReportsHTML(reports);
-
-    try {
-      const { uri } = await Print.printToFileAsync({
-        html: htmlContent,
-        base64: false,
-      });
-
-      return uri;
-    } catch (error) {
-      console.error('Error generating PDF:', error);
-      throw new Error('Failed to generate PDF');
-    }
-  }
-
-  private static generateMultipleReportsHTML(reports: WeeklyReportData[]): string {
-    const currentDate = new Date().toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
-
-    const reportsHTML = reports.map(report => `
-      <div class="report-section">
-        <div class="report-header">
-          <h2>Week ${report.weekNumber} - ${report.startDate} to ${report.endDate}</h2>
+    const headerLogos = `
+      <div class="logo-wrapper">
+        <div class="logo-box">
+          ${
+            reportData.leftLogoUrl
+              ? `<img src="${reportData.leftLogoUrl}" alt="Left Logo" />`
+              : `<div class="logo-placeholder">LOGO</div>`
+          }
         </div>
-        
-        <div class="report-summary">
-          <div class="summary-item">
-            <strong>Tasks:</strong> ${report.tasks.length} completed
-          </div>
-          <div class="summary-item">
-            <strong>Learnings:</strong> ${report.learnings.length} insights gained
-          </div>
-          <div class="summary-item">
-            <strong>Outcomes:</strong> ${report.outcomes.length} achievements
-          </div>
-        </div>
-
-        <div class="report-details">
-          <div class="detail-section">
-            <h4>Key Tasks:</h4>
-            ${report.tasks.slice(0, 3).map(task => `<div class="list-item">${task}</div>`).join('')}
-            ${report.tasks.length > 3 ? `<div class="more-items">... and ${report.tasks.length - 3} more tasks</div>` : ''}
-          </div>
-
-          <div class="detail-section">
-            <h4>Key Learnings:</h4>
-            ${report.learnings.slice(0, 2).map(learning => `<div class="list-item">${learning}</div>`).join('')}
-            ${report.learnings.length > 2 ? `<div class="more-items">... and ${report.learnings.length - 2} more learnings</div>` : ''}
-          </div>
+        <div class="logo-box">
+          ${
+            reportData.rightLogoUrl
+              ? `<img src="${reportData.rightLogoUrl}" alt="Right Logo" />`
+              : `<div class="logo-placeholder">LOGO</div>`
+          }
         </div>
       </div>
-    `).join('');
+    `;
 
     return `
       <!DOCTYPE html>
       <html>
         <head>
           <meta charset="utf-8">
-          <title>Weekly Reports Summary</title>
+          <title>Weekly Accomplishment Report</title>
           <style>
             body {
               font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
               margin: 0;
-              padding: 20px;
-              background-color: #f8f9fa;
+              padding: 32px;
+              background-color: #f6f6f6;
               color: #333;
             }
-            .container {
-              max-width: 800px;
+            .report {
+              background: #fff;
+              max-width: 900px;
               margin: 0 auto;
-              background-color: white;
-              padding: 40px;
-              border-radius: 8px;
-              box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+              padding: 32px 40px;
+              border: 1px solid #dcdcdc;
             }
-            .header {
-              text-align: center;
-              border-bottom: 3px solid #007bff;
-              padding-bottom: 20px;
-              margin-bottom: 30px;
-            }
-            .header h1 {
-              color: #007bff;
-              margin: 0;
-              font-size: 28px;
-              font-weight: bold;
-            }
-            .header h2 {
-              color: #666;
-              margin: 10px 0 0 0;
-              font-size: 18px;
-              font-weight: normal;
-            }
-            .report-section {
-              margin-bottom: 30px;
-              padding: 20px;
-              border: 1px solid #e9ecef;
-              border-radius: 8px;
-              background-color: #f8f9fa;
-            }
-            .report-header h2 {
-              color: #007bff;
-              margin: 0 0 15px 0;
-              font-size: 20px;
-            }
-            .report-summary {
+            .logo-wrapper {
               display: flex;
               justify-content: space-between;
-              margin-bottom: 15px;
-              padding: 10px;
-              background-color: white;
-              border-radius: 6px;
+              align-items: center;
+              margin-bottom: 16px;
             }
-            .summary-item {
-              font-size: 14px;
-              color: #666;
-            }
-            .report-details {
+            .logo-box {
+              width: 90px;
+              height: 90px;
+              border: 1px solid #ddd;
               display: flex;
-              gap: 20px;
+              align-items: center;
+              justify-content: center;
+              border-radius: 50%;
+              overflow: hidden;
             }
-            .detail-section {
-              flex: 1;
+            .logo-box img {
+              width: 100%;
+              height: 100%;
+              object-fit: contain;
             }
-            .detail-section h4 {
-              color: #333;
-              margin: 0 0 10px 0;
-              font-size: 16px;
-            }
-            .list-item {
-              margin-bottom: 6px;
-              padding-left: 15px;
-              position: relative;
-              font-size: 14px;
-            }
-            .list-item:before {
-              content: "•";
-              color: #007bff;
-              font-weight: bold;
-              position: absolute;
-              left: 0;
-            }
-            .more-items {
+            .logo-placeholder {
               font-size: 12px;
-              color: #666;
-              font-style: italic;
-              margin-top: 5px;
+              color: #999;
             }
-            .footer {
-              margin-top: 40px;
-              padding-top: 20px;
-              border-top: 1px solid #e9ecef;
+            .header-text {
               text-align: center;
+              margin-bottom: 16px;
+            }
+            .header-text h1 {
+              font-size: 20px;
+              margin: 0;
+              text-transform: uppercase;
+              letter-spacing: 1px;
+            }
+            .header-text h2 {
+              font-size: 18px;
+              margin: 8px 0 4px;
+              text-transform: uppercase;
+            }
+            .header-text p {
+              margin: 4px 0;
+              font-size: 12px;
+              letter-spacing: 0.5px;
+            }
+            .highlight-title {
+              text-align: center;
+              font-size: 18px;
+              font-weight: bold;
+              margin: 16px 0 24px;
+            }
+            .meta-table,
+            .entries-table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-bottom: 20px;
+              font-size: 13px;
+            }
+            .meta-table td {
+              border: 1px solid #000;
+              padding: 8px 10px;
+            }
+            .meta-label {
+              width: 20%;
+              font-weight: bold;
+              text-transform: uppercase;
+            }
+            .entries-table th,
+            .entries-table td {
+              border: 1px solid #000;
+              padding: 8px;
+              text-align: left;
+              vertical-align: top;
+            }
+            .entries-table th {
+              text-align: center;
+              background-color: #f0f0f0;
+            }
+            .total-row td {
+              font-weight: bold;
+              text-transform: uppercase;
+            }
+            .summary-row {
+              font-weight: bold;
+            }
+            .footer-signatures {
+              margin-top: 24px;
+              display: flex;
+              justify-content: space-between;
+              text-align: center;
+            }
+            .signature-block {
+              width: 30%;
+            }
+            .signature-line {
+              margin-top: 48px;
+              border-top: 1px solid #000;
+              padding-top: 4px;
+              font-size: 12px;
+            }
+            .signature-label {
+              font-size: 11px;
+              text-transform: uppercase;
               color: #666;
+            }
+            .submitted-row {
+              margin-top: 16px;
+              display: flex;
+              justify-content: space-between;
               font-size: 12px;
             }
           </style>
         </head>
         <body>
-          <div class="container">
-            <div class="header">
-              <h1>Weekly Reports Summary</h1>
-              <h2>${reports.length} Reports Generated</h2>
+          <div class="report">
+            ${headerLogos}
+            <div class="header-text">
+              <h2>New Era University</h2>
+              <p>College of Computer Studies</p>
+              <p>Department of Information Technology</p>
+              <h1>Weekly Accomplishment Report</h1>
+              <p>On the Job Training</p>
             </div>
 
-            ${reportsHTML}
+            <table class="meta-table">
+              <tr>
+                <td class="meta-label">Trainee:</td>
+                <td>${reportData.traineeName || ''}</td>
+                <td class="meta-label">Department Assigned:</td>
+                <td>${reportData.departmentAssigned || ''}</td>
+              </tr>
+              <tr>
+                <td class="meta-label">Company:</td>
+                <td>${reportData.companyName || ''}</td>
+                <td class="meta-label">Month Covered:</td>
+                <td>${reportData.monthCovered || ''}</td>
+              </tr>
+            </table>
 
-            <div class="footer">
-              <p>Generated on ${currentDate} | InternQuest Mobile Application</p>
+            <table class="entries-table">
+              <thead>
+                <tr>
+                  <th style="width: 12%;">Date</th>
+                  <th style="width: 10%;">Time IN</th>
+                  <th style="width: 10%;">Time OUT</th>
+                  <th style="width: 10%;">Number of Hours</th>
+                  <th style="width: 38%;">Task Completed</th>
+                  <th style="width: 20%;">Remarks</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${entryRows}
+                <tr class="total-row">
+                  <td colspan="3">Total Number of Hours</td>
+                  <td>${totalHours}</td>
+                  <td colspan="2"></td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div class="submitted-row">
+              <span>Prepared by:</span>
+              <span>Noted by:</span>
+              <span>Received by:</span>
+            </div>
+
+            <div class="footer-signatures">
+              <div class="signature-block">
+                <div class="signature-line">${preparedByName}</div>
+                <div class="signature-label">${preparedByTitle}</div>
+              </div>
+              <div class="signature-block">
+                <div class="signature-line">${notedByName}</div>
+                <div class="signature-label">${notedByTitle}</div>
+              </div>
+              <div class="signature-block">
+                <div class="signature-line">${receivedByName}</div>
+                <div class="signature-label">${receivedByTitle}</div>
+              </div>
+            </div>
+
+            <div class="submitted-row">
+              <span>Date Submitted: ${currentDate}</span>
+              <span></span>
+              <span></span>
             </div>
           </div>
         </body>
       </html>
     `;
+  }
+
+  static async generateMultipleReportsPDF(): Promise<string> {
+    throw new Error('generateMultipleReportsPDF is not implemented for the tabular template yet.');
   }
 }
 
-export default PDFGenerator; 
+export default PDFGenerator;

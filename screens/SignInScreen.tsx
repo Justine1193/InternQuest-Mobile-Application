@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -18,8 +18,12 @@ import {
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useNavigation } from "@react-navigation/native";
-import { signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
+import { GoogleAuthProvider, signInWithCredential, signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
+import * as WebBrowser from "expo-web-browser";
+import * as Google from "expo-auth-session/providers/google";
 import { auth } from "../firebase/config";
+
+WebBrowser.maybeCompleteAuthSession();
 
 // Types
 type RootStackParamList = {
@@ -55,11 +59,74 @@ const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [errors, setErrors] = useState<{
     email?: string;
     password?: string;
   }>({});
   const [forgotPasswordSent, setForgotPasswordSent] = useState(false);
+
+  const googleClientIds = useMemo(
+    () => ({
+      expo: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_EXPO,
+      ios: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS,
+      android: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID,
+      web: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB,
+    }),
+    []
+  );
+
+  const isGoogleConfigured = useMemo(
+    () => Boolean(googleClientIds.expo || googleClientIds.android || googleClientIds.ios || googleClientIds.web),
+    [googleClientIds]
+  );
+
+  const googleAuthConfig = useMemo<Partial<Google.GoogleAuthRequestConfig>>(
+    () => ({
+      clientId: googleClientIds.expo,
+      iosClientId: googleClientIds.ios,
+      androidClientId: googleClientIds.android,
+      webClientId: googleClientIds.web,
+      scopes: ["profile", "email"],
+    }),
+    [googleClientIds]
+  );
+
+  const [request, response, promptAsync] = Google.useIdTokenAuthRequest(googleAuthConfig);
+
+  useEffect(() => {
+    const finishGoogleSignIn = async () => {
+      if (!response) return;
+
+      if (response.type === "success") {
+        try {
+          const idToken = response.authentication?.idToken || response.params?.id_token;
+          if (!idToken) {
+            throw new Error("Missing Google idToken");
+          }
+          const credential = GoogleAuthProvider.credential(idToken);
+          await signInWithCredential(auth, credential);
+          setIsLoggedIn(true);
+        } catch (error: any) {
+          console.error("Google sign-in error:", error);
+          Alert.alert(
+            "Google Sign-In Failed",
+            error?.message || "Unable to complete Google sign-in. Please try again."
+          );
+        } finally {
+          setIsGoogleLoading(false);
+        }
+        return;
+      }
+
+      if (response.type !== "dismiss") {
+        Alert.alert("Google Sign-In Cancelled", "You can continue by using your NEU credentials.");
+      }
+      setIsGoogleLoading(false);
+    };
+
+    finishGoogleSignIn();
+  }, [response, setIsLoggedIn]);
 
   // Validation
   const validateEmail = (email: string): boolean => {
@@ -178,6 +245,32 @@ const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
 
   const handleSignUp = () => navigation.navigate("SignUp");
   const togglePasswordVisibility = () => setShowPassword(!showPassword);
+  const handleGoogleSignIn = useCallback(async () => {
+    if (!isGoogleConfigured) {
+      Alert.alert(
+        "Google Sign-In Not Configured",
+        "Please set the EXPO_PUBLIC_GOOGLE_CLIENT_ID values before using Google sign-in."
+      );
+      return;
+    }
+
+    if (!request) {
+      Alert.alert("Google Sign-In", "Still preparing Google sign-in. Please try again in a moment.");
+      return;
+    }
+
+    try {
+      setIsGoogleLoading(true);
+      const result = await promptAsync({ useProxy: true, showInRecents: true } as any);
+      if (result.type !== "success") {
+        setIsGoogleLoading(false);
+      }
+    } catch (error) {
+      console.error("Google prompt error:", error);
+      Alert.alert("Google Sign-In Failed", "Unable to open Google sign-in. Please try again.");
+      setIsGoogleLoading(false);
+    }
+  }, [isGoogleConfigured, promptAsync, request]);
 
   // Render
   return (
@@ -305,6 +398,37 @@ const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
                 </Text>
               </Text>
             </View>
+
+            {isGoogleConfigured && (
+              <>
+                <View style={styles.dividerRow}>
+                  <View style={styles.divider} />
+                  <Text style={styles.dividerText}>or</Text>
+                  <View style={styles.divider} />
+                </View>
+
+                <TouchableOpacity
+                  onPress={handleGoogleSignIn}
+                  style={[styles.socialButton, styles.googleButton]}
+                  disabled={isGoogleLoading}
+                >
+                  {isGoogleLoading ? (
+                    <ActivityIndicator color="#000" />
+                  ) : (
+                    <>
+                      <Icon name="google" size={20} color="#DB4437" style={styles.socialIcon} />
+                      <Text style={styles.socialButtonText}>Continue with Google</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </>
+            )}
+
+            {!isGoogleConfigured && (
+              <Text style={styles.googleConfigNotice}>
+                Google sign-in is not yet configured. Add your platform Google OAuth client IDs as EXPO_PUBLIC_GOOGLE_CLIENT_ID_* in app config to enable one-tap login.
+              </Text>
+            )}
           </View>
         </ScrollView>
       </TouchableWithoutFeedback>
@@ -387,6 +511,48 @@ const styles = StyleSheet.create({
   buttonText: {
     fontSize: 17,
     fontWeight: "bold",
+  },
+  dividerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: 16,
+  },
+  divider: {
+    flex: 1,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: "#ccc",
+  },
+  dividerText: {
+    marginHorizontal: 8,
+    color: "#999",
+    textTransform: "uppercase",
+    fontSize: 12,
+  },
+  socialButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#ddd",
+    borderRadius: 8,
+    paddingVertical: 12,
+  },
+  googleButton: {
+    backgroundColor: "#fff",
+  },
+  socialIcon: {
+    marginRight: 12,
+  },
+  socialButtonText: {
+    fontSize: 16,
+    fontWeight: "500",
+    color: "#333",
+  },
+  googleConfigNotice: {
+    marginTop: 12,
+    fontSize: 13,
+    color: "#999",
+    textAlign: "center",
   },
   signupContainer: {
     alignItems: "center",

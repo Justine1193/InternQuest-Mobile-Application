@@ -8,7 +8,6 @@
     "android": {
       "package": "com.internquest.internquest",
       "versionCode": 1,
-      // Google Maps config removed
       "newArchEnabled": true
     },
     "extra": {

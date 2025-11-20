@@ -188,8 +188,8 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
       const logsCol = collection(firestore, `users/${auth.currentUser.uid}/ojtLogs`);
       const logsSnap = await getDocs(logsCol);
       let sum = 0;
-      logsSnap.forEach(doc => {
-        const log = doc.data();
+      logsSnap.forEach((doc: any) => {
+        const log: any = doc.data();
         console.log('Fetched log:', log);
         const hours = parseFloat(log.hours);
         if (!isNaN(hours)) sum += hours;

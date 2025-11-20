@@ -3,6 +3,9 @@ import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 import { getDatabase } from 'firebase/database';
 import { getAuth } from "firebase/auth";
+import { initializeAuth } from 'firebase/auth/react-native';
+import { getReactNativePersistence } from 'firebase/auth/react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getStorage } from 'firebase/storage';
 
 // Note: In production, consider using environment variables
@@ -19,7 +22,19 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const firestore = getFirestore(app);
 const db = getDatabase(app);
-const auth = getAuth(app);
+// Use React Native persistence so auth state survives app restarts
+let auth: any;
+try {
+  auth = initializeAuth(app, {
+    persistence: getReactNativePersistence(AsyncStorage),
+  });
+} catch (e) {
+  // Fallback for environments where react-native persistence isn't available
+  // (shouldn't happen in a properly configured React Native app)
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore
+  auth = getAuth(app);
+}
 const storage = getStorage(app);
 
 export { firestore, db, app, auth, storage };

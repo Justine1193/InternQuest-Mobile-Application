@@ -116,6 +116,10 @@ const SignInScreen: React.FC = () => {
       <TouchableOpacity onPress={handleResetPassword}>
         <Text style={styles.loginLink}>Forgot password?</Text>
       </TouchableOpacity>
+
+      <TouchableOpacity onPress={() => (navigation as any).navigate('SignUp')}>
+        <Text style={styles.signupLink}>Don't have an account? Sign Up</Text>
+      </TouchableOpacity>
     </View>
   );
 };
@@ -202,6 +206,12 @@ const styles = StyleSheet.create({
     color: '#0077cc',
     textAlign: 'center',
   },
+    signupLink: {
+      fontWeight: 'bold',
+      color: '#0077cc',
+      textAlign: 'center',
+      marginTop: 16,
+    },
 });
 
 export default SignInScreen;

@@ -12,7 +12,8 @@
         "googleMaps": {
           "apiKey": "AIzaSyBqKcbvrNZzqs8G43VkWb-THJYVozjI9T0"
         }
-      }
+      },
+      "newArchEnabled": true
     },
     "extra": {
       "eas": {

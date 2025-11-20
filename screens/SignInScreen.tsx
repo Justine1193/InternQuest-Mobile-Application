@@ -39,6 +39,11 @@ type Props = {
   setIsLoggedIn: (value: boolean) => void;
 };
 
+type Errors = {
+  email?: string;
+  password?: string;
+};
+
 // Theme
 const theme = {
   background: "#fff",
@@ -60,10 +65,7 @@ const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
-  const [errors, setErrors] = useState<{
-    email?: string;
-    password?: string;
-  }>({});
+  const [errors, setErrors] = useState<Errors>({});
   const [forgotPasswordSent, setForgotPasswordSent] = useState(false);
 
   const googleClientIds = useMemo(
@@ -226,12 +228,12 @@ const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
 
   const handleForgotPassword = async () => {
     if (!email) {
-      setErrors(prev => ({ ...prev, email: "Please enter your email address first" }));
+      setErrors((prev: Errors) => ({ ...prev, email: "Please enter your email address first" }));
       return;
     }
 
     if (!validateEmail(email)) {
-      setErrors(prev => ({ ...prev, email: "Please enter a valid NEU email address" }));
+      setErrors((prev: Errors) => ({ ...prev, email: "Please enter a valid NEU email address" }));
       return;
     }
 
@@ -323,9 +325,9 @@ const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
                 placeholderTextColor="#aaa"
                 style={[styles.input, { color: theme.text }]}
                 value={email}
-                onChangeText={(text) => {
+                onChangeText={(text: string) => {
                   setEmail(text);
-                  if (errors.email) setErrors(prev => ({ ...prev, email: undefined }));
+                  if (errors.email) setErrors((prev: Errors) => ({ ...prev, email: undefined }));
                 }}
                 keyboardType="email-address"
                 autoCapitalize="none"
@@ -348,9 +350,9 @@ const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
                 placeholderTextColor="#aaa"
                 style={[styles.input, { color: theme.text }]}
                 value={password}
-                onChangeText={(text) => {
+                onChangeText={(text: string) => {
                   setPassword(text);
-                  if (errors.password) setErrors(prev => ({ ...prev, password: undefined }));
+                  if (errors.password) setErrors((prev: Errors) => ({ ...prev, password: undefined }));
                 }}
                 secureTextEntry={!showPassword}
                 autoCorrect={false}

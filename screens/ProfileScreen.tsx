@@ -18,7 +18,7 @@ import BottomNavbar from '../components/BottomNav';
 import { auth, firestore } from '../firebase/config';
 import { doc, setDoc, collection, getDoc, getDocs } from "firebase/firestore";
 import * as ImagePicker from 'expo-image-picker';
-import * as Progress from 'react-native-progress';
+// removed `react-native-progress` dependency and use a simple native progress bar instead
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
@@ -339,15 +339,11 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
         {/* Internship Progress Section */}
         <View style={styles.sectionCard}>
           <Text style={styles.sectionHeader}>Internship Progress</Text>
-          <Progress.Bar
-            progress={progress}
-            width={null}
-            height={20}
-            color="#0080ff"
-            unfilledColor="#e0e0e0"
-            borderRadius={10}
-            borderWidth={0}
-          />
+          <View style={styles.progressBarContainer}>
+            <View style={styles.progressBackground}>
+              <View style={[styles.progressFill, { width: `${Math.round(progress * 100)}%` }]} />
+            </View>
+          </View>
           <Text style={styles.progressText}>
             {totalHours} hrs / {requiredHours} hrs ({Math.round(progress * 100)}% completed)
           </Text>
@@ -732,6 +728,20 @@ const styles = StyleSheet.create({
   },
   progressBarContainer: {
     marginTop: 10,
+    height: 20,
+    justifyContent: 'center',
+  },
+  progressBackground: {
+    width: '100%',
+    height: 12,
+    backgroundColor: '#e0e0e0',
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#0080ff',
+    borderRadius: 10,
   },
   progressText: {
     fontSize: 14,

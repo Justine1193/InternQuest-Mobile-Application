@@ -70,24 +70,38 @@ const App: React.FC = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isProfileComplete, setIsProfileComplete] = useState<boolean | null>(null);
   const [currentScreen, setCurrentScreen] = useState<string>('Home');
+  const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setIsLoggedIn(!!user);
       if (user) {
+        // Auto-login detected!
+        console.log('✅ Auto-login successful!');
+        console.log('📧 User email:', user.email);
+        console.log('🆔 User ID:', user.uid);
+        setCurrentUserEmail(user.email || null);
+        setIsLoggedIn(true);
+
         // Fetch user profile from Firestore
         try {
           const userDoc = await getDoc(doc(firestore, 'users', user.uid));
           if (userDoc.exists()) {
             const data = userDoc.data();
             setIsProfileComplete(!!data.isProfileComplete);
+            console.log('📋 Profile complete:', !!data.isProfileComplete);
           } else {
             setIsProfileComplete(false);
+            console.log('📋 Profile not found in Firestore');
           }
         } catch (e) {
+          console.error('❌ Error fetching profile:', e);
           setIsProfileComplete(false);
         }
       } else {
+        // No user found - need to sign in
+        console.log('🔓 No saved session found - showing sign in screen');
+        setCurrentUserEmail(null);
+        setIsLoggedIn(false);
         setIsProfileComplete(null);
       }
       setIsLoading(false);
@@ -102,7 +116,11 @@ const App: React.FC = () => {
 
   const renderMainContent = () => {
     if (isLoading) {
-      return <Stack.Screen name="Launch" component={LaunchScreen} />;
+      return (
+        <Stack.Screen name="Launch">
+          {props => <LaunchScreen {...props} userEmail={currentUserEmail} />}
+        </Stack.Screen>
+      );
     }
 
     if (!isLoggedIn) {

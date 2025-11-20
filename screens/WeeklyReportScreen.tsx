@@ -9,6 +9,7 @@ import {
     Alert,
     ScrollView,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { collection, addDoc, Timestamp } from 'firebase/firestore';
@@ -28,6 +29,11 @@ const emptyEntry: WeeklyReportEntryForm = {
 };
 
 const WeeklyReportScreen: React.FC = () => {
+    const insets = useSafeAreaInsets();
+    // Bottom navbar height is approximately 60-70px (icon + label + padding)
+    const BOTTOM_NAV_HEIGHT = 70;
+    const bottomPadding = insets.bottom + BOTTOM_NAV_HEIGHT;
+
     const [formInfo, setFormInfo] = useState({
         traineeName: '',
         departmentAssigned: '',
@@ -195,7 +201,10 @@ const WeeklyReportScreen: React.FC = () => {
     };
 
     return (
-        <ScrollView contentContainerStyle={styles.scroll}>
+        <ScrollView 
+            contentContainerStyle={[styles.scroll, { paddingBottom: bottomPadding }]}
+            showsVerticalScrollIndicator={true}
+        >
             <View style={styles.section}>
                 <Text style={styles.title}>Weekly Accomplishment Report</Text>
                 <Text style={styles.description}>

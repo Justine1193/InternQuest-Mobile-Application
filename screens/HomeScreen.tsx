@@ -201,7 +201,7 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
             <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
             <TextInput
               style={styles.searchInput}
-              placeholder="Search companies, skills, location..."
+              placeholder="Search companies"
               value={searchText}
               onChangeText={setSearchText}
               placeholderTextColor="#999"

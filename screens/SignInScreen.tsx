@@ -76,22 +76,52 @@ const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
     []
   );
 
-  const isGoogleConfigured = useMemo(
-    () => Boolean(googleClientIds.expo || googleClientIds.android || googleClientIds.ios || googleClientIds.web),
-    [googleClientIds]
-  );
+  const isGoogleConfigured = useMemo(() => {
+    if (Platform.OS === 'android') {
+      return Boolean(googleClientIds.android);
+    } else if (Platform.OS === 'ios') {
+      return Boolean(googleClientIds.ios);
+    } else {
+      return Boolean(googleClientIds.web || googleClientIds.expo);
+    }
+  }, [googleClientIds]);
 
+  // Build config with required platform-specific client ID
+  // The hook validates that the platform-specific client ID exists and is not empty
   const googleAuthConfig = useMemo<Partial<Google.GoogleAuthRequestConfig>>(
-    () => ({
-      clientId: googleClientIds.expo,
-      iosClientId: googleClientIds.ios,
-      androidClientId: googleClientIds.android,
-      webClientId: googleClientIds.web,
-      scopes: ["profile", "email"],
-    }),
+    () => {
+      const config: Partial<Google.GoogleAuthRequestConfig> = {
+        scopes: ["profile", "email"],
+      };
+
+      // Always provide the platform-specific client ID to satisfy hook validation
+      // If not configured, use a placeholder in valid Google client ID format
+      // This prevents the hook from throwing an error on initialization
+      // We check isGoogleConfigured before actually using the auth, so this placeholder won't be used
+      const placeholderClientId = '123456789012-abcdefghijklmnopqrstuvwxyz123456.apps.googleusercontent.com';
+
+      if (Platform.OS === 'android') {
+        config.androidClientId = googleClientIds.android || placeholderClientId;
+      } else if (Platform.OS === 'ios') {
+        config.iosClientId = googleClientIds.ios || placeholderClientId;
+      } else {
+        config.webClientId = googleClientIds.web || googleClientIds.expo || placeholderClientId;
+        if (googleClientIds.expo) config.clientId = googleClientIds.expo;
+      }
+
+      // Also set other client IDs if available
+      if (googleClientIds.expo && Platform.OS !== 'web') config.clientId = googleClientIds.expo;
+      if (googleClientIds.ios && Platform.OS !== 'ios') config.iosClientId = googleClientIds.ios;
+      if (googleClientIds.android && Platform.OS !== 'android') config.androidClientId = googleClientIds.android;
+      if (googleClientIds.web && Platform.OS !== 'web') config.webClientId = googleClientIds.web;
+
+      return config;
+    },
     [googleClientIds]
   );
 
+  // Initialize the hook - it will validate the config
+  // We'll check isGoogleConfigured before actually using it
   const [request, response, promptAsync] = Google.useIdTokenAuthRequest(googleAuthConfig);
 
   useEffect(() => {
@@ -399,6 +429,7 @@ const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
               </Text>
             </View>
 
+            {/* Google Sign-In Button */}
             {isGoogleConfigured && (
               <>
                 <View style={styles.dividerRow}>
@@ -422,12 +453,6 @@ const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
                   )}
                 </TouchableOpacity>
               </>
-            )}
-
-            {!isGoogleConfigured && (
-              <Text style={styles.googleConfigNotice}>
-                Google sign-in is not yet configured. Add your platform Google OAuth client IDs as EXPO_PUBLIC_GOOGLE_CLIENT_ID_* in app config to enable one-tap login.
-              </Text>
             )}
           </View>
         </ScrollView>

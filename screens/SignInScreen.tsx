@@ -28,7 +28,7 @@ const SignInScreen: React.FC = () => {
   // Use 'as never' because navigation types in this repo are loose
   // eslint-disable-next-line @typescript-eslint/ban-ts-comment
   // @ts-ignore
-  navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
+  (navigation as any).navigate('Home');
       }
       setCheckingSession(false);
     });
@@ -45,7 +45,7 @@ const SignInScreen: React.FC = () => {
       await signInWithEmailAndPassword(auth, email.trim(), password);
   // eslint-disable-next-line @typescript-eslint/ban-ts-comment
   // @ts-ignore
-  navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
+  (navigation as any).navigate('Home');
     } catch (e: any) {
       const code = e?.code ?? '';
       let message = 'Failed to sign in. Please try again.';

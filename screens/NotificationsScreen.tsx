@@ -126,8 +126,8 @@ const NotificationsScreen: React.FC<Props> = ({ navigation }) => {
       endOfWeek.setDate(startOfWeek.getDate() + 6);
       endOfWeek.setHours(23, 59, 59, 999);
       let hasReport = false;
-      reportsSnap.forEach(doc => {
-        const data = doc.data();
+      reportsSnap.forEach((doc: any) => {
+        const data: any = doc.data();
         const weekStart = new Date(data.weekStartDate);
         const weekEnd = new Date(data.weekEndDate);
         if (
@@ -213,13 +213,29 @@ const NotificationsScreen: React.FC<Props> = ({ navigation }) => {
           contentContainerStyle={styles.scrollContent}
           renderItem={({ item }) => {
             if (item.type === 'reminder' && 'text' in item) {
+              // Make reminders clickable: go to RequirementsChecklist or WeeklyReport
+              let onPress = undefined;
+              if (item.text.includes('upload your')) {
+                onPress = () => navigation.navigate('RequirementsChecklist');
+              } else if (item.text.includes('weekly accomplishment report')) {
+                onPress = () => navigation.navigate('WeeklyReport');
+              }
               return (
-                <View style={styles.reminderCard}>
-                  <Ionicons name="alert-circle" size={20} color="#ff9800" style={{ marginRight: 8 }} />
-                  <Text style={styles.reminderText}>{item.text}</Text>
-                </View>
+                <TouchableOpacity onPress={onPress} disabled={!onPress}>
+                  <View style={styles.reminderCard}>
+                    <Ionicons name="alert-circle" size={20} color="#ff9800" style={{ marginRight: 8 }} />
+                    <Text style={styles.reminderText}>{item.text}</Text>
+                  </View>
+                </TouchableOpacity>
               );
             } else if (item.type === 'notification' && 'title' in item && 'description' in item && 'id' in item) {
+              // Make notification action button interactive
+              let actionPress = undefined;
+              if (item.action === 'View all jobs') {
+                actionPress = () => navigation.navigate('Home');
+              } else if (item.action === 'Send message') {
+                actionPress = () => setModalVisible(true);
+              }
               return (
                 <Swipeable renderRightActions={() => renderRightActions(item.id)}>
                   <View style={styles.notificationCard}>
@@ -227,6 +243,11 @@ const NotificationsScreen: React.FC<Props> = ({ navigation }) => {
                     <View>
                       <Text style={styles.notificationTitle}>{item.title}</Text>
                       <Text style={styles.notificationText}>{item.description}</Text>
+                      {item.action && (
+                        <TouchableOpacity style={styles.actionButton} onPress={actionPress}>
+                          <Text style={styles.actionButtonText}>{item.action}</Text>
+                        </TouchableOpacity>
+                      )}
                     </View>
                   </View>
                 </Swipeable>

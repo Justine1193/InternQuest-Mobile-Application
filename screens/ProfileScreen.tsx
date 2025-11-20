@@ -169,7 +169,11 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
       if (userSnap.exists()) {
         const data = userSnap.data();
         setUserData(data);
-        setName(data.name || "");
+        // Prefer firstName + lastName if available, else fallback to name
+        const displayName = (data.firstName && data.lastName)
+          ? `${data.firstName} ${data.lastName}`
+          : (data.name || "");
+        setName(displayName);
         setEmail(data.email || "");
         setPhone(data.contact || data.phone || "");
         setLinkedIn(data.linkedin || "");

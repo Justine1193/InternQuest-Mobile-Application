@@ -66,62 +66,36 @@ const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
   }>({});
   const [forgotPasswordSent, setForgotPasswordSent] = useState(false);
 
+  // Simplified Google Client IDs - using web client ID as fallback for all platforms
   const googleClientIds = useMemo(
     () => ({
-      expo: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_EXPO,
-      ios: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS,
-      android: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID,
-      web: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB,
+      // Use web client ID for all platforms for simplicity
+      web: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB || "",
+      android: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID || process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB || "",
+      ios: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS || process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB || "",
     }),
     []
   );
 
   const isGoogleConfigured = useMemo(() => {
-    if (Platform.OS === 'android') {
-      return Boolean(googleClientIds.android);
-    } else if (Platform.OS === 'ios') {
-      return Boolean(googleClientIds.ios);
-    } else {
-      return Boolean(googleClientIds.web || googleClientIds.expo);
-    }
+    // Only enable Google Sign-In if we have at least one client ID
+    return Boolean(googleClientIds.web || googleClientIds.android || googleClientIds.ios);
   }, [googleClientIds]);
 
-  // Build config with required platform-specific client ID
-  // The hook validates that the platform-specific client ID exists and is not empty
-  const googleAuthConfig = useMemo<Partial<Google.GoogleAuthRequestConfig>>(
-    () => {
-      const config: Partial<Google.GoogleAuthRequestConfig> = {
-        scopes: ["profile", "email"],
-      };
-
-      // Always provide the platform-specific client ID to satisfy hook validation
-      // If not configured, use a placeholder in valid Google client ID format
-      // This prevents the hook from throwing an error on initialization
-      // We check isGoogleConfigured before actually using the auth, so this placeholder won't be used
-      const placeholderClientId = '123456789012-abcdefghijklmnopqrstuvwxyz123456.apps.googleusercontent.com';
-
-      if (Platform.OS === 'android') {
-        config.androidClientId = googleClientIds.android || placeholderClientId;
-      } else if (Platform.OS === 'ios') {
-        config.iosClientId = googleClientIds.ios || placeholderClientId;
-      } else {
-        config.webClientId = googleClientIds.web || googleClientIds.expo || placeholderClientId;
-        if (googleClientIds.expo) config.clientId = googleClientIds.expo;
-      }
-
-      // Also set other client IDs if available
-      if (googleClientIds.expo && Platform.OS !== 'web') config.clientId = googleClientIds.expo;
-      if (googleClientIds.ios && Platform.OS !== 'ios') config.iosClientId = googleClientIds.ios;
-      if (googleClientIds.android && Platform.OS !== 'android') config.androidClientId = googleClientIds.android;
-      if (googleClientIds.web && Platform.OS !== 'web') config.webClientId = googleClientIds.web;
-
-      return config;
-    },
+  // Simplified Google Auth Config
+  const googleAuthConfig = useMemo<Google.GoogleAuthRequestConfig>(
+    () => ({
+      // Use web client ID as primary - it works for most cases
+      clientId: googleClientIds.web || googleClientIds.android || googleClientIds.ios || "dummy-client-id",
+      scopes: ["profile", "email"],
+      // Platform-specific IDs if available
+      ...(googleClientIds.android && { androidClientId: googleClientIds.android }),
+      ...(googleClientIds.ios && { iosClientId: googleClientIds.ios }),
+    }),
     [googleClientIds]
   );
 
-  // Initialize the hook - it will validate the config
-  // We'll check isGoogleConfigured before actually using it
+  // Initialize Google Auth - with error handling
   const [request, response, promptAsync] = Google.useIdTokenAuthRequest(googleAuthConfig);
 
   useEffect(() => {
@@ -150,7 +124,7 @@ const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
       }
 
       if (response.type !== "dismiss") {
-        Alert.alert("Google Sign-In Cancelled", "You can continue by using your NEU credentials.");
+        console.log("Google auth response:", response.type);
       }
       setIsGoogleLoading(false);
     };
@@ -275,11 +249,12 @@ const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
 
   const handleSignUp = () => navigation.navigate("SignUp");
   const togglePasswordVisibility = () => setShowPassword(!showPassword);
+
   const handleGoogleSignIn = useCallback(async () => {
     if (!isGoogleConfigured) {
       Alert.alert(
         "Google Sign-In Not Configured",
-        "Please set the EXPO_PUBLIC_GOOGLE_CLIENT_ID values before using Google sign-in."
+        "Please set the EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB environment variable to enable Google Sign-In."
       );
       return;
     }
@@ -291,10 +266,8 @@ const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
 
     try {
       setIsGoogleLoading(true);
-      const result = await promptAsync({ useProxy: true, showInRecents: true } as any);
-      if (result.type !== "success") {
-        setIsGoogleLoading(false);
-      }
+      await promptAsync();
+      // Response handling is in useEffect above
     } catch (error) {
       console.error("Google prompt error:", error);
       Alert.alert("Google Sign-In Failed", "Unable to open Google sign-in. Please try again.");
@@ -389,7 +362,6 @@ const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
                   style={styles.openEmailButton}
                   onPress={() => {
                     // Open NEU webmail in browser
-                    // You can change this to the actual NEU webmail URL if different
                     const url = 'https://mail.google.com/a/neu.edu.ph';
                     Linking.openURL(url);
                   }}
@@ -429,8 +401,8 @@ const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
               </Text>
             </View>
 
-            {/* Google Sign-In Button */}
-            {isGoogleConfigured && (
+            {/* Google Sign-In Button - Only show if configured */}
+            {isGoogleConfigured ? (
               <>
                 <View style={styles.dividerRow}>
                   <View style={styles.divider} />
@@ -453,6 +425,13 @@ const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
                   )}
                 </TouchableOpacity>
               </>
+            ) : (
+              // Show configuration hint if Google Sign-In is not set up
+              <View style={styles.googleConfigNotice}>
+                <Text style={styles.googleConfigText}>
+                  To enable Google Sign-In, set EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB in your .env file
+                </Text>
+              </View>
             )}
           </View>
         </ScrollView>
@@ -573,12 +552,6 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     color: "#333",
   },
-  googleConfigNotice: {
-    marginTop: 12,
-    fontSize: 13,
-    color: "#999",
-    textAlign: "center",
-  },
   signupContainer: {
     alignItems: "center",
   },
@@ -613,6 +586,18 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: 'bold',
     fontSize: 14,
+  },
+  googleConfigNotice: {
+    marginTop: 16,
+    padding: 12,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  googleConfigText: {
+    color: '#666',
+    fontSize: 12,
+    textAlign: 'center',
   },
 });
 

@@ -18,12 +18,9 @@ import {
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useNavigation } from "@react-navigation/native";
-import { GoogleAuthProvider, signInWithCredential, signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
-import * as WebBrowser from "expo-web-browser";
-import * as Google from "expo-auth-session/providers/google";
+import { signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
 import { auth } from "../firebase/config";
 
-WebBrowser.maybeCompleteAuthSession();
 
 // Types
 type RootStackParamList = {
@@ -64,7 +61,6 @@ const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [errors, setErrors] = useState<Errors>({});
   const [forgotPasswordSent, setForgotPasswordSent] = useState(false);
 
@@ -117,83 +113,6 @@ const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
     isGoogleConfigured ? googleAuthConfig : { androidClientId: 'placeholder', scopes: ["profile", "email"] }
   );
 
-  useEffect(() => {
-    const finishGoogleSignIn = async () => {
-      if (!response) return;
-
-      if (response.type === "success") {
-        try {
-          const idToken = response.authentication?.idToken || response.params?.id_token;
-          if (!idToken) {
-            throw new Error("Missing Google idToken");
-          }
-          const credential = GoogleAuthProvider.credential(idToken);
-          await signInWithCredential(auth, credential);
-          setIsLoggedIn(true);
-        } catch (error: any) {
-          console.error("Google sign-in error:", error);
-          Alert.alert(
-            "Google Sign-In Failed",
-            error?.message || "Unable to complete Google sign-in. Please try again."
-          );
-        } finally {
-          setIsGoogleLoading(false);
-        }
-        return;
-      }
-
-      if (response.type !== "dismiss") {
-        Alert.alert("Google Sign-In Cancelled", "You can continue by using your NEU credentials.");
-      }
-      setIsGoogleLoading(false);
-    };
-
-    finishGoogleSignIn();
-  }, [response, setIsLoggedIn]);
-
-  // Validation
-  const validateEmail = (email: string): boolean => {
-    // Only allow NEU email addresses
-    const emailRegex = /^[^\s@]+@neu\.edu\.ph$/;
-    return emailRegex.test(email);
-  };
-
-  const validateForm = (): boolean => {
-    const newErrors: typeof errors = {};
-
-    if (!email) {
-      newErrors.email = "Email is required";
-    } else if (!validateEmail(email)) {
-      newErrors.email = "Please use your NEU email address (@neu.edu.ph)";
-    }
-
-    if (!password) {
-      newErrors.password = "Password is required";
-    } else if (password.length < 8) {
-      newErrors.password = "Password must be at least 8 characters";
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  // Handlers
-  const handleLogin = async () => {
-    if (!validateForm()) return;
-
-    setIsLoading(true);
-    try {
-      // Sanitize inputs
-      const sanitizedEmail = email.trim().toLowerCase();
-      const sanitizedPassword = password.trim();
-
-      const userCredential = await signInWithEmailAndPassword(auth, sanitizedEmail, sanitizedPassword);
-
-      // Clear sensitive data
-      setPassword("");
-      setEmail("");
-
-      console.log("✅ User signed in:", userCredential.user.uid);
       setIsLoggedIn(true);
     } catch (error: any) {
       let errorMessage = "Invalid email or password.";
@@ -224,88 +143,20 @@ const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
     } finally {
       setIsLoading(false);
     }
-  };
+      // State
+      const [email, setEmail] = useState("");
+      const [password, setPassword] = useState("");
+      const [showPassword, setShowPassword] = useState(false);
+      const [isLoading, setIsLoading] = useState(false);
+      const [errors, setErrors] = useState<Errors>({});
+      const [forgotPasswordSent, setForgotPasswordSent] = useState(false);
 
-  const handleForgotPassword = async () => {
-    if (!email) {
-      setErrors((prev: Errors) => ({ ...prev, email: "Please enter your email address first" }));
-      return;
-    }
-
-    if (!validateEmail(email)) {
-      setErrors((prev: Errors) => ({ ...prev, email: "Please enter a valid NEU email address" }));
-      return;
-    }
-
-    try {
-      const sanitizedEmail = email.trim().toLowerCase();
-      await sendPasswordResetEmail(auth, sanitizedEmail);
-      setForgotPasswordSent(true);
       Alert.alert(
-        "Password Reset",
-        "A password reset link has been sent to your NEU email address. Please check your inbox and follow the instructions to reset your password.",
-        [{ text: "OK" }]
-      );
-    } catch (error: any) {
-      let errorMessage = "Failed to send password reset email.";
-      switch (error.code) {
-        case 'auth/user-not-found':
-          errorMessage = "No account found with this email.";
           break;
-        case 'auth/invalid-email':
-          errorMessage = "Please enter a valid NEU email address.";
-          break;
-        case 'auth/too-many-requests':
-          errorMessage = "Too many attempts. Please try again later.";
-          break;
-        default:
           errorMessage = error.message || "Failed to send password reset email.";
-      }
-      Alert.alert("Error", errorMessage);
-      console.error("Password reset error:", error.message);
-    }
   };
-
-  const handleSignUp = () => navigation.navigate("SignUp");
-  const togglePasswordVisibility = () => setShowPassword(!showPassword);
-  const handleGoogleSignIn = useCallback(async () => {
-    if (!isGoogleConfigured) {
-      Alert.alert(
-        "Google Sign-In Not Configured",
-        "Please set the EXPO_PUBLIC_GOOGLE_CLIENT_ID values before using Google sign-in."
-      );
-      return;
-    }
-
-    if (!request) {
-      Alert.alert("Google Sign-In", "Still preparing Google sign-in. Please try again in a moment.");
-      return;
-    }
-
-    try {
-      setIsGoogleLoading(true);
-      const result = await promptAsync({ useProxy: true, showInRecents: true } as any);
-      if (result.type !== "success") {
-        setIsGoogleLoading(false);
-      }
-    } catch (error) {
-      console.error("Google prompt error:", error);
-      Alert.alert("Google Sign-In Failed", "Unable to open Google sign-in. Please try again.");
-      setIsGoogleLoading(false);
-    }
-  }, [isGoogleConfigured, promptAsync, request]);
-
-  // Render
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      style={{ flex: 1 }}
-    >
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <ScrollView contentContainerStyle={[styles.scroll, { backgroundColor: theme.background }]}>
-          <View style={styles.container}>
-            <Image
-              source={require("../assets/InternQuest.png")}
               style={styles.logo}
               resizeMode="contain"
             />
@@ -422,36 +273,6 @@ const SignInScreen: React.FC<Props> = ({ setIsLoggedIn }) => {
               </Text>
             </View>
 
-            {isGoogleConfigured && (
-              <>
-                <View style={styles.dividerRow}>
-                  <View style={styles.divider} />
-                  <Text style={styles.dividerText}>or</Text>
-                  <View style={styles.divider} />
-                </View>
-
-                <TouchableOpacity
-                  onPress={handleGoogleSignIn}
-                  style={[styles.socialButton, styles.googleButton]}
-                  disabled={isGoogleLoading}
-                >
-                  {isGoogleLoading ? (
-                    <ActivityIndicator color="#000" />
-                  ) : (
-                    <>
-                      <Icon name="google" size={20} color="#DB4437" style={styles.socialIcon} />
-                      <Text style={styles.socialButtonText}>Continue with Google</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-              </>
-            )}
-
-            {!isGoogleConfigured && (
-              <Text style={styles.googleConfigNotice}>
-                Google sign-in is not yet configured. Add your platform Google OAuth client IDs as EXPO_PUBLIC_GOOGLE_CLIENT_ID_* in app config to enable one-tap login.
-              </Text>
-            )}
           </View>
         </ScrollView>
       </TouchableWithoutFeedback>

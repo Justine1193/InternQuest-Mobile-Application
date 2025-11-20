@@ -8,11 +8,7 @@
     "android": {
       "package": "com.internquest.internquest",
       "versionCode": 1,
-      "config": {
-        "googleMaps": {
-          "apiKey": "AIzaSyBqKcbvrNZzqs8G43VkWb-THJYVozjI9T0"
-        }
-      },
+      // Google Maps config removed
       "newArchEnabled": true
     },
     "extra": {

@@ -24,6 +24,7 @@ import SearchBar from "../SearchBar/SearchBar.jsx";
 import StudentTable from "./Table/StudentTable.jsx";
 import ConfirmModal from "../ConfirmModalComponents/ConfirmModal.jsx";
 import LoadingSpinner from "../LoadingSpinner.jsx";
+import StudentRequirementModal from "./StudentRequirementModal.jsx";
 import "./StudentDashboard.css";
 import Footer from "../Footer/Footer.jsx";
 
@@ -55,6 +56,9 @@ const StudentDashboard = () => {
   const [selectedItems, setSelectedItems] = useState([]);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  // Requirement Modal
+  const [showRequirementModal, setShowRequirementModal] = useState(false);
+  const [selectedStudent, setSelectedStudent] = useState(null);
   // Filters
   const [showFilter, setShowFilter] = useState(false);
   const [filterValues, setFilterValues] = useState({
@@ -238,6 +242,18 @@ const StudentDashboard = () => {
     );
   };
 
+  // Handles row click - opens requirement modal
+  const handleRowClick = (student) => {
+    setSelectedStudent(student);
+    setShowRequirementModal(true);
+  };
+
+  // Handles closing the requirement modal
+  const handleCloseRequirementModal = () => {
+    setShowRequirementModal(false);
+    setSelectedStudent(null);
+  };
+
   // --- Render ---
   return (
     <div className="dashboard-container">
@@ -338,6 +354,7 @@ const StudentDashboard = () => {
               }}
               onSelectItem={handleSelectItem}
               onDelete={handleDelete}
+              onRowClick={handleRowClick}
             />
             <div className="pagination">
               <button
@@ -399,6 +416,11 @@ const StudentDashboard = () => {
         message="Are you sure you want to delete the selected items?"
         onConfirm={confirmDelete}
         onCancel={cancelDelete}
+      />
+      <StudentRequirementModal
+        open={showRequirementModal}
+        student={selectedStudent}
+        onClose={handleCloseRequirementModal}
       />
       <Footer />
     </div>

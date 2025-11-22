@@ -14,9 +14,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../App';
-import { auth, firestore } from '../firebase/config';
+import { auth, firestore, storage } from '../firebase/config';
 import { doc, getDoc, updateDoc, collection, addDoc } from 'firebase/firestore';
 import * as DocumentPicker from 'expo-document-picker';
+import { Linking } from 'react-native';
+import * as FileSystem from 'expo-file-system';
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 type RequirementsNavigationProp = StackNavigationProp<RootStackParamList, 'RequirementsChecklist'>;
 
@@ -27,7 +30,11 @@ interface Requirement {
     category: 'documents' | 'forms' | 'certifications' | 'other';
     status: 'pending' | 'completed' | 'overdue';
     dueDate?: Date;
-    uploadedFiles: string[];
+    uploadedFiles: Array<
+        | string
+        | { name: string; url?: string; path?: string; contentType?: string; uploadedAt?: string }
+        | { name: string; adminDocId: string; storedInFirestore: boolean; downloadUrl?: string; uploadedAt?: string }
+    >;
     notes?: string;
     isRequired: boolean;
 }
@@ -39,6 +46,10 @@ const RequirementsChecklistScreen: React.FC = () => {
     const [showUploadModal, setShowUploadModal] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [progress, setProgress] = useState(0);
+    const [storeMode, setStoreMode] = useState<'storage' | 'firestore'>('storage');
+
+    // Soft limit for base64 storing in Firestore (bytes)
+    const FIRESTORE_MAX_BYTES = 700 * 1024; // ~700 KB
 
     useEffect(() => {
         loadRequirements();
@@ -183,6 +194,23 @@ const RequirementsChecklistScreen: React.FC = () => {
         }
     };
 
+    const uriToBlob = (uri: string) => new Promise<Blob>((resolve, reject) => {
+        try {
+            const xhr = new XMLHttpRequest();
+            xhr.onload = function () {
+                resolve(xhr.response as Blob);
+            };
+            xhr.onerror = function () {
+                reject(new Error('Failed to fetch file for upload'));
+            };
+            xhr.responseType = 'blob';
+            xhr.open('GET', uri, true);
+            xhr.send(null);
+        } catch (err) {
+            reject(err);
+        }
+    });
+
     const handleUploadFile = async () => {
         if (!selectedRequirement) return;
 
@@ -198,29 +226,109 @@ const RequirementsChecklistScreen: React.FC = () => {
                 return;
             }
 
-            const file = result.assets[0];
+            const file = result.assets && result.assets.length > 0 ? result.assets[0] : (result as any);
+            const fileAny: any = file;
+            const uri = fileAny.uri;
+            const name = fileAny.name || fileAny.fileName || `uploaded_${Date.now()}`;
 
-            // Simulate file upload (in real app, upload to cloud storage)
-            const fileName = file.name || 'uploaded_file';
+            if (storeMode === 'firestore') {
+                // Read as base64 and store in Firestore (small files only)
+                try {
+                    const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+                    const estimatedBytes = Math.ceil((base64.length * 3) / 4);
+                    if (estimatedBytes > FIRESTORE_MAX_BYTES) {
+                        Alert.alert('File too large', 'File exceeds the Firestore size limit (700 KB). Please use Storage mode.');
+                        setUploading(false);
+                        return;
+                    }
 
-            const updatedRequirements = requirements.map(req =>
-                req.id === selectedRequirement.id
-                    ? { ...req, uploadedFiles: [...req.uploadedFiles, fileName], status: 'completed' as 'completed' }
-                    : req
-            );
+                    const adminDocRef = await addDoc(collection(firestore, 'admin_files'), {
+                        userId: auth.currentUser?.uid,
+                        requirementId: selectedRequirement.id,
+                        requirementTitle: selectedRequirement.title,
+                        name,
+                        contentBase64: base64,
+                        contentType: fileAny.mimeType || fileAny.type || 'application/octet-stream',
+                        uploadedAt: new Date().toISOString(),
+                        storedInFirestore: true,
+                    });
 
-            setRequirements(updatedRequirements);
+                    const dataUrl = `data:${fileAny.mimeType || fileAny.type || 'application/octet-stream'};base64,${base64}`;
 
-            // Save to Firestore
-            if (auth.currentUser) {
-                await updateDoc(doc(firestore, 'users', auth.currentUser.uid), {
-                    requirements: updatedRequirements,
-                });
+                    const uploadedEntry = { name, adminDocId: adminDocRef.id, storedInFirestore: true, downloadUrl: dataUrl } as any;
+
+                    const updatedRequirements = requirements.map(req =>
+                        req.id === selectedRequirement.id
+                            ? { ...req, uploadedFiles: [...req.uploadedFiles, uploadedEntry], status: 'completed' as 'completed' }
+                            : req
+                    );
+
+                    setRequirements(updatedRequirements);
+                    if (auth.currentUser) {
+                        await updateDoc(doc(firestore, 'users', auth.currentUser.uid), {
+                            requirements: updatedRequirements,
+                        });
+                    }
+
+                    Alert.alert('Success', 'File stored in Firestore (small file). Admins can download it.');
+                    setShowUploadModal(false);
+                    setSelectedRequirement(null);
+                    setUploading(false);
+                    return;
+                } catch (fsErr) {
+                    console.error('Firestore store error:', fsErr);
+                    Alert.alert('Error', 'Failed to store file in Firestore. Try Storage mode.');
+                    setUploading(false);
+                    return;
+                }
             }
 
-            Alert.alert('Success', 'File uploaded successfully!');
-            setShowUploadModal(false);
-            setSelectedRequirement(null);
+            // Default: Storage upload path
+            try {
+                const blob = await uriToBlob(uri);
+                const remotePath = `requirements/${auth.currentUser?.uid}/${name}`;
+                const sRef = storageRef(storage, remotePath);
+                await uploadBytes(sRef, blob, { contentType: fileAny.mimeType || fileAny.type || 'application/octet-stream' });
+                const downloadURL = await getDownloadURL(sRef);
+
+                const fileMeta = { name, url: downloadURL, path: remotePath, contentType: fileAny.mimeType || fileAny.type || 'application/octet-stream', uploadedAt: new Date().toISOString() };
+
+                const updatedRequirements = requirements.map(req =>
+                    req.id === selectedRequirement.id
+                        ? { ...req, uploadedFiles: [...req.uploadedFiles, fileMeta], status: 'completed' as 'completed' }
+                        : req
+                );
+
+                setRequirements(updatedRequirements);
+                if (auth.currentUser) {
+                    await updateDoc(doc(firestore, 'users', auth.currentUser.uid), {
+                        requirements: updatedRequirements,
+                    });
+
+                    // Add admin_files doc for admin listing
+                    try {
+                        await addDoc(collection(firestore, 'admin_files'), {
+                            userId: auth.currentUser.uid,
+                            requirementId: selectedRequirement.id,
+                            requirementTitle: selectedRequirement.title,
+                            name: fileMeta.name,
+                            url: fileMeta.url,
+                            path: fileMeta.path,
+                            contentType: fileMeta.contentType,
+                            uploadedAt: fileMeta.uploadedAt,
+                        });
+                    } catch (adminErr) {
+                        console.error('Failed to write admin_files record:', adminErr);
+                    }
+                }
+
+                Alert.alert('Success', 'File uploaded to Storage successfully.');
+                setShowUploadModal(false);
+                setSelectedRequirement(null);
+            } catch (uploadErr) {
+                console.error('Storage upload error:', uploadErr);
+                Alert.alert('Upload error', 'Failed to upload file to storage.');
+            }
         } catch (error) {
             console.error('Error uploading file:', error);
             Alert.alert('Error', 'Failed to upload file. Please try again.');
@@ -337,12 +445,24 @@ const RequirementsChecklistScreen: React.FC = () => {
                                 {requirement.uploadedFiles.length > 0 && (
                                     <View style={styles.uploadedFilesContainer}>
                                         <Text style={styles.uploadedFilesTitle}>Uploaded Files:</Text>
-                                        {requirement.uploadedFiles.map((file, index) => (
-                                            <View key={index} style={styles.fileItem}>
-                                                <Ionicons name="document" size={16} color="#007aff" />
-                                                <Text style={styles.fileName}>{file}</Text>
-                                            </View>
-                                        ))}
+                                        {requirement.uploadedFiles.map((file, index) => {
+                                            const fileAny: any = file;
+                                            const displayName = typeof file === 'string' ? file : (fileAny.name || 'file');
+                                            const url = typeof file === 'string' ? null : (fileAny.downloadUrl || fileAny.url);
+                                            return (
+                                                <TouchableOpacity
+                                                    key={index}
+                                                    style={styles.fileItem}
+                                                    onPress={() => {
+                                                        if (url) Linking.openURL(url);
+                                                    }}
+                                                    disabled={!url}
+                                                >
+                                                    <Ionicons name="document" size={16} color="#007aff" />
+                                                    <Text style={styles.fileName}>{displayName}</Text>
+                                                </TouchableOpacity>
+                                            );
+                                        })}
                                     </View>
                                 )}
 
@@ -400,6 +520,12 @@ const RequirementsChecklistScreen: React.FC = () => {
                                         <Ionicons name="cloud-upload-outline" size={48} color="#007aff" />
                                         <Text style={styles.uploadText}>Select a file to upload</Text>
                                         <Text style={styles.uploadSubtext}>Supports PDF and image files</Text>
+                                    </View>
+
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                                        <Chip mode={storeMode === 'storage' ? 'flat' : 'outlined'} onPress={() => setStoreMode('storage')}>Storage</Chip>
+                                        <Chip mode={storeMode === 'firestore' ? 'flat' : 'outlined'} onPress={() => setStoreMode('firestore')}>Firestore (small)</Chip>
+                                        <Text style={{ marginLeft: 8, fontSize: 12, color: '#666' }}>{storeMode === 'storage' ? 'Uploads to Firebase Storage' : 'Stores small file in Firestore as base64'}</Text>
                                     </View>
 
                                     <Button

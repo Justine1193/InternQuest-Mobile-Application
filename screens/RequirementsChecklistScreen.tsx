@@ -15,7 +15,7 @@ import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../App';
 import { auth, firestore, storage } from '../firebase/config';
-import { doc, getDoc, updateDoc, collection, addDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, collection, addDoc, deleteDoc, query, where, getDocs } from 'firebase/firestore';
 import * as DocumentPicker from 'expo-document-picker';
 import { Linking } from 'react-native';
 import * as FileSystem from 'expo-file-system';
@@ -46,10 +46,15 @@ const RequirementsChecklistScreen: React.FC = () => {
     const [showUploadModal, setShowUploadModal] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [progress, setProgress] = useState(0);
-    const [storeMode, setStoreMode] = useState<'storage' | 'firestore'>('storage');
+    const [storeMode, setStoreMode] = useState<'storage' | 'firestore'>('firestore');
 
     // Soft limit for base64 storing in Firestore (bytes)
     const FIRESTORE_MAX_BYTES = 700 * 1024; // ~700 KB
+
+    // If you deploy the Cloud Function `getAdminFile`, set its base URL here so the app
+    // can open a proper download link for Firestore-stored files (recommended for PDFs).
+    // Replace <region>-<project> with your function endpoint after deploy.
+    const ADMIN_FILE_FUNCTION_BASE_URL = 'https://<region>-<project>.cloudfunctions.net/getAdminFile';
 
     useEffect(() => {
         loadRequirements();
@@ -211,6 +216,39 @@ const RequirementsChecklistScreen: React.FC = () => {
         }
     });
 
+    const uploadToStorage = async (uri: string, name: string, fileAny: any, requirementId: string) => {
+        try {
+            const blob = await uriToBlob(uri);
+            const remotePath = `requirements/${auth.currentUser?.uid}/${name}`;
+            const sRef = storageRef(storage, remotePath);
+            await uploadBytes(sRef, blob, { contentType: fileAny.mimeType || fileAny.type || 'application/octet-stream' });
+            const downloadURL = await getDownloadURL(sRef);
+
+            const fileMeta = { name, url: downloadURL, path: remotePath, contentType: fileAny.mimeType || fileAny.type || 'application/octet-stream', uploadedAt: new Date().toISOString() };
+
+            // add admin_files doc
+            try {
+                await addDoc(collection(firestore, 'admin_files'), {
+                    userId: auth.currentUser?.uid,
+                    requirementId,
+                    requirementTitle: selectedRequirement?.title,
+                    name: fileMeta.name,
+                    url: fileMeta.url,
+                    path: fileMeta.path,
+                    contentType: fileMeta.contentType,
+                    uploadedAt: fileMeta.uploadedAt,
+                });
+            } catch (adminErr) {
+                console.error('Failed to write admin_files record:', adminErr);
+            }
+
+            return fileMeta;
+        } catch (err) {
+            console.error('Storage upload error (helper):', err);
+            throw err;
+        }
+    };
+
     const handleUploadFile = async () => {
         if (!selectedRequirement) return;
 
@@ -237,9 +275,31 @@ const RequirementsChecklistScreen: React.FC = () => {
                     const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
                     const estimatedBytes = Math.ceil((base64.length * 3) / 4);
                     if (estimatedBytes > FIRESTORE_MAX_BYTES) {
-                        Alert.alert('File too large', 'File exceeds the Firestore size limit (700 KB). Please use Storage mode.');
-                        setUploading(false);
-                        return;
+                        Alert.alert('Info', 'File exceeds Firestore size limit — uploading to Storage.');
+                        try {
+                            const fileMeta = await uploadToStorage(uri, name, fileAny, selectedRequirement.id);
+                            const updatedRequirements = requirements.map(req =>
+                                req.id === selectedRequirement.id
+                                    ? { ...req, uploadedFiles: [...req.uploadedFiles, fileMeta], status: 'completed' as 'completed' }
+                                    : req
+                            );
+                            setRequirements(updatedRequirements);
+                            if (auth.currentUser) {
+                                await updateDoc(doc(firestore, 'users', auth.currentUser.uid), {
+                                    requirements: updatedRequirements,
+                                });
+                            }
+                            Alert.alert('Success', 'File uploaded to Storage successfully.');
+                            setShowUploadModal(false);
+                            setSelectedRequirement(null);
+                            setUploading(false);
+                            return;
+                        } catch (storageErr) {
+                            console.error('Fallback storage upload failed:', storageErr);
+                            Alert.alert('Upload error', 'Failed to upload file to storage.');
+                            setUploading(false);
+                            return;
+                        }
                     }
 
                     const adminDocRef = await addDoc(collection(firestore, 'admin_files'), {
@@ -283,15 +343,9 @@ const RequirementsChecklistScreen: React.FC = () => {
                 }
             }
 
-            // Default: Storage upload path
+            // Default: Storage upload path (use helper)
             try {
-                const blob = await uriToBlob(uri);
-                const remotePath = `requirements/${auth.currentUser?.uid}/${name}`;
-                const sRef = storageRef(storage, remotePath);
-                await uploadBytes(sRef, blob, { contentType: fileAny.mimeType || fileAny.type || 'application/octet-stream' });
-                const downloadURL = await getDownloadURL(sRef);
-
-                const fileMeta = { name, url: downloadURL, path: remotePath, contentType: fileAny.mimeType || fileAny.type || 'application/octet-stream', uploadedAt: new Date().toISOString() };
+                const fileMeta = await uploadToStorage(uri, name, fileAny, selectedRequirement.id);
 
                 const updatedRequirements = requirements.map(req =>
                     req.id === selectedRequirement.id
@@ -304,22 +358,6 @@ const RequirementsChecklistScreen: React.FC = () => {
                     await updateDoc(doc(firestore, 'users', auth.currentUser.uid), {
                         requirements: updatedRequirements,
                     });
-
-                    // Add admin_files doc for admin listing
-                    try {
-                        await addDoc(collection(firestore, 'admin_files'), {
-                            userId: auth.currentUser.uid,
-                            requirementId: selectedRequirement.id,
-                            requirementTitle: selectedRequirement.title,
-                            name: fileMeta.name,
-                            url: fileMeta.url,
-                            path: fileMeta.path,
-                            contentType: fileMeta.contentType,
-                            uploadedAt: fileMeta.uploadedAt,
-                        });
-                    } catch (adminErr) {
-                        console.error('Failed to write admin_files record:', adminErr);
-                    }
                 }
 
                 Alert.alert('Success', 'File uploaded to Storage successfully.');
@@ -376,6 +414,87 @@ const RequirementsChecklistScreen: React.FC = () => {
             case 'other': return 'folder';
             default: return 'document';
         }
+    };
+
+    const removeUploadedFile = async (requirementId: string, fileAny: any, index: number) => {
+        if (!selectedRequirement) return;
+        Alert.alert('Remove file', 'Are you sure you want to remove this uploaded file?', [
+            { text: 'Cancel', style: 'cancel' },
+            {
+                text: 'Remove',
+                style: 'destructive',
+                onPress: async () => {
+                    try {
+                        // If file is stored in Firestore (has adminDocId), delete that admin doc
+                        if (fileAny && fileAny.adminDocId) {
+                            try {
+                                await deleteDoc(doc(firestore, 'admin_files', fileAny.adminDocId));
+                            } catch (e) {
+                                console.error('Failed to delete admin_files doc:', e);
+                            }
+                        }
+
+                        // If file is stored in Storage (has path), delete object and any admin_files pointing to it
+                        if (fileAny && fileAny.path) {
+                            try {
+                                const sRef = storageRef(storage, fileAny.path);
+                                try {
+                                    const storageModule: any = await import('firebase/storage');
+                                    const deleteObjectFn = storageModule.deleteObject;
+                                    if (deleteObjectFn) {
+                                        await deleteObjectFn(sRef);
+                                    } else {
+                                        console.warn('deleteObject not available in storage module');
+                                    }
+                                } catch (impErr) {
+                                    console.error('Dynamic import of firebase/storage failed for deleteObject:', impErr);
+                                }
+                            } catch (e) {
+                                console.error('Failed to delete storage object:', e);
+                            }
+
+                            try {
+                                const q = query(collection(firestore, 'admin_files'), where('path', '==', fileAny.path));
+                                const snap = await getDocs(q);
+                                for (const d of snap.docs) {
+                                    try { await deleteDoc(d.ref); } catch (ee) { console.error('Failed to delete admin_files by path:', ee); }
+                                }
+                            } catch (e) {
+                                console.error('Failed to query/delete admin_files by path:', e);
+                            }
+                        }
+
+                        // Remove from user's requirements array and update per-requirement status
+                        const updatedRequirements = requirements.map(req => {
+                            if (req.id === requirementId) {
+                                const newFiles = req.uploadedFiles.filter((_, i) => i !== index);
+                                // If no uploaded files remain, mark as pending; otherwise keep completed
+                                const newStatus = newFiles.length > 0 ? 'completed' : 'pending';
+                                return { ...req, uploadedFiles: newFiles, status: newStatus } as Requirement;
+                            }
+                            return req;
+                        });
+
+                        setRequirements(updatedRequirements);
+                        // Recalculate overall progress immediately so the progress bar reflects the change
+                        calculateProgress(updatedRequirements);
+
+                        if (auth.currentUser) {
+                            try {
+                                await updateDoc(doc(firestore, 'users', auth.currentUser.uid), { requirements: updatedRequirements });
+                            } catch (e) {
+                                console.error('Failed to update user doc after file removal:', e);
+                            }
+                        }
+
+                        Alert.alert('Removed', 'File removed successfully.');
+                    } catch (err) {
+                        console.error('Error removing uploaded file:', err);
+                        Alert.alert('Error', 'Failed to remove file.');
+                    }
+                }
+            }
+        ]);
     };
 
     return (
@@ -444,23 +563,25 @@ const RequirementsChecklistScreen: React.FC = () => {
                             <View style={styles.requirementDetails}>
                                 {requirement.uploadedFiles.length > 0 && (
                                     <View style={styles.uploadedFilesContainer}>
-                                        <Text style={styles.uploadedFilesTitle}>Uploaded Files:</Text>
+                                        <Text style={styles.uploadedFilesTitle}>{`Uploaded Files (${requirement.uploadedFiles.length})`}</Text>
                                         {requirement.uploadedFiles.map((file, index) => {
                                             const fileAny: any = file;
                                             const displayName = typeof file === 'string' ? file : (fileAny.name || 'file');
                                             const url = typeof file === 'string' ? null : (fileAny.downloadUrl || fileAny.url);
                                             return (
-                                                <TouchableOpacity
-                                                    key={index}
-                                                    style={styles.fileItem}
-                                                    onPress={() => {
-                                                        if (url) Linking.openURL(url);
-                                                    }}
-                                                    disabled={!url}
-                                                >
-                                                    <Ionicons name="document" size={16} color="#007aff" />
-                                                    <Text style={styles.fileName}>{displayName}</Text>
-                                                </TouchableOpacity>
+                                                <View key={index} style={styles.fileRow}>
+                                                    <TouchableOpacity
+                                                        style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}
+                                                        onPress={() => { if (url) Linking.openURL(url); }}
+                                                        disabled={!url}
+                                                    >
+                                                        <Ionicons name="document" size={16} color="#007aff" />
+                                                        <Text style={styles.fileName}>{displayName}</Text>
+                                                    </TouchableOpacity>
+                                                    <TouchableOpacity onPress={() => removeUploadedFile(requirement.id, fileAny, index)} style={styles.deleteButton}>
+                                                        <Ionicons name="trash" size={18} color="#d32f2f" />
+                                                    </TouchableOpacity>
+                                                </View>
                                             );
                                         })}
                                     </View>
@@ -522,10 +643,8 @@ const RequirementsChecklistScreen: React.FC = () => {
                                         <Text style={styles.uploadSubtext}>Supports PDF and image files</Text>
                                     </View>
 
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                                        <Chip mode={storeMode === 'storage' ? 'flat' : 'outlined'} onPress={() => setStoreMode('storage')}>Storage</Chip>
-                                        <Chip mode={storeMode === 'firestore' ? 'flat' : 'outlined'} onPress={() => setStoreMode('firestore')}>Firestore (small)</Chip>
-                                        <Text style={{ marginLeft: 8, fontSize: 12, color: '#666' }}>{storeMode === 'storage' ? 'Uploads to Firebase Storage' : 'Stores small file in Firestore as base64'}</Text>
+                                    <View style={{ marginBottom: 12 }}>
+                                        <Text style={{ fontSize: 12, color: '#666' }}>Files will be stored in Firestore (small files only, ≤700 KB).</Text>
                                     </View>
 
                                     <Button
@@ -675,6 +794,16 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         marginBottom: 4,
+    },
+    fileRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 4,
+    },
+    deleteButton: {
+        padding: 6,
+        marginLeft: 8,
     },
     fileName: {
         fontSize: 14,

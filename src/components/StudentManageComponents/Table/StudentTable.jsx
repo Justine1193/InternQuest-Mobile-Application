@@ -53,6 +53,7 @@ const StudentTable = ({
   setSelectedItems,
   handleDeleteSingle,
   isDeleting,
+  onRowClick,
 }) => {
   return (
     <div className="student-table-container">
@@ -140,6 +141,7 @@ const StudentTable = ({
               setSelectedItems={setSelectedItems}
               handleDeleteSingle={handleDeleteSingle}
               isDeleting={isDeleting}
+              onRowClick={onRowClick}
             />
           ))}
         </tbody>
@@ -169,6 +171,7 @@ StudentTable.propTypes = {
   setSelectedItems: PropTypes.func,
   handleDeleteSingle: PropTypes.func,
   isDeleting: PropTypes.bool,
+  onRowClick: PropTypes.func,
 };
 
 export default StudentTable;

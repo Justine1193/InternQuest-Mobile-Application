@@ -175,8 +175,61 @@
 .document-files {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
   margin-top: 8px;
+}
+
+.document-file-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: #fff;
+  border-radius: 6px;
+  border: 1px solid #e0e0e0;
+  transition: box-shadow 0.2s, border-color 0.2s;
+}
+
+.document-file-item:hover {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  border-color: #1976d2;
+}
+
+.document-file-icon {
+  font-size: 1.2rem;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+}
+
+.document-file-name {
+  flex: 1;
+  font-size: 0.9rem;
+  color: #333;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.document-file-name-clickable {
+  cursor: pointer;
+  color: #1976d2;
+  text-decoration: none;
+  transition: color 0.2s;
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+}
+
+.document-file-name-clickable:hover {
+  color: #1565c0;
+  text-decoration: underline;
 }
 
 .document-link {
@@ -383,8 +436,13 @@
   gap: 6px;
 }
 
-.file-download-header-btn:hover {
+.file-download-header-btn:hover:not(:disabled) {
   background: #1565c0;
+}
+
+.file-download-header-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .file-viewer-close {
@@ -489,20 +547,47 @@
   border: 1px solid #1976d2;
   color: #1976d2;
   text-decoration: none;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   font-weight: 500;
-  padding: 8px 12px;
+  padding: 6px 12px;
   border-radius: 6px;
   transition: background 0.2s, color 0.2s;
-  text-align: left;
-  display: inline-block;
+  text-align: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
   font-family: inherit;
-  width: 100%;
-  text-align: center;
+  white-space: nowrap;
+  gap: 4px;
 }
 
 .document-link:hover {
   background: #1976d2;
   color: #fff;
+}
+
+.document-view-btn {
+  border-color: #1976d2;
+  color: #1976d2;
+}
+
+.document-view-btn:hover {
+  background: #1976d2;
+  color: #fff;
+}
+
+.document-download-btn {
+  border-color: #43a047;
+  color: #43a047;
+}
+
+.document-download-btn:hover:not(:disabled) {
+  background: #43a047;
+  color: #fff;
+}
+
+.document-download-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }

@@ -21,6 +21,7 @@
  * @param {function} setSelectedItems - Setter for selected items
  * @param {function} handleDeleteSingle - Handler for deleting a single student
  * @param {boolean} isDeleting - Whether a delete operation is in progress
+ * @param {function} onRowClick - Handler for clicking on a row
  * @example
  * <StudentTableRow row={row} ...props />
  */
@@ -52,12 +53,32 @@ const StudentTableRow = ({
   setSelectedItems,
   handleDeleteSingle,
   isDeleting,
+  onRowClick,
 }) => {
   // State for toggling skill tag expansion
   const [showAllSkills, setShowAllSkills] = useState(false);
 
+  const handleRowClick = (e) => {
+    // Don't trigger row click if clicking on interactive elements
+    if (
+      e.target.closest('input[type="checkbox"]') ||
+      e.target.closest('.student-kebab-cell') ||
+      e.target.closest('a') ||
+      e.target.closest('.student-table-skill-tag[style*="cursor: pointer"]')
+    ) {
+      return;
+    }
+    if (onRowClick) {
+      onRowClick(row);
+    }
+  };
+
   return (
-    <tr className={isSelected ? "student-selected-row" : ""}>
+    <tr 
+      className={isSelected ? "student-selected-row" : "student-clickable-row"}
+      onClick={handleRowClick}
+      style={{ cursor: onRowClick ? "pointer" : "default" }}
+    >
       {selectionMode && (
         <td className="student-checkbox-cell">
           <input
@@ -75,6 +96,7 @@ const StudentTableRow = ({
           <a
             href={`mailto:${row.email}`}
             style={{ color: "#1976d2", textDecoration: "underline" }}
+            onClick={(e) => e.stopPropagation()}
           >
             {row.email}
           </a>
@@ -217,6 +239,7 @@ StudentTableRow.propTypes = {
   setSelectedItems: PropTypes.func,
   handleDeleteSingle: PropTypes.func,
   isDeleting: PropTypes.bool,
+  onRowClick: PropTypes.func,
 };
 
 export default StudentTableRow;

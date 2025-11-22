@@ -23,6 +23,7 @@ const StudentRequirementModal = ({ open, student, onClose }) => {
   const [fetchError, setFetchError] = useState(null);
   const [viewingFile, setViewingFile] = useState(null);
   const [viewingFileName, setViewingFileName] = useState("");
+  const [downloadingFile, setDownloadingFile] = useState(null);
 
   // Fetch requirements from Firestore when modal opens
   useEffect(() => {
@@ -270,6 +271,24 @@ const StudentRequirementModal = ({ open, student, onClose }) => {
   const getFileType = (url) => {
     if (!url) return "unknown";
     const urlLower = url.toLowerCase();
+
+    // Check for data URLs first (data:application/pdf;base64,... or data:image/png;base64,...)
+    if (urlLower.startsWith("data:")) {
+      if (urlLower.includes("application/pdf") || urlLower.includes("pdf")) {
+        return "pdf";
+      }
+      if (
+        urlLower.includes("image/jpeg") ||
+        urlLower.includes("image/jpg") ||
+        urlLower.includes("image/png") ||
+        urlLower.includes("image/gif") ||
+        urlLower.includes("image/webp")
+      ) {
+        return "image";
+      }
+    }
+
+    // Check file extensions and MIME types
     if (urlLower.includes(".pdf") || urlLower.includes("application/pdf"))
       return "pdf";
     if (
@@ -310,15 +329,55 @@ const StudentRequirementModal = ({ open, student, onClose }) => {
     e.preventDefault();
     e.stopPropagation();
 
+    const downloadId = `${fileUrl}-${fileName}`;
+    setDownloadingFile(downloadId);
+
     try {
-      // Fetch the file
-      const response = await fetch(fileUrl);
-      if (!response.ok) {
-        throw new Error("Failed to fetch file");
+      // Handle data URLs (base64 encoded files)
+      if (fileUrl.startsWith("data:")) {
+        const link = document.createElement("a");
+        link.href = fileUrl;
+        link.download = fileName || "download";
+        link.style.display = "none";
+        document.body.appendChild(link);
+        link.click();
+        setTimeout(() => {
+          document.body.removeChild(link);
+          setDownloadingFile(null);
+        }, 100);
+        return;
       }
 
-      // Get the blob
-      const blob = await response.blob();
+      // Try to fetch the file with CORS handling
+      let blob;
+      try {
+        const response = await fetch(fileUrl, {
+          method: "GET",
+          mode: "cors",
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        blob = await response.blob();
+      } catch (fetchError) {
+        // If fetch fails (CORS issue), try direct download
+        console.log("Fetch failed, trying direct download:", fetchError);
+        const link = document.createElement("a");
+        link.href = fileUrl;
+        link.download = fileName || "download";
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.style.display = "none";
+        document.body.appendChild(link);
+        link.click();
+        setTimeout(() => {
+          document.body.removeChild(link);
+          setDownloadingFile(null);
+        }, 100);
+        return;
+      }
 
       // Create a temporary URL for the blob
       const blobUrl = window.URL.createObjectURL(blob);
@@ -335,10 +394,12 @@ const StudentRequirementModal = ({ open, student, onClose }) => {
       setTimeout(() => {
         document.body.removeChild(link);
         window.URL.revokeObjectURL(blobUrl);
+        setDownloadingFile(null);
       }, 100);
     } catch (error) {
       console.error("Download error:", error);
-      // Fallback: open in new tab if download fails
+      setDownloadingFile(null);
+      // Final fallback: open in new tab if download fails
       window.open(fileUrl, "_blank");
     }
   };
@@ -473,11 +534,12 @@ const StudentRequirementModal = ({ open, student, onClose }) => {
                                 fileName = `File ${fileIndex + 1}`;
                               }
                             } else if (file && typeof file === "object") {
-                              // Try multiple possible URL fields
+                              // Prioritize downloadUrl (camelCase) as shown in the data structure
+                              // Also handle data URLs (data:application/pdf;base64,...)
                               fileUrl =
-                                file.url ||
-                                file.downloadURL ||
                                 file.downloadUrl ||
+                                file.downloadURL ||
+                                file.url ||
                                 file.fileUrl ||
                                 file.fileURL ||
                                 file.link ||
@@ -486,7 +548,7 @@ const StudentRequirementModal = ({ open, student, onClose }) => {
                                 file.uri ||
                                 file.downloadUri;
 
-                              // Extract file name
+                              // Extract file name - prioritize name property from uploadedFiles
                               fileName =
                                 file.name ||
                                 file.fileName ||
@@ -494,8 +556,11 @@ const StudentRequirementModal = ({ open, student, onClose }) => {
                                 file.filename ||
                                 file.displayName ||
                                 (fileUrl
-                                  ? fileUrl.split("/").pop() ||
-                                    `File ${fileIndex + 1}`
+                                  ? fileUrl.includes("data:")
+                                    ? `File ${fileIndex + 1}`
+                                    : fileUrl.split("/").pop() ||
+                                      fileUrl.split("?")[0].split("/").pop() ||
+                                      `File ${fileIndex + 1}`
                                   : `File ${fileIndex + 1}`);
                             }
 
@@ -504,16 +569,20 @@ const StudentRequirementModal = ({ open, student, onClose }) => {
                             );
 
                             return fileUrl ? (
-                              <button
+                              <div
                                 key={fileIndex}
-                                onClick={(e) =>
-                                  handleFileClick(e, fileUrl, fileName)
-                                }
-                                className="document-link"
-                                title={`View ${fileName}`}
+                                className="document-file-item"
                               >
-                                📄 {fileName}
-                              </button>
+                                <span
+                                  onClick={(e) =>
+                                    handleFileClick(e, fileUrl, fileName)
+                                  }
+                                  className="document-file-name document-file-name-clickable"
+                                  title={`Click to view ${fileName}`}
+                                >
+                                  {fileName}
+                                </span>
+                              </div>
                             ) : (
                               <div
                                 key={fileIndex}
@@ -575,8 +644,15 @@ const StudentRequirementModal = ({ open, student, onClose }) => {
                     handleDownload(e, viewingFile, viewingFileName)
                   }
                   title="Download file"
+                  disabled={
+                    downloadingFile === `${viewingFile}-${viewingFileName}`
+                  }
                 >
-                  ⬇️ Download
+                  {downloadingFile === `${viewingFile}-${viewingFileName}` ? (
+                    <>Downloading...</>
+                  ) : (
+                    <>Download</>
+                  )}
                 </button>
                 <button className="file-viewer-close" onClick={closeFileViewer}>
                   <IoCloseOutline />
@@ -612,7 +688,7 @@ const StudentRequirementModal = ({ open, student, onClose }) => {
                       }
                       className="file-download-btn"
                     >
-                      ⬇️ Download Image
+                      Download Image
                     </button>
                   </div>
                 </div>
@@ -625,7 +701,7 @@ const StudentRequirementModal = ({ open, student, onClose }) => {
                     }
                     className="file-download-btn"
                   >
-                    ⬇️ Download File
+                    Download File
                   </button>
                 </div>
               )}

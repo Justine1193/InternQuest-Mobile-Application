@@ -30,8 +30,8 @@ Replace `<region>` and `<project>` with your Firebase settings or the CLI output
 
 Security: restrict the function with IAM or verify callers inside the function if you don't want it public.
 
-Serving PDFs and other binary types
-----------------------------------
+## Serving PDFs and other binary types
+
 This function returns the raw binary stored in `admin_files.contentBase64` with the correct
 `Content-Type` header (from `admin_files.contentType`). That means the function can be used
 to serve PDFs directly to browsers or mobile apps. Example usage:

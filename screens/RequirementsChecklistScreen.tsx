@@ -67,9 +67,23 @@ const RequirementsChecklistScreen: React.FC = () => {
             const userDoc = await getDoc(doc(firestore, 'users', auth.currentUser.uid));
             if (userDoc.exists()) {
                 const data = userDoc.data();
-                const savedRequirements = data.requirements || getDefaultRequirements();
-                setRequirements(savedRequirements);
-                calculateProgress(savedRequirements);
+                const savedRequirements = (data.requirements || getDefaultRequirements()) as any[];
+                // Normalize statuses: if there are no uploadedFiles, ensure status is 'pending'
+                const normalized = savedRequirements.map(r => {
+                    const uploadedFiles = Array.isArray(r.uploadedFiles) ? r.uploadedFiles : [];
+                    let status = r.status || (uploadedFiles.length > 0 ? 'completed' : 'pending');
+                    if (!uploadedFiles || uploadedFiles.length === 0) status = 'pending';
+                    // If dueDate exists and is past, keep 'overdue'
+                    if (r.dueDate) {
+                        const due = new Date(r.dueDate);
+                        if (!isNaN(due.getTime()) && new Date() > due) {
+                            status = uploadedFiles.length > 0 ? 'completed' : 'overdue';
+                        }
+                    }
+                    return { ...r, uploadedFiles, status };
+                });
+                setRequirements(normalized as any);
+                calculateProgress(normalized as any);
             } else {
                 const defaultRequirements = getDefaultRequirements();
                 setRequirements(defaultRequirements);
@@ -228,10 +242,11 @@ const RequirementsChecklistScreen: React.FC = () => {
 
             // add admin_files doc
             try {
+                const req = requirements.find(r => r.id === requirementId);
                 await addDoc(collection(firestore, 'admin_files'), {
                     userId: auth.currentUser?.uid,
                     requirementId,
-                    requirementTitle: selectedRequirement?.title,
+                    requirementTitle: req?.title || null,
                     name: fileMeta.name,
                     url: fileMeta.url,
                     path: fileMeta.path,
@@ -417,7 +432,6 @@ const RequirementsChecklistScreen: React.FC = () => {
     };
 
     const removeUploadedFile = async (requirementId: string, fileAny: any, index: number) => {
-        if (!selectedRequirement) return;
         Alert.alert('Remove file', 'Are you sure you want to remove this uploaded file?', [
             { text: 'Cancel', style: 'cancel' },
             {

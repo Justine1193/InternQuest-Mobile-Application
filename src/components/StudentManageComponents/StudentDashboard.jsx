@@ -20,6 +20,7 @@ import {
 import logo from "../../assets/InternQuest_Logo.png";
 import { signOut } from "firebase/auth";
 import { auth } from "../../../firebase.js";
+import { clearAdminSession } from "../../utils/auth";
 import SearchBar from "../SearchBar/SearchBar.jsx";
 import StudentTable from "./Table/StudentTable.jsx";
 import ConfirmModal from "../ConfirmModalComponents/ConfirmModal.jsx";
@@ -189,9 +190,11 @@ const StudentDashboard = () => {
   const handleLogout = async () => {
     try {
       await signOut(auth);
-      window.location.href = "/";
     } catch (error) {
       alert("Logout failed!");
+    } finally {
+      clearAdminSession();
+      window.location.href = "/";
     }
   };
 

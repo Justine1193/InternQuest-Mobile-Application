@@ -13,21 +13,21 @@ const ANIMATION_DURATION = 150;
 
 function KebabCell({
   row,
-  openMenuId,
+  openMenuId = null,
   setOpenMenuId,
-  selectedRowId,
+  selectedRowId = null,
   setSelectedRowId,
   handleDeleteSingle,
-  isDeleting,
-  selectionMode,
+  isDeleting = false,
+  selectionMode = false,
   setSelectedItems,
   setSelectionMode,
-  setIsEditMode,
-  setEditCompanyId,
-  setFormData,
-  setSkills,
-  setIsModalOpen,
-  onEdit,
+  setIsEditMode = null,
+  setEditCompanyId = null,
+  setFormData = null,
+  setSkills = null,
+  setIsModalOpen = null,
+  onEdit = null,
 }) {
   const kebabRef = useRef(null);
   const [isClicked, setIsClicked] = useState(false);
@@ -184,19 +184,6 @@ KebabCell.propTypes = {
   setIsModalOpen: PropTypes.func,
   /** Function to handle edit action */
   onEdit: PropTypes.func,
-};
-
-KebabCell.defaultProps = {
-  openMenuId: null,
-  selectedRowId: null,
-  isDeleting: false,
-  selectionMode: false,
-  setIsEditMode: null,
-  setEditCompanyId: null,
-  setFormData: null,
-  setSkills: null,
-  setIsModalOpen: null,
-  onEdit: null,
 };
 
 export default KebabCell;

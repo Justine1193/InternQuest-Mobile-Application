@@ -61,6 +61,21 @@ const TableRow = ({
     : Array.isArray(row.skillsREq)
     ? row.skillsREq.slice(0, 3)
     : [];
+  const getMoaValidityDisplay = () => {
+    if (row.moa !== "Yes") {
+      return { text: "No MOA", variant: "muted" };
+    }
+    const years = Number(row.moaValidityYears);
+    if (!Number.isNaN(years) && years > 0) {
+      return {
+        text: `${years} year${years > 1 ? "s" : ""}`,
+        variant: "active",
+      };
+    }
+    return { text: "Not set", variant: "warning" };
+  };
+  const moaValidity = getMoaValidityDisplay();
+
   return (
     <tr className={isSelected ? "selected-row" : ""}>
       {selectionMode && (
@@ -184,6 +199,13 @@ const TableRow = ({
           checked={row.moa === "Yes"}
           readOnly
         />
+      </td>
+      <td className="moa-validity-cell">
+        <span
+          className={`moa-validity-pill moa-validity-pill-${moaValidity.variant}`}
+        >
+          {moaValidity.text}
+        </span>
       </td>
       <td className="kebab-cell">
         <KebabCell

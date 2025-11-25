@@ -84,15 +84,15 @@ table td {
   max-width: 300px;
 }
 
-.table-container table th:nth-last-child(2),
-.table-container table td:nth-last-child(2) {
-  min-width: 40px;
-  max-width: 40px;
-  width: 40px;
+.table-container table th:last-child,
+.table-container table td:last-child {
+  min-width: 60px;
+  max-width: 60px;
+  width: 60px;
   text-align: center;
-  white-space: nowrap;
   padding-left: 0;
   padding-right: 0;
+  white-space: nowrap;
 }
 
 .table-container table th:nth-child(2),

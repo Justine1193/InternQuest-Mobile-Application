@@ -3,6 +3,7 @@ import React from "react";
 import Login from "../components/LoginComponents/AdminLogin.jsx";
 import Dashboard from "../components/CompanyManageComponents/CompanyDashboard.jsx";
 import StudentDashboard from "../components/StudentManageComponents/StudentDashboard.jsx";
+import ProtectedRoute from "../components/ProtectedRoute.jsx";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 
 function App() {
@@ -10,8 +11,22 @@ function App() {
     <Router>
       <Routes>
         <Route path="/" element={<Login />} />
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/StudentDashboard" element={<StudentDashboard />} />
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/StudentDashboard"
+          element={
+            <ProtectedRoute>
+              <StudentDashboard />
+            </ProtectedRoute>
+          }
+        />
       </Routes>
     </Router>
   );

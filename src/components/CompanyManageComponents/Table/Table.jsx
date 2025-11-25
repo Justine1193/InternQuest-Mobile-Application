@@ -82,6 +82,7 @@ const Table = ({
             <th>Skills required</th>
             <th>Mode of work</th>
             <th>MOA</th>
+            <th>MOA Validity (Years)</th>
             <th className="kebab-cell"></th>
           </tr>
         </thead>

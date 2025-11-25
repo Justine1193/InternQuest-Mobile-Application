@@ -64,6 +64,11 @@ function CompanyModal({
 
   // Validation function
   const validateForm = () => {
+    const requiresMoaValidity =
+      formData.moa &&
+      (!formData.moaValidityYears ||
+        Number(formData.moaValidityYears) <= 0 ||
+        Number.isNaN(Number(formData.moaValidityYears)));
     if (
       !formData.companyName.trim() ||
       !formData.description.trim() ||
@@ -73,9 +78,14 @@ function CompanyModal({
       skills.length === 0 ||
       fields.length === 0 ||
       !formData.modeOfWork ||
-      formData.modeOfWork.length === 0
+      formData.modeOfWork.length === 0 ||
+      requiresMoaValidity
     ) {
-      setLocalError("Please fill in all required fields.");
+      setLocalError(
+        requiresMoaValidity
+          ? "Please specify how many years the MOA is valid."
+          : "Please fill in all required fields."
+      );
       setShakeKey((k) => k + 1); // Force re-render for animation
       return false;
     }
@@ -112,6 +122,11 @@ function CompanyModal({
   // New minimal update handler
   const handleUpdate = () => {
     console.log("Update clicked", { formData, fields, skills, editCompanyId });
+    const requiresMoaValidity =
+      formData.moa &&
+      (!formData.moaValidityYears ||
+        Number(formData.moaValidityYears) <= 0 ||
+        Number.isNaN(Number(formData.moaValidityYears)));
     if (
       !formData.companyName ||
       !formData.description ||
@@ -121,9 +136,14 @@ function CompanyModal({
       skills.length === 0 ||
       fields.length === 0 ||
       !formData.modeOfWork ||
-      formData.modeOfWork.length === 0
+      formData.modeOfWork.length === 0 ||
+      requiresMoaValidity
     ) {
-      setLocalError("Please fill in all required fields.");
+      setLocalError(
+        requiresMoaValidity
+          ? "Please specify how many years the MOA is valid."
+          : "Please fill in all required fields."
+      );
       return;
     }
     setLocalError("");
@@ -196,6 +216,15 @@ function CompanyModal({
     }
   }, [isEditMode]);
 
+  useEffect(() => {
+    if (!formData.moa && formData.moaValidityYears) {
+      setFormData((prev) => ({
+        ...prev,
+        moaValidityYears: "",
+      }));
+    }
+  }, [formData.moa, formData.moaValidityYears, setFormData]);
+
   if (!open) return null;
   return (
     <div className="modal">
@@ -242,9 +271,7 @@ function CompanyModal({
             />
           </div>
           <div className="form-group">
-            <label htmlFor="website">
-              Website: <span style={{ color: "red" }}>*</span>
-            </label>
+            <label htmlFor="website">Website (optional)</label>
             <input
               id="website"
               type="text"
@@ -252,7 +279,6 @@ function CompanyModal({
               value={formData.website}
               onChange={handleInputChange}
               placeholder="Enter company website"
-              required
             />
             {websiteChecking && (
               <span style={{ color: "#1976d2" }}>Checking...</span>
@@ -448,7 +474,8 @@ function CompanyModal({
               </div>
             </div>
           </div>
-          <div className="form-group">
+        <div className="moa-validity-card">
+          <div className="moa-toggle">
             <label htmlFor="moa" className="checkbox-label">
               <input
                 id="moa"
@@ -457,9 +484,45 @@ function CompanyModal({
                 checked={formData.moa}
                 onChange={handleInputChange}
               />
-              <span>MOA (Memorandum of Agreement)</span>
+              <div>
+                <span className="moa-title">MOA (Memorandum of Agreement)</span>
+                <p className="moa-subtitle">
+                  Track current agreements and show validity to students.
+                </p>
+              </div>
             </label>
           </div>
+          <div className="moa-validity-input">
+            <div className="moa-validity-label">
+              <span>Validity</span>
+              {formData.moa && (
+                <span className="moa-required">*</span>
+              )}
+            </div>
+            <div
+              className={`moa-input-wrapper${
+                !formData.moa ? " disabled" : ""
+              }`}
+            >
+              <input
+                id="moaValidityYears"
+                type="number"
+                name="moaValidityYears"
+                min="1"
+                step="1"
+                placeholder="3"
+                value={formData.moaValidityYears}
+                onChange={handleInputChange}
+                disabled={!formData.moa}
+              />
+              <span className="moa-unit">years</span>
+            </div>
+          </div>
+          <p className="moa-hint">
+            This value syncs to the mobile app so interns immediately see how
+            long the partnership is active.
+          </p>
+        </div>
           <div className="form-group">
             <label>
               Mode of Work: <span style={{ color: "red" }}>*</span>
@@ -518,6 +581,7 @@ function CompanyModal({
                 email: "",
                 skills: "",
                 moa: false,
+                moaValidityYears: "",
                 modeOfWork: [],
               });
               setSkills([]);

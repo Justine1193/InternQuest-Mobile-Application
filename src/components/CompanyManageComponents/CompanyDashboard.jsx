@@ -37,6 +37,7 @@ const Dashboard = () => {
     email: "",
     skills: "",
     moa: false,
+    moaValidityYears: "",
     modeOfWork: [],
   });
   const [skills, setSkills] = useState([]);
@@ -258,6 +259,7 @@ const Dashboard = () => {
                   email: "",
                   skills: "",
                   moa: false,
+                  moaValidityYears: "",
                   modeOfWork: [],
                 });
                 setSkills([]);

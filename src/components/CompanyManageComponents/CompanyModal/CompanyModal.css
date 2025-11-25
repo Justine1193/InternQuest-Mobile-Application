@@ -77,6 +77,7 @@
 
 .form-group input[type="text"],
 .form-group input[type="email"],
+.form-group input[type="number"],
 .form-group textarea {
   background: #f7f9fb;
   border: 1px solid #d0d7de;
@@ -90,6 +91,7 @@
 
 .form-group input[type="text"]:focus,
 .form-group input[type="email"]:focus,
+.form-group input[type="number"]:focus,
 .form-group textarea:focus {
   border: 1.5px solid #1976d2;
   outline: none;
@@ -328,6 +330,102 @@
 .checkbox-label input[type="checkbox"]:focus {
   outline: none;
   box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.2);
+}
+
+.moa-validity-card {
+  margin: 1.4rem 0;
+  padding: 1.3rem 1.4rem;
+  border: 1.5px solid #e3e8f3;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #f8fbff 0%, #fefefe 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.moa-toggle .checkbox-label {
+  margin: 0;
+}
+
+.moa-title {
+  font-weight: 600;
+  display: block;
+  color: #122740;
+}
+
+.moa-subtitle {
+  margin: 0.15rem 0 0;
+  color: #5c6f82;
+  font-size: 0.9rem;
+}
+
+.moa-validity-input {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.moa-validity-label {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-weight: 600;
+  color: #1e2a39;
+}
+
+.moa-required {
+  color: #d32f2f;
+  font-size: 0.85rem;
+}
+
+.moa-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  border: 1.5px solid #d0d7de;
+  border-radius: 10px;
+  background: #fff;
+  padding: 0.2rem 0.6rem 0.2rem 0.4rem;
+  transition: border 0.2s, box-shadow 0.2s;
+  max-width: 215px;
+}
+
+.moa-input-wrapper input {
+  border: none;
+  background: transparent;
+  flex: 1;
+  font-size: 1rem;
+  padding: 0.45rem 0.4rem;
+  color: #1f2a37;
+}
+
+.moa-input-wrapper input:focus {
+  outline: none;
+}
+
+.moa-input-wrapper:focus-within {
+  border-color: #1976d2;
+  box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.12);
+}
+
+.moa-input-wrapper.disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.moa-unit {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #54657a;
+  text-transform: uppercase;
+  letter-spacing: 0.4em;
+  margin-left: 1.3rem;
+}
+
+.moa-hint {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #5f6a7a;
 }
 
 .modal-btn,

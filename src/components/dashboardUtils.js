@@ -4,9 +4,11 @@
  */
 
 import { useState, useEffect } from 'react';
-import { db, auth } from '../../firebase';
+import { db, auth, realtimeDb } from '../../firebase';
 import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc, getDoc } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
+import { ref, update as updateRealtime, remove as removeRealtime } from 'firebase/database';
+import { clearAdminSession } from '../utils/auth';
 
 /**
  * Custom hook to fetch and return skill suggestions from Firestore
@@ -59,6 +61,22 @@ export function useSuggestionFields() {
 /**
  * Collection of handler functions for dashboard operations
  */
+const syncMoaValidityToRealtime = async (companyId, payload) => {
+  try {
+    await updateRealtime(ref(realtimeDb, `companies/${companyId}`), payload);
+  } catch (error) {
+    console.error("Failed to sync MOA validity to Realtime Database:", error);
+  }
+};
+
+const removeCompanyFromRealtime = async (companyId) => {
+  try {
+    await removeRealtime(ref(realtimeDb, `companies/${companyId}`));
+  } catch (error) {
+    console.error("Failed to remove company from Realtime Database:", error);
+  }
+};
+
 export const dashboardHandlers = {
   /**
    * Handles skill input changes and shows dropdown
@@ -119,7 +137,6 @@ export const dashboardHandlers = {
       const requiredFields = {
         companyName: "Company name",
         description: "Description",
-        website: "Website",
         address: "Address",
         email: "Email"
       };
@@ -133,6 +150,14 @@ export const dashboardHandlers = {
       if (fields.length === 0) throw new Error("At least one field is required");
       if (skills.length === 0) throw new Error("At least one skill is required");
       if (formData.modeOfWork.length === 0) throw new Error("At least one mode of work is required");
+      if (
+        formData.moa &&
+        (!formData.moaValidityYears ||
+          Number(formData.moaValidityYears) <= 0 ||
+          Number.isNaN(Number(formData.moaValidityYears)))
+      ) {
+        throw new Error("MOA validity (years) is required when MOA is checked");
+      }
 
       setIsLoading(true);
       
@@ -144,12 +169,22 @@ export const dashboardHandlers = {
         companyEmail: formData.email,
         skillsREq: skills,
         moa: formData.moa ? "Yes" : "No",
+        moaValidityYears: formData.moa
+          ? Number(formData.moaValidityYears)
+          : null,
         modeOfWork: formData.modeOfWork,
         createdAt: new Date().toISOString(),
         fields: fields,
       };
 
       const docRef = await addDoc(collection(db, 'companies'), newCompany);
+      await syncMoaValidityToRealtime(docRef.id, {
+        moa: newCompany.moa,
+        moaValidityYears:
+          newCompany.moa === "Yes" ? newCompany.moaValidityYears : null,
+        companyName: newCompany.companyName,
+        updatedAt: new Date().toISOString(),
+      });
       
       setTableData(prev => Array.isArray(prev) 
         ? [...prev, { id: docRef.id, ...newCompany }] 
@@ -167,6 +202,7 @@ export const dashboardHandlers = {
         skills: '',
         moa: false,
         modeOfWork: [],
+        moaValidityYears: "",
       });
       setSkills([]);
       setFields([]);
@@ -186,7 +222,6 @@ export const dashboardHandlers = {
       const requiredFields = {
         companyName: "Company name",
         description: "Description",
-        website: "Website",
         address: "Address",
         email: "Email"
       };
@@ -200,6 +235,14 @@ export const dashboardHandlers = {
       if (fields.length === 0) throw new Error("At least one field is required");
       if (skills.length === 0) throw new Error("At least one skill is required");
       if (formData.modeOfWork.length === 0) throw new Error("At least one mode of work is required");
+      if (
+        formData.moa &&
+        (!formData.moaValidityYears ||
+          Number(formData.moaValidityYears) <= 0 ||
+          Number.isNaN(Number(formData.moaValidityYears)))
+      ) {
+        throw new Error("MOA validity (years) is required when MOA is checked");
+      }
 
       setIsLoading(true);
 
@@ -211,11 +254,21 @@ export const dashboardHandlers = {
         companyEmail: formData.email,
         skillsREq: skills,
         moa: formData.moa ? "Yes" : "No",
+        moaValidityYears: formData.moa
+          ? Number(formData.moaValidityYears)
+          : null,
         modeOfWork: formData.modeOfWork,
         fields: fields,
       };
 
       await updateDoc(doc(db, 'companies', editCompanyId), updatedCompany);
+      await syncMoaValidityToRealtime(editCompanyId, {
+        moa: updatedCompany.moa,
+        moaValidityYears:
+          updatedCompany.moa === "Yes" ? updatedCompany.moaValidityYears : null,
+        companyName: updatedCompany.companyName,
+        updatedAt: new Date().toISOString(),
+      });
       
       setTableData(prev =>
         prev.map(item =>
@@ -236,6 +289,7 @@ export const dashboardHandlers = {
         skills: '',
         moa: false,
         modeOfWork: [],
+        moaValidityYears: "",
       });
       setSkills([]);
       setFields([]);
@@ -254,6 +308,7 @@ export const dashboardHandlers = {
     try {
       setIsDeleting(true);
       await deleteDoc(doc(db, 'companies', id));
+      await removeCompanyFromRealtime(id);
       setTableData(prev => prev.filter(company => company.id !== id));
       setSelectedRowId?.(null);
       setOpenMenuId?.(null);
@@ -276,6 +331,10 @@ export const dashboardHandlers = {
       email: company.companyEmail || '',
       skills: '',
       moa: company.moa === "Yes",
+      moaValidityYears:
+        typeof company.moaValidityYears === "number" && company.moaValidityYears > 0
+          ? String(company.moaValidityYears)
+          : "",
       modeOfWork: Array.isArray(company.modeOfWork) ? company.modeOfWork : [],
     });
     setSkills(Array.isArray(company.skillsREq) ? company.skillsREq : []);
@@ -299,7 +358,12 @@ export const dashboardHandlers = {
     setShowConfirm(false);
     try {
       setIsDeleting(true);
-      await Promise.all(selectedItems.map(id => deleteDoc(doc(db, 'companies', id))));
+      await Promise.all(
+        selectedItems.map(async (id) => {
+          await deleteDoc(doc(db, 'companies', id));
+          await removeCompanyFromRealtime(id);
+        })
+      );
       setTableData(prevData => prevData.filter(item => !selectedItems.includes(item.id)));
       setSelectedItems([]);
     } catch (error) {
@@ -365,9 +429,11 @@ export const dashboardHandlers = {
   handleLogout: async () => {
     try {
       await signOut(auth);
-      window.location.href = '/';
     } catch (error) {
       alert('Logout failed!');
+    } finally {
+      clearAdminSession();
+      window.location.href = '/';
     }
   },
 }; 

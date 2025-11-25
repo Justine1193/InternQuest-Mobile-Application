@@ -21,7 +21,6 @@
  * @param {function} setSelectedItems - Setter for selected items
  * @param {function} handleDeleteSingle - Handler for deleting a single student
  * @param {boolean} isDeleting - Whether a delete operation is in progress
- * @param {function} onRowClick - Handler for clicking on a row
  * @example
  * <StudentTableRow row={row} ...props />
  */
@@ -57,30 +56,44 @@ const StudentTableRow = ({
 }) => {
   // State for toggling skill tag expansion
   const [showAllSkills, setShowAllSkills] = useState(false);
-
-  const handleRowClick = (e) => {
-    // Don't trigger row click if clicking on interactive elements
-    if (
-      e.target.closest('input[type="checkbox"]') ||
-      e.target.closest('.student-kebab-cell') ||
-      e.target.closest('a') ||
-      e.target.closest('.student-table-skill-tag[style*="cursor: pointer"]')
-    ) {
-      return;
-    }
-    if (onRowClick) {
+  const handleRowClick = () => {
+    if (selectionMode) return;
+    if (typeof onRowClick === "function") {
       onRowClick(row);
     }
   };
 
+  const getCompanyName = () => {
+    if (!row) return "";
+    if (typeof row.company === "string" && row.company.trim()) return row.company;
+    if (typeof row.companyName === "string" && row.companyName.trim())
+      return row.companyName;
+    if (
+      typeof row.assignedCompany === "string" &&
+      row.assignedCompany.trim()
+    )
+      return row.assignedCompany;
+    if (
+      row.company &&
+      typeof row.company === "object" &&
+      row.company.name
+    ) {
+      return row.company.name;
+    }
+    return "";
+  };
+
   return (
-    <tr 
-      className={isSelected ? "student-selected-row" : "student-clickable-row"}
+    <tr
+      className={isSelected ? "student-selected-row" : ""}
       onClick={handleRowClick}
-      style={{ cursor: onRowClick ? "pointer" : "default" }}
+      style={{ cursor: selectionMode ? "default" : "pointer" }}
     >
       {selectionMode && (
-        <td className="student-checkbox-cell">
+        <td
+          className="student-checkbox-cell"
+          onClick={(event) => event.stopPropagation()}
+        >
           <input
             type="checkbox"
             className="table-checkbox"
@@ -96,7 +109,6 @@ const StudentTableRow = ({
           <a
             href={`mailto:${row.email}`}
             style={{ color: "#1976d2", textDecoration: "underline" }}
-            onClick={(e) => e.stopPropagation()}
           >
             {row.email}
           </a>
@@ -107,6 +119,7 @@ const StudentTableRow = ({
       <td>{row.contact}</td>
       <td>{row.program}</td>
       <td>{row.field}</td>
+      <td>{getCompanyName() || "—"}</td>
       <td>{row.status === "hired" ? "Yes" : "No"}</td>
       <td>
         <div className="student-table-skills-tags">
@@ -197,7 +210,10 @@ const StudentTableRow = ({
           }
         </div>
       </td>
-      <td className="student-kebab-cell">
+      <td
+        className="student-kebab-cell"
+        onClick={(event) => event.stopPropagation()}
+      >
         <KebabCell
           row={row}
           openMenuId={openMenuId}

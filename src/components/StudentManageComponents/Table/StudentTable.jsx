@@ -36,6 +36,7 @@ const StudentTable = ({
   data,
   onEdit,
   onDelete,
+  onRowClick,
   selectedItems,
   onSelectItem,
   onSelectAll,
@@ -53,7 +54,6 @@ const StudentTable = ({
   setSelectedItems,
   handleDeleteSingle,
   isDeleting,
-  onRowClick,
 }) => {
   return (
     <div className="student-table-container">
@@ -65,6 +65,7 @@ const StudentTable = ({
           <col /> {/* Contact */}
           <col /> {/* Program */}
           <col /> {/* Field */}
+          <col /> {/* Company */}
           <col /> {/* Skills */}
           <col style={{ width: "60px" }} /> {/* Hired */}
           <col /> {/* Location Preference */}
@@ -112,6 +113,7 @@ const StudentTable = ({
             <th>Contact</th>
             <th>Program</th>
             <th>Field</th>
+            <th>Company</th>
             <th>Hired</th>
             <th>Skills</th>
             <th>Location Preference</th>
@@ -125,6 +127,7 @@ const StudentTable = ({
               row={row}
               onEdit={onEdit}
               onDelete={onDelete}
+              onRowClick={onRowClick}
               isSelected={selectedItems.includes(row.id)}
               onSelect={() => onSelectItem(row.id)}
               selectionMode={selectionMode}
@@ -141,7 +144,6 @@ const StudentTable = ({
               setSelectedItems={setSelectedItems}
               handleDeleteSingle={handleDeleteSingle}
               isDeleting={isDeleting}
-              onRowClick={onRowClick}
             />
           ))}
         </tbody>
@@ -158,6 +160,7 @@ StudentTable.propTypes = {
   onSelectItem: PropTypes.func.isRequired,
   onSelectAll: PropTypes.func.isRequired,
   selectionMode: PropTypes.bool.isRequired,
+  onRowClick: PropTypes.func,
   openMenuId: PropTypes.any,
   setOpenMenuId: PropTypes.func,
   selectedRowId: PropTypes.any,
@@ -171,7 +174,6 @@ StudentTable.propTypes = {
   setSelectedItems: PropTypes.func,
   handleDeleteSingle: PropTypes.func,
   isDeleting: PropTypes.bool,
-  onRowClick: PropTypes.func,
 };
 
 export default StudentTable;

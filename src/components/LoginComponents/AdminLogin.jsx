@@ -15,6 +15,10 @@ import { FaRegEye, FaRegEyeSlash } from "react-icons/fa";
 import { collection, query, where, getDocs, addDoc } from "firebase/firestore";
 import { db } from "../../../firebase";
 import InternQuestLogo from "../../assets/InternQuest_with_text_white.png";
+import {
+  createAdminSession,
+  isAdminAuthenticated,
+} from "../../utils/auth";
 
 const AdminLogin = () => {
   const navigate = useNavigate();
@@ -47,6 +51,12 @@ const AdminLogin = () => {
 
 
 
+  useEffect(() => {
+    if (isAdminAuthenticated()) {
+      navigate("/dashboard", { replace: true });
+    }
+  }, [navigate]);
+
   // Handles form submission and authentication logic
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -76,7 +86,8 @@ const AdminLogin = () => {
       // Check if password matches
       if (adminData.password === formData.password) {
         console.log("Password match successful, navigating to dashboard");
-        navigate("/dashboard");
+        createAdminSession({ username: formData.username });
+        navigate("/dashboard", { replace: true });
       } else {
         console.log("Password mismatch");
         setError("Invalid username or password");

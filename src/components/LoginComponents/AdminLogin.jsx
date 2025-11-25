@@ -13,12 +13,10 @@ import { useNavigate } from "react-router-dom";
 import "./AdminLogin.css";
 import { FaRegEye, FaRegEyeSlash } from "react-icons/fa";
 import { collection, query, where, getDocs, addDoc } from "firebase/firestore";
-import { db } from "../../../firebase";
+import { db, auth } from "../../../firebase";
+import { signInWithEmailAndPassword } from "firebase/auth";
 import InternQuestLogo from "../../assets/InternQuest_with_text_white.png";
-import {
-  createAdminSession,
-  isAdminAuthenticated,
-} from "../../utils/auth";
+import { createAdminSession, isAdminAuthenticated } from "../../utils/auth";
 
 const AdminLogin = () => {
   const navigate = useNavigate();
@@ -48,8 +46,6 @@ const AdminLogin = () => {
   const togglePasswordVisibility = () => {
     setShowPassword((prev) => !prev);
   };
-
-
 
   useEffect(() => {
     if (isAdminAuthenticated()) {
@@ -85,7 +81,43 @@ const AdminLogin = () => {
 
       // Check if password matches
       if (adminData.password === formData.password) {
-        console.log("Password match successful, navigating to dashboard");
+        console.log("Password match successful, signing into Firebase Auth");
+
+        // Sign into Firebase Auth so RTDB rules can verify admin role
+        if (adminData.firebaseEmail && adminData.firebasePassword) {
+          try {
+            console.log(
+              "Attempting Firebase Auth sign-in with:",
+              adminData.firebaseEmail
+            );
+            const userCredential = await signInWithEmailAndPassword(
+              auth,
+              adminData.firebaseEmail,
+              adminData.firebasePassword
+            );
+            console.log(
+              "Firebase Auth sign-in successful. User UID:",
+              userCredential.user.uid
+            );
+            console.log("Current auth state:", auth.currentUser?.uid);
+          } catch (authError) {
+            console.error("Firebase Auth sign-in failed:", authError);
+            console.error("Error code:", authError.code);
+            console.error("Error message:", authError.message);
+            setError(
+              `Authentication failed: ${authError.message}. Please contact administrator.`
+            );
+            return;
+          }
+        } else {
+          console.warn("Firebase Auth credentials not found in admin document");
+          console.warn("Admin data keys:", Object.keys(adminData));
+          setError(
+            "Admin account not properly configured. Please add firebaseEmail and firebasePassword to your admin document."
+          );
+          return;
+        }
+
         createAdminSession({ username: formData.username });
         navigate("/dashboard", { replace: true });
       } else {

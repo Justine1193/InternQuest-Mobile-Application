@@ -474,55 +474,55 @@ function CompanyModal({
               </div>
             </div>
           </div>
-        <div className="moa-validity-card">
-          <div className="moa-toggle">
-            <label htmlFor="moa" className="checkbox-label">
-              <input
-                id="moa"
-                type="checkbox"
-                name="moa"
-                checked={formData.moa}
-                onChange={handleInputChange}
-              />
-              <div>
-                <span className="moa-title">MOA (Memorandum of Agreement)</span>
-                <p className="moa-subtitle">
-                  Track current agreements and show validity to students.
-                </p>
+          <div className="moa-validity-card">
+            <div className="moa-toggle">
+              <label htmlFor="moa" className="checkbox-label">
+                <input
+                  id="moa"
+                  type="checkbox"
+                  name="moa"
+                  checked={formData.moa}
+                  onChange={handleInputChange}
+                />
+                <div>
+                  <span className="moa-title">
+                    MOA (Memorandum of Agreement)
+                  </span>
+                  <p className="moa-subtitle">
+                    Track current agreements and show validity to students.
+                  </p>
+                </div>
+              </label>
+            </div>
+            <div className="moa-validity-input">
+              <div className="moa-validity-label">
+                <span>Validity</span>
+                {formData.moa && <span className="moa-required">*</span>}
               </div>
-            </label>
-          </div>
-          <div className="moa-validity-input">
-            <div className="moa-validity-label">
-              <span>Validity</span>
-              {formData.moa && (
-                <span className="moa-required">*</span>
-              )}
+              <div
+                className={`moa-input-wrapper${
+                  !formData.moa ? " disabled" : ""
+                }`}
+              >
+                <input
+                  id="moaValidityYears"
+                  type="number"
+                  name="moaValidityYears"
+                  min="1"
+                  step="1"
+                  placeholder="3"
+                  value={formData.moaValidityYears}
+                  onChange={handleInputChange}
+                  disabled={!formData.moa}
+                />
+                <span className="moa-unit">years</span>
+              </div>
             </div>
-            <div
-              className={`moa-input-wrapper${
-                !formData.moa ? " disabled" : ""
-              }`}
-            >
-              <input
-                id="moaValidityYears"
-                type="number"
-                name="moaValidityYears"
-                min="1"
-                step="1"
-                placeholder="3"
-                value={formData.moaValidityYears}
-                onChange={handleInputChange}
-                disabled={!formData.moa}
-              />
-              <span className="moa-unit">years</span>
-            </div>
+            <p className="moa-hint">
+              This value syncs to the mobile app so interns immediately see how
+              long the partnership is active.
+            </p>
           </div>
-          <p className="moa-hint">
-            This value syncs to the mobile app so interns immediately see how
-            long the partnership is active.
-          </p>
-        </div>
           <div className="form-group">
             <label>
               Mode of Work: <span style={{ color: "red" }}>*</span>

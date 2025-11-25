@@ -63,9 +63,31 @@ export function useSuggestionFields() {
  */
 const syncMoaValidityToRealtime = async (companyId, payload) => {
   try {
+    // Check if user is authenticated
+    if (!auth.currentUser) {
+      console.warn("No authenticated user found. Skipping RTDB sync.");
+      console.warn("This usually means:");
+      console.warn("1. Firebase Auth credentials (firebaseEmail/firebasePassword) are missing from your Firestore admin document");
+      console.warn("2. The Firebase Auth user doesn't exist");
+      console.warn("3. The sign-in failed during login");
+      console.warn("Check the browser console during login for more details.");
+      return;
+    }
+    console.log("Syncing to RTDB with user:", auth.currentUser.uid, auth.currentUser.email);
     await updateRealtime(ref(realtimeDb, `companies/${companyId}`), payload);
+    console.log("Successfully synced MOA validity to RTDB");
   } catch (error) {
     console.error("Failed to sync MOA validity to Realtime Database:", error);
+    console.error("Auth state:", {
+      isAuthenticated: !!auth.currentUser,
+      uid: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+    });
+    if (error.code === 'PERMISSION_DENIED') {
+      console.error("Permission denied. Make sure:");
+      console.error("1. You're signed into Firebase Auth (check login console logs)");
+      console.error("2. Your UID exists in Realtime Database at: userRoles/<your-uid> with value 'admin'");
+    }
   }
 };
 

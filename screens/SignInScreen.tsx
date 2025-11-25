@@ -14,7 +14,11 @@ import { useNavigation } from '@react-navigation/native';
 import { auth } from '../firebase/config';
 import { signInWithEmailAndPassword, sendPasswordResetEmail, onAuthStateChanged } from 'firebase/auth';
 
-const SignInScreen: React.FC = () => {
+type SignInProps = {
+  setIsLoggedIn?: (v: boolean) => void;
+};
+
+const SignInScreen: React.FC<SignInProps> = ({ setIsLoggedIn }) => {
   const navigation = useNavigation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -29,6 +33,7 @@ const SignInScreen: React.FC = () => {
   // eslint-disable-next-line @typescript-eslint/ban-ts-comment
   // @ts-ignore
   (navigation as any).navigate('Home');
+  if (setIsLoggedIn) setIsLoggedIn(true);
       }
       setCheckingSession(false);
     });
@@ -42,10 +47,11 @@ const SignInScreen: React.FC = () => {
     }
     setLoading(true);
     try {
-      await signInWithEmailAndPassword(auth, email.trim(), password);
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-  // @ts-ignore
-  (navigation as any).navigate('Home');
+        await signInWithEmailAndPassword(auth, email.trim(), password);
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore
+        (navigation as any).navigate('Home');
+        if (setIsLoggedIn) setIsLoggedIn(true);
     } catch (e: any) {
       const code = e?.code ?? '';
       let message = 'Failed to sign in. Please try again.';

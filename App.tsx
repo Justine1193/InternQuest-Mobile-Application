@@ -136,18 +136,17 @@ const App: React.FC = () => {
 
     if (isProfileComplete === false) {
       return (
-        <Stack.Screen name="SetupAccount">
+            <Stack.Screen name="SetupAccount">
           {props => (
             <SetupAccountScreen
               {...props}
               onSetupComplete={async () => {
                 // Update Firestore and local state
                 if (auth.currentUser) {
-                  await getDoc(doc(firestore, 'users', auth.currentUser.uid)).then(userDoc => {
-                    if (userDoc.exists()) {
-                      setIsProfileComplete(true);
-                    }
-                  });
+                  const userDoc = await getDoc(doc(firestore, 'users', auth.currentUser.uid));
+                  if (userDoc.exists()) {
+                    setIsProfileComplete(true);
+                  }
                 }
               }}
             />

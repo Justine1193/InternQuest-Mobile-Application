@@ -169,7 +169,7 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
       endAt(searchText + '\uf8ff')
     );
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => doc.data().name);
+    return snapshot.docs.map((doc: any) => doc.data().name);
   };
 
   // --- Handlers for dropdown search ---
@@ -225,11 +225,11 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
         if (skillsDoc.exists()) {
           const skillsData = skillsDoc.data();
           let skillsArray: string[] = [];
-          if (Array.isArray(skillsData.list)) {
+            if (Array.isArray(skillsData.list)) {
             // Remove duplicates and trim whitespace
-            skillsArray = [...new Set(skillsData.list.map(skill => String(skill).trim()))];
+            skillsArray = [...new Set(skillsData.list.map((skill: any) => String(skill).trim()))] as string[];
           } else {
-            skillsArray = [...new Set(Object.values(skillsData).map(skill => String(skill).trim()))];
+            skillsArray = [...new Set(Object.values(skillsData).map((skill: any) => String(skill).trim()))] as string[];
           }
           setAvailableSkills(skillsArray);
         }

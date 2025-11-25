@@ -57,7 +57,7 @@ export const getUserWeeklyReports = async (userId: string): Promise<WeeklyReport
         const querySnapshot = await getDocs(reportsQuery);
 
         const reports: WeeklyReport[] = [];
-        querySnapshot.forEach((doc) => {
+        querySnapshot.forEach((doc: any) => {
             reports.push({ id: doc.id, ...doc.data() } as WeeklyReport);
         });
 
@@ -122,7 +122,7 @@ export const getReportsByStatus = async (userId: string, status: WeeklyReport['s
         const querySnapshot = await getDocs(reportsQuery);
 
         const reports: WeeklyReport[] = [];
-        querySnapshot.forEach((doc) => {
+        querySnapshot.forEach((doc: any) => {
             reports.push({ id: doc.id, ...doc.data() } as WeeklyReport);
         });
 
@@ -150,7 +150,7 @@ export const getReportsByDateRange = async (
         const querySnapshot = await getDocs(reportsQuery);
 
         const reports: WeeklyReport[] = [];
-        querySnapshot.forEach((doc) => {
+        querySnapshot.forEach((doc: any) => {
             reports.push({ id: doc.id, ...doc.data() } as WeeklyReport);
         });
 
@@ -171,7 +171,7 @@ export const subscribeToWeeklyReports = (
 
     return onSnapshot(reportsQuery, (querySnapshot) => {
         const reports: WeeklyReport[] = [];
-        querySnapshot.forEach((doc) => {
+        querySnapshot.forEach((doc: any) => {
             reports.push({ id: doc.id, ...doc.data() } as WeeklyReport);
         });
         callback(reports);
@@ -211,7 +211,7 @@ export const getAllReportsForCoordinators = async (): Promise<WeeklyReport[]> =>
             const reportsQuery = query(reportsCol, orderBy('submittedAt', 'desc'));
             const reportsSnapshot = await getDocs(reportsQuery);
 
-            reportsSnapshot.forEach((reportDoc) => {
+            reportsSnapshot.forEach((reportDoc: any) => {
                 allReports.push({ id: reportDoc.id, ...reportDoc.data() } as WeeklyReport);
             });
         }

@@ -15,10 +15,9 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList, Post as BasePost } from '../App';
 import { Ionicons } from '@expo/vector-icons';
 import { useSavedInternships } from '../context/SavedInternshipsContext';
-import { collection, getDocs } from 'firebase/firestore';
-import { firestore } from '../firebase/config';
-import { auth } from '../firebase/config';
-import { doc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
+import { firestore, db, auth } from '../firebase/config';
+import { ref, onValue } from 'firebase/database';
 
 type Post = BasePost & { createdAt?: Date };
 
@@ -45,6 +44,9 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
   const [userFields, setUserFields] = useState<string[]>([]);
   const [userSkills, setUserSkills] = useState<string[]>([]);
 
+  // Realtime MOA availability (companyId -> remaining slots)
+  const [moaAvailability, setMoaAvailability] = useState<{ [companyId: string]: number | null }>({});
+
   // Advanced filters
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [selectedLocation, setSelectedLocation] = useState('All Locations');
@@ -55,7 +57,7 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
     try {
       setRefreshing(true);
       const querySnapshot = await getDocs(collection(firestore, 'companies'));
-      const companyData: Post[] = querySnapshot.docs.map(doc => {
+      const companyData: Post[] = querySnapshot.docs.map((doc: any) => {
         const data = doc.data();
         return {
           id: doc.id,
@@ -103,6 +105,26 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
       }
     };
     fetchUserFieldsAndSkills();
+
+    // subscribe to realtime moa availability for all companies
+    let unsubListener: any = null;
+    try {
+      const moaRef = ref(db, 'moaAvailability');
+      unsubListener = onValue(moaRef, (snapshot: any) => {
+        const val = snapshot.val() || {};
+        setMoaAvailability(val);
+      }, (error: any) => {
+        console.error('Failed to read moa availability from Realtime DB', error);
+      });
+    } catch (e) {
+      console.warn('Realtime DB moa subscription skipped:', e);
+    }
+
+    return () => {
+      try {
+        if (unsubListener) unsubListener();
+      } catch (e) {}
+    };
   }, []);
 
   // Enhanced search and filtering logic
@@ -312,6 +334,11 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
                         <Ionicons name="briefcase" size={14} color="#666" />
                         {' '}{typeof post.industry === 'string' ? post.industry : 'Industry not specified'}
                       </Text>
+                    {typeof post.id === 'string' && (
+                      <Text style={styles.moaRemaining}>
+                        MOA validity: {typeof moaAvailability[post.id] === 'number' ? moaAvailability[post.id] : '—'}
+                      </Text>
+                    )}
                     </View>
                   </View>
                   <TouchableOpacity
@@ -696,6 +723,12 @@ const styles = StyleSheet.create({
   companyIndustry: {
     fontSize: 14,
     color: '#666',
+  },
+  moaRemaining: {
+    fontSize: 12,
+    color: '#ff5722',
+    marginTop: 4,
+    fontWeight: '600',
   },
   bookmarkButton: {
     padding: 8,

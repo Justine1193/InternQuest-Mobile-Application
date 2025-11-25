@@ -11,6 +11,8 @@ import {
   Platform,
   ScrollView,
   ActivityIndicator,
+  Modal,
+  Linking,
 } from "react-native";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { doc, setDoc, serverTimestamp, getDoc } from "firebase/firestore";
@@ -19,6 +21,7 @@ import { useNavigation } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "../App";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
+import UserAgreementText from '../docs/userAgreement';
 
 // Types
 type NavigationProp = StackNavigationProp<RootStackParamList, "SignUp">;
@@ -64,7 +67,10 @@ const SignUpScreen: React.FC = () => {
     contact?: string;
     password?: string;
     confirmPassword?: string;
+    agreement?: string;
   }>({});
+  const [agreementChecked, setAgreementChecked] = useState(false);
+  const [showAgreementModal, setShowAgreementModal] = useState(false);
 
   const navigation = useNavigation<NavigationProp>();
 
@@ -132,6 +138,10 @@ const SignUpScreen: React.FC = () => {
       newErrors.confirmPassword = "Passwords do not match";
     }
 
+    if (!agreementChecked) {
+      newErrors.agreement = 'You must accept the User Agreement to continue';
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -160,6 +170,8 @@ const SignUpScreen: React.FC = () => {
         isProfileComplete: false,
         role: "user",
         status: "active",
+        acceptedTerms: agreementChecked ? true : false,
+        acceptedTermsAt: agreementChecked ? serverTimestamp() : null,
         existingContact,
       };
 
@@ -340,6 +352,49 @@ const SignUpScreen: React.FC = () => {
           </View>
           {errors.confirmPassword && <Text style={styles.errorText}>{errors.confirmPassword}</Text>}
 
+          {/* User Agreement */}
+          <TouchableOpacity
+            style={styles.agreementRow}
+            onPress={() => setAgreementChecked(prev => !prev)}
+            activeOpacity={0.8}
+            disabled={isLoading}
+          >
+            <Icon
+              name={agreementChecked ? 'checkbox-marked' : 'checkbox-blank-outline'}
+              size={22}
+              color={agreementChecked ? '#0077cc' : '#999'}
+            />
+            <Text style={styles.agreementText}>
+              I agree to the{' '}
+              <Text style={styles.agreementLink} onPress={() => setShowAgreementModal(true)}>
+                User Agreement
+              </Text>
+            </Text>
+          </TouchableOpacity>
+          {errors.agreement && <Text style={styles.errorText}>{errors.agreement}</Text>}
+
+          {/* Agreement modal (in-app) */}
+          <Modal
+            visible={showAgreementModal}
+            animationType="slide"
+            onRequestClose={() => setShowAgreementModal(false)}
+            transparent={true}
+          >
+            <View style={styles.modalOverlay}>
+              <View style={styles.agreementModalContent}>
+                <View style={styles.modalHeaderInline}>
+                  <Text style={styles.modalTitleInline}>User Agreement</Text>
+                  <TouchableOpacity onPress={() => setShowAgreementModal(false)}>
+                    <Icon name="close" size={22} color="#333" />
+                  </TouchableOpacity>
+                </View>
+                <ScrollView style={{ padding: 16 }}>
+                  <Text style={{ color: '#333', lineHeight: 20 }}>{UserAgreementText}</Text>
+                </ScrollView>
+              </View>
+            </View>
+          </Modal>
+
           {/* Sign Up Button */}
           <TouchableOpacity
             style={[styles.button, isLoading && styles.buttonDisabled]}
@@ -473,6 +528,47 @@ const styles = StyleSheet.create({
   loginLink: {
     fontWeight: "bold",
     color: "#0077cc",
+  },
+  agreementRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 12,
+  },
+  agreementText: {
+    marginLeft: 10,
+    color: '#333',
+    fontSize: 14,
+    flexShrink: 1,
+  },
+  agreementLink: {
+    color: '#0077cc',
+    textDecorationLine: 'underline',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  agreementModalContent: {
+    backgroundColor: '#fff',
+    width: '90%',
+    maxHeight: '80%',
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  modalHeaderInline: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  modalTitleInline: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#333',
   },
 });
 

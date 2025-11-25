@@ -104,7 +104,7 @@ const OJTTrackerScreen: React.FC = () => {
       const logsCol = collection(firestore, `users/${userId}/ojtLogs`);
       const logsSnap = await getDocs(logsCol);
       const logs: TimeLog[] = [];
-      logsSnap.forEach(doc => logs.push(doc.data() as TimeLog));
+      logsSnap.forEach((doc: any) => logs.push(doc.data() as TimeLog));
       setTimeLogs(logs.sort((a, b) => b.date.localeCompare(a.date)));
     } catch (error) {
       console.error('Error loading logs:', error);

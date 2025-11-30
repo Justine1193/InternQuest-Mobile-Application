@@ -1,0 +1,28 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "status": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+
+    "companies": {
+      ".read": "auth != null",
+      "$companyId": {
+        ".write": "auth != null && root.child('userRoles/' + auth.uid).val() === 'admin'"
+      }
+    },
+
+    "moaAvailability": {
+      ".read": "auth != null",
+      "$companyId": {
+        ".write": "auth != null && root.child('userRoles/' + auth.uid).val() === 'admin'"
+      }
+    }
+  }
+}
+

@@ -19,6 +19,13 @@ import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
 import { firestore, db, auth } from '../firebase/config';
 import { ref, onValue } from 'firebase/database';
 
+type MoaValidity = {
+  years: number | null;
+  updatedAt: string | null;
+  expiresOn: string | null;
+  expired: boolean;
+};
+
 type Post = BasePost & { createdAt?: Date };
 
 type Props = {
@@ -44,8 +51,8 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
   const [userFields, setUserFields] = useState<string[]>([]);
   const [userSkills, setUserSkills] = useState<string[]>([]);
 
-  // Realtime MOA availability (companyId -> remaining slots)
-  const [moaAvailability, setMoaAvailability] = useState<{ [companyId: string]: number | null }>({});
+  // Realtime MOA validity info (companyId -> validity metadata)
+  const [moaValidity, setMoaValidity] = useState<{ [companyId: string]: MoaValidity }>({});
 
   // Advanced filters
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
@@ -106,24 +113,64 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
     };
     fetchUserFieldsAndSkills();
 
-    // subscribe to realtime moa availability for all companies
+    // subscribe to realtime MOA validity for all companies
     let unsubListener: any = null;
     try {
-      const moaRef = ref(db, 'moaAvailability');
-      unsubListener = onValue(moaRef, (snapshot: any) => {
-        const val = snapshot.val() || {};
-        setMoaAvailability(val);
+      const companiesRef = ref(db, 'companies');
+      unsubListener = onValue(companiesRef, (snapshot: any) => {
+        const companies = snapshot.val() || {};
+        const processed: { [key: string]: MoaValidity } = {};
+
+        Object.entries(companies).forEach(([companyId, data]) => {
+          const rawYears = (data as any)?.moaValidityYears;
+          const parsedYears = typeof rawYears === 'number' ? rawYears : Number(rawYears);
+          const years = Number.isFinite(parsedYears) ? parsedYears : null;
+          const updatedAt = (data as any)?.updatedAt ?? null;
+          const companyName = typeof (data as any)?.companyName === 'string'
+            ? (data as any).companyName.trim().toLowerCase()
+            : null;
+
+          let expiresOn: string | null = null;
+          let expired = false;
+          if (updatedAt && years !== null) {
+            const updatedDate = new Date(updatedAt);
+            if (!Number.isNaN(updatedDate.getTime())) {
+              const expiryDate = new Date(updatedDate);
+              expiryDate.setFullYear(expiryDate.getFullYear() + years);
+              expiresOn = expiryDate.toISOString();
+              expired = expiryDate.getTime() < Date.now();
+            }
+          }
+
+          processed[companyId] = {
+            years,
+            updatedAt,
+            expiresOn,
+            expired,
+          };
+
+          if (companyName) {
+            processed[companyName] = {
+              years,
+              updatedAt,
+              expiresOn,
+              expired,
+            };
+          }
+        });
+
+        setMoaValidity(processed);
       }, (error: any) => {
-        console.error('Failed to read moa availability from Realtime DB', error);
+        console.error('Failed to read MOA validity from Realtime DB', error);
       });
     } catch (e) {
-      console.warn('Realtime DB moa subscription skipped:', e);
+      console.warn('Realtime DB MOA subscription skipped:', e);
     }
 
     return () => {
       try {
         if (unsubListener) unsubListener();
-      } catch (e) {}
+      } catch (e) { }
     };
   }, []);
 
@@ -199,6 +246,28 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
     const colors = ['#2196F3', '#4CAF50', '#FF9800', '#9C27B0', '#F44336', '#00BCD4'];
     const colorIndex = companyName.length % colors.length;
     return { letter: firstLetter, color: colors[colorIndex] };
+  };
+
+  const formatMoaValidity = (post: Post) => {
+    const idKey = typeof post.id === 'string' ? post.id : '';
+    const nameKey = typeof post.company === 'string' ? post.company.trim().toLowerCase() : '';
+    const info = (idKey && moaValidity[idKey]) || (nameKey && moaValidity[nameKey]);
+    if (!info || (info.years === null && !info.expiresOn)) return '—';
+
+    const segments: string[] = [];
+
+    if (info.years !== null) {
+      segments.push(`${info.years} year${info.years === 1 ? '' : 's'}`);
+    }
+
+    if (info.expiresOn) {
+      const expiryDate = new Date(info.expiresOn);
+      if (!Number.isNaN(expiryDate.getTime())) {
+        segments.push(info.expired ? `expired ${expiryDate.toLocaleDateString()}` : `until ${expiryDate.toLocaleDateString()}`);
+      }
+    }
+
+    return segments.join(' • ') || '—';
   };
 
   return (
@@ -334,11 +403,11 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
                         <Ionicons name="briefcase" size={14} color="#666" />
                         {' '}{typeof post.industry === 'string' ? post.industry : 'Industry not specified'}
                       </Text>
-                    {typeof post.id === 'string' && (
-                      <Text style={styles.moaRemaining}>
-                        MOA validity: {typeof moaAvailability[post.id] === 'number' ? moaAvailability[post.id] : '—'}
-                      </Text>
-                    )}
+                      {typeof post.id === 'string' && (
+                        <Text style={styles.moaRemaining}>
+                          MOA validity: {formatMoaValidity(post)}
+                        </Text>
+                      )}
                     </View>
                   </View>
                   <TouchableOpacity

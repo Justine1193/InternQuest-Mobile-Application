@@ -15,7 +15,7 @@ import { RootStackParamList } from '../App';
 import BottomNavbar from '../components/BottomNav';
 import { Swipeable } from 'react-native-gesture-handler';
 import { auth, firestore } from '../firebase/config';
-import { doc, getDoc, collection, getDocs } from 'firebase/firestore';
+import { doc, getDoc, collection, getDocs, query, orderBy } from 'firebase/firestore';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 
 type Props = {
@@ -30,45 +30,8 @@ type NotificationItem = {
   action?: string;
 };
 
-const initialNotifications: NotificationItem[] = [
-  {
-    id: '1',
-    title: "Celebrate David's 2-year anniversary at Techcompany",
-    description: 'David has been with Techcompany for 2 years. Congratulate him on his milestone!',
-    time: '10m ago',
-    action: 'Send message',
-  },
-  {
-    id: '2',
-    title: '31 searches reached you this week',
-    description: 'Your profile was viewed 31 times this week. Keep up the great work!',
-    time: '10m ago',
-  },
-  {
-    id: '3',
-    title: 'We found 10 product manager job opportunities in NC',
-    description: 'Explore 10 new job opportunities for product managers in North Carolina.',
-    time: '10m ago',
-    action: 'View all jobs',
-  },
-  {
-    id: '4',
-    title: "Celebrate Anna's 4-year anniversary at Techcompany",
-    description: 'Anna has been with Techcompany for 4 years. Congratulate her on her milestone!',
-    time: '10m ago',
-    action: 'Send message',
-  },
-  {
-    id: '5',
-    title: "Celebrate Jennifer's 4-year anniversary at Edtechcom",
-    description: 'Jennifer has been with Edtechcom for 4 years. Congratulate her on her milestone!',
-    time: '10m ago',
-    action: 'Send message',
-  },
-];
-
 const NotificationsScreen: React.FC<Props> = ({ navigation }) => {
-  const [notifications, setNotifications] = useState(initialNotifications);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [selectedNotification, setSelectedNotification] = useState<NotificationItem | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [userName, setUserName] = useState('');
@@ -91,7 +54,31 @@ const NotificationsScreen: React.FC<Props> = ({ navigation }) => {
     };
     fetchUserName();
     fetchReminders();
+    fetchNotifications();
   }, []);
+
+  const fetchNotifications = async () => {
+    if (!auth.currentUser) return;
+    try {
+      const notificationsRef = collection(firestore, 'notifications');
+      const notificationsQuery = query(notificationsRef, orderBy('timestamp', 'desc'));
+      const snapshot = await getDocs(notificationsQuery);
+      const items: NotificationItem[] = snapshot.docs.map((docSnap: any) => {
+        const data = docSnap.data();
+        const timestamp = data.timestamp?.toDate ? data.timestamp.toDate() : (data.timestamp ? new Date(data.timestamp) : null);
+        return {
+          id: docSnap.id,
+          title: data.title || 'Notification',
+          description: data.message || data.description || '',
+          time: timestamp ? timestamp.toLocaleString() : (data.time || ''),
+          action: data.action,
+        };
+      });
+      setNotifications(items);
+    } catch (error) {
+      console.error('Failed to fetch notifications:', error);
+    }
+  };
 
   const fetchReminders = async () => {
     if (!auth.currentUser) return;

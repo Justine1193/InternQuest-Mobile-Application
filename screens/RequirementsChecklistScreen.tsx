@@ -513,12 +513,12 @@ const RequirementsChecklistScreen: React.FC = () => {
 
     return (
         <View style={styles.container}>
-            <StatusBar translucent backgroundColor="transparent" barStyle="dark-content" />
+            <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
 
             {/* Header */}
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                    <Ionicons name="arrow-back" size={24} color="#333" />
+                    <Ionicons name="arrow-back" size={24} color="#fff" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Requirements Checklist</Text>
                 <View style={{ width: 24 }} />
@@ -683,7 +683,7 @@ const RequirementsChecklistScreen: React.FC = () => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#f8f9fa',
+        backgroundColor: '#f2f6ff',
     },
     header: {
         flexDirection: 'row',
@@ -692,17 +692,17 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
         paddingTop: 50,
         paddingBottom: 16,
-        backgroundColor: '#fff',
-        borderBottomWidth: 1,
-        borderBottomColor: '#eee',
+        backgroundColor: '#6366F1',
+        borderBottomWidth: 0,
+        borderRadius: 12,
     },
     backButton: {
         padding: 8,
     },
     headerTitle: {
         fontSize: 18,
-        fontWeight: 'bold',
-        color: '#333',
+        fontWeight: '700',
+        color: '#fff',
     },
     scrollView: {
         flex: 1,
@@ -821,7 +821,7 @@ const styles = StyleSheet.create({
     },
     fileName: {
         fontSize: 14,
-        color: '#007aff',
+        color: '#6366F1',
         marginLeft: 6,
     },
     actionButtons: {
@@ -857,12 +857,12 @@ const styles = StyleSheet.create({
         paddingVertical: 8,
         borderRadius: 8,
         borderWidth: 1,
-        borderColor: '#007aff',
+        borderColor: '#6366F1',
         backgroundColor: 'transparent',
     },
     uploadButtonText: {
         fontSize: 14,
-        color: '#007aff',
+        color: '#6366F1',
         marginLeft: 4,
         fontWeight: '500',
     },

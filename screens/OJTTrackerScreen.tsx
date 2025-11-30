@@ -533,7 +533,7 @@ const OJTTrackerScreen: React.FC = () => {
   return (
     <><ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
       <View style={styles.header}>
-        <Icon name="arrow-back" size={24} onPress={() => navigation.goBack()} />
+        <Icon name="arrow-back" size={24} color="#fff" onPress={() => navigation.goBack()} />
         <Text style={styles.headerText}>OJT Personal Tracker</Text>
       </View>
 
@@ -556,7 +556,7 @@ const OJTTrackerScreen: React.FC = () => {
       </View>
 
       <View style={styles.noteBox}>
-        <Icon name="warning-outline" size={20} color="#FFA500" />
+        <Icon name="warning-outline" size={18} color="#ff9800" />
         <Text style={styles.noteText}>
           This tracker is for personal use only. For official time logs, please check with your HR.
         </Text>
@@ -566,7 +566,7 @@ const OJTTrackerScreen: React.FC = () => {
         style={styles.weeklyReportButton}
         onPress={() => navigation.navigate('WeeklyReport')}
       >
-        <Icon name="document-text-outline" size={20} color="#fff" />
+        <Icon name="document-text-outline" size={18} color="#fff" />
         <Text style={styles.weeklyReportButtonText}>Submit Weekly Report</Text>
       </TouchableOpacity>
 
@@ -585,10 +585,10 @@ const OJTTrackerScreen: React.FC = () => {
             <Text style={styles.tableCell}>{item.clockOut}</Text>
             <Text style={styles.tableCell}>{item.hours}</Text>
             <TouchableOpacity onPress={() => openModal(item, index)}>
-              <Icon name="create-outline" size={18} color="blue" />
+              <Icon name="create-outline" size={18} color="#6366F1" />
             </TouchableOpacity>
             <TouchableOpacity onPress={() => handleDelete(index)}>
-              <Icon name="trash-outline" size={18} color="red" style={{ marginLeft: 8 }} />
+              <Icon name="trash-outline" size={18} color="#ef4444" style={{ marginLeft: 8 }} />
             </TouchableOpacity>
           </View>
         ))}
@@ -653,7 +653,7 @@ const OJTTrackerScreen: React.FC = () => {
 
       {/* Plus Button */}
       <FAB
-        style={[styles.fabPlus, { backgroundColor: '#007bff' }]}
+        style={[styles.fabPlus, { backgroundColor: '#6366F1' }]}
         icon="plus"
         color="#fff"
         onPress={toggleDropdown} />
@@ -676,7 +676,7 @@ const OJTTrackerScreen: React.FC = () => {
                 onPress={() => setShowDatePicker(true)}
               >
                 <View style={styles.dateInputContent}>
-                  <Icon name="calendar-outline" size={20} color="#007bff" style={styles.dateIcon} />
+                  <Icon name="calendar-outline" size={20} color="#6366F1" style={styles.dateIcon} />
                   <Text style={[
                     styles.dateInputText,
                     !formData.date && styles.dateInputPlaceholder
@@ -895,16 +895,16 @@ const OJTTrackerScreen: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { padding: 16, backgroundColor: '#fff', flex: 1, paddingTop: 30 },
+  container: { padding: 16, backgroundColor: '#f2f6ff', flex: 1, paddingTop: 30 },
   scrollContent: { paddingBottom: 100 },
-  header: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
-  headerText: { fontSize: 18, fontWeight: 'bold', marginLeft: 8 },
+  header: { flexDirection: 'row', alignItems: 'center', marginBottom: 16, padding: 12, backgroundColor: '#6366F1', borderRadius: 12 },
+  headerText: { fontSize: 18, fontWeight: '700', marginLeft: 8, color: '#fff' },
   infoRow: { flexDirection: 'row', justifyContent: 'space-between' },
   infoBox: {
-    width: '48%', backgroundColor: '#f9f9ff', borderRadius: 10, padding: 12,
-    borderWidth: 1, borderColor: '#cce0ff', alignItems: 'center',
+    width: '48%', backgroundColor: '#fff', borderRadius: 12, padding: 14,
+    borderWidth: 0, alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 2,
   },
-  infoLabel: { color: '#007bff', fontWeight: 'bold' },
+  infoLabel: { color: '#6366F1', fontWeight: '800' },
   infoValue: { fontSize: 16, fontWeight: 'bold', marginVertical: 4 },
   subText: { fontSize: 12, color: '#888' },
   noteBox: {
@@ -916,7 +916,7 @@ const styles = StyleSheet.create({
   tableCard: { borderRadius: 10, overflow: 'hidden', marginTop: 10, marginBottom: 20 },
   tableHeader: {
     flexDirection: 'row',
-    backgroundColor: '#007bff',
+    backgroundColor: '#6366F1',
     padding: 10,
     alignItems: 'flex-start'
   },
@@ -954,7 +954,7 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   paginationText: {
-    color: '#007bff',
+    color: '#6366F1',
     fontSize: 14,
   },
   paginationTextDisabled: {
@@ -972,7 +972,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   pageNumberButtonActive: {
-    backgroundColor: '#007bff',
+    backgroundColor: '#6366F1',
   },
   pageNumberText: {
     color: '#333',
@@ -986,13 +986,13 @@ const styles = StyleSheet.create({
     position: 'absolute', bottom: 160, right: 20, backgroundColor: '#4CAF50',
   },
   fabAdd: {
-    position: 'absolute', bottom: 80, right: 20, backgroundColor: '#007bff',
+    position: 'absolute', bottom: 80, right: 20, backgroundColor: '#6366F1',
   },
   fabPlus: {
     position: 'absolute',
     bottom: 80, // Positioned above the Bottom Navbar
     right: 20,
-    backgroundColor: '#007bff',
+    backgroundColor: '#6366F1',
   },
   dropdownContainer: {
     position: 'absolute',
@@ -1030,8 +1030,8 @@ const styles = StyleSheet.create({
   cancelBtn: {
     padding: 10, backgroundColor: '#eee', borderRadius: 5,
   },
-  saveBtn: {
-    padding: 10, backgroundColor: '#007bff', borderRadius: 5,
+    saveBtn: {
+    padding: 10, backgroundColor: '#6366F1', borderRadius: 5,
   },
   inputContainer: {
     marginBottom: 15,
@@ -1059,7 +1059,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f5f5f5',
   },
   amPmButtonActive: {
-    backgroundColor: '#007bff',
+    backgroundColor: '#6366F1',
   },
   amPmText: {
     fontSize: 14,
@@ -1190,11 +1190,11 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   datePickerTodayText: {
-    color: '#007bff',
+    color: '#6366F1',
     fontWeight: 'bold',
   },
   datePickerSelected: {
-    backgroundColor: '#007bff',
+    backgroundColor: '#6366F1',
     borderRadius: 20,
   },
   datePickerSelectedText: {
@@ -1204,7 +1204,7 @@ const styles = StyleSheet.create({
   datePickerCloseButton: {
     marginTop: 16,
     padding: 12,
-    backgroundColor: '#007bff',
+    backgroundColor: '#6366F1',
     borderRadius: 8,
     alignItems: 'center',
   },
@@ -1233,7 +1233,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#2196F3',
+    backgroundColor: '#6366F1',
     paddingVertical: 12,
     paddingHorizontal: 20,
     borderRadius: 8,

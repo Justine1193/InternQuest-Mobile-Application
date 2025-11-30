@@ -355,7 +355,7 @@ const WeeklyReportScreen: React.FC = () => {
 const styles = StyleSheet.create({
     scroll: {
         padding: 20,
-        backgroundColor: '#f7f9fc',
+        backgroundColor: '#f2f6ff',
     },
     section: {
         backgroundColor: '#fff',
@@ -440,7 +440,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#e6f0ff',
     },
     addButtonText: {
-        color: '#2962ff',
+        color: '#6366F1',
         fontWeight: '600',
     },
     totalHours: {
@@ -459,7 +459,7 @@ const styles = StyleSheet.create({
         marginBottom: 16,
     },
     fileButtonText: {
-        color: '#2962ff',
+        color: '#6366F1',
         fontWeight: '600',
     },
     buttonRow: {
@@ -476,10 +476,10 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     primaryButton: {
-        backgroundColor: '#1c7ed6',
+        backgroundColor: '#6366F1',
     },
     secondaryButton: {
-        backgroundColor: '#6c5ce7',
+        backgroundColor: '#8b5cf6',
     },
     actionButtonText: {
         color: '#fff',

@@ -59,6 +59,7 @@ export type RootStackParamList = {
   OJTTracker: { post?: Post };
   WeeklyReport: undefined;
   Notifications: undefined;
+  HelpDesk: undefined;
   Settings: undefined;
   Profile: undefined;
 };
@@ -172,6 +173,12 @@ const App: React.FC = () => {
           name="Notifications"
           component={NotificationsScreen}
           listeners={{ focus: () => handleScreenChange('Notifications') }}
+        />
+        <Stack.Screen
+          name="HelpDesk"
+          // lazy-load the screen when accessed
+          component={require('./screens/HelpDeskScreen').default}
+          listeners={{ focus: () => handleScreenChange('HelpDesk') }}
         />
         <Stack.Screen
           name="Settings"

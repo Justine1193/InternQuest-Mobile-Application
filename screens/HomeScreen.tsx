@@ -390,9 +390,8 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
               >
                 <View style={styles.cardHeader}>
                   <View style={styles.companyInfo}>
-                    <View style={[styles.companyLogo, { backgroundColor: logo.color }]}>
-                      <Text style={styles.companyLogoText}>{logo.letter}</Text>
-                    </View>
+                    {/* removed round logo to give a cleaner card — replaced with a slim accent stripe */}
+                    <View style={[styles.cardAccent, { backgroundColor: logo.color }]} />
                     <View style={styles.companyDetails}>
                       <Text style={styles.companyName}>{post.company}</Text>
                       <Text style={styles.companyLocation}>
@@ -585,7 +584,7 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#f2f6ff',
   },
   header: {
     flexDirection: 'row',
@@ -594,14 +593,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 50,
     paddingBottom: 16,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    backgroundColor: '#6366F1',
+    borderBottomWidth: 0,
   },
   headerTitle: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
+    fontWeight: '800',
+    color: '#fff',
   },
   filterButton: {
     padding: 8,
@@ -623,11 +621,16 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#fff',
     borderRadius: 12,
     paddingHorizontal: 12,
     marginRight: 8,
     height: 44,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
   },
   searchIcon: {
     marginRight: 12,
@@ -662,7 +665,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   filterButtonNext: {
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#fff',
     borderRadius: 12,
     padding: 10,
     justifyContent: 'center',
@@ -670,8 +673,8 @@ const styles = StyleSheet.create({
     height: 44,
     width: 44,
     shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
     shadowOffset: { width: 0, height: 1 },
     elevation: 1,
   },
@@ -743,14 +746,15 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 20,
+    borderRadius: 18,
+    padding: 18,
+    paddingLeft: 18,
     marginBottom: 16,
     shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 3,
+    shadowOpacity: 0.09,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 6,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -761,43 +765,39 @@ const styles = StyleSheet.create({
   companyInfo: {
     flexDirection: 'row',
     flex: 1,
-  },
-  companyLogo: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
   },
-  companyLogoText: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: 'bold',
+  /* old circular company logo removed for cleaner layout */
+  cardAccent: {
+    width: 6,
+    height: 50,
+    borderRadius: 4,
+    marginRight: 12,
+    marginTop: 4,
   },
   companyDetails: {
     flex: 1,
   },
   companyName: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 4,
+    fontWeight: '800',
+    color: '#111827',
+    marginBottom: 6,
   },
   companyLocation: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: 13,
+    color: '#6b7280',
     marginBottom: 2,
   },
   companyIndustry: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: 13,
+    color: '#6b7280',
   },
   moaRemaining: {
     fontSize: 12,
     color: '#ff5722',
-    marginTop: 4,
-    fontWeight: '600',
+    marginTop: 6,
+    fontWeight: '700',
   },
   bookmarkButton: {
     padding: 8,
@@ -807,7 +807,7 @@ const styles = StyleSheet.create({
   },
   description: {
     fontSize: 15,
-    color: '#555',
+    color: '#374151',
     lineHeight: 22,
   },
   readMore: {
@@ -828,13 +828,13 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   tag: {
-    backgroundColor: '#e3f2fd',
+    backgroundColor: '#eef2ff',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
   },
   tagText: {
-    color: '#1976d2',
+    color: '#4338ca',
     fontSize: 12,
     fontWeight: '500',
   },
@@ -848,8 +848,8 @@ const styles = StyleSheet.create({
   },
   workMode: {
     fontSize: 12,
-    color: '#4caf50',
-    fontWeight: '600',
+    color: '#10b981',
+    fontWeight: '700',
     marginBottom: 4,
   },
   timeStamp: {

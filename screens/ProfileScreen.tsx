@@ -279,8 +279,8 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007aff" />
-      </View>
+          <ActivityIndicator size="large" color="#6366F1" />
+        </View>
     );
   }
 
@@ -312,7 +312,7 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
               {/* Edit Icon Overlay */}
               <View style={styles.editIconOverlay}>
                 {avatarUploading ? (
-                  <ActivityIndicator size="small" color="#007bff" />
+                  <ActivityIndicator size="small" color="#6366F1" />
                 ) : (
                   <Ionicons name="camera" size={28} color="#fff" style={styles.editIcon} />
                 )}
@@ -329,12 +329,12 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
         {/* Stats Section */}
         <View style={styles.statsRow}>
           <View style={styles.statCard}>
-            <Ionicons name="time-outline" size={24} color="#007bff" style={{ marginBottom: 4 }} />
+            <Ionicons name="time-outline" size={24} color="#6366F1" style={{ marginBottom: 4 }} />
             <Text style={styles.statLabel}>Remaining Hours</Text>
             <Text style={styles.statValue}>{Math.max(0, requiredHours - totalHours)} hrs</Text>
           </View>
           <View style={styles.statCard}>
-            <Ionicons name="business-outline" size={24} color="#007bff" style={{ marginBottom: 4 }} />
+            <Ionicons name="business-outline" size={24} color="#6366F1" style={{ marginBottom: 4 }} />
             <Text style={styles.statLabel}>Company</Text>
             <Text style={styles.statValue}>{userData.status === 'hired' ? userData.company || 'Not Set' : 'Not Hired'}</Text>
           </View>
@@ -357,15 +357,15 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
         <View style={styles.sectionCard}>
           <Text style={styles.sectionHeader}>Contact & Details</Text>
           <TouchableOpacity style={styles.detailRow} onPress={handleEmailPress} activeOpacity={0.7}>
-            <Ionicons name="mail-outline" size={20} color="#007bff" style={styles.detailIcon} />
+            <Ionicons name="mail-outline" size={20} color="#6366F1" style={styles.detailIcon} />
             <Text style={styles.detailValue}>{userData.email}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.detailRow} onPress={handlePhonePress} activeOpacity={0.7}>
-            <Ionicons name="call-outline" size={20} color="#007bff" style={styles.detailIcon} />
+            <Ionicons name="call-outline" size={20} color="#6366F1" style={styles.detailIcon} />
             <Text style={styles.detailValue}>{userData.contact}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.detailRow} onPress={handleLinkedInPress} activeOpacity={0.7}>
-            <Ionicons name="logo-linkedin" size={20} color="#007bff" style={styles.detailIcon} />
+            <Ionicons name="logo-linkedin" size={20} color="#6366F1" style={styles.detailIcon} />
             <Text style={styles.detailValue}>{userData.linkedin}</Text>
           </TouchableOpacity>
         </View>
@@ -373,7 +373,7 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
         {/* Action Buttons */}
         <View style={styles.buttonGroup}>
           <TouchableOpacity
-            style={[styles.actionButton, { backgroundColor: '#007bff' }]}
+            style={[styles.actionButton, { backgroundColor: '#6366F1' }]}
             onPress={() => setModalVisible(true)}
           >
             <Ionicons name="pencil" size={20} color="#fff" />
@@ -559,7 +559,7 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
                 <Text style={styles.buttonText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.button, { backgroundColor: '#007bff', flex: 1, marginLeft: 8 }]}
+                style={[styles.button, { backgroundColor: '#6366F1', flex: 1, marginLeft: 8 }]}
                 onPress={async () => {
                   setChangePasswordError('');
                   setChangePasswordSuccess('');
@@ -622,7 +622,7 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#f2f6ff',
     paddingTop: 30,
   },
   scrollContent: {
@@ -649,14 +649,14 @@ const styles = StyleSheet.create({
     height: 120,
     borderRadius: 60,
     borderWidth: 2,
-    borderColor: '#007bff',
+    borderColor: '#6366F1',
     backgroundColor: '#fff',
   },
   editIconOverlay: {
     position: 'absolute',
     right: 0,
     bottom: 0,
-    backgroundColor: '#007bff',
+    backgroundColor: '#6366F1',
     borderRadius: 20,
     padding: 4,
     borderWidth: 2,
@@ -714,7 +714,7 @@ const styles = StyleSheet.create({
   sectionHeader: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#007bff',
+    color: '#6366F1',
     marginBottom: 12,
   },
   detailLabel: {
@@ -744,7 +744,7 @@ const styles = StyleSheet.create({
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#0080ff',
+    backgroundColor: '#6366F1',
     borderRadius: 10,
   },
   progressText: {
@@ -757,7 +757,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#007aff',
+    backgroundColor: '#6366F1',
     paddingVertical: 12,
     borderRadius: 5,
     marginTop: 10,
@@ -813,7 +813,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 5,
   },
   saveButton: {
-    backgroundColor: '#007aff',
+    backgroundColor: '#6366F1',
   },
   cancelButton: {
     backgroundColor: '#d9534f',
@@ -836,7 +836,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   link: {
-    color: '#007aff',
+    color: '#6366F1',
     textDecorationLine: 'underline',
   },
   undoButton: {
@@ -849,11 +849,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#e6f0ff',
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#007bff',
+    borderColor: '#6366F1',
     alignSelf: 'flex-start',
   },
   undoButtonText: {
-    color: '#007bff',
+    color: '#6366F1',
     fontWeight: 'bold',
     fontSize: 13,
     marginLeft: 6,
@@ -879,7 +879,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   companyText: {
-    color: '#007aff',
+    color: '#6366F1',
     textDecorationLine: 'underline',
   },
   successText: {

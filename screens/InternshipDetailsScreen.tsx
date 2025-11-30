@@ -10,6 +10,7 @@ import {
   Alert,
   ActivityIndicator,
   RefreshControl,
+  StatusBar,
 } from 'react-native';
 import { RouteProp, useNavigation } from '@react-navigation/native';
 import { RootStackParamList } from '../App';
@@ -273,14 +274,15 @@ const InternshipDetailsScreen: React.FC<Props> = ({ route }) => {
 
   return (
     <View style={styles.container}>
+      <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
       {/* Fixed Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Icon name="arrow-left" size={24} color="#000" />
+          <Icon name="arrow-left" size={24} color="#fff" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Internship Details</Text>
         <TouchableOpacity onPress={handleSaveInternship}>
-          <Icon name={isSaved ? "bookmark" : "bookmark-outline"} size={24} color="#000" />
+          <Icon name={isSaved ? "bookmark" : "bookmark-outline"} size={24} color="#fff" />
         </TouchableOpacity>
       </View>
 
@@ -298,13 +300,16 @@ const InternshipDetailsScreen: React.FC<Props> = ({ route }) => {
         <View style={styles.contentContainer}>
           {/* Company Name */}
           <View style={styles.companyHeader}>
-            <Text style={styles.companyName}>{post.company}</Text>
+            <View style={[styles.cardAccent, { backgroundColor: '#6366F1' }]} />
+            <View style={styles.companyNameRow}>
+              <Text style={styles.companyName}>{post.company}</Text>
             <TouchableOpacity onPress={openWebsite}>
               <Text style={styles.companyLink}>{post.website || 'Company Site'}</Text>
             </TouchableOpacity>
-            <View style={styles.locationRow}>
-              <Icon name="map-marker" size={16} color="#888" />
+              <View style={styles.locationRow}>
+              <Icon name="map-marker" size={16} color="#9ca3af" />
               <Text style={styles.locationText}>{post.location}</Text>
+              </View>
             </View>
           </View>
 
@@ -323,8 +328,8 @@ const InternshipDetailsScreen: React.FC<Props> = ({ route }) => {
               <Text style={styles.infoLabel}>Website:</Text>
               <TouchableOpacity onPress={openWebsite} style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <Text style={styles.link}>{post.website || 'N/A'}</Text>
-                {post.website && (
-                  <Icon name="open-in-new" size={16} color="#007bff" style={{ marginLeft: 4 }} />
+                  {post.website && (
+                  <Icon name="open-in-new" size={16} color="#6366F1" style={{ marginLeft: 4 }} />
                 )}
               </TouchableOpacity>
             </View>
@@ -371,7 +376,8 @@ const InternshipDetailsScreen: React.FC<Props> = ({ route }) => {
             style={styles.tagBox}
             onPress={() => Alert.alert('NDA Info', 'This internship requires an NDA.')}
           >
-            <Icon name="file-document-check" size={32} color="#0056b3" style={styles.tagIcon} />
+            {/* removed large icon, keeping concise label */}
+            <View style={[styles.smallBadge, { backgroundColor: '#eef2ff' }]} />
             <Text style={styles.tagLabel}>Approved</Text>
             <Text style={styles.tagSubLabel}>MOA</Text>
           </TouchableOpacity>
@@ -379,7 +385,7 @@ const InternshipDetailsScreen: React.FC<Props> = ({ route }) => {
             style={styles.tagBox}
             onPress={() => Alert.alert('Work Mode', workMode.description)}
           >
-            <Icon name={workMode.icon} size={32} color="#0056b3" style={styles.tagIcon} />
+            <View style={[styles.smallBadge, { backgroundColor: '#e6fffa' }]} />
             <Text style={styles.tagLabel}>{workMode.type}</Text>
             <Text style={styles.tagSubLabel}>Mode of Work</Text>
           </TouchableOpacity>
@@ -481,7 +487,7 @@ const InternshipDetailsScreen: React.FC<Props> = ({ route }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff'
+    backgroundColor: '#f2f6ff'
   },
   scrollContent: {
     paddingHorizontal: 16,
@@ -498,15 +504,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderColor: '#eee',
+    backgroundColor: '#6366F1',
+    borderBottomWidth: 0,
     zIndex: 10,
   },
-  headerTitle: { fontSize: 16, fontWeight: 'bold' },
-  companyHeader: { marginBottom: 16 },
+  headerTitle: { fontSize: 16, fontWeight: '700', color: '#fff' },
+  companyHeader: { marginBottom: 16, flexDirection: 'row', alignItems: 'center' },
+  cardAccent: { width: 8, height: 64, borderRadius: 4, marginRight: 12 },
+  companyNameRow: { flex: 1 },
   companyName: { fontSize: 20, fontWeight: 'bold', marginBottom: 4 },
-  companyLink: { color: '#007bff', marginBottom: 6 },
+  companyLink: { color: '#6366F1', marginBottom: 6 },
   locationRow: { flexDirection: 'row', alignItems: 'center' },
   locationText: { color: '#555', marginLeft: 4 },
   card: {
@@ -542,7 +549,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   link: {
-    color: '#007bff',
+    color: '#6366F1',
     textDecorationLine: 'underline',
     fontSize: 14,
   },
@@ -560,10 +567,16 @@ const styles = StyleSheet.create({
     marginHorizontal: 6,
     minHeight: 100,
   },
+  smallBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    marginBottom: 8,
+  },
   tagIcon: {
     marginBottom: 8,
   },
-  tagLabel: { fontWeight: 'bold', color: '#0056b3' },
+  tagLabel: { fontWeight: 'bold', color: '#6366F1' },
   tagSubLabel: { fontSize: 12, color: '#555' },
   mapContainer: {
     height: 200,
@@ -589,7 +602,7 @@ const styles = StyleSheet.create({
   },
   hiredButton: {
     flex: 1,
-    backgroundColor: '#007bff',
+    backgroundColor: '#6366F1',
     padding: 12,
     borderRadius: 25,
     alignItems: 'center',

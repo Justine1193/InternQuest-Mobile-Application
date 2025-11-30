@@ -140,12 +140,12 @@ const CompanyProfileScreen: React.FC = () => {
 
     return (
         <View style={styles.container}>
-            <StatusBar translucent backgroundColor="transparent" barStyle="dark-content" />
+            <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
 
             {/* Header */}
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                    <Ionicons name="arrow-back" size={24} color="#333" />
+                    <Ionicons name="arrow-back" size={24} color="#fff" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Company Profile</Text>
                 <View style={{ width: 24 }} />
@@ -155,11 +155,10 @@ const CompanyProfileScreen: React.FC = () => {
                 {/* Company Header Card */}
                 <Card style={styles.companyHeaderCard}>
                     <Card.Content>
-                        <View style={styles.companyHeader}>
-                            <View style={styles.companyLogo}>
-                                <Ionicons name="business" size={40} color="#2196F3" />
-                            </View>
-                            <View style={styles.companyInfo}>
+                                    <View style={styles.companyHeader}>
+                                        {/* removed large logo for a cleaner profile — replaced with slim accent */}
+                                        <View style={[styles.cardAccent, { backgroundColor: '#6366F1' }]} />
+                                        <View style={styles.companyInfoEnhanced}>
                                 <Text style={styles.companyName}>{company.company}</Text>
                                 <Text style={styles.companyLocation}>
                                     <Ionicons name="location" size={16} color="#666" />
@@ -285,17 +284,16 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
         paddingTop: 50,
         paddingBottom: 16,
-        backgroundColor: '#fff',
-        borderBottomWidth: 1,
-        borderBottomColor: '#eee',
+        backgroundColor: '#6366F1',
+        borderBottomWidth: 0,
     },
     backButton: {
         padding: 8,
     },
     headerTitle: {
         fontSize: 18,
-        fontWeight: 'bold',
-        color: '#333',
+        fontWeight: '700',
+        color: '#fff',
     },
     scrollView: {
         flex: 1,
@@ -303,39 +301,45 @@ const styles = StyleSheet.create({
     },
     companyHeaderCard: {
         marginBottom: 16,
-        elevation: 2,
-        borderRadius: 12,
+        elevation: 3,
+        borderRadius: 14,
+        overflow: 'hidden',
+        borderWidth: 0,
     },
     companyHeader: {
         flexDirection: 'row',
         alignItems: 'center',
+        paddingVertical: 12,
     },
-    companyLogo: {
-        width: 60,
-        height: 60,
-        borderRadius: 30,
-        backgroundColor: '#f0f8ff',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: 16,
+    /* circular logo removed - using a slim accent stripe */
+    cardAccent: {
+        width: 8,
+        height: 64,
+        borderRadius: 4,
+        marginRight: 12,
+    },
+    companyInfoEnhanced: {
+        flex: 1,
+        paddingVertical: 4,
+        paddingRight: 6,
     },
     companyInfo: {
         flex: 1,
     },
     companyName: {
         fontSize: 20,
-        fontWeight: 'bold',
-        color: '#333',
-        marginBottom: 4,
+        fontWeight: '800',
+        color: '#111827',
+        marginBottom: 6,
     },
     companyLocation: {
-        fontSize: 14,
-        color: '#666',
+        fontSize: 13,
+        color: '#6b7280',
         marginBottom: 2,
     },
     companyIndustry: {
-        fontSize: 14,
-        color: '#666',
+        fontSize: 13,
+        color: '#6b7280',
     },
     statusCard: {
         marginBottom: 16,

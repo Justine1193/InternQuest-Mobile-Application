@@ -46,8 +46,8 @@ const theme = {
   text: "#333",
   border: "#ccc",
   buttonText: "#fff",
-  buttonBg: "#007bff",
-  link: "#0077cc",
+  buttonBg: "#6366F1",
+  link: "#6366F1",
   error: "#ff3b30",
 } as const;
 
@@ -254,7 +254,7 @@ const SignUpScreen: React.FC = () => {
           {/* Student ID Input */}
           <Text style={styles.label}>Student ID</Text>
           <View style={[styles.inputWrapper, errors.studentId && styles.inputError]}>
-            <Icon name="card-account-details-outline" size={20} color="#555" style={styles.icon} />
+            <Icon name="card-account-details-outline" size={20} color="#6366F1" style={styles.icon} />
             <TextInput
               placeholder="Enter student ID (e.g., XX-XXXXX-XXX)"
               style={styles.input}
@@ -270,7 +270,7 @@ const SignUpScreen: React.FC = () => {
           {/* Email Input */}
           <Text style={styles.label}>Email</Text>
           <View style={[styles.inputWrapper, errors.email && styles.inputError]}>
-            <Icon name="email-outline" size={20} color="#555" style={styles.icon} />
+            <Icon name="email-outline" size={20} color="#6366F1" style={styles.icon} />
             <TextInput
               placeholder="Enter email"
               style={styles.input}
@@ -289,7 +289,7 @@ const SignUpScreen: React.FC = () => {
           {/* Contact Input */}
           <Text style={styles.label}>Contact Number</Text>
           <View style={[styles.inputWrapper, errors.contact && styles.inputError]}>
-            <Icon name="phone-outline" size={20} color="#555" style={styles.icon} />
+            <Icon name="phone-outline" size={20} color="#6366F1" style={styles.icon} />
             <TextInput
               placeholder="Enter contact number (11 digits)"
               style={styles.input}
@@ -305,7 +305,7 @@ const SignUpScreen: React.FC = () => {
           {/* Password Input */}
           <Text style={styles.label}>Password</Text>
           <View style={[styles.inputWrapper, errors.password && styles.inputError]}>
-            <Icon name="lock-outline" size={20} color="#555" style={styles.icon} />
+            <Icon name="lock-outline" size={20} color="#6366F1" style={styles.icon} />
             <TextInput
               placeholder="Enter password"
               style={styles.input}
@@ -321,7 +321,7 @@ const SignUpScreen: React.FC = () => {
               <Icon
                 name={showPassword ? "eye-off-outline" : "eye-outline"}
                 size={20}
-                color="#555"
+                color="#6366F1"
               />
             </TouchableOpacity>
           </View>
@@ -330,7 +330,7 @@ const SignUpScreen: React.FC = () => {
           {/* Confirm Password Input */}
           <Text style={styles.label}>Confirm Password</Text>
           <View style={[styles.inputWrapper, errors.confirmPassword && styles.inputError]}>
-            <Icon name="lock-check-outline" size={20} color="#555" style={styles.icon} />
+            <Icon name="lock-check-outline" size={20} color="#6366F1" style={styles.icon} />
             <TextInput
               placeholder="Confirm password"
               style={styles.input}
@@ -346,7 +346,7 @@ const SignUpScreen: React.FC = () => {
               <Icon
                 name={showConfirmPassword ? "eye-off-outline" : "eye-outline"}
                 size={20}
-                color="#555"
+                color="#6366F1"
               />
             </TouchableOpacity>
           </View>
@@ -362,7 +362,7 @@ const SignUpScreen: React.FC = () => {
             <Icon
               name={agreementChecked ? 'checkbox-marked' : 'checkbox-blank-outline'}
               size={22}
-              color={agreementChecked ? '#0077cc' : '#999'}
+                color={agreementChecked ? '#6366F1' : '#999'}
             />
             <Text style={styles.agreementText}>
               I agree to the{' '}
@@ -426,14 +426,14 @@ const SignUpScreen: React.FC = () => {
 const styles = StyleSheet.create({
   scrollContainer: {
     flexGrow: 1,
-    backgroundColor: "#fff",
+    backgroundColor: "#f2f6ff",
   },
   container: {
     flex: 1,
     justifyContent: "center",
     paddingHorizontal: 24,
     paddingVertical: 32,
-    backgroundColor: "#fff",
+    backgroundColor: "#f2f6ff",
   },
   logo: {
     width: 180,
@@ -444,7 +444,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: "bold",
-    color: "#0077cc",
+    color: "#6366F1",
     textAlign: "center",
     marginBottom: 8,
   },
@@ -492,7 +492,7 @@ const styles = StyleSheet.create({
     paddingVertical: 0,
   },
   button: {
-    backgroundColor: "#0077cc",
+    backgroundColor: "#6366F1",
     paddingVertical: 14,
     borderRadius: 8,
     marginTop: 8,

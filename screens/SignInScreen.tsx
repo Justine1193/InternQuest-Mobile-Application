@@ -79,7 +79,7 @@ const SignInScreen: React.FC<SignInProps> = ({ setIsLoggedIn }) => {
   if (checkingSession) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" />
+        <ActivityIndicator size="large" color="#6366F1" />
       </View>
     );
   }
@@ -92,7 +92,7 @@ const SignInScreen: React.FC<SignInProps> = ({ setIsLoggedIn }) => {
 
       <Text style={styles.label}>Email</Text>
       <View style={styles.inputWrapper}>
-        <Icon name="email-outline" size={20} color="#555" style={styles.icon} />
+        <Icon name="email-outline" size={20} color="#6366F1" style={styles.icon} />
         <TextInput
           style={styles.input}
           placeholder="Enter email"
@@ -105,7 +105,7 @@ const SignInScreen: React.FC<SignInProps> = ({ setIsLoggedIn }) => {
 
       <Text style={styles.label}>Password</Text>
       <View style={styles.inputWrapper}>
-        <Icon name="lock-outline" size={20} color="#555" style={styles.icon} />
+        <Icon name="lock-outline" size={20} color="#6366F1" style={styles.icon} />
         <TextInput
           style={styles.input}
           placeholder="Enter password"
@@ -136,7 +136,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 24,
     paddingVertical: 32,
-    backgroundColor: '#fff',
+    backgroundColor: '#f2f6ff',
   },
   centered: {
     flex: 1,
@@ -151,8 +151,8 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 28,
-    fontWeight: 'bold',
-    color: '#0077cc',
+    fontWeight: '800',
+    color: '#6366F1',
     textAlign: 'center',
     marginBottom: 8,
   },
@@ -190,7 +190,7 @@ const styles = StyleSheet.create({
     paddingVertical: 0,
   },
   button: {
-    backgroundColor: '#0077cc',
+    backgroundColor: '#6366F1',
     paddingVertical: 14,
     borderRadius: 8,
     marginTop: 8,
@@ -208,13 +208,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   loginLink: {
-    fontWeight: 'bold',
-    color: '#0077cc',
+    fontWeight: '700',
+    color: '#6366F1',
     textAlign: 'center',
   },
     signupLink: {
-      fontWeight: 'bold',
-      color: '#0077cc',
+      fontWeight: '700',
+      color: '#6366F1',
       textAlign: 'center',
       marginTop: 16,
     },

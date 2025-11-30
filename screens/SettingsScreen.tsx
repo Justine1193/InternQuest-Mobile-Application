@@ -167,25 +167,25 @@ const SettingsScreen: React.FC = () => {
           <Text style={styles.cardTitle}>Notifications</Text>
           <View style={styles.settingRow}>
             <View style={styles.settingLabelRow}>
-              <Icon name="email-outline" size={20} color="#007bff" style={{ marginRight: 8 }} />
+              <Icon name="email-outline" size={20} color="#6366F1" style={{ marginRight: 8 }} />
               <Text style={styles.settingText}>Email Notifications</Text>
             </View>
             <Switch
               value={emailNotif}
               onValueChange={setEmailNotif}
-              trackColor={{ false: '#ccc', true: '#007bff' }}
+              trackColor={{ false: '#ccc', true: '#6366F1' }}
               thumbColor={emailNotif ? '#fff' : '#f4f3f4'}
             />
           </View>
           <View style={styles.settingRow}>
             <View style={styles.settingLabelRow}>
-              <Icon name="bell-outline" size={20} color="#007bff" style={{ marginRight: 8 }} />
+              <Icon name="bell-outline" size={20} color="#6366F1" style={{ marginRight: 8 }} />
               <Text style={styles.settingText}>Push Notifications</Text>
             </View>
             <Switch
               value={pushNotif}
               onValueChange={setPushNotif}
-              trackColor={{ false: '#ccc', true: '#007bff' }}
+              trackColor={{ false: '#ccc', true: '#6366F1' }}
               thumbColor={pushNotif ? '#fff' : '#f4f3f4'}
             />
           </View>
@@ -237,7 +237,7 @@ const SettingsScreen: React.FC = () => {
           <Text style={styles.cardTitle}>Notification Preview</Text>
           <TouchableOpacity style={styles.settingRow} onPress={() => setShowNotifPreview(true)}>
             <View style={styles.settingLabelRow}>
-              <Icon name="bell-ring-outline" size={20} color="#007bff" style={{ marginRight: 8 }} />
+              <Icon name="bell-ring-outline" size={20} color="#6366F1" style={{ marginRight: 8 }} />
               <Text style={styles.settingText}>Show Test Notification</Text>
             </View>
             <Icon name="chevron-right" size={24} color="#bbb" />
@@ -261,7 +261,7 @@ const SettingsScreen: React.FC = () => {
           <Text style={styles.cardTitle}>Help & Support</Text>
           <TouchableOpacity style={styles.settingRow} onPress={() => setShowSupportModal(true)}>
             <View style={styles.settingLabelRow}>
-              <Icon name="help-circle-outline" size={20} color="#007bff" style={{ marginRight: 8 }} />
+              <Icon name="help-circle-outline" size={20} color="#6366F1" style={{ marginRight: 8 }} />
               <Text style={styles.settingText}>FAQ, Contact, Support</Text>
             </View>
             <Icon name="chevron-right" size={24} color="#bbb" />
@@ -330,7 +330,7 @@ const SettingsScreen: React.FC = () => {
             <TouchableOpacity style={styles.closeIcon} onPress={() => setShowNotifPreview(false)}>
               <Icon name="close" size={24} color="#888" />
             </TouchableOpacity>
-            <Icon name="bell-ring-outline" size={40} color="#007bff" style={{ alignSelf: 'center', marginBottom: 12 }} />
+            <Icon name="bell-ring-outline" size={40} color="#6366F1" style={{ alignSelf: 'center', marginBottom: 12 }} />
             <Text style={styles.modalTitle}>This is a test notification!</Text>
             <Text style={{ color: '#555', textAlign: 'center', marginBottom: 20 }}>You can preview how notifications will look here.</Text>
           </View>
@@ -386,13 +386,13 @@ const styles = StyleSheet.create({
   container: {
     padding: 20,
     paddingTop: 40,
-    backgroundColor: '#f9f9f9',
+    backgroundColor: '#f2f6ff',
   },
   header: {
     fontSize: 28,
     fontWeight: 'bold',
     marginBottom: 30,
-    color: '#222',
+    color: '#111827',
     alignSelf: 'center',
   },
   card: {
@@ -429,7 +429,7 @@ const styles = StyleSheet.create({
   logoutButton: {
     flexDirection: 'row',
     marginTop: 10,
-    backgroundColor: '#007bff',
+    backgroundColor: '#6366F1',
     paddingVertical: 14,
     borderRadius: 8,
     alignItems: 'center',
@@ -492,7 +492,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fafafa',
   },
   saveButton: {
-    backgroundColor: '#007bff',
+    backgroundColor: '#6366F1',
     paddingVertical: 12,
     borderRadius: 8,
     alignItems: 'center',

@@ -160,7 +160,7 @@ const NotificationsScreen: React.FC<Props> = ({ navigation }) => {
       <TouchableOpacity onPress={() => handleNotificationPress(item)}>
         <View style={styles.card}>
           <View style={styles.cardHeader}>
-            <Icon name="account-circle" size={40} color="#007aff" />
+            <View style={[styles.cardBadge, { backgroundColor: '#6366F1' }]} />
             <View style={styles.cardContent}>
               <Text style={styles.cardTitle}>{item.title}</Text>
               <Text style={styles.cardTime}>{item.time}</Text>
@@ -190,10 +190,11 @@ const NotificationsScreen: React.FC<Props> = ({ navigation }) => {
       <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
+          <View>
+            <Text style={styles.headerTitle}>Notifications</Text>
+            {userName ? <Text style={styles.headerSubtitle}>Hi, {userName.split(' ')[0]}</Text> : null}
+          </View>
         </View>
-
-        {/* Reminders & Notifications */}
-        <Text style={styles.sectionHeader}>Notifications</Text>
         <FlatList
           data={feed}
           keyExtractor={(_, idx) => idx.toString()}
@@ -226,7 +227,7 @@ const NotificationsScreen: React.FC<Props> = ({ navigation }) => {
               return (
                 <Swipeable renderRightActions={() => renderRightActions(item.id)}>
                   <View style={styles.notificationCard}>
-                    <Icon name="bell" size={20} color="#007bff" style={{ marginRight: 8 }} />
+                    <Icon name="bell" size={20} color="#6366F1" style={{ marginRight: 8 }} />
                     <View>
                       <Text style={styles.notificationTitle}>{item.title}</Text>
                       <Text style={styles.notificationText}>{item.description}</Text>
@@ -284,15 +285,21 @@ const NotificationsScreen: React.FC<Props> = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f9f9f9',
+    backgroundColor: '#f2f6ff',
     padding: 16,
     paddingTop: 30,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 18,
+    paddingHorizontal: 8,
+    paddingVertical: 12,
+    backgroundColor: '#6366F1',
+    borderRadius: 12,
   },
+  headerTitle: { flex: 1, fontSize: 18, fontWeight: '700', color: '#fff' },
+  headerSubtitle: { fontSize: 12, color: 'rgba(255,255,255,0.9)', marginTop: 2 },
   profileImage: {
     width: 40,
     height: 40,
@@ -340,15 +347,15 @@ const styles = StyleSheet.create({
   actionButton: {
     marginTop: 12,
     alignSelf: 'flex-start',
-    backgroundColor: '#e6f0ff',
+    backgroundColor: '#eef2ff',
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 20,
   },
   actionButtonText: {
     fontSize: 14,
-    color: '#007aff',
-    fontWeight: 'bold',
+    color: '#6366F1',
+    fontWeight: '800',
   },
   deleteButton: {
     backgroundColor: '#ff3b30',
@@ -451,12 +458,19 @@ const styles = StyleSheet.create({
   notificationCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f5f8ff',
+    backgroundColor: '#fff',
     borderRadius: 10,
     padding: 12,
     marginBottom: 8,
     borderLeftWidth: 4,
-    borderLeftColor: '#007bff',
+    borderLeftColor: '#6366F1',
+  },
+
+  cardBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    marginRight: 12,
   },
   notificationTitle: {
     color: '#222',

@@ -37,5 +37,11 @@ try {
   auth = getAuth(app);
 }
 const storage = getStorage(app);
+// Cloud functions (optional) - pick up value from environment variable or Expo runtime config (app.json / eas.json)
+import Constants from 'expo-constants';
+
+const fromEnv = process.env.ADMIN_FILE_FUNCTION_BASE_URL;
+const fromConstants = (Constants && ((Constants.expoConfig && Constants.expoConfig.extra) || (Constants.manifest && Constants.manifest.extra)))?.ADMIN_FILE_FUNCTION_BASE_URL;
+export const ADMIN_FILE_FUNCTION_BASE_URL = fromEnv || fromConstants || 'https://<region>-<project>.cloudfunctions.net/getAdminFile';
 
 export { firestore, db, app, auth, storage };

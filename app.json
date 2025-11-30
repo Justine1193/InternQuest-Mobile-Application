@@ -13,7 +13,8 @@
     "extra": {
       "eas": {
         "projectId": "196eb2bd-d5d2-420d-a362-5adccdf13f69"
-      }
+      },
+      "ADMIN_FILE_FUNCTION_BASE_URL": "https://<region>-<project>.cloudfunctions.net/getAdminFile"
     },
     "owner": "johnleeaeolus",
     "scheme": "internquest"

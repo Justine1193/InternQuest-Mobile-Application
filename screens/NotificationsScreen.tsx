@@ -15,7 +15,7 @@ import { RootStackParamList } from '../App';
 import BottomNavbar from '../components/BottomNav';
 import { Swipeable } from 'react-native-gesture-handler';
 import { auth, firestore } from '../firebase/config';
-import { doc, getDoc, collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { doc, getDoc, collection, getDocs, query, orderBy, setDoc } from 'firebase/firestore';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 
 type Props = {
@@ -74,7 +74,21 @@ const NotificationsScreen: React.FC<Props> = ({ navigation }) => {
           action: data.action,
         };
       });
-      setNotifications(items);
+      // Now filter out any notifications this user has hidden
+      try {
+        const uid = auth.currentUser.uid;
+        const hiddenSnap = await getDocs(collection(firestore, `users/${uid}/hiddenNotifications`));
+        const hiddenIds = new Set(hiddenSnap.docs.map((d: any) => d.id));
+        if (hiddenIds.size > 0) {
+          setNotifications(items.filter(i => !hiddenIds.has(i.id)));
+        } else {
+          setNotifications(items);
+        }
+      } catch (e) {
+        // If fetching hidden notifications fails, fall back to showing all notifications
+        console.warn('Failed to fetch hiddenNotifications for user:', e);
+        setNotifications(items);
+      }
     } catch (error) {
       console.error('Failed to fetch notifications:', error);
     }
@@ -135,7 +149,29 @@ const NotificationsScreen: React.FC<Props> = ({ navigation }) => {
   };
 
   const handleDelete = (id: string) => {
-    setNotifications((prev) => prev.filter((item) => item.id !== id));
+    // Hide for the current user only: add an entry under users/{uid}/hiddenNotifications/{notificationId}
+    (async () => {
+      if (!auth.currentUser) {
+        // fallback to local-only removal while signed out
+        setNotifications((prev) => prev.filter((item) => item.id !== id));
+        return;
+      }
+
+      try {
+        const uid = auth.currentUser.uid;
+        // create a doc where id == notification id so it's easy to check/remove
+        await setDoc(doc(firestore, `users/${uid}/hiddenNotifications`, id), {
+          hiddenAt: new Date().toISOString(),
+        });
+
+        // reflect change in UI
+        setNotifications((prev) => prev.filter((item) => item.id !== id));
+      } catch (err) {
+        console.error('Failed to hide notification for user:', err);
+        // still remove locally so the user experience is responsive
+        setNotifications((prev) => prev.filter((item) => item.id !== id));
+      }
+    })();
   };
 
   const renderRightActions = (id: string) => (

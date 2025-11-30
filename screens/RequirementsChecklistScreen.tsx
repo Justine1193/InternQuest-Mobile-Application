@@ -14,7 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../App';
-import { auth, firestore, storage } from '../firebase/config';
+import { auth, firestore, storage, ADMIN_FILE_FUNCTION_BASE_URL } from '../firebase/config';
 import { doc, getDoc, updateDoc, collection, addDoc, deleteDoc, query, where, getDocs } from 'firebase/firestore';
 import * as DocumentPicker from 'expo-document-picker';
 import { Linking } from 'react-native';
@@ -51,10 +51,7 @@ const RequirementsChecklistScreen: React.FC = () => {
     // Soft limit for base64 storing in Firestore (bytes)
     const FIRESTORE_MAX_BYTES = 700 * 1024; // ~700 KB
 
-    // If you deploy the Cloud Function `getAdminFile`, set its base URL here so the app
-    // can open a proper download link for Firestore-stored files (recommended for PDFs).
-    // Replace <region>-<project> with your function endpoint after deploy.
-    const ADMIN_FILE_FUNCTION_BASE_URL = 'https://<region>-<project>.cloudfunctions.net/getAdminFile';
+    // ADMIN_FILE_FUNCTION_BASE_URL is read from firebase/config (useful when you deploy the getAdminFile function)
 
     useEffect(() => {
         loadRequirements();
@@ -586,8 +583,15 @@ const RequirementsChecklistScreen: React.FC = () => {
                                                 <View key={index} style={styles.fileRow}>
                                                     <TouchableOpacity
                                                         style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}
-                                                        onPress={() => { if (url) Linking.openURL(url); }}
-                                                        disabled={!url}
+                                                        onPress={() => {
+                                                            if (url) return Linking.openURL(url);
+                                                            // If file was saved as an admin doc in Firestore, prefer the getAdminFile cloud function
+                                                            if ((fileAny && fileAny.adminDocId) && ADMIN_FILE_FUNCTION_BASE_URL.includes('cloudfunctions')) {
+                                                                const fnUrl = `${ADMIN_FILE_FUNCTION_BASE_URL}?docId=${fileAny.adminDocId}`;
+                                                                return Linking.openURL(fnUrl);
+                                                            }
+                                                        }}
+                                                        disabled={!url && !(fileAny && fileAny.adminDocId)}
                                                     >
                                                         <Ionicons name="document" size={16} color="#007aff" />
                                                         <Text style={styles.fileName}>{displayName}</Text>

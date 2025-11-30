@@ -1,30 +1,38 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, FlatList, Linking, StatusBar, Modal } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, FlatList, Linking, StatusBar, Modal, Image } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import { Card, Button, ActivityIndicator, IconButton, TextInput } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { auth, firestore, storage } from '../firebase/config';
+import { auth, firestore, storage, ADMIN_FILE_FUNCTION_BASE_URL } from '../firebase/config';
 import { collection, addDoc, query, orderBy, getDocs, doc, deleteDoc, updateDoc } from 'firebase/firestore';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { SecurityUtils } from '../services/security';
 
 const FIRESTORE_MAX_BYTES = 700 * 1024; // ~700KB
 
-// Optional: if you deploy the getAdminFile cloud function, set it here so Firestore-stored files
-// can be streamed securely: https://<region>-<project>.cloudfunctions.net/getAdminFile?docId=<DOC_ID>
-const ADMIN_FILE_FUNCTION_BASE_URL = 'https://<region>-<project>.cloudfunctions.net/getAdminFile';
 
 type TemplateDoc = {
   id: string;
-  name: string;
+  // support older and newer naming schemas
+  name?: string; // friendly name or title
   description?: string;
   uploaderId?: string;
+  uploadedBy?: string;
   uploadedAt?: string;
+  // storage vs firestore
   storedInFirestore?: boolean;
+  // older schema: contentBase64
   contentBase64?: string;
+  // newer schema: fileData is full data url like "data:application/pdf;base64,..."
+  fileData?: string;
+  // file metadata
   contentType?: string;
+  fileType?: string;
+  fileName?: string;
+  fileSize?: number;
   path?: string;
   url?: string;
 };
@@ -38,6 +46,11 @@ const HelpDeskScreen: React.FC = () => {
   const [description, setDescription] = useState('');
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [selectedFile, setSelectedFile] = useState<any | null>(null);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewType, setPreviewType] = useState<'pdf' | 'image' | 'other' | null>(null);
+  const [previewLocalUri, setPreviewLocalUri] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -50,7 +63,8 @@ const HelpDeskScreen: React.FC = () => {
   const loadTemplates = async () => {
     setLoading(true);
     try {
-      const q = query(collection(firestore, 'helpdesk_templates'), orderBy('uploadedAt', 'desc'));
+      // read from the `helpDeskFiles` collection (matches workspace screenshot)
+      const q = query(collection(firestore, 'helpDeskFiles'), orderBy('uploadedAt', 'desc'));
       const snap = await getDocs(q);
       const docs: TemplateDoc[] = snap.docs.map((d: any) => ({ id: d.id, ...(d.data() as any) }));
       setTemplates(docs);
@@ -60,6 +74,11 @@ const HelpDeskScreen: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const closePreview = () => {
+    setShowPreviewModal(false);
+    setPreviewUrl(null);
   };
 
   const uriToBlob = (uri: string) => new Promise<Blob>((resolve, reject) => {
@@ -73,7 +92,7 @@ const HelpDeskScreen: React.FC = () => {
 
   const uploadToStorage = async (uri: string, name: string, fileAny: any) => {
     const blob = await uriToBlob(uri);
-    const remotePath = `helpdesk_templates/${auth.currentUser?.uid}/${Date.now()}_${name}`;
+    const remotePath = `helpDeskFiles/${auth.currentUser?.uid}/${Date.now()}_${name}`;
     const sRef = storageRef(storage, remotePath);
     await uploadBytes(sRef, blob, { contentType: fileAny.mimeType || fileAny.type || 'application/octet-stream' });
     const downloadURL = await getDownloadURL(sRef);
@@ -99,15 +118,17 @@ const HelpDeskScreen: React.FC = () => {
         const estimatedBytes = Math.ceil((base64.length * 3) / 4);
 
         if (estimatedBytes <= FIRESTORE_MAX_BYTES) {
-          const docRef = await addDoc(collection(firestore, 'helpdesk_templates'), {
-            name: title,
-            description,
-            uploaderId: auth.currentUser?.uid,
-            uploadedAt: new Date().toISOString(),
-            storedInFirestore: true,
-            contentBase64: base64,
-            contentType: f.mimeType || f.type || 'application/octet-stream',
-          });
+                    const dataUrl = `data:${f.mimeType || f.type || 'application/octet-stream'};base64,${base64}`;
+                    const docRef = await addDoc(collection(firestore, 'helpDeskFiles'), {
+                      fileName: name,
+                      description: description || 'No description',
+                      uploadedBy: auth.currentUser?.uid,
+                      uploadedAt: new Date().toISOString(),
+                      storedInFirestore: true,
+                      fileData: dataUrl,
+                      fileType: f.mimeType || f.type || 'application/octet-stream',
+                      fileSize: Math.ceil((base64.length * 3) / 4),
+                    });
 
           setTitle(''); setDescription('');
           Alert.alert('Success', 'Template saved to Firestore.');
@@ -122,15 +143,16 @@ const HelpDeskScreen: React.FC = () => {
       // fallback: store in Storage
       try {
         const fileMeta = await uploadToStorage(uri, name, f);
-        await addDoc(collection(firestore, 'helpdesk_templates'), {
-          name: title,
-          description,
-          uploaderId: auth.currentUser?.uid,
+        await addDoc(collection(firestore, 'helpDeskFiles'), {
+          fileName: name,
+          description: description || 'No description',
+          uploadedBy: auth.currentUser?.uid,
           uploadedAt: fileMeta.uploadedAt,
           storedInFirestore: false,
           path: fileMeta.path,
           url: fileMeta.url,
-          contentType: fileMeta.contentType,
+          fileType: fileMeta.contentType,
+          fileSize: undefined,
         });
 
         setTitle(''); setDescription('');
@@ -151,21 +173,22 @@ const HelpDeskScreen: React.FC = () => {
 
   const handleDownload = async (t: TemplateDoc) => {
     try {
+      // If storage URL is present, open it directly for download/view
       if (t.url) {
         await Linking.openURL(t.url);
         return;
       }
 
-      // If content stored in Firestore (base64) — use the cloud function if configured
+      // If Firestore-stored file is present, prefer streaming via cloud function if configured
       if (t.id && ADMIN_FILE_FUNCTION_BASE_URL.includes('cloudfunctions')) {
         const openUrl = `${ADMIN_FILE_FUNCTION_BASE_URL}?docId=${t.id}`;
         await Linking.openURL(openUrl);
         return;
       }
 
-      if (t.storedInFirestore && t.contentBase64) {
-        // Use data URL directly
-        const dataUrl = `data:${t.contentType || 'application/octet-stream'};base64,${t.contentBase64}`;
+      // If file data or base64 available, open data URL
+      if (t.storedInFirestore && (t.fileData || t.contentBase64)) {
+        const dataUrl = t.fileData || `data:${t.contentType || 'application/octet-stream'};base64,${t.contentBase64}`;
         await Linking.openURL(dataUrl);
         return;
       }
@@ -179,23 +202,24 @@ const HelpDeskScreen: React.FC = () => {
 
   const handlePreview = async (t: TemplateDoc) => {
     try {
-      // Prefer cloud function streaming if it's configured
+      // Use cloud function or storage/url/dataUrl and open the in-app preview modal
       if (t.id && ADMIN_FILE_FUNCTION_BASE_URL.includes('cloudfunctions')) {
         const openUrl = `${ADMIN_FILE_FUNCTION_BASE_URL}?docId=${t.id}`;
-        await WebBrowser.openBrowserAsync(openUrl);
+        setPreviewUrl(openUrl);
+        setShowPreviewModal(true);
         return;
       }
 
-      // If public storage URL -> open in WebBrowser
       if (t.url) {
-        await WebBrowser.openBrowserAsync(t.url);
+        setPreviewUrl(t.url);
+        setShowPreviewModal(true);
         return;
       }
 
-      // If stored in Firestore as base64, open data url in browser
-      if (t.storedInFirestore && t.contentBase64) {
-        const dataUrl = `data:${t.contentType || 'application/octet-stream'};base64,${t.contentBase64}`;
-        await WebBrowser.openBrowserAsync(dataUrl);
+      if (t.storedInFirestore && (t.fileData || t.contentBase64)) {
+        const dataUrl = t.fileData || `data:${t.contentType || 'application/octet-stream'};base64,${t.contentBase64}`;
+        setPreviewUrl(dataUrl);
+        setShowPreviewModal(true);
         return;
       }
 
@@ -222,7 +246,7 @@ const HelpDeskScreen: React.FC = () => {
             } catch (e) { console.warn('Failed to delete storage object', e); }
           }
 
-          await deleteDoc(doc(firestore, 'helpdesk_templates', t.id));
+          await deleteDoc(doc(firestore, 'helpDeskFiles', t.id));
           Alert.alert('Deleted', 'Template removed.');
           await loadTemplates();
         } catch (err) {
@@ -235,7 +259,7 @@ const HelpDeskScreen: React.FC = () => {
 
   const renderItem = ({ item }: { item: TemplateDoc }) => (
     <Card style={styles.card}>
-      <Card.Title title={item.name} subtitle={item.description} titleNumberOfLines={2} subtitleNumberOfLines={2} />
+      <Card.Title title={item.fileName || item.name || 'Untitled'} subtitle={item.description || item.fileType || ''} titleNumberOfLines={2} subtitleNumberOfLines={2} />
       <Card.Content>
         <Text style={styles.metaText}>Uploaded: {item.uploadedAt ? new Date(item.uploadedAt).toLocaleString() : '—'}</Text>
       </Card.Content>
@@ -252,6 +276,7 @@ const HelpDeskScreen: React.FC = () => {
       </Card.Actions>
     </Card>
   );
+
 
   return (
     <View style={styles.page}>
@@ -279,11 +304,11 @@ const HelpDeskScreen: React.FC = () => {
             </View>
 
             <Text style={styles.emptyTitle}>No templates yet</Text>
-            <Text style={styles.emptySubtitle}>Ask your admin to upload the latest requirement forms to the "helpDeskTemplates" collection in Firestore.</Text>
+            <Text style={styles.emptySubtitle}>Ask your admin to upload the latest requirement forms to the "helpDeskFiles" collection in Firestore.</Text>
 
             <View style={styles.infoCallout}>
               <MaterialCommunityIcons name="cloud-upload-outline" size={20} color="#0b2b34" style={{ marginRight: 10 }} />
-              <Text style={styles.infoCalloutText}>Admins can manage these templates by adding files to Firestore → helpDeskTemplates with fields: title, description, category, fileUrl, updatedAt.</Text>
+              <Text style={styles.infoCalloutText}>Admins can manage these templates by adding files to Cloud Firestore → helpDeskFiles with fields: fileName, fileData (base64), fileUrl, uploadedAt, uploadedBy.</Text>
             </View>
 
             {isAdmin && (
@@ -335,14 +360,16 @@ const HelpDeskScreen: React.FC = () => {
                     const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
                     const estimatedBytes = Math.ceil((base64.length * 3) / 4);
                     if (estimatedBytes <= FIRESTORE_MAX_BYTES) {
-                      await addDoc(collection(firestore, 'helpdesk_templates'), {
-                        name: title,
+                      const dataUrl = `data:${selectedFile.mimeType || selectedFile.type || 'application/octet-stream'};base64,${base64}`;
+                      await addDoc(collection(firestore, 'helpDeskFiles'), {
+                        fileName: title,
                         description,
-                        uploaderId: auth.currentUser?.uid,
+                        uploadedBy: auth.currentUser?.uid,
                         uploadedAt: new Date().toISOString(),
                         storedInFirestore: true,
-                        contentBase64: base64,
-                        contentType: selectedFile.mimeType || selectedFile.type || 'application/octet-stream',
+                        fileData: dataUrl,
+                        fileType: selectedFile.mimeType || selectedFile.type || 'application/octet-stream',
+                        fileSize: Math.ceil((base64.length * 3) / 4),
                       });
 
                       Alert.alert('Success', 'Template saved to Firestore.');
@@ -355,15 +382,16 @@ const HelpDeskScreen: React.FC = () => {
                   } catch (e) { console.warn('cannot store base64, continue to storage', e); }
 
                   const meta = await uploadToStorage(uri, name, selectedFile);
-                  await addDoc(collection(firestore, 'helpdesk_templates'), {
-                    name: title,
+                  await addDoc(collection(firestore, 'helpDeskFiles'), {
+                    fileName: title,
                     description,
-                    uploaderId: auth.currentUser?.uid,
+                    uploadedBy: auth.currentUser?.uid,
                     uploadedAt: meta.uploadedAt,
                     storedInFirestore: false,
                     path: meta.path,
                     url: meta.url,
-                    contentType: meta.contentType,
+                    fileType: meta.contentType,
+                    fileSize: undefined,
                   });
 
                   Alert.alert('Success', 'Template uploaded to Storage.');
@@ -378,6 +406,45 @@ const HelpDeskScreen: React.FC = () => {
               }} loading={uploading} color="#6366F1">Upload</Button>
             </View>
           </View>
+        </View>
+      </Modal>
+      {/* preview modal - embedded WebView when available, otherwise the button already uses WebBrowser */}
+      <Modal visible={showPreviewModal} animationType="slide" onRequestClose={closePreview}>
+        <View style={{ flex: 1, backgroundColor: '#fff' }}>
+          <View style={{ padding: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#eee' }}>
+            <Text style={{ fontSize: 16, fontWeight: '700' }}>Preview</Text>
+            <Button mode="text" onPress={closePreview}>Close</Button>
+          </View>
+
+          {previewUrl ? (
+            // Try to dynamically import WebView. Some dev environments may not have it installed.
+            (() => {
+              // Try to render WebView dynamically so the app still compiles if the package isn't installed here.
+              let WebViewComponent: any = null;
+              try {
+                // eslint-disable-next-line @typescript-eslint/no-var-requires
+                WebViewComponent = require('react-native-webview').WebView;
+              } catch (e) {
+                WebViewComponent = null;
+              }
+
+              if (WebViewComponent) {
+                return <WebViewComponent source={{ uri: previewUrl }} style={{ flex: 1 }} />;
+              }
+
+              // Fallback: open system browser and close modal
+              (async () => { await WebBrowser.openBrowserAsync(previewUrl); closePreview(); })();
+              return (
+                <View style={{ padding: 18, alignItems: 'center', justifyContent: 'center', flex: 1 }}>
+                  <Text style={{ color: '#666' }}>Previewing requires react-native-webview (not installed here) — opening in your browser instead.</Text>
+                </View>
+              );
+            })()
+          ) : (
+            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={{ color: '#666' }}>No preview available</Text>
+            </View>
+          )}
         </View>
       </Modal>
     </View>

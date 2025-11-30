@@ -273,6 +273,9 @@ const StudentDashboard = () => {
             <a href="/studentDashboard" className="nav-link active">
               Manage Students
             </a>
+            <a href="/helpDesk" className="nav-link">
+              Help Desk
+            </a>
           </div>
         </div>
         <div className="nav-right">

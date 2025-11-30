@@ -39,6 +39,9 @@ const Navbar = ({ onLogout }) => {
           <a href="/studentDashboard" className="nav-link">
             Manage Students
           </a>
+          <a href="/helpDesk" className="nav-link">
+            Help Desk
+          </a>
         </div>
       </div>
       <div className="nav-right" tabIndex={-1} onBlur={handleBlur}>

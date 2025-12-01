@@ -470,6 +470,11 @@ const HelpDeskDashboard = () => {
             {/* Requirement Files Upload Section */}
             <div className="upload-section">
               <h2>Upload Requirement Files</h2>
+              <p className="section-note">
+                Upload the requirement documents that students need to submit
+                for their OJT. These files will appear in the mobile app under
+                requirement files.
+              </p>
               <div className="upload-form">
                 <div className="form-group">
                   <label htmlFor="file-input-needed">
@@ -493,21 +498,6 @@ const HelpDeskDashboard = () => {
                       )}
                     </div>
                   )}
-                </div>
-
-                <div className="form-group">
-                  <label htmlFor="file-description-needed">
-                    Description (Optional)
-                  </label>
-                  <textarea
-                    id="file-description-needed"
-                    value={fileDescriptionNeeded}
-                    onChange={(e) => setFileDescriptionNeeded(e.target.value)}
-                    placeholder="Enter a description for this file..."
-                    className="description-input"
-                    rows="3"
-                    disabled={uploadingFileNeeded}
-                  />
                 </div>
 
                 <button

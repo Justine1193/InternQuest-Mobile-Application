@@ -17,6 +17,31 @@ service cloud.firestore {
     match /users/{userId}/weeklyReports/{reportId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
+
+    // Help Desk templates (admin-managed). Templates can be read by any authenticated
+    // user (preview/download), but only administrators can create/update/delete.
+    match /helpDeskFiles/{fileId} {
+      allow read: if request.auth != null;
+      allow create, update, delete: if request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // admin_files stores uploaded file metadata and (sometimes) base64 content.
+    // Allow the authenticated owner to create/read/update/delete their own admin_files
+    // records; allow administrators full access.
+    match /admin_files/{docId} {
+      allow create: if request.auth != null && (
+        // owner may create a record for themselves OR admin can create on behalf
+        request.resource.data.userId == request.auth.uid ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+      );
+
+      allow read, update, delete: if request.auth != null && (
+        // owner or admin can read/update/delete
+        resource.data.userId == request.auth.uid ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+      );
+    }
     
     // Requirements - users can only access their own requirements
     match /users/{userId}/requirements/{requirementId} {

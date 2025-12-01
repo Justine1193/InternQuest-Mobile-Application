@@ -12,6 +12,15 @@ service firebase.storage {
       allow write: if request.auth != null && 
         firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
+
+    // Help Desk files are stored under helpDeskFiles/{uId}/... - allow any
+    // authenticated user to read/download templates, but only admins may upload or modify
+    // (UI already restricts uploads to admins; rules enforce it).
+    match /helpDeskFiles/{uId}/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null &&
+        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
     
     // Default deny all
     match /{allPaths=**} {

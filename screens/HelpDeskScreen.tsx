@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, FlatList, Linking, StatusBar, Modal, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, FlatList, Linking, StatusBar, Modal, Image, ScrollView } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import { Card, Button, ActivityIndicator, IconButton, TextInput } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -35,6 +35,8 @@ type TemplateDoc = {
   fileSize?: number;
   path?: string;
   url?: string;
+  // optional due date (ISO string or human string) for file requirements
+  dueDate?: string;
 };
 
 const HelpDeskScreen: React.FC = () => {
@@ -51,6 +53,8 @@ const HelpDeskScreen: React.FC = () => {
   const [previewType, setPreviewType] = useState<'pdf' | 'image' | 'other' | null>(null);
   const [previewLocalUri, setPreviewLocalUri] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [showImageModal, setShowImageModal] = useState(false);
+  const [imageModalUri, setImageModalUri] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -79,6 +83,18 @@ const HelpDeskScreen: React.FC = () => {
   const closePreview = () => {
     setShowPreviewModal(false);
     setPreviewUrl(null);
+  };
+
+  // helper to format possible due date strings
+  const formatDate = (v?: string | null) => {
+    if (!v) return '';
+    try {
+      const d = new Date(v);
+      if (isNaN(d.getTime())) return String(v);
+      return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+    } catch (e) {
+      return String(v);
+    }
   };
 
   const uriToBlob = (uri: string) => new Promise<Blob>((resolve, reject) => {
@@ -121,7 +137,8 @@ const HelpDeskScreen: React.FC = () => {
                     const dataUrl = `data:${f.mimeType || f.type || 'application/octet-stream'};base64,${base64}`;
                     const docRef = await addDoc(collection(firestore, 'helpDeskFiles'), {
                       fileName: name,
-                      description: description || 'No description',
+                      // only include a description when provided
+                      ...(description ? { description } : {}),
                       uploadedBy: auth.currentUser?.uid,
                       uploadedAt: new Date().toISOString(),
                       storedInFirestore: true,
@@ -145,7 +162,8 @@ const HelpDeskScreen: React.FC = () => {
         const fileMeta = await uploadToStorage(uri, name, f);
         await addDoc(collection(firestore, 'helpDeskFiles'), {
           fileName: name,
-          description: description || 'No description',
+          // only include a description when provided
+          ...(description ? { description } : {}),
           uploadedBy: auth.currentUser?.uid,
           uploadedAt: fileMeta.uploadedAt,
           storedInFirestore: false,
@@ -173,37 +191,83 @@ const HelpDeskScreen: React.FC = () => {
 
   const handleDownload = async (t: TemplateDoc) => {
     try {
-      // If storage URL is present, open it directly for download/view
+      setPreviewLoading(true);
+
+      // Helper to write base64 to a local file and share/open it
+      const writeBase64AndShare = async (base64: string, name = 'file', contentType = 'application/octet-stream') => {
+        const ext = (contentType && contentType.split('/')[1]) ? `.${contentType.split('/')[1].split('+')[0]}` : '';
+        const filenameSafe = (name || 'file').replace(/[^a-z0-9_.-]/gi, '_');
+        const localPath = `${FileSystem.cacheDirectory}${filenameSafe}_${Date.now()}${ext}`;
+        await FileSystem.writeAsStringAsync(localPath, base64, { encoding: FileSystem.EncodingType.Base64 });
+        // Prefer sharing; on many devices this will open the file in the native viewer
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(localPath);
+        } else {
+          // fallback to opening the file URI (some platforms may support it)
+          await Linking.openURL(localPath);
+        }
+      };
+
+      // If storage URL is present, download the file to cache and share/open it
       if (t.url) {
-        await Linking.openURL(t.url);
+        const fileName = t.fileName || t.name || `download_${Date.now()}`;
+        const extMatch = (t.url.match(/\.(\w+)(?:\?|$)/) || [])[1];
+        const ext = extMatch ? `.${extMatch}` : '';
+        const localPath = `${FileSystem.cacheDirectory}${fileName}_${Date.now()}${ext}`;
+        const { uri } = await FileSystem.downloadAsync(t.url, localPath);
+        await Sharing.shareAsync(uri);
         return;
       }
 
       // If Firestore-stored file is present, prefer streaming via cloud function if configured
-      if (t.id && ADMIN_FILE_FUNCTION_BASE_URL.includes('cloudfunctions')) {
+      // only use cloud function URL when it looks like a real URL (not the
+      // placeholder https://<region>-<project>.cloudfunctions.net/... used in config)
+      const isCloudFnConfigured = typeof ADMIN_FILE_FUNCTION_BASE_URL === 'string' &&
+        ADMIN_FILE_FUNCTION_BASE_URL.length > 0 &&
+        !ADMIN_FILE_FUNCTION_BASE_URL.includes('<') &&
+        ADMIN_FILE_FUNCTION_BASE_URL.includes('cloudfunctions.net');
+
+      if (t.id && isCloudFnConfigured) {
         const openUrl = `${ADMIN_FILE_FUNCTION_BASE_URL}?docId=${t.id}`;
-        await Linking.openURL(openUrl);
+        const fileName = t.fileName || t.name || `download_${Date.now()}`;
+        const extMatch = (openUrl.match(/\.(\w+)(?:\?|$)/) || [])[1];
+        const ext = extMatch ? `.${extMatch}` : '.pdf';
+        const localPath = `${FileSystem.cacheDirectory}${fileName}_${Date.now()}${ext}`;
+        const { uri } = await FileSystem.downloadAsync(openUrl, localPath);
+        await Sharing.shareAsync(uri);
         return;
       }
 
-      // If file data or base64 available, open data URL
-      if (t.storedInFirestore && (t.fileData || t.contentBase64)) {
+      // If file data or base64 is present in the document, write to a local file then share
+      // (don't require storedInFirestore flag to be present — some documents may have
+      // fileData but no storedInFirestore boolean)
+      if ((t.fileData || t.contentBase64)) {
         const dataUrl = t.fileData || `data:${t.contentType || 'application/octet-stream'};base64,${t.contentBase64}`;
-        await Linking.openURL(dataUrl);
-        return;
+        const match = dataUrl.match(/^data:([^;]+);base64,(.*)$/);
+        if (match) {
+          const [, contentType, base64] = match;
+          await writeBase64AndShare(base64, t.fileName || t.name || 'file', contentType);
+          return;
+        }
       }
 
       Alert.alert('Unavailable', 'No downloadable file found for this template.');
     } catch (err) {
-      console.error('Open URL failed', err);
-      Alert.alert('Error', 'Failed to open the file.');
+      console.error('Download failed', err);
+      Alert.alert('Error', 'Failed to download/open the file.');
+    } finally {
+      setPreviewLoading(false);
     }
   };
 
   const handlePreview = async (t: TemplateDoc) => {
+    const isCloudFnConfigured = typeof ADMIN_FILE_FUNCTION_BASE_URL === 'string' &&
+      ADMIN_FILE_FUNCTION_BASE_URL.length > 0 &&
+      !ADMIN_FILE_FUNCTION_BASE_URL.includes('<') &&
+      ADMIN_FILE_FUNCTION_BASE_URL.includes('cloudfunctions.net');
     try {
       // Use cloud function or storage/url/dataUrl and open the in-app preview modal
-      if (t.id && ADMIN_FILE_FUNCTION_BASE_URL.includes('cloudfunctions')) {
+      if (t.id && isCloudFnConfigured) {
         const openUrl = `${ADMIN_FILE_FUNCTION_BASE_URL}?docId=${t.id}`;
         setPreviewUrl(openUrl);
         setShowPreviewModal(true);
@@ -216,7 +280,16 @@ const HelpDeskScreen: React.FC = () => {
         return;
       }
 
+      // For preview: do not attempt to preview PDFs — they should be downloaded instead
       if (t.storedInFirestore && (t.fileData || t.contentBase64)) {
+        const fileNameLower = String(t.fileName || t.name || '').toLowerCase();
+        const fileTypeLower = String(t.fileType || t.contentType || '').toLowerCase();
+        const isPdf = fileTypeLower === 'application/pdf' || fileNameLower.endsWith('.pdf');
+        if (isPdf) {
+          Alert.alert('Preview not supported', 'PDF preview is disabled — please download the file to view it.');
+          return;
+        }
+
         const dataUrl = t.fileData || `data:${t.contentType || 'application/octet-stream'};base64,${t.contentBase64}`;
         setPreviewUrl(dataUrl);
         setShowPreviewModal(true);
@@ -257,17 +330,90 @@ const HelpDeskScreen: React.FC = () => {
     ]);
   };
 
-  const renderItem = ({ item }: { item: TemplateDoc }) => (
-    <Card style={styles.card}>
-      <Card.Title title={item.fileName || item.name || 'Untitled'} subtitle={item.description || item.fileType || ''} titleNumberOfLines={2} subtitleNumberOfLines={2} />
-      <Card.Content>
-        <Text style={styles.metaText}>Uploaded: {item.uploadedAt ? new Date(item.uploadedAt).toLocaleString() : '—'}</Text>
-      </Card.Content>
-      <Card.Actions style={styles.cardActions}>
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          <Button mode="outlined" onPress={() => handlePreview(item)} color="#6366F1">Preview</Button>
-        </View>
-        <Button mode="contained" onPress={() => handleDownload(item)} color="#6366F1">Download</Button>
+  const renderItem = ({ item }: { item: TemplateDoc }) => {
+    const fileName = String(item.fileName || item.name || '').toLowerCase();
+    const fileType = String(item.fileType || '').toLowerCase();
+    const isImage = fileType.startsWith('image') || /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(fileName);
+
+    // If this is an image template, render a simplified card containing only the image
+    if (isImage) {
+      const imageUri = item.url || item.fileData || (item.contentBase64 ? `data:${item.contentType || 'image/png'};base64,${item.contentBase64}` : null);
+      return (
+        <Card style={[styles.card, styles.imageOnlyCard]}>
+          {imageUri ? (
+            <View style={styles.inlineImageWrap}>
+              <TouchableOpacity
+                activeOpacity={0.95}
+                onPress={() => {
+                  setImageModalUri(imageUri as string);
+                  setShowImageModal(true);
+                }}
+              >
+                <Image source={{ uri: imageUri }} style={styles.inlineImage} resizeMode="contain" />
+              </TouchableOpacity>
+              {isAdmin && (
+                <View style={styles.imageAdminOverlay}>
+                  <TouchableOpacity style={styles.imageDeleteBtn} onPress={() => handleDelete(item)}>
+                    <MaterialCommunityIcons name="delete" size={18} color="#fff" />
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          ) : (
+            <Card.Content>
+              <Text style={styles.metaText}>Image unavailable</Text>
+            </Card.Content>
+          )}
+        </Card>
+      );
+    }
+
+    return (
+      <Card style={styles.card}>
+        <Card.Title title={item.fileName || item.name || 'Untitled'} subtitle={item.description || item.fileType || ''} titleNumberOfLines={2} subtitleNumberOfLines={2} />
+        <Card.Content>
+          <Text style={styles.metaText}>Uploaded: {item.uploadedAt ? new Date(item.uploadedAt).toLocaleString() : '—'}</Text>
+
+          {/* Non-image templates: maybe show a small thumbnail when url available - keep existing flow */}
+          {(!isImage && item.fileType && item.fileType.startsWith('image') && item.url) && (
+            <Image source={{ uri: item.url }} style={styles.inlineImage} resizeMode="contain" />
+          )}
+        </Card.Content>
+        <Card.Actions style={styles.cardActions}>
+        {/* If this is an image we already displayed it inline — hide Preview/Download actions.
+            Otherwise keep the existing preview / download controls. */}
+        {/* Determine special handling: images already inlined, PDFs should be download-only (no Preview) */}
+        {(() => {
+          const fileName = String(item.fileName || item.name || '').toLowerCase();
+          const fileType = String(item.fileType || '').toLowerCase();
+          const isImage = fileType.startsWith('image') || /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(fileName);
+          const isPdf = fileType === 'application/pdf' || fileName.endsWith('.pdf');
+
+          // Images were already rendered inline — nothing to show here
+          if (isImage) return null;
+
+          // PDF: show a download-only file row (clicking it downloads the file)
+          if (isPdf) {
+            return (
+              <TouchableOpacity activeOpacity={0.9} onPress={() => handleDownload(item)} style={styles.pdfBox}>
+                <View style={styles.pdfBoxInner}>
+                  <MaterialCommunityIcons name="file-pdf-box" size={18} color="#0b2b34" style={{ marginRight: 10 }} />
+                  <Text style={styles.pdfBoxText}>{item.fileName || item.name || 'document.pdf'}</Text>
+                </View>
+              </TouchableOpacity>
+            );
+          }
+
+          // Otherwise show both Preview and Download
+          return (
+            <>
+              <View style={{ flexDirection: 'row' }}>
+                <Button mode="outlined" onPress={() => handlePreview(item)} color="#6366F1">Preview</Button>
+              </View>
+              <Button mode="contained" onPress={() => handleDownload(item)} color="#6366F1">Download</Button>
+            </>
+          );
+        })()}
         {isAdmin && (
           <View style={{ flexDirection: 'row' }}>
             <IconButton icon="delete" onPress={() => handleDelete(item)} />
@@ -277,6 +423,38 @@ const HelpDeskScreen: React.FC = () => {
     </Card>
   );
 
+    };
+  // group templates: PDFs should live in their own stacked section
+
+  // Split templates into images, PDFs, and others
+  const imageTemplates = templates.filter(item => {
+    const fileName = String(item.fileName || item.name || '').toLowerCase();
+    const fileType = String(item.fileType || item.contentType || '').toLowerCase();
+    return fileType.startsWith('image') || /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(fileName);
+  });
+
+  const pdfTemplates = templates.filter(item => {
+    const fileName = String(item.fileName || item.name || '').toLowerCase();
+    const fileType = String(item.fileType || item.contentType || '').toLowerCase();
+    return fileType === 'application/pdf' || fileName.endsWith('.pdf');
+  });
+
+  const otherTemplates = templates.filter(item => {
+    const fileName = String(item.fileName || item.name || '').toLowerCase();
+    const fileType = String(item.fileType || item.contentType || '').toLowerCase();
+    const isImage = fileType.startsWith('image') || /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(fileName);
+    const isPdf = fileType === 'application/pdf' || fileName.endsWith('.pdf');
+    return !isImage && !isPdf;
+  });
+
+  // group pdfTemplates by 'requirement' (same description + dueDate) so multiple attachments can appear inside one card
+  const groupedPdfMap: Record<string, { description?: string, dueDate?: string | undefined, items: TemplateDoc[] }> = {};
+  pdfTemplates.forEach(p => {
+    const key = `${p.description || 'File Requirement'}||${p.dueDate || ''}`;
+    if (!groupedPdfMap[key]) groupedPdfMap[key] = { description: p.description, dueDate: p.dueDate, items: [] };
+    groupedPdfMap[key].items.push(p);
+  });
+  const groupedPdfs = Object.keys(groupedPdfMap).map(k => groupedPdfMap[k]);
 
   return (
     <View style={styles.page}>
@@ -286,15 +464,19 @@ const HelpDeskScreen: React.FC = () => {
       <View style={styles.headerWrap}>
         <View style={styles.headerInner}>
           <View style={styles.headerTextWrap}>
-            <Text style={styles.headerTag}>HELP DESK</Text>
-            <Text style={styles.title}>All your OJT forms in one sleek desk.</Text>
-            <Text style={styles.subtitle}>Browse, preview, and download the latest Memorandum of Agreement, requirement checklists, and tracker templates curated by the admin team.</Text>
+            <View style={styles.headerRowTop}>
+              <View style={styles.headerBadge}><Text style={styles.headerBadgeText}>HELP DESK</Text></View>
+            </View>
+            <Text style={styles.title}>All your OJT forms</Text>
           </View>
+
+          {/* decorative accent circle */}
+          <View style={styles.headerAccent} />
         </View>
       </View>
 
       {/* main content area */}
-      <View style={styles.contentWrap}>
+      <ScrollView style={styles.contentWrap} contentContainerStyle={{ padding: 16, paddingBottom: 120 }}>
         {loading ? (
           <ActivityIndicator animating size="large" color="#6366F1" style={{ marginTop: 20 }} />
         ) : templates.length === 0 ? (
@@ -316,9 +498,59 @@ const HelpDeskScreen: React.FC = () => {
             )}
           </View>
         ) : (
-          <FlatList data={templates} keyExtractor={t => t.id} contentContainerStyle={{ padding: 16, paddingBottom: 120 }} renderItem={renderItem} />
+          <>
+            {/* 1. Render all image templates first */}
+            {imageTemplates.length > 0 && (
+              <View style={{ marginBottom: 16 }}>
+                {imageTemplates.map(item => (
+                  <React.Fragment key={item.id}>{renderItem({ item })}</React.Fragment>
+                ))}
+              </View>
+            )}
+
+            {/* 2. Render grouped PDF section next */}
+            {groupedPdfs.length > 0 && (
+              <View style={styles.pdfSection}>
+                {groupedPdfs.map((g, idx) => (
+                  <Card style={styles.requirementCard} key={idx}>
+                    <View style={styles.requirementHeader}>
+                      <Text style={styles.requirementTitle}>File Requirement</Text>
+                    </View>
+                    <View style={{ paddingHorizontal: 12, paddingVertical: 8 }}>
+                      {g.description ? <Text style={styles.requirementDescription}>{g.description}</Text> : null}
+                      {g.dueDate ? <Text style={styles.requirementDue}>Due: {formatDate(g.dueDate)}</Text> : null}
+                      {/* attachments stacked inside the card */}
+                      <View style={{ marginTop: 10 }}>
+                        {g.items.map(att => (
+                          <TouchableOpacity key={att.id} activeOpacity={0.9} onPress={() => handleDownload(att)} style={styles.attachmentRow}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                              <View style={styles.attachmentIconWrap}><MaterialCommunityIcons name="file-pdf-box" size={18} color="#fff" /></View>
+                              <View style={{ flex: 1 }}>
+                                <Text numberOfLines={1} ellipsizeMode='tail' style={styles.attachmentText}>{att.fileName || att.name || 'document.pdf'}</Text>
+                                {att.uploadedAt ? <Text style={styles.attachmentMeta}>Uploaded {new Date(att.uploadedAt).toLocaleDateString()}</Text> : null}
+                              </View>
+                            </View>
+                            <MaterialCommunityIcons name="download" size={18} color="#6b7280" />
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </View>
+                  </Card>
+                ))}
+              </View>
+            )}
+
+            {/* 3. Render any other (non-image, non-PDF) templates */}
+            {otherTemplates.length > 0 && (
+              <View style={{ marginTop: 16 }}>
+                {otherTemplates.map(item => (
+                  <React.Fragment key={item.id}>{renderItem({ item })}</React.Fragment>
+                ))}
+              </View>
+            )}
+          </>
         )}
-      </View>
+      </ScrollView>
       {/* upload modal */}
       <Modal visible={showUploadModal} animationType="slide" transparent onRequestClose={() => setShowUploadModal(false)}>
         <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.35)' }}>
@@ -432,8 +664,8 @@ const HelpDeskScreen: React.FC = () => {
                 return <WebViewComponent source={{ uri: previewUrl }} style={{ flex: 1 }} />;
               }
 
-              // Fallback: open system browser and close modal
-              (async () => { await WebBrowser.openBrowserAsync(previewUrl); closePreview(); })();
+              // Fallback: open system browser and close modal (ensure previewUrl is defined)
+              (async () => { if (previewUrl) { await WebBrowser.openBrowserAsync(previewUrl); } closePreview(); })();
               return (
                 <View style={{ padding: 18, alignItems: 'center', justifyContent: 'center', flex: 1 }}>
                   <Text style={{ color: '#666' }}>Previewing requires react-native-webview (not installed here) — opening in your browser instead.</Text>
@@ -444,6 +676,20 @@ const HelpDeskScreen: React.FC = () => {
             <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
               <Text style={{ color: '#666' }}>No preview available</Text>
             </View>
+          )}
+        </View>
+      </Modal>
+
+      {/* Full-screen image modal (mobile) */}
+      <Modal visible={showImageModal && !!imageModalUri} animationType="fade" transparent={false} onRequestClose={() => setShowImageModal(false)}>
+        <View style={styles.fullImageWrap}>
+          <TouchableOpacity style={styles.fullImageClose} onPress={() => setShowImageModal(false)}>
+            <Text style={styles.fullImageCloseText}>Close</Text>
+          </TouchableOpacity>
+          {imageModalUri ? (
+            <Image source={{ uri: imageModalUri as string }} style={styles.fullImage} resizeMode="contain" />
+          ) : (
+            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><Text>No image</Text></View>
           )}
         </View>
       </Modal>
@@ -459,15 +705,17 @@ const styles = StyleSheet.create({
   headerInner: {
     height: 160,
     backgroundColor: '#0b2545',
-    borderBottomRightRadius: 44,
-    paddingHorizontal: 22,
-    paddingTop: 26,
+    borderBottomRightRadius: 70, // smaller curve
+    paddingLeft: 22, // less left padding
+    paddingRight: 12,
+    paddingTop: 36, // less top padding
     justifyContent: 'center',
+    overflow: 'visible',
   },
-  headerTextWrap: { maxWidth: '84%' },
+  headerTextWrap: { maxWidth: '70%', zIndex: 2 },
   headerTag: { color: '#c9d6ff', fontSize: 12, letterSpacing: 1.2, marginBottom: 8 },
-  title: { fontSize: 22, fontWeight: '700', color: '#fff' },
-  subtitle: { color: '#d7e0ff', marginTop: 10, fontSize: 13, lineHeight: 18 },
+  title: { fontSize: 24, fontWeight: '800', color: '#fff', lineHeight: 30 },
+  subtitle: { color: 'rgba(215,224,255,0.95)', marginTop: 8, fontSize: 14, lineHeight: 20, maxWidth: '90%' },
 
   /* content */
   contentWrap: { flex: 1, paddingTop: 28 },
@@ -484,8 +732,40 @@ const styles = StyleSheet.create({
   uploadBox: { padding: 16, backgroundColor: '#fff', marginHorizontal: 16, marginBottom: 6, borderRadius: 12, elevation: 2 },
   input: { marginBottom: 8, backgroundColor: '#fff' },
   card: { marginVertical: 8, marginHorizontal: 0, borderRadius: 12, overflow: 'hidden' },
+  imageOnlyCard: { padding: 0, marginVertical: 8, marginHorizontal: 0, borderRadius: 12, overflow: 'hidden' },
+  inlineImageWrap: { position: 'relative', width: '100%' },
+  imageAdminOverlay: { position: 'absolute', right: 10, top: 10, zIndex: 20 },
+  imageDeleteBtn: { backgroundColor: 'rgba(0,0,0,0.5)', padding: 6, borderRadius: 18 },
   cardActions: { justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 12, paddingBottom: 12 },
   metaText: { color: '#666', marginTop: 6 },
+  inlineImage: { width: '100%', height: 280, borderRadius: 12, marginTop: 12, backgroundColor: '#fff' },
+  /* Full-screen image viewer */
+  fullImageWrap: { flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' },
+  fullImage: { width: '100%', height: '100%' },
+  fullImageClose: { position: 'absolute', top: 44, right: 16, zIndex: 10, padding: 8, backgroundColor: 'rgba(0,0,0,0.4)', borderRadius: 8 },
+  fullImageCloseText: { color: '#fff', fontSize: 14 },
+  /* PDF download row */
+  pdfBox: { width: '100%', borderWidth: 1, borderColor: '#cfe0ff', borderRadius: 10, paddingVertical: 12, paddingHorizontal: 14, marginTop: 10, backgroundColor: '#ffffff' },
+  pdfBoxInner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+  pdfBoxText: { color: '#0b2b34', fontWeight: '600' },
+  pdfBoxSubtitle: { color: '#68707d', fontSize: 13, marginTop: 4 },
+  pdfSection: { marginHorizontal: 16, marginTop: 8 },
+  pdfSectionTitle: { fontSize: 16, fontWeight: '700', color: '#0b2b34', marginBottom: 8 },
+  headerRowTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  headerBadge: { backgroundColor: 'rgba(99,102,241,0.12)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
+  headerBadgeText: { color: '#6366F1', fontSize: 11, fontWeight: '700', letterSpacing: 0.8 },
+  headerAccent: { position: 'absolute', right: -16, top: -16, width: 100, height: 100, backgroundColor: 'rgba(102,126,234,0.10)', borderRadius: 60, transform: [{ rotate: '16deg' }], zIndex: 1 },
+  /* requirement grouped card */
+  requirementCard: { marginVertical: 8, borderRadius: 12, overflow: 'hidden' },
+  requirementHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 12, paddingTop: 12 },
+  requirementTitle: { fontSize: 15, fontWeight: '700', color: '#0b2b34' },
+  requirementDescription: { color: '#444', marginTop: 6 },
+  requirementDue: { color: '#68707d', marginTop: 6, fontSize: 13 },
+  /* status badge removed */
+  attachmentRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 10, borderWidth: 1, borderColor: '#e6eefb', borderRadius: 8, marginBottom: 8, backgroundColor: '#fff' },
+  attachmentIconWrap: { width: 36, height: 36, borderRadius: 9, backgroundColor: '#ff6b6b', alignItems: 'center', justifyContent: 'center', marginRight: 10 },
+  attachmentMeta: { color: '#9aa3b2', fontSize: 12, marginTop: 2 },
+  attachmentText: { color: '#0b2b34', fontWeight: '600' },
 });
 
 export default HelpDeskScreen;

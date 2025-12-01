@@ -94,8 +94,22 @@ const App: React.FC = () => {
             setIsProfileComplete(false);
             console.log('📋 Profile not found in Firestore');
           }
-        } catch (e) {
+        } catch (e: any) {
           console.error('❌ Error fetching profile:', e);
+          // Extra diagnostics for permission issues
+          if (e?.code === 'permission-denied') {
+            console.warn('🔍 Permission denied when reading user profile. This usually means the client request did not pass authentication, or Firestore rules disallow this read.');
+            try {
+              // Try to dump some helpful info to the console (do not log tokens in production)
+              console.log('Debug auth.currentUser:', auth.currentUser);
+              if (user?.getIdToken) {
+                const idToken = await user.getIdToken();
+                console.log('Debug: user.getIdToken() retrieved a token (length):', idToken ? idToken.length : 0);
+              }
+            } catch (debugErr) {
+              console.log('Failed to fetch debug token / info:', debugErr);
+            }
+          }
           setIsProfileComplete(false);
         }
       } else {

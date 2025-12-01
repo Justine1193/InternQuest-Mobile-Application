@@ -3,7 +3,15 @@ service cloud.firestore {
   match /databases/{database}/documents {
     // Users can only read/write their own data
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      # (one-time) install deps if needed
+      npm install firebase-admin minimist
+      
+      # Option A: set env var then run
+      $env:GOOGLE_APPLICATION_CREDENTIALS = 'C:\path\to\serviceAccountKey.json'
+      node tools/migrations/create_ojt_logs_for_users.js --user 8eJHyZR4GvRFxk8teunFb1tTBOA3
+      
+      # Option B: pass key directly
+      node tools/migrations/create_ojt_logs_for_users.js --key C:\path\to\serviceAccountKey.json --user 8eJHyZR4GvRFxk8teunFb1tTBOA3      allow read, write: if request.auth != null && request.auth.uid == userId;
     }
     
     // Companies collection - authenticated users can read, only admins can write
@@ -16,6 +24,20 @@ service cloud.firestore {
     // Weekly reports - users can only access their own reports
     match /users/{userId}/weeklyReports/{reportId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+
+    // Allow authenticated owners to access any nested documents under their user
+    // document (covers subcollections like ojtLogs, hiddenNotifications, etc.).
+    match /users/{userId}/{allPaths=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+      // OJT logs - users can only access their own logs
+      match /users/{userId}/ojtLogs/{logId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+      // Hidden notifications - users can only access their own hidden notifications
+      match /users/{userId}/hiddenNotifications/{notificationId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
     }
 
     // Help Desk templates (admin-managed). Templates can be read by any authenticated
@@ -42,6 +64,15 @@ service cloud.firestore {
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
       );
     }
+      // Notifications - authenticated users can read, update, and delete their own notifications
+      match /notifications/{notificationId} {
+        // Allow all authenticated users to read notifications
+        allow read: if request.auth != null;
+        // Only the owner can update/delete
+        allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
+        // Only the owner can create
+        allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      }
     
     // Requirements - users can only access their own requirements
     match /users/{userId}/requirements/{requirementId} {

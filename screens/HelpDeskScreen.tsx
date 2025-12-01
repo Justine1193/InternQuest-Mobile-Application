@@ -35,6 +35,15 @@ type TemplateDoc = {
   fileSize?: number;
   path?: string;
   url?: string;
+  // Accept legacy / alternate field names used in older documents
+  fileUrl?: string;
+  downloadUrl?: string;
+  downloadURL?: string;
+  fileDownloadUrl?: string;
+  file_path?: string;
+  filePath?: string;
+  storagePath?: string;
+  file_pathname?: string;
   // optional due date (ISO string or human string) for file requirements
   dueDate?: string;
 };
@@ -71,7 +80,31 @@ const HelpDeskScreen: React.FC = () => {
       const q = query(collection(firestore, 'helpDeskFiles'), orderBy('uploadedAt', 'desc'));
       const snap = await getDocs(q);
       const docs: TemplateDoc[] = snap.docs.map((d: any) => ({ id: d.id, ...(d.data() as any) }));
-      setTemplates(docs);
+
+      // Resolve any storage paths to download URLs so the UI can preview and download images/PDFs
+      const resolvedDocs = await Promise.all(docs.map(async (docItem) => {
+        // Accept multiple possible URL field names used historically
+        const possibleUrl = docItem.url || docItem.fileUrl || docItem.downloadUrl || docItem.downloadURL || docItem.fileDownloadUrl;
+        if (possibleUrl) return { ...docItem, url: possibleUrl };
+
+        // If we have a Storage path, try to resolve it to a download URL
+        // Accept multiple path field variants too
+        const possiblePath = docItem.path || docItem.filePath || docItem.storagePath || docItem.file_path || docItem.file_pathname;
+        if (possiblePath) {
+          try {
+            const resolvedUrl = await getDownloadURL(storageRef(storage, possiblePath));
+            return { ...docItem, url: resolvedUrl };
+          } catch (err) {
+            // Could be permission issue or wrong path — keep the original doc and continue
+            console.warn('Failed to resolve storage path to URL for', docItem.path, err);
+            return docItem;
+          }
+        }
+
+        return docItem;
+      }));
+
+      setTemplates(resolvedDocs);
     } catch (err) {
       console.error('Failed to load templates:', err);
       Alert.alert('Error', 'Failed to load templates.');
@@ -128,38 +161,11 @@ const HelpDeskScreen: React.FC = () => {
       const uri = f.uri;
       const name = f.name || f.fileName || `template_${Date.now()}`;
 
-      // Try storing as base64 into firestore for small files
-      try {
-        const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
-        const estimatedBytes = Math.ceil((base64.length * 3) / 4);
-
-        if (estimatedBytes <= FIRESTORE_MAX_BYTES) {
-                    const dataUrl = `data:${f.mimeType || f.type || 'application/octet-stream'};base64,${base64}`;
-                    const docRef = await addDoc(collection(firestore, 'helpDeskFiles'), {
-                      fileName: name,
-                      // only include a description when provided
-                      ...(description ? { description } : {}),
-                      uploadedBy: auth.currentUser?.uid,
-                      uploadedAt: new Date().toISOString(),
-                      storedInFirestore: true,
-                      fileData: dataUrl,
-                      fileType: f.mimeType || f.type || 'application/octet-stream',
-                      fileSize: Math.ceil((base64.length * 3) / 4),
-                    });
-
-          setTitle(''); setDescription('');
-          Alert.alert('Success', 'Template saved to Firestore.');
-          await loadTemplates();
-          return;
-        }
-      } catch (e) {
-        // ignore - fall back to storage
-        console.warn('Could not store in Firestore, falling back to Storage', e);
-      }
-
-      // fallback: store in Storage
+      // Always store uploaded files in Cloud Storage and write a Firestore record with path + url
+      // (We avoid embedding base64 into Firestore; Storage is preferred for images and PDFs)
       try {
         const fileMeta = await uploadToStorage(uri, name, f);
+        // write a reference doc that points to the storage path + download URL
         await addDoc(collection(firestore, 'helpDeskFiles'), {
           fileName: name,
           // only include a description when provided
@@ -170,7 +176,7 @@ const HelpDeskScreen: React.FC = () => {
           path: fileMeta.path,
           url: fileMeta.url,
           fileType: fileMeta.contentType,
-          fileSize: undefined,
+            fileSize: undefined,
         });
 
         setTitle(''); setDescription('');
@@ -208,15 +214,36 @@ const HelpDeskScreen: React.FC = () => {
         }
       };
 
-      // If storage URL is present, download the file to cache and share/open it
-      if (t.url) {
+      // Resolve canonical URL / path fields
+      const possibleUrl = t.url || t.fileUrl || t.downloadUrl || t.downloadURL || t.fileDownloadUrl;
+      const possiblePath = t.path || t.filePath || t.storagePath || t.file_path || t.file_pathname;
+
+      // If a URL is present, download the file to cache and share/open it
+      if (possibleUrl) {
         const fileName = t.fileName || t.name || `download_${Date.now()}`;
-        const extMatch = (t.url.match(/\.(\w+)(?:\?|$)/) || [])[1];
+        const extMatch = (possibleUrl.match(/\.(\w+)(?:\?|$)/) || [])[1];
         const ext = extMatch ? `.${extMatch}` : '';
         const localPath = `${FileSystem.cacheDirectory}${fileName}_${Date.now()}${ext}`;
-        const { uri } = await FileSystem.downloadAsync(t.url, localPath);
+        const { uri } = await FileSystem.downloadAsync(possibleUrl, localPath);
         await Sharing.shareAsync(uri);
         return;
+      }
+
+      // If a storage path is present but no direct URL, resolve it to a download URL and fetch from Storage
+      // If no URL, but we have a storage path (or variant), resolve it then download
+      if (!possibleUrl && possiblePath) {
+        try {
+          const resolvedUrl = await getDownloadURL(storageRef(storage, possiblePath));
+          const fileName = t.fileName || t.name || `download_${Date.now()}`;
+          const extMatch = (resolvedUrl.match(/\.(\w+)(?:\?|$)/) || [])[1];
+          const ext = extMatch ? `.${extMatch}` : '';
+          const localPath = `${FileSystem.cacheDirectory}${fileName}_${Date.now()}${ext}`;
+          const { uri } = await FileSystem.downloadAsync(resolvedUrl, localPath);
+          await Sharing.shareAsync(uri);
+          return;
+        } catch (storageResolveErr) {
+          console.warn('Failed to resolve storage path to URL, continuing to other fallbacks', storageResolveErr);
+        }
       }
 
       // If Firestore-stored file is present, prefer streaming via cloud function if configured
@@ -238,18 +265,11 @@ const HelpDeskScreen: React.FC = () => {
         return;
       }
 
-      // If file data or base64 is present in the document, write to a local file then share
-      // (don't require storedInFirestore flag to be present — some documents may have
-      // fileData but no storedInFirestore boolean)
-      if ((t.fileData || t.contentBase64)) {
-        const dataUrl = t.fileData || `data:${t.contentType || 'application/octet-stream'};base64,${t.contentBase64}`;
-        const match = dataUrl.match(/^data:([^;]+);base64,(.*)$/);
-        if (match) {
-          const [, contentType, base64] = match;
-          await writeBase64AndShare(base64, t.fileName || t.name || 'file', contentType);
-          return;
-        }
-      }
+      // The client no longer reads embedded file data (base64) in Firestore documents.
+      // Prefer Cloud Storage `path` or `url` instead.
+      // Firestore-embedded base64 is no longer supported by the client — we fetch files only from Cloud Storage.
+      // If no URL/path is present at this point, inform the user and ask admins to migrate the document.
+      Alert.alert('Unavailable', 'No downloadable Storage path or URL found for this template. Please ask an administrator to upload this file to Cloud Storage and set the Firestore document `path` or `url`.');
 
       Alert.alert('Unavailable', 'No downloadable file found for this template.');
     } catch (err) {
@@ -258,6 +278,57 @@ const HelpDeskScreen: React.FC = () => {
     } finally {
       setPreviewLoading(false);
     }
+  };
+
+  // --- Migration: migrate a base64-stored Firestore doc to Cloud Storage ---
+  const handleMigrateToStorage = async (t: TemplateDoc) => {
+    if (!isAdmin) return Alert.alert('Not authorized', 'Only administrators can migrate templates.');
+    Alert.alert('Migrate to Storage?', 'This will upload the embedded file to Cloud Storage and update the Firestore document to reference the Storage path (removing the base64 content). Continue?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Migrate', style: 'default', onPress: async () => {
+        setUploading(true);
+        try {
+          // find the embedded data (data URL or contentBase64)
+          let dataUrl: string | null = null;
+          if (t.fileData) dataUrl = t.fileData;
+          else if (t.contentBase64) dataUrl = `data:${t.contentType || 'application/octet-stream'};base64,${t.contentBase64}`;
+
+          if (!dataUrl) throw new Error('No embedded file data to migrate.');
+
+          // Convert to blob using fetch (works for data URLs)
+          const res = await fetch(dataUrl);
+          const blob = await res.blob();
+
+          const fileName = (t.fileName || t.name || `migrated_${t.id || Date.now()}`).replace(/[^a-z0-9_.-]/gi, '_');
+          const remotePath = `helpDeskFiles/${t.uploadedBy || auth.currentUser?.uid || 'migrated'}/${Date.now()}_${fileName}`;
+          const sRef = storageRef(storage, remotePath);
+
+          await uploadBytes(sRef, blob, { contentType: t.fileType || t.contentType || 'application/octet-stream' });
+          // get a secure download URL
+          const downloadURL = await getDownloadURL(sRef);
+
+          const docRef = doc(firestore, 'helpDeskFiles', t.id);
+          await updateDoc(docRef, {
+            path: remotePath,
+            url: downloadURL,
+            storedInFirestore: false,
+            fileType: t.fileType || t.contentType || 'application/octet-stream',
+            uploadedAt: new Date().toISOString(),
+            // remove embedded content (set to null so doc no longer stores raw base64)
+            fileData: null,
+            contentBase64: null,
+          } as any);
+
+          Alert.alert('Success', 'Template migrated to Cloud Storage.');
+          await loadTemplates();
+        } catch (err) {
+          console.error('Migration failed', err);
+          Alert.alert('Migration failed', String(err));
+        } finally {
+          setUploading(false);
+        }
+      } }
+    ]);
   };
 
   const handlePreview = async (t: TemplateDoc) => {
@@ -274,29 +345,31 @@ const HelpDeskScreen: React.FC = () => {
         return;
       }
 
-      if (t.url) {
-        setPreviewUrl(t.url);
+      // Accept several canonical URL fields set on the document
+      const possibleUrl = t.url || t.fileUrl || t.downloadUrl || t.downloadURL || t.fileDownloadUrl;
+      if (possibleUrl) {
+        setPreviewUrl(possibleUrl);
         setShowPreviewModal(true);
         return;
+      }
+
+      // If no URL available, but path variants exist, attempt to resolve via Storage
+      const possiblePath = t.path || t.filePath || t.storagePath || t.file_path || t.file_pathname;
+      if (possiblePath) {
+        try {
+          const resolvedUrl = await getDownloadURL(storageRef(storage, possiblePath));
+          setPreviewUrl(resolvedUrl);
+          setShowPreviewModal(true);
+          return;
+        } catch (e) {
+          console.warn('Failed to resolve storage path for preview', e);
+        }
       }
 
       // For preview: do not attempt to preview PDFs — they should be downloaded instead
-      if (t.storedInFirestore && (t.fileData || t.contentBase64)) {
-        const fileNameLower = String(t.fileName || t.name || '').toLowerCase();
-        const fileTypeLower = String(t.fileType || t.contentType || '').toLowerCase();
-        const isPdf = fileTypeLower === 'application/pdf' || fileNameLower.endsWith('.pdf');
-        if (isPdf) {
-          Alert.alert('Preview not supported', 'PDF preview is disabled — please download the file to view it.');
-          return;
-        }
-
-        const dataUrl = t.fileData || `data:${t.contentType || 'application/octet-stream'};base64,${t.contentBase64}`;
-        setPreviewUrl(dataUrl);
-        setShowPreviewModal(true);
-        return;
-      }
-
-      Alert.alert('Preview unavailable', 'This template cannot be previewed in the app. You can download it to view externally.');
+      // Preview from Firestore-embedded base64 is not supported.
+      // We only preview files that have a storage URL or are served via the admin cloud function.
+      Alert.alert('Preview unavailable', 'This template cannot be previewed because it does not have a Cloud Storage URL or path. Please ask an administrator to upload the file to Cloud Storage and set the Firestore document `path` or `url`.');
     } catch (err) {
       console.error('Preview failed', err);
       Alert.alert('Error', 'Failed to preview template.');
@@ -310,9 +383,10 @@ const HelpDeskScreen: React.FC = () => {
       { text: 'Delete', style: 'destructive', onPress: async () => {
         try {
           // delete storage object if present
-          if (t.path) {
+          const deletePath = t.path || t.filePath || t.storagePath || t.file_path || t.file_pathname;
+          if (deletePath) {
             try {
-              const sRef = storageRef(storage, t.path);
+              const sRef = storageRef(storage, deletePath);
               const storageModule: any = await import('firebase/storage');
               const deleteObjectFn = storageModule.deleteObject;
               if (deleteObjectFn) await deleteObjectFn(sRef);
@@ -337,7 +411,8 @@ const HelpDeskScreen: React.FC = () => {
 
     // If this is an image template, render a simplified card containing only the image
     if (isImage) {
-      const imageUri = item.url || item.fileData || (item.contentBase64 ? `data:${item.contentType || 'image/png'};base64,${item.contentBase64}` : null);
+      // Only render images from Storage URLs. Firestore-stored base64 image content is not used by the client.
+      const imageUri = item.url || item.fileUrl || item.downloadUrl || item.downloadURL || item.fileDownloadUrl || null;
       return (
         <Card style={[styles.card, styles.imageOnlyCard]}>
           {imageUri ? (
@@ -415,7 +490,10 @@ const HelpDeskScreen: React.FC = () => {
           );
         })()}
         {isAdmin && (
-          <View style={{ flexDirection: 'row' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            {(item.fileData || item.contentBase64) ? (
+              <Button mode="text" onPress={() => handleMigrateToStorage(item)} color="#E11D48" style={{ marginRight: 6 }}>Migrate</Button>
+            ) : null}
             <IconButton icon="delete" onPress={() => handleDelete(item)} />
           </View>
         )}
@@ -490,7 +568,7 @@ const HelpDeskScreen: React.FC = () => {
 
             <View style={styles.infoCallout}>
               <MaterialCommunityIcons name="cloud-upload-outline" size={20} color="#0b2b34" style={{ marginRight: 10 }} />
-              <Text style={styles.infoCalloutText}>Admins can manage these templates by adding files to Cloud Firestore → helpDeskFiles with fields: fileName, fileData (base64), fileUrl, uploadedAt, uploadedBy.</Text>
+              <Text style={styles.infoCalloutText}>Admins: upload templates to Cloud Storage and set the Firestore document's `path` or `url` (example: helpDeskFiles/&lt;uId&gt;/file.pdf). The client fetches assets only from Cloud Storage.</Text>
             </View>
 
             {isAdmin && (
@@ -591,26 +669,7 @@ const HelpDeskScreen: React.FC = () => {
                   try {
                     const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
                     const estimatedBytes = Math.ceil((base64.length * 3) / 4);
-                    if (estimatedBytes <= FIRESTORE_MAX_BYTES) {
-                      const dataUrl = `data:${selectedFile.mimeType || selectedFile.type || 'application/octet-stream'};base64,${base64}`;
-                      await addDoc(collection(firestore, 'helpDeskFiles'), {
-                        fileName: title,
-                        description,
-                        uploadedBy: auth.currentUser?.uid,
-                        uploadedAt: new Date().toISOString(),
-                        storedInFirestore: true,
-                        fileData: dataUrl,
-                        fileType: selectedFile.mimeType || selectedFile.type || 'application/octet-stream',
-                        fileSize: Math.ceil((base64.length * 3) / 4),
-                      });
-
-                      Alert.alert('Success', 'Template saved to Firestore.');
-                      setShowUploadModal(false);
-                      setSelectedFile(null);
-                      setTitle(''); setDescription('');
-                      await loadTemplates();
-                      return;
-                    }
+                  // Always upload to Storage (do not embed base64 into Firestore)
                   } catch (e) { console.warn('cannot store base64, continue to storage', e); }
 
                   const meta = await uploadToStorage(uri, name, selectedFile);

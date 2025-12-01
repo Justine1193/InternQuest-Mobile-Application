@@ -101,14 +101,16 @@ const OJTTrackerScreen: React.FC = () => {
     if (!auth.currentUser) return;
     try {
       const userId = auth.currentUser.uid;
+      console.log('loadLogsFromFirestore: loading logs for user', userId);
       const logsCol = collection(firestore, `users/${userId}/ojtLogs`);
       const logsSnap = await getDocs(logsCol);
+      console.log('loadLogsFromFirestore: found', logsSnap.size, 'documents');
       const logs: TimeLog[] = [];
       logsSnap.forEach((doc: any) => logs.push(doc.data() as TimeLog));
       setTimeLogs(logs.sort((a, b) => b.date.localeCompare(a.date)));
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading logs:', error);
-      Alert.alert('Error', 'Failed to load time logs.');
+      Alert.alert('Error', 'Failed to load time logs: ' + (error?.message || String(error)));
     }
   };
 
@@ -129,14 +131,28 @@ const OJTTrackerScreen: React.FC = () => {
 
   // Firestore operations
   const syncLogToFirestore = async (log: TimeLog) => {
-    if (!auth.currentUser) return;
+    if (!auth.currentUser) {
+      console.warn('syncLogToFirestore: no auth.currentUser — user not signed in');
+      throw new Error('Not authenticated');
+    }
+
     try {
       const userId = auth.currentUser.uid;
       const logId = `${log.date}_${log.clockIn}`.replace(/\W/g, '');
-      const logRef = doc(firestore, `users/${userId}/ojtLogs/${logId}`);
+      const path = `users/${userId}/ojtLogs/${logId}`;
+      const logRef = doc(firestore, path);
+
+      console.log('syncLogToFirestore: attempting to write', { userId, path, log });
       await setDoc(logRef, log);
-    } catch (error) {
-      console.error('Error syncing log:', error);
+      console.log('syncLogToFirestore: write succeeded', { userId, path, logId });
+    } catch (error: any) {
+      // Provide helpful debug logs for permission issues and other failures
+      console.error('syncLogToFirestore: failed to write log —', {
+        message: error?.message ?? error,
+        code: error?.code ?? null,
+        stack: error?.stack ?? null,
+      });
+      // Re-throw so callers can show an error message (or handle as they see fit)
       throw error;
     }
   };
@@ -146,8 +162,11 @@ const OJTTrackerScreen: React.FC = () => {
     try {
       const userId = auth.currentUser.uid;
       const logId = `${log.date}_${log.clockIn}`.replace(/\W/g, '');
-      const logRef = doc(firestore, `users/${userId}/ojtLogs/${logId}`);
+      const path = `users/${userId}/ojtLogs/${logId}`;
+      const logRef = doc(firestore, path);
+      console.log('deleteLogFromFirestore: attempting delete', { userId, path, logId });
       await deleteDoc(logRef);
+      console.log('deleteLogFromFirestore: delete succeeded', { userId, path, logId });
     } catch (error) {
       console.error('Error deleting log:', error);
       throw error;
@@ -198,6 +217,7 @@ const OJTTrackerScreen: React.FC = () => {
 
   const handleSave = async () => {
     try {
+      console.log('handleSave: saving formData', formData);
       // Validate inputs
       if (!formData.date || !formData.clockIn || !formData.clockOut) {
         Alert.alert('Error', 'Please fill in all required fields.');
@@ -254,11 +274,25 @@ const OJTTrackerScreen: React.FC = () => {
         const updatedLogs = [...timeLogs];
         updatedLogs[editIndex] = logToSave;
         setTimeLogs(updatedLogs);
-        await syncLogToFirestore(logToSave);
+        try {
+          await syncLogToFirestore(logToSave);
+        } catch (error: any) {
+          console.error('handleSave: sync edited log failed', error);
+          Alert.alert('Error', `Failed saving edited log: ${error?.message || String(error)}`);
+          return; // stop, keep modal open for retry
+        }
       } else {
         const newLogs = [...timeLogs, logToSave];
         setTimeLogs(newLogs);
-        await syncLogToFirestore(logToSave);
+        try {
+          await syncLogToFirestore(logToSave);
+        } catch (error: any) {
+          console.error('handleSave: sync new log failed', error);
+          Alert.alert('Error', `Failed saving new log: ${error?.message || String(error)}`);
+          // revert the optimistic add
+          setTimeLogs(timeLogs);
+          return;
+        }
       }
 
       // Update UI
@@ -266,9 +300,26 @@ const OJTTrackerScreen: React.FC = () => {
       setModalVisible(false);
       setFormData({ date: '', clockIn: '', clockOut: '', hours: '' });
       Alert.alert('Success', 'Time log saved successfully!');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving log:', error);
-      Alert.alert('Error', 'Failed to save time log. Please try again.');
+      Alert.alert('Error', `Failed to save time log: ${error?.message || String(error)}. Please try again.`);
+
+      // Diagnostic: attempt to write a small debug object to the user's root document
+      // so we can inspect error details server-side (this write usually allowed by rules).
+      try {
+        if (auth.currentUser) {
+          const uid = auth.currentUser.uid;
+          await setDoc(doc(firestore, 'users', uid), {
+            lastOjtSyncError: {
+              time: new Date().toISOString(),
+              message: error?.message || String(error),
+            }
+          }, { merge: true });
+          console.log('handleSave: wrote lastOjtSyncError to users/' + uid);
+        }
+      } catch (dbgErr) {
+        console.error('handleSave: failed to write debug info to user doc:', dbgErr);
+      }
     }
   };
 
@@ -284,9 +335,9 @@ const OJTTrackerScreen: React.FC = () => {
             const filtered = timeLogs.filter((_, i) => i !== index);
             setTimeLogs(filtered);
             await loadLogsFromFirestore();
-          } catch (error) {
+          } catch (error: any) {
             console.error('Error deleting log:', error);
-            Alert.alert('Error', 'Failed to delete time log.');
+            Alert.alert('Error', `Failed to delete time log: ${error?.message || String(error)}`);
           }
         }
       }

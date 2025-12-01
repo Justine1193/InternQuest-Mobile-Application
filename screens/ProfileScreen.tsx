@@ -85,7 +85,15 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
       setModalVisible(false);
     } catch (error) {
       Alert.alert('Error', 'Failed to update profile.');
-      console.error(error);
+      console.error('handleSaveProfile failed:', error);
+      try {
+        if (auth.currentUser) {
+          await setDoc(doc(firestore, 'users', auth.currentUser.uid), { lastProfileUpdateError: { time: new Date().toISOString(), message: String(error) } }, { merge: true });
+          console.log('ProfileScreen: wrote lastProfileUpdateError to user doc');
+        }
+      } catch (diagErr) {
+        console.warn('ProfileScreen: failed to write lastProfileUpdateError for user:', diagErr);
+      }
     }
     setLoading(false);
   };
@@ -154,6 +162,14 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
       } catch (error) {
         Alert.alert('Error', 'Failed to upload profile picture.');
         console.error('Firebase Storage upload error:', error);
+        try {
+          if (auth.currentUser) {
+            await setDoc(doc(firestore, 'users', auth.currentUser.uid), { lastAvatarUploadError: { time: new Date().toISOString(), message: String(error) } }, { merge: true });
+            console.log('ProfileScreen: wrote lastAvatarUploadError to user doc');
+          }
+        } catch (diagErr) {
+          console.warn('ProfileScreen: failed to write lastAvatarUploadError for user:', diagErr);
+        }
       } finally {
         setAvatarUploading(false);
       }
@@ -180,7 +196,15 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
         setSkills(data.skills || []);
       }
     } catch (error) {
-      console.error("Failed to fetch user data:", error);
+      console.error('Failed to fetch user data:', error);
+      try {
+        if (auth.currentUser) {
+          await setDoc(doc(firestore, 'users', auth.currentUser.uid), { lastProfileFetchError: { time: new Date().toISOString(), message: String(error) } }, { merge: true });
+          console.log('ProfileScreen: wrote lastProfileFetchError to user doc');
+        }
+      } catch (diagErr) {
+        console.warn('ProfileScreen: failed to write lastProfileFetchError for user:', diagErr);
+      }
     }
     setLoading(false);
   };
@@ -202,6 +226,14 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
       setProgress(Math.min(sum / requiredHours, 1));
     } catch (error) {
       console.error('Failed to fetch OJT logs:', error);
+      try {
+        if (auth.currentUser) {
+          await setDoc(doc(firestore, 'users', auth.currentUser.uid), { lastOjtLogsFetchError: { time: new Date().toISOString(), message: String(error) } }, { merge: true });
+          console.log('ProfileScreen: wrote lastOjtLogsFetchError to user doc');
+        }
+      } catch (diagErr) {
+        console.warn('ProfileScreen: failed to write lastOjtLogsFetchError for user:', diagErr);
+      }
     }
   };
 
@@ -253,6 +285,15 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
       setCompanyModalVisible(false);
     } catch (error) {
       Alert.alert('Error', 'Failed to update company details');
+      console.error('handleCompanyUpdate failed:', error);
+      try {
+        if (auth.currentUser) {
+          await setDoc(doc(firestore, 'users', auth.currentUser.uid), { lastCompanyUpdateError: { time: new Date().toISOString(), message: String(error) } }, { merge: true });
+          console.log('ProfileScreen: wrote lastCompanyUpdateError to user doc');
+        }
+      } catch (diagErr) {
+        console.warn('ProfileScreen: failed to write lastCompanyUpdateError for user:', diagErr);
+      }
     }
   };
 
@@ -273,6 +314,15 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
       setShowUndoCompany(false);
     } catch (error) {
       Alert.alert('Error', 'Failed to undo status');
+      console.error('handleUndoCompany failed:', error);
+      try {
+        if (auth.currentUser) {
+          await setDoc(doc(firestore, 'users', auth.currentUser.uid), { lastCompanyUndoError: { time: new Date().toISOString(), message: String(error) } }, { merge: true });
+          console.log('ProfileScreen: wrote lastCompanyUndoError to user doc');
+        }
+      } catch (diagErr) {
+        console.warn('ProfileScreen: failed to write lastCompanyUndoError for user:', diagErr);
+      }
     }
   };
 

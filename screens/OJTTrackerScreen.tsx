@@ -85,7 +85,7 @@ const OJTTrackerScreen: React.FC = () => {
         setUserStatus(data.status || null);
         setUserCompany(data.company || null);
       }
-    } catch (error) {
+    } catch (error: any) {
       setUserStatus(null);
       setUserCompany(null);
     }
@@ -169,6 +169,12 @@ const OJTTrackerScreen: React.FC = () => {
       console.log('deleteLogFromFirestore: delete succeeded', { userId, path, logId });
     } catch (error) {
       console.error('Error deleting log:', error);
+      // Diagnostic write so we can inspect failure server-side
+      try {
+        if (auth.currentUser) await setDoc(doc(firestore, 'users', auth.currentUser.uid), { lastOjtSyncError: { time: new Date().toISOString(), message: String(error) } }, { merge: true });
+      } catch (dbgErr) {
+        console.error('deleteLogFromFirestore: failed to write debug info to user doc:', dbgErr);
+      }
       throw error;
     }
   };
@@ -450,6 +456,13 @@ const OJTTrackerScreen: React.FC = () => {
       console.log('totalHours updated in Firestore:', totalHours);
     } catch (error) {
       console.error('Error updating totalHours in Firestore:', error);
+      // Diagnostic fallback so we can inspect failure server-side
+      try {
+        if (auth.currentUser) await setDoc(doc(firestore, 'users', auth.currentUser.uid), { lastOjtSyncError: { time: new Date().toISOString(), message: String(error) } }, { merge: true });
+        console.log('updateTotalHoursInFirestore: wrote lastOjtSyncError to user doc');
+      } catch (dbgErr) {
+        console.error('updateTotalHoursInFirestore: failed to write debug info to user doc:', dbgErr);
+      }
     }
   };
 

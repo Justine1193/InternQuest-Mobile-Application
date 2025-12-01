@@ -15,9 +15,10 @@ import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../App';
 import { auth, firestore, storage, ADMIN_FILE_FUNCTION_BASE_URL } from '../firebase/config';
-import { doc, getDoc, updateDoc, collection, addDoc, deleteDoc, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, setDoc, collection, addDoc, deleteDoc, query, where, getDocs } from 'firebase/firestore';
 import * as DocumentPicker from 'expo-document-picker';
 import { Linking } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 
@@ -46,7 +47,8 @@ const RequirementsChecklistScreen: React.FC = () => {
     const [showUploadModal, setShowUploadModal] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [progress, setProgress] = useState(0);
-    const [storeMode, setStoreMode] = useState<'storage' | 'firestore'>('firestore');
+    // Default to using Cloud Storage for requirement files to avoid Firestore size limits
+    const [storeMode, setStoreMode] = useState<'storage' | 'firestore'>('storage');
 
     // Soft limit for base64 storing in Firestore (bytes)
     const FIRESTORE_MAX_BYTES = 700 * 1024; // ~700 KB
@@ -55,7 +57,22 @@ const RequirementsChecklistScreen: React.FC = () => {
 
     useEffect(() => {
         loadRequirements();
+        // load persisted upload store mode preference
+        (async () => {
+            try {
+                const value = await AsyncStorage.getItem('REQUIREMENTS_STORE_MODE');
+                if (value === 'storage' || value === 'firestore') setStoreMode(value);
+            } catch (e) {
+                // ignore
+            }
+        })();
     }, []);
+
+    // Persist user's selected storage mode
+    const setStoreModeAndPersist = async (mode: 'storage' | 'firestore') => {
+        setStoreMode(mode);
+        try { await AsyncStorage.setItem('REQUIREMENTS_STORE_MODE', mode); } catch (e) { /* ignore */ }
+    };
 
     const loadRequirements = async () => {
         if (!auth.currentUser) return;
@@ -201,11 +218,23 @@ const RequirementsChecklistScreen: React.FC = () => {
         // Save to Firestore
         if (auth.currentUser) {
             try {
+                console.log('handleStatusChange: updating requirements for user', auth.currentUser.uid, { requirementId, newStatus });
                 await updateDoc(doc(firestore, 'users', auth.currentUser.uid), {
                     requirements: updatedRequirements,
                 });
-            } catch (error) {
+                console.log('handleStatusChange: requirements update succeeded');
+            } catch (error: any) {
                 console.error('Error updating requirements:', error);
+                Alert.alert('Save error', `Failed to save requirements: ${error?.message || String(error)}`);
+                // Diagnostic: write the error to the user's document so you can inspect it in the console / server side.
+                try {
+                    await setDoc(doc(firestore, 'users', auth.currentUser.uid), {
+                        lastRequirementsSyncError: { time: new Date().toISOString(), message: error?.message || String(error) }
+                    }, { merge: true });
+                    console.log('handleStatusChange: wrote lastRequirementsSyncError to user doc');
+                } catch (dbgErr) {
+                    console.error('handleStatusChange: failed to write diagnostic info to user doc:', dbgErr);
+                }
             }
         }
     };
@@ -235,12 +264,12 @@ const RequirementsChecklistScreen: React.FC = () => {
             await uploadBytes(sRef, blob, { contentType: fileAny.mimeType || fileAny.type || 'application/octet-stream' });
             const downloadURL = await getDownloadURL(sRef);
 
-            const fileMeta = { name, url: downloadURL, path: remotePath, contentType: fileAny.mimeType || fileAny.type || 'application/octet-stream', uploadedAt: new Date().toISOString() };
+            const fileMeta = { name, url: downloadURL, path: remotePath, contentType: fileAny.mimeType || fileAny.type || 'application/octet-stream', uploadedAt: new Date().toISOString() } as any;
 
-            // add admin_files doc
+            // add admin_files doc and attach its id to the returned metadata
             try {
                 const req = requirements.find(r => r.id === requirementId);
-                await addDoc(collection(firestore, 'admin_files'), {
+                const adminDocRef = await addDoc(collection(firestore, 'admin_files'), {
                     userId: auth.currentUser?.uid,
                     requirementId,
                     requirementTitle: req?.title || null,
@@ -250,6 +279,7 @@ const RequirementsChecklistScreen: React.FC = () => {
                     contentType: fileMeta.contentType,
                     uploadedAt: fileMeta.uploadedAt,
                 });
+                fileMeta.adminDocId = adminDocRef.id;
             } catch (adminErr) {
                 console.error('Failed to write admin_files record:', adminErr);
             }
@@ -287,31 +317,9 @@ const RequirementsChecklistScreen: React.FC = () => {
                     const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
                     const estimatedBytes = Math.ceil((base64.length * 3) / 4);
                     if (estimatedBytes > FIRESTORE_MAX_BYTES) {
-                        Alert.alert('Info', 'File exceeds Firestore size limit — uploading to Storage.');
-                        try {
-                            const fileMeta = await uploadToStorage(uri, name, fileAny, selectedRequirement.id);
-                            const updatedRequirements = requirements.map(req =>
-                                req.id === selectedRequirement.id
-                                    ? { ...req, uploadedFiles: [...req.uploadedFiles, fileMeta], status: 'completed' as 'completed' }
-                                    : req
-                            );
-                            setRequirements(updatedRequirements);
-                            if (auth.currentUser) {
-                                await updateDoc(doc(firestore, 'users', auth.currentUser.uid), {
-                                    requirements: updatedRequirements,
-                                });
-                            }
-                            Alert.alert('Success', 'File uploaded to Storage successfully.');
-                            setShowUploadModal(false);
-                            setSelectedRequirement(null);
-                            setUploading(false);
-                            return;
-                        } catch (storageErr) {
-                            console.error('Fallback storage upload failed:', storageErr);
-                            Alert.alert('Upload error', 'Failed to upload file to storage.');
-                            setUploading(false);
-                            return;
-                        }
+                        Alert.alert('File too large', 'This file exceeds the Firestore storage limit (≈700 KB). Requirement uploads must be stored in Firestore; please use the Help Desk or contact an administrator to upload larger files.');
+                        setUploading(false);
+                        return;
                     }
 
                     const adminDocRef = await addDoc(collection(firestore, 'admin_files'), {
@@ -337,9 +345,20 @@ const RequirementsChecklistScreen: React.FC = () => {
 
                     setRequirements(updatedRequirements);
                     if (auth.currentUser) {
-                        await updateDoc(doc(firestore, 'users', auth.currentUser.uid), {
-                            requirements: updatedRequirements,
-                        });
+                        try {
+                            console.log('handleUploadFile: updating user requirements (firestore-only) for', auth.currentUser.uid);
+                            await updateDoc(doc(firestore, 'users', auth.currentUser.uid), {
+                                requirements: updatedRequirements,
+                            });
+                            console.log('handleUploadFile: update requirements succeeded (firestore-only)');
+                        } catch (error: any) {
+                            console.error('handleUploadFile: failed to update requirements after firestore upload:', error);
+                            Alert.alert('Save error', `Failed to update your requirements in Firestore: ${error?.message || String(error)}`);
+                            try {
+                                await setDoc(doc(firestore, 'users', auth.currentUser.uid), { lastRequirementsSyncError: { time: new Date().toISOString(), message: error?.message || String(error) } }, { merge: true });
+                                console.log('handleUploadFile: wrote diagnostic to user doc');
+                            } catch (dbgErr) { console.error('handleUploadFile: debug write failed', dbgErr); }
+                        }
                     }
 
                     Alert.alert('Success', 'File stored in Firestore (small file). Admins can download it.');
@@ -355,29 +374,58 @@ const RequirementsChecklistScreen: React.FC = () => {
                 }
             }
 
-            // Default: Storage upload path (use helper)
-            try {
-                const fileMeta = await uploadToStorage(uri, name, fileAny, selectedRequirement.id);
+            // If storeMode is storage, upload the file to Cloud Storage and record admin_files
+            if (storeMode === 'storage') {
+                try {
+                    // perform storage upload (this also writes admin_files and returns meta)
+                    const fileMeta = await uploadToStorage(uri, name, fileAny, selectedRequirement.id);
 
-                const updatedRequirements = requirements.map(req =>
-                    req.id === selectedRequirement.id
-                        ? { ...req, uploadedFiles: [...req.uploadedFiles, fileMeta], status: 'completed' as 'completed' }
-                        : req
-                );
+                    const uploadedEntry: any = {
+                        name: fileMeta.name,
+                        url: fileMeta.url,
+                        path: fileMeta.path,
+                        contentType: fileMeta.contentType,
+                        uploadedAt: fileMeta.uploadedAt,
+                        adminDocId: fileMeta.adminDocId,
+                        storedInFirestore: false,
+                    };
 
-                setRequirements(updatedRequirements);
-                if (auth.currentUser) {
-                    await updateDoc(doc(firestore, 'users', auth.currentUser.uid), {
-                        requirements: updatedRequirements,
-                    });
+                    const updatedRequirements = requirements.map(req =>
+                        req.id === selectedRequirement.id
+                            ? { ...req, uploadedFiles: [...req.uploadedFiles, uploadedEntry], status: 'completed' as 'completed' }
+                            : req
+                    );
+
+                    setRequirements(updatedRequirements);
+
+                    if (auth.currentUser) {
+                        try {
+                            console.log('handleUploadFile: updating user requirements (storage) for', auth.currentUser.uid);
+                            await updateDoc(doc(firestore, 'users', auth.currentUser.uid), {
+                                requirements: updatedRequirements,
+                            });
+                            console.log('handleUploadFile: update requirements succeeded (storage)');
+                        } catch (error: any) {
+                            console.error('handleUploadFile: failed to update requirements after storage upload:', error);
+                            Alert.alert('Save error', `Failed to update your requirements in Firestore: ${error?.message || String(error)}`);
+                            try {
+                                await setDoc(doc(firestore, 'users', auth.currentUser.uid), { lastRequirementsSyncError: { time: new Date().toISOString(), message: error?.message || String(error) } }, { merge: true });
+                                console.log('handleUploadFile: wrote diagnostic to user doc');
+                            } catch (dbgErr) { console.error('handleUploadFile: debug write failed', dbgErr); }
+                        }
+                    }
+
+                    Alert.alert('Success', 'File uploaded to Storage. Admins can download it.');
+                    setShowUploadModal(false);
+                    setSelectedRequirement(null);
+                    setUploading(false);
+                    return;
+                } catch (storageErr) {
+                    console.error('Storage upload error (handleUploadFile):', storageErr);
+                    Alert.alert('Error', 'Failed to upload file to Storage. Please try again.');
+                    setUploading(false);
+                    return;
                 }
-
-                Alert.alert('Success', 'File uploaded to Storage successfully.');
-                setShowUploadModal(false);
-                setSelectedRequirement(null);
-            } catch (uploadErr) {
-                console.error('Storage upload error:', uploadErr);
-                Alert.alert('Upload error', 'Failed to upload file to storage.');
             }
         } catch (error) {
             console.error('Error uploading file:', error);
@@ -491,12 +539,19 @@ const RequirementsChecklistScreen: React.FC = () => {
                         calculateProgress(updatedRequirements);
 
                         if (auth.currentUser) {
-                            try {
-                                await updateDoc(doc(firestore, 'users', auth.currentUser.uid), { requirements: updatedRequirements });
-                            } catch (e) {
-                                console.error('Failed to update user doc after file removal:', e);
-                            }
-                        }
+                                    try {
+                                        console.log('removeUploadedFile: updating user requirements for', auth.currentUser.uid);
+                                        await updateDoc(doc(firestore, 'users', auth.currentUser.uid), { requirements: updatedRequirements });
+                                        console.log('removeUploadedFile: user requirements update succeeded');
+                                    } catch (e: any) {
+                                        console.error('Failed to update user doc after file removal:', e);
+                                        Alert.alert('Save error', `Failed to update your requirements in Firestore: ${e?.message || String(e)}`);
+                                        try {
+                                            await setDoc(doc(firestore, 'users', auth.currentUser.uid), { lastRequirementsSyncError: { time: new Date().toISOString(), message: e?.message || String(e) } }, { merge: true });
+                                            console.log('removeUploadedFile: wrote diagnostic to user doc');
+                                        } catch (dbgErr) { console.error('removeUploadedFile: debug write failed', dbgErr); }
+                                    }
+                                }
 
                         Alert.alert('Removed', 'File removed successfully.');
                     } catch (err) {
@@ -661,9 +716,38 @@ const RequirementsChecklistScreen: React.FC = () => {
                                         <Text style={styles.uploadSubtext}>Supports PDF and image files</Text>
                                     </View>
 
-                                    <View style={{ marginBottom: 12 }}>
-                                        <Text style={{ fontSize: 12, color: '#666' }}>Files will be stored in Firestore (small files only, ≤700 KB).</Text>
-                                    </View>
+                                                            <View style={{ marginBottom: 12 }}>
+                                                                <Text style={{ fontSize: 12, color: '#666' }}>
+                                                                    Files for requirements are stored in Cloud Storage by default. Small files may be stored in Firestore when you explicitly select Firestore mode (≈700 KB limit).
+                                                                    Admin metadata is saved in `admin_files` so administrators can download files.
+                                                                </Text>
+                                                            </View>
+
+                                                            {/* Storage / Firestore toggle */}
+                                                            <View style={{ marginVertical: 6, flexDirection: 'row', justifyContent: 'center', gap: 8 }}>
+                                                                <TouchableOpacity
+                                                                    onPress={() => setStoreModeAndPersist('storage')}
+                                                                    style={{
+                                                                        paddingVertical: 8,
+                                                                        paddingHorizontal: 14,
+                                                                        borderRadius: 8,
+                                                                        backgroundColor: storeMode === 'storage' ? '#6366F1' : '#f1f1f1'
+                                                                    }}
+                                                                >
+                                                                    <Text style={{ color: storeMode === 'storage' ? '#fff' : '#333', fontWeight: storeMode === 'storage' ? '700' : '600' }}>Storage (recommended)</Text>
+                                                                </TouchableOpacity>
+                                                                <TouchableOpacity
+                                                                    onPress={() => setStoreModeAndPersist('firestore')}
+                                                                    style={{
+                                                                        paddingVertical: 8,
+                                                                        paddingHorizontal: 14,
+                                                                        borderRadius: 8,
+                                                                        backgroundColor: storeMode === 'firestore' ? '#6366F1' : '#f1f1f1'
+                                                                    }}
+                                                                >
+                                                                    <Text style={{ color: storeMode === 'firestore' ? '#fff' : '#333', fontWeight: storeMode === 'firestore' ? '700' : '600' }}>Firestore (≤700 KB)</Text>
+                                                                </TouchableOpacity>
+                                                            </View>
 
                                     <Button
                                         mode="contained"

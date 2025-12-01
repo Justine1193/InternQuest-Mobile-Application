@@ -87,10 +87,27 @@ const NotificationsScreen: React.FC<Props> = ({ navigation }) => {
       } catch (e) {
         // If fetching hidden notifications fails, fall back to showing all notifications
         console.warn('Failed to fetch hiddenNotifications for user:', e);
+        try {
+          if (auth.currentUser) {
+            // Persist a short diagnostic on the user doc so server-side logs can be correlated
+            await setDoc(doc(firestore, 'users', auth.currentUser.uid), { lastHiddenNotificationsFetchError: { time: new Date().toISOString(), message: String(e) } }, { merge: true });
+            console.log('NotificationsScreen: wrote lastHiddenNotificationsFetchError to user doc');
+          }
+        } catch (diagErr) {
+          console.warn('NotificationsScreen: failed to write lastHiddenNotificationsFetchError for user:', diagErr);
+        }
         setNotifications(items);
       }
     } catch (error) {
       console.error('Failed to fetch notifications:', error);
+      try {
+        if (auth.currentUser) {
+          await setDoc(doc(firestore, 'users', auth.currentUser.uid), { lastNotificationsFetchError: { time: new Date().toISOString(), message: String(error) } }, { merge: true });
+          console.log('NotificationsScreen: wrote lastNotificationsFetchError to user doc');
+        }
+      } catch (diagErr) {
+        console.warn('NotificationsScreen: failed to write lastNotificationsFetchError for user:', diagErr);
+      }
     }
   };
 
@@ -168,6 +185,15 @@ const NotificationsScreen: React.FC<Props> = ({ navigation }) => {
         setNotifications((prev) => prev.filter((item) => item.id !== id));
       } catch (err) {
         console.error('Failed to hide notification for user:', err);
+        // Persist a diagnostic marker to the user's doc so we can inspect server-side
+        try {
+          if (auth.currentUser) {
+            await setDoc(doc(firestore, 'users', auth.currentUser.uid), { lastNotificationsHideError: { time: new Date().toISOString(), message: String(err) } }, { merge: true });
+            console.log('NotificationsScreen: wrote lastNotificationsHideError to user doc');
+          }
+        } catch (diagErr) {
+          console.warn('NotificationsScreen: failed to write lastNotificationsHideError for user:', diagErr);
+        }
         // still remove locally so the user experience is responsive
         setNotifications((prev) => prev.filter((item) => item.id !== id));
       }

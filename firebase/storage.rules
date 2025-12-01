@@ -5,6 +5,19 @@ service firebase.storage {
     match /users/{userId}/{allPaths=**} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
+
+    // Allow each user to upload/download requirement files under requirements/{userId}/...
+    match /requirements/{userId}/{allPaths=**} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      // allow write by owner for uploads
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Allow avatars to be uploaded to avatars/{userId} and read by authenticated users
+    match /avatars/{userId}/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
     
     // Company logos - authenticated users can read, only admins can upload
     match /companies/{companyId}/logo/{fileName} {

@@ -8,7 +8,7 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { db, auth } from "../../../firebase";
+import { db, auth, storage } from "../../../firebase";
 import {
   collection,
   getDocs,
@@ -16,12 +16,18 @@ import {
   deleteDoc,
   doc,
 } from "firebase/firestore";
-import { IoSettingsOutline } from "react-icons/io5";
+import {
+  ref as storageRef,
+  uploadBytes,
+  getDownloadURL,
+  deleteObject,
+} from "firebase/storage";
 import {
   IoCloudUploadOutline,
   IoTrashOutline,
   IoDownloadOutline,
   IoEyeOutline,
+  IoSettingsOutline,
   IoCloseOutline,
 } from "react-icons/io5";
 import logo from "../../assets/InternQuest_Logo.png";
@@ -90,17 +96,7 @@ const HelpDeskDashboard = () => {
     }
   };
 
-  // Convert file to base64
-  const fileToBase64 = (file) => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = (error) => reject(error);
-    });
-  };
-
-  // Upload file to Firestore (stored as base64)
+  // Upload file to Firebase Storage and save metadata to Firestore
   const handleUpload = async (category) => {
     const selectedFile =
       category === "tutorial" ? selectedFileTutorial : selectedFileNeeded;
@@ -140,36 +136,45 @@ const HelpDeskDashboard = () => {
         return;
       }
 
-      console.log("Converting file to base64...");
-
-      // Convert file to base64
-      const base64Data = await fileToBase64(selectedFile);
-
-      // Extract base64 string without data URL prefix (for mobile app compatibility)
-      const base64String = base64Data.includes(",")
-        ? base64Data.split(",")[1]
-        : base64Data;
-
       // Get file extension from filename
       const fileExtension = selectedFile.name.split(".").pop() || "";
 
       // Ensure fileType is set (fallback to application/octet-stream if missing)
       const mimeType = selectedFile.type || "application/octet-stream";
 
-      console.log("Saving to Firestore...");
+      console.log("Uploading file to Firebase Storage...");
 
-      // Save file data and metadata to Firestore
+      // Decide storage folder based on category
+      const folder =
+        category === "tutorial" ? "helpDesk/tutorial" : "helpDesk/requirement";
+
+      // Create a unique storage path
+      const timestamp = Date.now();
+      const safeFileName = selectedFile.name.replace(/[^\w.\-]/g, "_");
+      const path = `${folder}/${timestamp}-${safeFileName}`;
+
+      // Upload to Storage
+      const fileRef = storageRef(storage, path);
+      await uploadBytes(fileRef, selectedFile);
+
+      // Get download URL from Storage
+      const downloadUrl = await getDownloadURL(fileRef);
+
+      console.log("Saving metadata to Firestore...");
+
+      // Save file metadata (Storage-based only) to Firestore
       await addDoc(collection(db, "helpDeskFiles"), {
         fileName: selectedFile.name,
-        fileData: base64Data, // Full data URL (for web compatibility)
-        base64String: base64String, // Clean base64 string without prefix (for mobile app)
+        // Storage-based fields
+        downloadUrl,
+        storagePath: path,
         description: fileDescription || "No description",
-        category: category, // Store category: "tutorial" or "fileNeeded"
+        category: category, // "tutorial" or "fileNeeded"
         uploadedAt: new Date().toISOString(),
         uploadedBy: auth.currentUser.uid,
         fileSize: selectedFile.size,
-        fileType: mimeType, // MIME type (e.g., "image/png", "application/pdf")
-        fileExtension: fileExtension.toLowerCase(), // File extension (e.g., "png", "pdf")
+        fileType: mimeType,
+        fileExtension: fileExtension.toLowerCase(),
       });
 
       console.log("File uploaded successfully!");
@@ -195,7 +200,7 @@ const HelpDeskDashboard = () => {
     }
   };
 
-  // Delete file from Firestore
+  // Delete file from Firestore (and Storage if applicable)
   const handleDelete = async (fileId) => {
     if (!window.confirm("Are you sure you want to delete this file?")) {
       return;
@@ -205,7 +210,23 @@ const HelpDeskDashboard = () => {
       setIsLoading(true);
       setError(null);
 
-      // Delete from Firestore
+      // Find file in local state to get its storagePath (if any)
+      const fileToDelete = files.find((f) => f.id === fileId);
+
+      // Attempt to delete from Storage first (if storagePath exists)
+      if (fileToDelete && fileToDelete.storagePath) {
+        try {
+          const fileRef = storageRef(storage, fileToDelete.storagePath);
+          await deleteObject(fileRef);
+        } catch (storageErr) {
+          console.warn(
+            "Failed to delete file from Firebase Storage. Continuing to remove Firestore doc.",
+            storageErr
+          );
+        }
+      }
+
+      // Delete metadata from Firestore
       await deleteDoc(doc(db, "helpDeskFiles", fileId));
 
       // Refresh file list
@@ -261,8 +282,11 @@ const HelpDeskDashboard = () => {
     );
   };
 
-  // Get preview URL from file data
+  // Get preview URL from Storage (preferred) or base64 (fallback)
   const getPreviewUrl = (file) => {
+    if (file.downloadUrl) {
+      return file.downloadUrl;
+    }
     if (file.fileData) {
       return file.fileData;
     }
@@ -272,16 +296,32 @@ const HelpDeskDashboard = () => {
     return null;
   };
 
-  // Download file from base64 data
-  const handleDownload = (fileData, fileName, fileType) => {
+  // Download file (prefers Storage URL, falls back to base64)
+  const handleDownload = (file) => {
     try {
-      // Handle both data URL format (data:image/png;base64,...) and plain base64 string
-      let base64String = fileData;
-      if (fileData.includes(",")) {
-        base64String = fileData.split(",")[1];
+      // If Storage URL exists, use it directly
+      if (file.downloadUrl) {
+        const link = document.createElement("a");
+        link.href = file.downloadUrl;
+        link.download = file.fileName || "download";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        return;
       }
 
-      // Convert base64 to blob
+      // Fallback: use base64 data if available
+      const fileData = file.fileData || file.base64String;
+      if (!fileData) {
+        throw new Error("No file data available to download.");
+      }
+
+      // Handle both data URL format and plain base64 string
+      let base64String = fileData;
+      if (base64String.includes(",")) {
+        base64String = base64String.split(",")[1];
+      }
+
       const byteCharacters = atob(base64String);
       const byteNumbers = new Array(byteCharacters.length);
       for (let i = 0; i < byteCharacters.length; i++) {
@@ -289,14 +329,13 @@ const HelpDeskDashboard = () => {
       }
       const byteArray = new Uint8Array(byteNumbers);
       const blob = new Blob([byteArray], {
-        type: fileType || "application/octet-stream",
+        type: file.fileType || "application/octet-stream",
       });
 
-      // Create download link
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = fileName;
+      link.download = file.fileName || "download";
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -430,7 +469,7 @@ const HelpDeskDashboard = () => {
 
             {/* Requirement Files Upload Section */}
             <div className="upload-section">
-              <h2>📄 Upload Requirement Files</h2>
+              <h2>Upload Requirement Files</h2>
               <div className="upload-form">
                 <div className="form-group">
                   <label htmlFor="file-input-needed">
@@ -503,7 +542,7 @@ const HelpDeskDashboard = () => {
                 {files.filter((f) => f.category === "tutorial").length > 0 && (
                   <div className="files-category-section">
                     <h3 className="category-title">
-                      📊 OJT How to Start (
+                      OJT How to Start (
                       {files.filter((f) => f.category === "tutorial").length})
                     </h3>
                     <div className="files-grid">
@@ -546,13 +585,7 @@ const HelpDeskDashboard = () => {
                                 </button>
                               )}
                               <button
-                                onClick={() =>
-                                  handleDownload(
-                                    file.fileData,
-                                    file.fileName,
-                                    file.fileType
-                                  )
-                                }
+                                onClick={() => handleDownload(file)}
                                 className="download-btn"
                                 style={{ border: "none", cursor: "pointer" }}
                               >
@@ -570,7 +603,7 @@ const HelpDeskDashboard = () => {
                   0 && (
                   <div className="files-category-section">
                     <h3 className="category-title">
-                      📄 Requirement Files (
+                      Requirement Files (
                       {files.filter((f) => f.category === "fileNeeded").length})
                     </h3>
                     <div className="files-grid">
@@ -613,13 +646,7 @@ const HelpDeskDashboard = () => {
                                 </button>
                               )}
                               <button
-                                onClick={() =>
-                                  handleDownload(
-                                    file.fileData,
-                                    file.fileName,
-                                    file.fileType
-                                  )
-                                }
+                                onClick={() => handleDownload(file)}
                                 className="download-btn"
                                 style={{ border: "none", cursor: "pointer" }}
                               >
@@ -640,7 +667,7 @@ const HelpDeskDashboard = () => {
                 ).length > 0 && (
                   <div className="files-category-section">
                     <h3 className="category-title">
-                      📁 Other Files (
+                      Other Files (
                       {
                         files.filter(
                           (f) =>
@@ -689,21 +716,15 @@ const HelpDeskDashboard = () => {
                                   style={{ border: "none", cursor: "pointer" }}
                                   title="Preview file"
                                 >
-                                  <IoEyeOutline /> Preview
+                                  Preview
                                 </button>
                               )}
                               <button
-                                onClick={() =>
-                                  handleDownload(
-                                    file.fileData,
-                                    file.fileName,
-                                    file.fileType
-                                  )
-                                }
+                                onClick={() => handleDownload(file)}
                                 className="download-btn"
                                 style={{ border: "none", cursor: "pointer" }}
                               >
-                                <IoDownloadOutline /> Download
+                                Download
                               </button>
                             </div>
                           </div>
@@ -757,13 +778,7 @@ const HelpDeskDashboard = () => {
             </div>
             <div className="preview-modal-footer">
               <button
-                onClick={() =>
-                  handleDownload(
-                    previewFile.fileData,
-                    previewFile.fileName,
-                    previewFile.fileType
-                  )
-                }
+                onClick={() => handleDownload(previewFile)}
                 className="download-btn"
               >
                 <IoDownloadOutline /> Download

@@ -1,56 +1,8 @@
-/* Reset default styles */
-@import url("https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap");
-
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-  font-family: "Roboto", sans-serif;
-  color: #333;
-}
-
-html,
-body,
-#root {
-  height: 100%;
-  width: 100%;
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-  background: #f7f9fb;
-}
-
-.dashboard-container {
-  min-height: 100vh;
-  background: #f7f9fb;
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-}
-
-.dashboard-content {
-  flex: 1;
-  padding: 2rem 0;
-  width: 100%;
-}
-
-.internships-section {
-  background: #fff;
-  border-radius: 12px;
-  padding: 2rem 0;
-  margin-top: 2rem;
-  width: 100%;
-  box-shadow: none;
-  border: none;
-}
+@import "../dashboardTheme.css";
 
 .table-container {
   width: 100%;
-  background: #fff;
-  border-radius: 12px;
   padding: 2rem 2rem 1rem 2rem;
-  box-shadow: none;
-  border: none;
 }
 
 .table-container h2 {

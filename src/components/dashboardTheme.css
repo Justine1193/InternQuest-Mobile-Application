@@ -1,0 +1,190 @@
+:root {
+  --iq-primary: #1976d2;
+  --iq-primary-soft: #e3f2fd;
+  --iq-accent: #ffb300;
+  --iq-bg: #f5f7fb;
+  --iq-surface: #ffffff;
+  --iq-border-subtle: #e5eaf2;
+  --iq-text-main: #1f2933;
+  --iq-text-muted: #6b7280;
+  --iq-radius-lg: 16px;
+  --iq-radius-md: 10px;
+  --iq-shadow-soft: 0 8px 24px rgba(15, 23, 42, 0.06);
+}
+
+/* Shared dashboard layout */
+.dashboard-container {
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  background: radial-gradient(circle at top left, #f0f5ff 0, var(--iq-bg) 40%, #eef2ff 100%);
+  color: var(--iq-text-main);
+}
+
+.dashboard-content {
+  flex: 1;
+  width: 100%;
+  padding: 2rem 0;
+}
+
+/* Shared top navigation styling (Student + HelpDesk) */
+.top-nav {
+  position: sticky;
+  top: 0;
+  z-index: 900;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1.75rem;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04);
+}
+
+.top-nav .nav-links .nav-link {
+  position: relative;
+  font-weight: 500;
+  color: var(--iq-text-muted);
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  transition: color 0.18s ease, background-color 0.18s ease;
+}
+
+.top-nav .nav-links .nav-link:hover {
+  color: var(--iq-primary);
+  background-color: rgba(25, 118, 210, 0.06);
+}
+
+.top-nav .nav-links .nav-link.active {
+  color: var(--iq-primary);
+  background: rgba(25, 118, 210, 0.12);
+}
+
+/* Shared card look for dashboard sections */
+.overview-section,
+.internships-section,
+.helpdesk-section,
+.student-table-container,
+.table-container {
+  background: var(--iq-surface);
+  border-radius: var(--iq-radius-lg);
+  box-shadow: var(--iq-shadow-soft);
+}
+
+.overview-section h1,
+.helpdesk-section h1,
+.table-container h2,
+.student-table-container h2 {
+  color: var(--iq-text-main);
+}
+
+/* Shared pagination style */
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 1.5rem 0 1rem 0;
+}
+
+.pagination-arrow,
+.pagination-number {
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
+  border: 1px solid var(--iq-border-subtle);
+  background: #ffffff;
+  cursor: pointer;
+  min-width: 40px;
+  font-weight: 500;
+  color: var(--iq-primary);
+  transition: all 0.18s ease;
+}
+
+.pagination-number.active {
+  background: var(--iq-primary);
+  color: #ffffff;
+  border-color: var(--iq-primary);
+  box-shadow: 0 6px 18px rgba(25, 118, 210, 0.3);
+}
+
+.pagination-number:hover:not(.active),
+.pagination-arrow:hover:not(:disabled) {
+  background: var(--iq-primary-soft);
+}
+
+.pagination-arrow:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* Shared table action buttons */
+.table-actions {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.table-action-btn {
+  min-width: 120px;
+  padding: 8px 20px;
+  font-size: 0.95rem;
+  border-radius: var(--iq-radius-md);
+  font-weight: 600;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.18s ease, color 0.18s ease,
+    box-shadow 0.18s ease, border-color 0.18s ease, transform 0.06s ease;
+}
+
+.table-action-btn:active {
+  transform: translateY(1px);
+}
+
+.table-action-btn.add-entry {
+  background: var(--iq-primary);
+  color: #ffffff;
+  box-shadow: 0 10px 24px rgba(25, 118, 210, 0.35);
+}
+
+.table-action-btn.add-entry:hover {
+  background: #1565c0;
+}
+
+.table-action-btn.delete {
+  background: #f44336;
+  color: #ffffff;
+}
+
+.table-action-btn.delete:disabled {
+  background: #ffcdd2;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.table-action-btn.cancel-action {
+  background: #ffffff;
+  color: var(--iq-text-main);
+  border: 1.5px solid rgba(148, 163, 184, 0.9);
+}
+
+.table-action-btn.cancel-action:hover {
+  background: #f9fafb;
+  color: var(--iq-primary);
+  border-color: var(--iq-primary);
+}
+
+@media (max-width: 900px) {
+  .dashboard-content {
+    padding: 1.25rem 0.5rem 1.5rem 0.5rem;
+  }
+}
+
+

@@ -21,6 +21,8 @@ import {
   IoCloudUploadOutline,
   IoTrashOutline,
   IoDownloadOutline,
+  IoEyeOutline,
+  IoCloseOutline,
 } from "react-icons/io5";
 import logo from "../../assets/InternQuest_Logo.png";
 import { signOut } from "firebase/auth";
@@ -36,10 +38,12 @@ const HelpDeskDashboard = () => {
   const [uploading, setUploading] = useState(false);
   const [uploadingTutorial, setUploadingTutorial] = useState(false);
   const [uploadingFileNeeded, setUploadingFileNeeded] = useState(false);
+  const [previewFile, setPreviewFile] = useState(null);
+  const [showPreview, setShowPreview] = useState(false);
   // Tutorial upload state
   const [selectedFileTutorial, setSelectedFileTutorial] = useState(null);
   const [fileDescriptionTutorial, setFileDescriptionTutorial] = useState("");
-  // File needed upload state
+  // Requirement files upload state
   const [selectedFileNeeded, setSelectedFileNeeded] = useState(null);
   const [fileDescriptionNeeded, setFileDescriptionNeeded] = useState("");
 
@@ -77,7 +81,7 @@ const HelpDeskDashboard = () => {
     }
   };
 
-  // Handle file selection for file needed
+  // Handle file selection for requirement files
   const handleFileSelectNeeded = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -110,7 +114,7 @@ const HelpDeskDashboard = () => {
       return;
     }
 
-    // Check file size only for "fileNeeded" category (Flowchart has no limit)
+    // Check file size only for "fileNeeded" category (OJT How to Start has no limit)
     if (category === "fileNeeded") {
       const maxSize = 900 * 1024; // 900KB
       if (selectedFile.size > maxSize) {
@@ -141,18 +145,31 @@ const HelpDeskDashboard = () => {
       // Convert file to base64
       const base64Data = await fileToBase64(selectedFile);
 
+      // Extract base64 string without data URL prefix (for mobile app compatibility)
+      const base64String = base64Data.includes(",")
+        ? base64Data.split(",")[1]
+        : base64Data;
+
+      // Get file extension from filename
+      const fileExtension = selectedFile.name.split(".").pop() || "";
+
+      // Ensure fileType is set (fallback to application/octet-stream if missing)
+      const mimeType = selectedFile.type || "application/octet-stream";
+
       console.log("Saving to Firestore...");
 
       // Save file data and metadata to Firestore
       await addDoc(collection(db, "helpDeskFiles"), {
         fileName: selectedFile.name,
-        fileData: base64Data, // Store file as base64
+        fileData: base64Data, // Full data URL (for web compatibility)
+        base64String: base64String, // Clean base64 string without prefix (for mobile app)
         description: fileDescription || "No description",
         category: category, // Store category: "tutorial" or "fileNeeded"
         uploadedAt: new Date().toISOString(),
         uploadedBy: auth.currentUser.uid,
         fileSize: selectedFile.size,
-        fileType: selectedFile.type,
+        fileType: mimeType, // MIME type (e.g., "image/png", "application/pdf")
+        fileExtension: fileExtension.toLowerCase(), // File extension (e.g., "png", "pdf")
       });
 
       console.log("File uploaded successfully!");
@@ -222,17 +239,58 @@ const HelpDeskDashboard = () => {
     });
   };
 
+  // Preview file
+  const handlePreview = (file) => {
+    setPreviewFile(file);
+    setShowPreview(true);
+  };
+
+  // Close preview modal
+  const handleClosePreview = () => {
+    setShowPreview(false);
+    setPreviewFile(null);
+  };
+
+  // Check if file type is previewable (images and PDFs)
+  const isPreviewable = (fileType) => {
+    if (!fileType) return false;
+    return (
+      fileType.startsWith("image/") ||
+      fileType === "application/pdf" ||
+      fileType === "application/x-pdf"
+    );
+  };
+
+  // Get preview URL from file data
+  const getPreviewUrl = (file) => {
+    if (file.fileData) {
+      return file.fileData;
+    }
+    if (file.base64String && file.fileType) {
+      return `data:${file.fileType};base64,${file.base64String}`;
+    }
+    return null;
+  };
+
   // Download file from base64 data
   const handleDownload = (fileData, fileName, fileType) => {
     try {
+      // Handle both data URL format (data:image/png;base64,...) and plain base64 string
+      let base64String = fileData;
+      if (fileData.includes(",")) {
+        base64String = fileData.split(",")[1];
+      }
+
       // Convert base64 to blob
-      const byteCharacters = atob(fileData.split(",")[1]);
+      const byteCharacters = atob(base64String);
       const byteNumbers = new Array(byteCharacters.length);
       for (let i = 0; i < byteCharacters.length; i++) {
         byteNumbers[i] = byteCharacters.charCodeAt(i);
       }
       const byteArray = new Uint8Array(byteNumbers);
-      const blob = new Blob([byteArray], { type: fileType });
+      const blob = new Blob([byteArray], {
+        type: fileType || "application/octet-stream",
+      });
 
       // Create download link
       const url = window.URL.createObjectURL(blob);
@@ -324,18 +382,17 @@ const HelpDeskDashboard = () => {
 
           {/* Upload Sections */}
           <div className="upload-sections-container">
-            {/* OJT Flowchart Upload Section */}
+            {/* OJT How to Start Upload Section */}
             <div className="upload-section">
-              <h2>OJT How to Start Flowchart</h2>
+              <h2>OJT How to Start</h2>
               <p className="section-note">
-                Upload OJT flowcharts. You can upload multiple flowcharts.
+                Upload OJT files. You can upload multiple files.
               </p>
 
               <div className="upload-form">
                 <div className="form-group">
                   <label htmlFor="file-input-tutorial">
-                    Select Flowchart File{" "}
-                    <span style={{ color: "red" }}>*</span>
+                    Select File <span style={{ color: "red" }}>*</span>
                   </label>
                   <input
                     id="file-input-tutorial"
@@ -364,16 +421,16 @@ const HelpDeskDashboard = () => {
                     </>
                   ) : (
                     <>
-                      <IoCloudUploadOutline /> Upload Flowchart
+                      <IoCloudUploadOutline /> Upload File
                     </>
                   )}
                 </button>
               </div>
             </div>
 
-            {/* File Needed Upload Section */}
+            {/* Requirement Files Upload Section */}
             <div className="upload-section">
-              <h2>📄 Upload File Needed</h2>
+              <h2>📄 Upload Requirement Files</h2>
               <div className="upload-form">
                 <div className="form-group">
                   <label htmlFor="file-input-needed">
@@ -442,11 +499,11 @@ const HelpDeskDashboard = () => {
               </div>
             ) : (
               <>
-                {/* OJT Flowchart */}
+                {/* OJT How to Start */}
                 {files.filter((f) => f.category === "tutorial").length > 0 && (
                   <div className="files-category-section">
                     <h3 className="category-title">
-                      📊 OJT How to Start Flowchart (
+                      📊 OJT How to Start (
                       {files.filter((f) => f.category === "tutorial").length})
                     </h3>
                     <div className="files-grid">
@@ -466,7 +523,7 @@ const HelpDeskDashboard = () => {
                               </button>
                             </div>
                             <div className="file-category-badge tutorial-badge">
-                              Flowchart
+                              OJT Guide
                             </div>
                             <p className="file-description">
                               {file.description}
@@ -477,31 +534,43 @@ const HelpDeskDashboard = () => {
                                 Uploaded: {formatDate(file.uploadedAt)}
                               </span>
                             </div>
-                            <button
-                              onClick={() =>
-                                handleDownload(
-                                  file.fileData,
-                                  file.fileName,
-                                  file.fileType
-                                )
-                              }
-                              className="download-btn"
-                              style={{ border: "none", cursor: "pointer" }}
-                            >
-                              <IoDownloadOutline /> Download
-                            </button>
+                            <div className="file-actions">
+                              {isPreviewable(file.fileType) && (
+                                <button
+                                  onClick={() => handlePreview(file)}
+                                  className="preview-btn"
+                                  style={{ border: "none", cursor: "pointer" }}
+                                  title="Preview file"
+                                >
+                                  <IoEyeOutline /> Preview
+                                </button>
+                              )}
+                              <button
+                                onClick={() =>
+                                  handleDownload(
+                                    file.fileData,
+                                    file.fileName,
+                                    file.fileType
+                                  )
+                                }
+                                className="download-btn"
+                                style={{ border: "none", cursor: "pointer" }}
+                              >
+                                <IoDownloadOutline /> Download
+                              </button>
+                            </div>
                           </div>
                         ))}
                     </div>
                   </div>
                 )}
 
-                {/* File Needed Files */}
+                {/* Requirement Files */}
                 {files.filter((f) => f.category === "fileNeeded").length >
                   0 && (
                   <div className="files-category-section">
                     <h3 className="category-title">
-                      📄 Files Needed (
+                      📄 Requirement Files (
                       {files.filter((f) => f.category === "fileNeeded").length})
                     </h3>
                     <div className="files-grid">
@@ -521,7 +590,7 @@ const HelpDeskDashboard = () => {
                               </button>
                             </div>
                             <div className="file-category-badge needed-badge">
-                              File Needed
+                              Requirement Files
                             </div>
                             <p className="file-description">
                               {file.description}
@@ -532,19 +601,31 @@ const HelpDeskDashboard = () => {
                                 Uploaded: {formatDate(file.uploadedAt)}
                               </span>
                             </div>
-                            <button
-                              onClick={() =>
-                                handleDownload(
-                                  file.fileData,
-                                  file.fileName,
-                                  file.fileType
-                                )
-                              }
-                              className="download-btn"
-                              style={{ border: "none", cursor: "pointer" }}
-                            >
-                              <IoDownloadOutline /> Download
-                            </button>
+                            <div className="file-actions">
+                              {isPreviewable(file.fileType) && (
+                                <button
+                                  onClick={() => handlePreview(file)}
+                                  className="preview-btn"
+                                  style={{ border: "none", cursor: "pointer" }}
+                                  title="Preview file"
+                                >
+                                  <IoEyeOutline /> Preview
+                                </button>
+                              )}
+                              <button
+                                onClick={() =>
+                                  handleDownload(
+                                    file.fileData,
+                                    file.fileName,
+                                    file.fileType
+                                  )
+                                }
+                                className="download-btn"
+                                style={{ border: "none", cursor: "pointer" }}
+                              >
+                                <IoDownloadOutline /> Download
+                              </button>
+                            </div>
                           </div>
                         ))}
                     </div>
@@ -600,19 +681,31 @@ const HelpDeskDashboard = () => {
                                 Uploaded: {formatDate(file.uploadedAt)}
                               </span>
                             </div>
-                            <button
-                              onClick={() =>
-                                handleDownload(
-                                  file.fileData,
-                                  file.fileName,
-                                  file.fileType
-                                )
-                              }
-                              className="download-btn"
-                              style={{ border: "none", cursor: "pointer" }}
-                            >
-                              <IoDownloadOutline /> Download
-                            </button>
+                            <div className="file-actions">
+                              {isPreviewable(file.fileType) && (
+                                <button
+                                  onClick={() => handlePreview(file)}
+                                  className="preview-btn"
+                                  style={{ border: "none", cursor: "pointer" }}
+                                  title="Preview file"
+                                >
+                                  <IoEyeOutline /> Preview
+                                </button>
+                              )}
+                              <button
+                                onClick={() =>
+                                  handleDownload(
+                                    file.fileData,
+                                    file.fileName,
+                                    file.fileType
+                                  )
+                                }
+                                className="download-btn"
+                                style={{ border: "none", cursor: "pointer" }}
+                              >
+                                <IoDownloadOutline /> Download
+                              </button>
+                            </div>
                           </div>
                         ))}
                     </div>
@@ -623,6 +716,62 @@ const HelpDeskDashboard = () => {
           </div>
         </div>
       </div>
+
+      {/* Preview Modal */}
+      {showPreview && previewFile && (
+        <div className="preview-modal-overlay" onClick={handleClosePreview}>
+          <div
+            className="preview-modal-content"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="preview-modal-header">
+              <h2>{previewFile.fileName}</h2>
+              <button
+                onClick={handleClosePreview}
+                className="preview-close-btn"
+                aria-label="Close preview"
+              >
+                <IoCloseOutline />
+              </button>
+            </div>
+            <div className="preview-modal-body">
+              {previewFile.fileType?.startsWith("image/") ? (
+                <img
+                  src={getPreviewUrl(previewFile)}
+                  alt={previewFile.fileName}
+                  className="preview-image"
+                />
+              ) : previewFile.fileType === "application/pdf" ||
+                previewFile.fileType === "application/x-pdf" ? (
+                <iframe
+                  src={getPreviewUrl(previewFile)}
+                  title={previewFile.fileName}
+                  className="preview-pdf"
+                />
+              ) : (
+                <div className="preview-not-supported">
+                  <p>Preview is not available for this file type.</p>
+                  <p>Please download the file to view it.</p>
+                </div>
+              )}
+            </div>
+            <div className="preview-modal-footer">
+              <button
+                onClick={() =>
+                  handleDownload(
+                    previewFile.fileData,
+                    previewFile.fileName,
+                    previewFile.fileType
+                  )
+                }
+                className="download-btn"
+              >
+                <IoDownloadOutline /> Download
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

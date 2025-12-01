@@ -11,7 +11,14 @@
     "esModuleInterop": true
   },
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "dist",
+    "build",
+    "**/dist/**",
+    "**/build/**",
+    "tools/functions/getAdminFile",
+    "tools/functions/getAdminFile/**"
   ],
+  "noEmit": true,
   "extends": "expo/tsconfig.base"
 }

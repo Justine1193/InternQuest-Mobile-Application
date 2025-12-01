@@ -16,7 +16,7 @@ import { RouteProp, useNavigation } from '@react-navigation/native';
 import { RootStackParamList } from '../App';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useSavedInternships } from '../context/SavedInternshipsContext';
-import MapView, { Marker } from 'react-native-maps';
+import { Platform } from 'react-native';
 import { doc, setDoc, getDoc, serverTimestamp, collection, query, where, getDocs } from 'firebase/firestore';
 import { auth, firestore } from '../firebase/config';
 
@@ -398,73 +398,46 @@ const InternshipDetailsScreen: React.FC<Props> = ({ route }) => {
             onPress={openLocationInMaps}
             activeOpacity={0.9}
           >
-            {coordinates ? (
-              <MapView
-                style={styles.mapView}
-                initialRegion={{
-                  latitude: coordinates.latitude,
-                  longitude: coordinates.longitude,
-                  latitudeDelta: 0.01,
-                  longitudeDelta: 0.01,
-                }}
-                scrollEnabled={false}
-                zoomEnabled={false}
-                pitchEnabled={false}
-                rotateEnabled={false}
-              >
-                <Marker
-                  coordinate={{
-                    latitude: coordinates.latitude,
-                    longitude: coordinates.longitude,
-                  }}
-                  title={post.company}
-                  description={post.location}
-                />
-              </MapView>
-            ) : (
-              <MapView
-                style={styles.mapView}
-                initialRegion={{
-                  latitude: 14.5995, // Default to Manila
-                  longitude: 120.9842,
-                  latitudeDelta: 0.01,
-                  longitudeDelta: 0.01,
-                }}
-                scrollEnabled={false}
-                zoomEnabled={false}
-                pitchEnabled={false}
-                rotateEnabled={false}
-              >
-                <Marker
-                  coordinate={{
-                    latitude: 14.5995,
-                    longitude: 120.9842,
-                  }}
-                  title="Default Location"
-                  description="This is a fallback marker."
-                />
-              </MapView>
-            )}
-          </TouchableOpacity>
-        </View>
+            {/* Avoid importing react-native-maps on web (native-only). Use require at runtime. */}
+            {Platform.OS !== 'web' ? (
+              // Use dynamic require so bundler will not include native-only modules for web
+              (() => {
+                // eslint-disable-next-line @typescript-eslint/no-var-requires
+                const rnMaps: any = require('react-native-maps');
+                const MapViewComp = rnMaps.default || rnMaps;
+                const MarkerComp = rnMaps.Marker;
 
-        {/* Bottom Buttons */}
-        <View style={styles.bottomButtons}>
-          <TouchableOpacity
-            style={[
-              styles.hiredButton,
-              isHired && styles.disabledButton,
-              isLoading && styles.loadingButton
-            ]}
-            onPress={handleGotHiredPress}
-            disabled={isHired || isLoading}
-          >
-            {isLoading ? (
-              <ActivityIndicator color="#fff" />
+                const region = coordinates
+                  ? {
+                      latitude: coordinates.latitude,
+                      longitude: coordinates.longitude,
+                      latitudeDelta: 0.01,
+                      longitudeDelta: 0.01,
+                    }
+                  : {
+                      latitude: 14.5995,
+                      longitude: 120.9842,
+                      latitudeDelta: 0.01,
+                      longitudeDelta: 0.01,
+                    };
+
+                return (
+                  <MapViewComp
+                    style={styles.mapView}
+                    initialRegion={region}
+                    scrollEnabled={false}
+                    zoomEnabled={false}
+                    pitchEnabled={false}
+                    rotateEnabled={false}
+                  >
+                    <MarkerComp coordinate={{ latitude: region.latitude, longitude: region.longitude }} title={post.company} description={post.location} />
+                  </MapViewComp>
+                );
+              })()
             ) : (
-              <Text style={styles.hiredButtonText}>
-                {isHired ? 'Already Hired' : 'Got Hired'}
-              </Text>
+              <View style={[styles.mapView, styles.mapFallback]}>
+                <Text style={styles.mapFallbackText}>Map preview unavailable on web</Text>
+              </View>
             )}
           </TouchableOpacity>
           <TouchableOpacity
@@ -593,6 +566,16 @@ const styles = StyleSheet.create({
     height: 200,
     width: '100%',
     borderRadius: 12,
+  },
+  mapFallback: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#eef2f6',
+    borderRadius: 12,
+  },
+  mapFallbackText: {
+    color: '#6b7280',
+    fontSize: 13,
   },
   bottomButtons: {
     flexDirection: 'row',

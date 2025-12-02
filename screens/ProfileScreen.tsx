@@ -16,7 +16,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import BottomNavbar from '../components/BottomNav';
 import { auth, firestore } from '../firebase/config';
-import { doc, setDoc, collection, getDoc, getDocs } from "firebase/firestore";
+import { doc, setDoc, collection, getDoc, getDocs, deleteDoc } from "firebase/firestore";
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 // removed `react-native-progress` dependency and use a simple native progress bar instead
@@ -61,6 +61,74 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
 
   const [avatarUploading, setAvatarUploading] = useState(false);
   const FIRESTORE_MAX_BYTES = 700 * 1024; // only store small base64 previews in Firestore
+
+  const handleClearAppliedCompanyProfile = async () => {
+    if (!auth.currentUser) return;
+    Alert.alert(
+      'Remove Application',
+      'Are you sure you want to remove your application? This will clear the applied company from your profile.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Remove', style: 'destructive', onPress: async () => {
+          try {
+            const uid = auth.currentUser!.uid;
+            // Read latest appliedCompanyId from user doc
+            let appliedId: string | null = null;
+            try {
+              const userSnap = await getDoc(doc(firestore, 'users', uid));
+              if (userSnap.exists()) appliedId = (userSnap.data() as any).appliedCompanyId || null;
+            } catch (readErr) {
+              console.warn('ProfileScreen: failed to read user doc before deleting application', readErr);
+            }
+
+            if (appliedId) {
+              try {
+                await deleteDoc(doc(firestore, 'applications', `${uid}_${appliedId}`));
+              } catch (delErr) {
+                console.warn('ProfileScreen: failed to delete application doc', delErr);
+              }
+            }
+
+            await setDoc(doc(firestore, 'users', uid), {
+              appliedCompanyId: null,
+              appliedCompanyName: null,
+              applicationRemovedAt: new Date().toISOString()
+            }, { merge: true });
+            setUserData(prev => ({ ...prev, appliedCompanyId: null, appliedCompanyName: null }));
+          } catch (err: any) {
+            Alert.alert('Error', 'Could not remove applied company. Please try again.');
+            if (auth.currentUser) {
+              await setDoc(doc(firestore, 'users', auth.currentUser.uid), { lastProfileError: { time: new Date().toISOString(), message: String(err) } }, { merge: true });
+            }
+          }
+        }}
+      ]
+    );
+  };
+
+  const handleCompanyPress = () => {
+    const appliedId = (userData as any).appliedCompanyId;
+    const appliedName = (userData as any).appliedCompanyName;
+    if (!appliedName && !(userData as any).company) return;
+
+    // If there's an applied company, show options
+    if (appliedName) {
+      const buttons: any[] = [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Remove Application', style: 'destructive', onPress: handleClearAppliedCompanyProfile }
+      ];
+      if (appliedId) {
+        buttons.splice(1, 0, { text: 'View Company', onPress: () => navigation.navigate('CompanyProfile', { companyId: appliedId }) });
+      }
+      Alert.alert(appliedName, 'Choose an action', buttons as any);
+      return;
+    }
+
+    // If hired company only (no appliedId), just inform
+    if ((userData as any).company) {
+      Alert.alert('Company', `You are currenty associated with ${ (userData as any).company }`);
+    }
+  };
 
   const handleSaveProfile = async () => {
     if (!auth.currentUser) return;
@@ -147,54 +215,29 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
         const localUri = result.assets[0].uri;
         const userDocRef = doc(firestore, "users", auth.currentUser.uid);
 
-        // helper: read base64 and estimated bytes
-        const readBase64 = async (): Promise<{ base64: string | null; estimatedBytes: number }> => {
-          try {
-            const base64 = await FileSystem.readAsStringAsync(localUri, { encoding: FileSystem.EncodingType.Base64 });
-            const estimatedBytes = Math.ceil((base64.length * 3) / 4);
-            return { base64, estimatedBytes };
-          } catch (e) {
-            return { base64: null, estimatedBytes: 0 };
-          }
-        };
-
+        // Always upload to Storage under avatars/{userId}/profile.jpg (unique folder per user)
         let storageUrl: string | null = null;
-        let base64ToSave: string | null = null;
-
-        // Try upload to Storage (always)
         try {
           const response = await fetch(localUri);
           const blob = await response.blob();
           const storage = getStorage();
-          const fileName = `avatars/${auth.currentUser.uid}`;
+          const fileName = `avatars/${auth.currentUser.uid}/profile.jpg`;
           const avatarRef = storageRef(storage, fileName);
           await uploadBytes(avatarRef, blob);
           storageUrl = await getDownloadURL(avatarRef);
         } catch (err: any) {
-          // write diagnostic but continue to attempt base64 preview
           await setDoc(userDocRef, { lastAvatarUploadError: { time: new Date().toISOString(), message: String(err) } }, { merge: true });
         }
 
-        // Attempt to read base64 preview and save if small enough
-        const r = await readBase64();
-        if (!r.base64) {
-          await setDoc(userDocRef, { lastAvatarReadBase64Error: { time: new Date().toISOString() } }, { merge: true });
-        } else if (r.estimatedBytes > FIRESTORE_MAX_BYTES) {
-          // Skip saving preview if too large, but keep storageUrl if present
-          await setDoc(userDocRef, { lastAvatarPreviewSkippedDueToSize: true, lastAvatarUploadAt: new Date().toISOString() }, { merge: true });
+        // Persist only the Storage URL to user doc
+        if (storageUrl) {
+          await setDoc(userDocRef, { avatar: storageUrl, updatedAt: new Date().toISOString() }, { merge: true });
+          setUserData({ ...userData, avatar: storageUrl });
+          setAvatarChanged(true);
+          Alert.alert('Success', 'Profile picture updated!');
         } else {
-          base64ToSave = r.base64;
+          Alert.alert('Error', 'Failed to upload profile picture.');
         }
-
-        // Persist results to user doc
-        const updatePayload: any = { updatedAt: new Date().toISOString() };
-        if (storageUrl) updatePayload.avatar = storageUrl;
-        if (base64ToSave) updatePayload.avatarBase64 = base64ToSave;
-        await setDoc(userDocRef, updatePayload, { merge: true });
-
-        setUserData({ ...userData, ...(storageUrl ? { avatar: storageUrl } : {}), ...(base64ToSave ? { avatarBase64: base64ToSave } : {}) });
-        setAvatarChanged(true);
-        Alert.alert('Success', 'Profile picture updated!');
       } catch (error) {
         Alert.alert('Error', 'Failed to upload profile picture.');
         console.error('ProfileScreen avatar upload error:', error);
@@ -372,8 +415,8 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
     );
   }
 
-  // Prefer inline base64 preview when available for instant rendering
-  const avatarUri = userData && (userData.avatarBase64 ? `data:image/jpeg;base64,${userData.avatarBase64}` : (userData.avatar || undefined));
+  // Always use the Storage URL for avatar
+  const avatarUri = userData && userData.avatar ? userData.avatar : undefined;
 
   return (
     <View style={styles.container}>
@@ -414,6 +457,9 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
             {userData.status === 'hired' && userData.company && (
               <Text style={styles.subtext}>Company: {userData.company}</Text>
             )}
+            {userData.appliedCompanyName && !userData.company && (
+              <Text style={styles.subtext}>Applied: {userData.appliedCompanyName}</Text>
+            )}
           </View>
         </View>
 
@@ -427,7 +473,16 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
           <View style={styles.statCard}>
             <Ionicons name="business-outline" size={24} color="#6366F1" style={{ marginBottom: 4 }} />
             <Text style={styles.statLabel}>Company</Text>
-            <Text style={styles.statValue}>{userData.status === 'hired' ? userData.company || 'Not Set' : 'Not Hired'}</Text>
+              <TouchableOpacity onPress={handleCompanyPress} accessibilityRole="button">
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Text style={styles.statValue}>{userData.company || userData.appliedCompanyName || 'Not Applied'}</Text>
+                  {userData.appliedCompanyName ? (
+                    <TouchableOpacity onPress={handleClearAppliedCompanyProfile} style={styles.removeButton} accessibilityLabel="Remove applied company">
+                      <Ionicons name="trash" size={18} color="#ff5252" />
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+              </TouchableOpacity>
           </View>
         </View>
 
@@ -730,6 +785,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginVertical: 25,
   },
+  removeButton: { marginLeft: 8, padding: 6, borderRadius: 6, backgroundColor: 'transparent' },
   avatarContainer: {
     alignSelf: 'center',
     marginBottom: 12,

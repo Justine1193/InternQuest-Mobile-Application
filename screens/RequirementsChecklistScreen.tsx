@@ -259,7 +259,12 @@ const RequirementsChecklistScreen: React.FC = () => {
     const uploadToStorage = async (uri: string, name: string, fileAny: any, requirementId: string) => {
         try {
             const blob = await uriToBlob(uri);
-            const remotePath = `requirements/${auth.currentUser?.uid}/${name}`;
+            // Find the requirement title and create a folder from it
+            const requirement = requirements.find(r => r.id === requirementId);
+            const folderName = requirement?.title
+                ? requirement.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+                : 'unknown';
+            const remotePath = `requirements/${auth.currentUser?.uid}/${folderName}/${name}`;
             const sRef = storageRef(storage, remotePath);
             await uploadBytes(sRef, blob, { contentType: fileAny.mimeType || fileAny.type || 'application/octet-stream' });
             const downloadURL = await getDownloadURL(sRef);
@@ -268,11 +273,10 @@ const RequirementsChecklistScreen: React.FC = () => {
 
             // add admin_files doc and attach its id to the returned metadata
             try {
-                const req = requirements.find(r => r.id === requirementId);
                 const adminDocRef = await addDoc(collection(firestore, 'admin_files'), {
                     userId: auth.currentUser?.uid,
                     requirementId,
-                    requirementTitle: req?.title || null,
+                    requirementTitle: requirement?.title || null,
                     name: fileMeta.name,
                     url: fileMeta.url,
                     path: fileMeta.path,
@@ -484,42 +488,73 @@ const RequirementsChecklistScreen: React.FC = () => {
                 style: 'destructive',
                 onPress: async () => {
                     try {
-                        // If file is stored in Firestore (has adminDocId), delete that admin doc
+                        // Delete from Storage first (if path exists)
+                        if (fileAny && fileAny.path) {
+                            try {
+                                const sRef = storageRef(storage, fileAny.path);
+                                const storageModule: any = await import('firebase/storage');
+                                const deleteObjectFn = storageModule.deleteObject;
+                                if (deleteObjectFn) {
+                                    await deleteObjectFn(sRef);
+                                } else {
+                                    console.warn('deleteObject not available in storage module');
+                                }
+                            } catch (e) {
+                                console.error('Failed to delete storage object:', e);
+                                // Write diagnostic to user doc if permission error
+                                const errCode = typeof e === 'object' && e && 'code' in e ? (e as any).code : undefined;
+                                if (errCode === 'storage/unauthorized' || errCode === 'storage/unknown') {
+                                    try {
+                                        if (auth.currentUser) {
+                                            await setDoc(doc(firestore, 'users', auth.currentUser.uid), { lastStorageDeleteError: { time: new Date().toISOString(), message: String(e) } }, { merge: true });
+                                        }
+                                    } catch (dbg) { console.error('Failed to write storage delete diagnostic:', dbg); }
+                                }
+                            }
+                        }
+
+                        // Delete admin_files doc (by adminDocId or by path)
                         if (fileAny && fileAny.adminDocId) {
                             try {
                                 await deleteDoc(doc(firestore, 'admin_files', fileAny.adminDocId));
                             } catch (e) {
                                 console.error('Failed to delete admin_files doc:', e);
-                            }
-                        }
-
-                        // If file is stored in Storage (has path), delete object and any admin_files pointing to it
-                        if (fileAny && fileAny.path) {
-                            try {
-                                const sRef = storageRef(storage, fileAny.path);
-                                try {
-                                    const storageModule: any = await import('firebase/storage');
-                                    const deleteObjectFn = storageModule.deleteObject;
-                                    if (deleteObjectFn) {
-                                        await deleteObjectFn(sRef);
-                                    } else {
-                                        console.warn('deleteObject not available in storage module');
-                                    }
-                                } catch (impErr) {
-                                    console.error('Dynamic import of firebase/storage failed for deleteObject:', impErr);
+                                const errCode = typeof e === 'object' && e && 'code' in e ? (e as any).code : undefined;
+                                if (errCode === 'permission-denied') {
+                                    try {
+                                        if (auth.currentUser) {
+                                            await setDoc(doc(firestore, 'users', auth.currentUser.uid), { lastAdminFilesDeleteError: { time: new Date().toISOString(), message: String(e) } }, { merge: true });
+                                        }
+                                    } catch (dbg) { console.error('Failed to write admin_files delete diagnostic:', dbg); }
                                 }
-                            } catch (e) {
-                                console.error('Failed to delete storage object:', e);
                             }
-
+                        } else if (fileAny && fileAny.path) {
                             try {
                                 const q = query(collection(firestore, 'admin_files'), where('path', '==', fileAny.path));
                                 const snap = await getDocs(q);
                                 for (const d of snap.docs) {
-                                    try { await deleteDoc(d.ref); } catch (ee) { console.error('Failed to delete admin_files by path:', ee); }
+                                    try { await deleteDoc(d.ref); } catch (ee) {
+                                        console.error('Failed to delete admin_files by path:', ee);
+                                        const errCode = typeof ee === 'object' && ee && 'code' in ee ? (ee as any).code : undefined;
+                                        if (errCode === 'permission-denied') {
+                                            try {
+                                                if (auth.currentUser) {
+                                                    await setDoc(doc(firestore, 'users', auth.currentUser.uid), { lastAdminFilesDeleteError: { time: new Date().toISOString(), message: String(ee) } }, { merge: true });
+                                                }
+                                            } catch (dbg) { console.error('Failed to write admin_files delete diagnostic:', dbg); }
+                                        }
+                                    }
                                 }
                             } catch (e) {
                                 console.error('Failed to query/delete admin_files by path:', e);
+                                const errCode = typeof e === 'object' && e && 'code' in e ? (e as any).code : undefined;
+                                if (errCode === 'permission-denied') {
+                                    try {
+                                        if (auth.currentUser) {
+                                            await setDoc(doc(firestore, 'users', auth.currentUser.uid), { lastAdminFilesDeleteError: { time: new Date().toISOString(), message: String(e) } }, { merge: true });
+                                        }
+                                    } catch (dbg) { console.error('Failed to write admin_files delete diagnostic:', dbg); }
+                                }
                             }
                         }
 
@@ -535,23 +570,19 @@ const RequirementsChecklistScreen: React.FC = () => {
                         });
 
                         setRequirements(updatedRequirements);
-                        // Recalculate overall progress immediately so the progress bar reflects the change
                         calculateProgress(updatedRequirements);
 
                         if (auth.currentUser) {
-                                    try {
-                                        console.log('removeUploadedFile: updating user requirements for', auth.currentUser.uid);
-                                        await updateDoc(doc(firestore, 'users', auth.currentUser.uid), { requirements: updatedRequirements });
-                                        console.log('removeUploadedFile: user requirements update succeeded');
-                                    } catch (e: any) {
-                                        console.error('Failed to update user doc after file removal:', e);
-                                        Alert.alert('Save error', `Failed to update your requirements in Firestore: ${e?.message || String(e)}`);
-                                        try {
-                                            await setDoc(doc(firestore, 'users', auth.currentUser.uid), { lastRequirementsSyncError: { time: new Date().toISOString(), message: e?.message || String(e) } }, { merge: true });
-                                            console.log('removeUploadedFile: wrote diagnostic to user doc');
-                                        } catch (dbgErr) { console.error('removeUploadedFile: debug write failed', dbgErr); }
-                                    }
-                                }
+                            try {
+                                await updateDoc(doc(firestore, 'users', auth.currentUser.uid), { requirements: updatedRequirements });
+                            } catch (e: any) {
+                                console.error('Failed to update user doc after file removal:', e);
+                                Alert.alert('Save error', `Failed to update your requirements in Firestore: ${e?.message || String(e)}`);
+                                try {
+                                    await setDoc(doc(firestore, 'users', auth.currentUser.uid), { lastRequirementsSyncError: { time: new Date().toISOString(), message: e?.message || String(e) } }, { merge: true });
+                                } catch (dbgErr) { console.error('removeUploadedFile: debug write failed', dbgErr); }
+                            }
+                        }
 
                         Alert.alert('Removed', 'File removed successfully.');
                     } catch (err) {

@@ -7,11 +7,11 @@ import { Card, FAB } from 'react-native-paper';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/Ionicons';
 import BottomNavbar from '../components/BottomNav';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import type { RootStackParamList } from '../App';
 import { auth, firestore } from '../firebase/config';
-import { doc, setDoc, deleteDoc, collection, getDocs, getDoc } from 'firebase/firestore';
+import { doc, setDoc, deleteDoc, collection, getDocs, getDoc, onSnapshot } from 'firebase/firestore';
 import { Picker } from '@react-native-picker/picker';
 import RNBlobUtil from 'react-native-blob-util';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -62,12 +62,33 @@ const OJTTrackerScreen: React.FC = () => {
   const [itemsPerPage] = useState(5);
   const [userStatus, setUserStatus] = useState<string | null>(null);
   const [userCompany, setUserCompany] = useState<string | null>(null);
+  const [appliedCompanyName, setAppliedCompanyName] = useState<string | null>(null);
 
   // Load initial data
   useEffect(() => {
     loadInitialData();
     fetchUserStatusAndCompany();
   }, []);
+
+  // Listen for live updates to the user's profile while this screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      if (!auth.currentUser) return () => {};
+      const uid = auth.currentUser.uid;
+      const userDocRef = doc(firestore, 'users', uid);
+      const unsub = onSnapshot(userDocRef, (snap: any) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          setUserStatus(data.status || null);
+          setUserCompany(data.company || null);
+          setAppliedCompanyName(data.appliedCompanyName || null);
+        }
+      });
+
+      // cleanup
+      return () => unsub();
+    }, [])
+  );
 
   const loadInitialData = async () => {
     await Promise.all([
@@ -84,11 +105,59 @@ const OJTTrackerScreen: React.FC = () => {
         const data = userDoc.data();
         setUserStatus(data.status || null);
         setUserCompany(data.company || null);
+        setAppliedCompanyName(data.appliedCompanyName || null);
       }
     } catch (error: any) {
       setUserStatus(null);
       setUserCompany(null);
+      setAppliedCompanyName(null);
     }
+  };
+
+  const handleClearAppliedCompany = async () => {
+    if (!auth.currentUser) return;
+    Alert.alert(
+      'Remove Application',
+      'Are you sure you want to remove the applied company from your profile? This will only clear your applied-company record on your account.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const uid = auth.currentUser!.uid;
+              // Read current appliedCompanyId from user doc so we can delete the application record too
+              try {
+                const userSnap = await getDoc(doc(firestore, 'users', uid));
+                const appliedId = userSnap.exists() ? (userSnap.data() as any).appliedCompanyId : null;
+                if (appliedId) {
+                  try {
+                    await deleteDoc(doc(firestore, 'applications', `${uid}_${appliedId}`));
+                  } catch (delErr) {
+                    console.warn('OJTTracker: failed to delete application doc', delErr);
+                  }
+                }
+              } catch (readErr) {
+                console.warn('OJTTracker: failed to read user doc before deleting application', readErr);
+              }
+
+              await setDoc(doc(firestore, 'users', uid), {
+                appliedCompanyId: null,
+                appliedCompanyName: null,
+                applicationRemovedAt: new Date().toISOString()
+              }, { merge: true });
+              setAppliedCompanyName(null);
+            } catch (error: any) {
+              Alert.alert('Error', 'Could not remove applied company. Please try again.');
+              if (auth.currentUser) {
+                await setDoc(doc(firestore, 'users', auth.currentUser.uid), { lastOjtSyncError: { time: new Date().toISOString(), message: String(error) } }, { merge: true });
+              }
+            }
+          }
+        }
+      ]
+    );
   };
 
   // Data loading functions
@@ -613,9 +682,14 @@ const OJTTrackerScreen: React.FC = () => {
         </View>
         <View style={styles.infoBox}>
           <Text style={styles.infoLabel}>Company</Text>
-          <Text style={styles.infoValue}>
-            {userStatus === 'hired' && userCompany ? userCompany : 'Not Hired'}
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Text style={styles.infoValue}>{userCompany || appliedCompanyName || 'Not Applied'}</Text>
+            {appliedCompanyName ? (
+              <TouchableOpacity onPress={handleClearAppliedCompany} style={styles.removeButton} accessibilityLabel="Remove applied company">
+                <Feather name="trash-2" size={18} color="#ff5252" />
+              </TouchableOpacity>
+            ) : null}
+          </View>
         </View>
       </View>
 
@@ -970,6 +1044,7 @@ const styles = StyleSheet.create({
   },
   infoLabel: { color: '#6366F1', fontWeight: '800' },
   infoValue: { fontSize: 16, fontWeight: 'bold', marginVertical: 4 },
+  removeButton: { marginLeft: 8, padding: 6, borderRadius: 6, backgroundColor: 'transparent' },
   subText: { fontSize: 12, color: '#888' },
   noteBox: {
     marginVertical: 16, flexDirection: 'row', alignItems: 'center',

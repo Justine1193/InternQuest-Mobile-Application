@@ -123,22 +123,37 @@ const CompanyProfileScreen: React.FC = () => {
 
         setIsLoading(true);
         try {
+            const userProfileData: any = {
+                name: userProfile.name || (userProfile.firstName && userProfile.lastName ? userProfile.firstName + ' ' + userProfile.lastName : 'Unknown'),
+                email: userProfile.email || '',
+            };
+            // Only add course if it exists (avoid undefined values)
+            if (userProfile.course) {
+                userProfileData.course = userProfile.course;
+            }
+            // Only add skills if they exist
+            if (userProfile.skills && userProfile.skills.length > 0) {
+                userProfileData.skills = userProfile.skills;
+            }
+
             const applicationData = {
                 userId: auth.currentUser.uid,
                 companyId: company!.id,
                 companyName: company!.company,
                 status: 'pending',
                 appliedAt: new Date(),
-                userProfile: {
-                    name: userProfile.name || userProfile.firstName + ' ' + userProfile.lastName,
-                    email: userProfile.email,
-                    course: userProfile.course,
-                    skills: userProfile.skills || [],
-                },
+                userProfile: userProfileData,
             };
 
             const applicationRef = doc(firestore, 'applications', `${auth.currentUser.uid}_${company!.id}`);
             await setDoc(applicationRef, applicationData);
+
+            // Also update user's profile to track the applied company (optional, for reference)
+            await setDoc(doc(firestore, 'users', auth.currentUser.uid), { 
+                appliedCompanyId: company!.id,
+                appliedCompanyName: company!.company,
+                applicationUpdatedAt: new Date().toISOString()
+            }, { merge: true });
 
             setApplicationStatus('pending');
             Alert.alert('Success', 'Your application has been submitted successfully!');

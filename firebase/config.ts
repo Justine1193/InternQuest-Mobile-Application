@@ -14,7 +14,7 @@ const firebaseConfig = {
   apiKey: process.env.FIREBASE_API_KEY || "AIzaSyCdc_SdyFRbNFIw3KqJcQQ19ALfW3pLIts",
   authDomain: process.env.FIREBASE_AUTH_DOMAIN || "neuinternshipdb.firebaseapp.com",
   projectId: process.env.FIREBASE_PROJECT_ID || "neuinternshipdb",
-  storageBucket: process.env.FIREBASE_STORAGE_BUCKET || "neuinternshipdb.appspot.com",
+  storageBucket: process.env.FIREBASE_STORAGE_BUCKET || "neuinternshipdb.firebasestorage.app",
   messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || "918910739132",
   appId: process.env.FIREBASE_APP_ID || "1:918910739132:web:bacbcd219ee7228542a6b9",
   databaseURL: process.env.FIREBASE_DATABASE_URL || "https://neuinternshipdb-default-rtdb.asia-southeast1.firebasedatabase.app",

@@ -716,39 +716,6 @@ const RequirementsChecklistScreen: React.FC = () => {
                                         <Text style={styles.uploadSubtext}>Supports PDF and image files</Text>
                                     </View>
 
-                                                            <View style={{ marginBottom: 12 }}>
-                                                                <Text style={{ fontSize: 12, color: '#666' }}>
-                                                                    Files for requirements are stored in Cloud Storage by default. Small files may be stored in Firestore when you explicitly select Firestore mode (≈700 KB limit).
-                                                                    Admin metadata is saved in `admin_files` so administrators can download files.
-                                                                </Text>
-                                                            </View>
-
-                                                            {/* Storage / Firestore toggle */}
-                                                            <View style={{ marginVertical: 6, flexDirection: 'row', justifyContent: 'center', gap: 8 }}>
-                                                                <TouchableOpacity
-                                                                    onPress={() => setStoreModeAndPersist('storage')}
-                                                                    style={{
-                                                                        paddingVertical: 8,
-                                                                        paddingHorizontal: 14,
-                                                                        borderRadius: 8,
-                                                                        backgroundColor: storeMode === 'storage' ? '#6366F1' : '#f1f1f1'
-                                                                    }}
-                                                                >
-                                                                    <Text style={{ color: storeMode === 'storage' ? '#fff' : '#333', fontWeight: storeMode === 'storage' ? '700' : '600' }}>Storage (recommended)</Text>
-                                                                </TouchableOpacity>
-                                                                <TouchableOpacity
-                                                                    onPress={() => setStoreModeAndPersist('firestore')}
-                                                                    style={{
-                                                                        paddingVertical: 8,
-                                                                        paddingHorizontal: 14,
-                                                                        borderRadius: 8,
-                                                                        backgroundColor: storeMode === 'firestore' ? '#6366F1' : '#f1f1f1'
-                                                                    }}
-                                                                >
-                                                                    <Text style={{ color: storeMode === 'firestore' ? '#fff' : '#333', fontWeight: storeMode === 'firestore' ? '700' : '600' }}>Firestore (≤700 KB)</Text>
-                                                                </TouchableOpacity>
-                                                            </View>
-
                                     <Button
                                         mode="contained"
                                         onPress={handleUploadFile}

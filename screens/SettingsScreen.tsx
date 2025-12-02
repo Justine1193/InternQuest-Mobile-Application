@@ -371,7 +371,7 @@ const SettingsScreen: React.FC = () => {
               <Icon name="close" size={24} color="#888" />
             </TouchableOpacity>
             <Text style={styles.modalTitle}>About InternQuest</Text>
-            <Text style={{ color: '#555', marginBottom: 8 }}>Version 1.2.7</Text>
+            <Text style={{ color: '#555', marginBottom: 8 }}>Version 1.3.1</Text>
             <Text style={{ color: '#555', marginBottom: 8 }}>Privacy Policy | Terms of Service</Text>
           </View>
         </View>

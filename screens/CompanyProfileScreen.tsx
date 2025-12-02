@@ -168,9 +168,18 @@ const CompanyProfileScreen: React.FC = () => {
         }
     };
 
+    // Work detail interaction removed; icons will be colored based on values.
+
+    const openMaps = (address?: string) => {
+        if (!address) return;
+        const query = encodeURIComponent(address);
+        const url = `https://www.google.com/maps/search/?api=1&query=${query}`;
+        Linking.openURL(url).catch((err) => console.warn('Failed to open maps url', err));
+    };
+
     const getStatusColor = (status: ApplicationStatus) => {
         switch (status) {
-            case 'approved': return '#4CAF50';
+            case 'approved': return '#2ab0b4ff';
             case 'rejected': return '#F44336';
             case 'pending': return '#FF9800';
             default: return '#757575';
@@ -216,10 +225,10 @@ const CompanyProfileScreen: React.FC = () => {
                                         <View style={[styles.cardAccent, { backgroundColor: '#6366F1' }]} />
                                         <View style={styles.companyInfoEnhanced}>
                                 <Text style={styles.companyName}>{company.company}</Text>
-                                <Text style={styles.companyLocation}>
-                                    <Ionicons name="location" size={16} color="#666" />
-                                    {' '}{company.location}
-                                </Text>
+                                <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center' }} onPress={() => openMaps(company.location)} accessibilityRole="link">
+                                    <Ionicons name="location" size={16} color="#1e88e5" />
+                                    <Text style={[styles.companyLocation, { color: '#1e88e5', marginLeft: 6 }]}>{company.location}</Text>
+                                </TouchableOpacity>
                                 <Text style={styles.companyIndustry}>
                                     <Ionicons name="briefcase" size={16} color="#666" />
                                     {' '}{company.industry}
@@ -260,11 +269,21 @@ const CompanyProfileScreen: React.FC = () => {
                     <Card.Content>
                         <Text style={styles.sectionTitle}>Work Details</Text>
                         <View style={styles.detailRow}>
-                            <Ionicons name="time" size={20} color="#666" />
+                            <Ionicons name="time" size={20} color={(() => {
+                                const m = (company.modeOfWork || '').toString().toLowerCase();
+                                if (m.includes('remote')) return '#10B981';
+                                if (m.includes('hybrid')) return '#F59E0B';
+                                if (m.includes('site') || m.includes('on-site') || m.includes('onsite') || m.includes('on site')) return '#6366F1';
+                                return '#6b7280';
+                            })()} />
                             <Text style={styles.detailText}>Mode: {company.modeOfWork || 'Not specified'}</Text>
                         </View>
                         <View style={styles.detailRow}>
-                            <Ionicons name="document" size={20} color="#666" />
+                            <Ionicons name="document" size={20} color={(() => {
+                                const s = String(company.moa || '').toLowerCase();
+                                if (['yes', 'y', 'true', '1'].includes(s)) return '#4CAF50';
+                                return '#F44336';
+                            })()} />
                             <Text style={styles.detailText}>MOA: {company.moa || 'Not specified'}</Text>
                         </View>
                     </Card.Content>
@@ -441,6 +460,7 @@ const styles = StyleSheet.create({
         color: '#666',
         marginLeft: 8,
     },
+    
     skillsContainer: {
         flexDirection: 'row',
         flexWrap: 'wrap',

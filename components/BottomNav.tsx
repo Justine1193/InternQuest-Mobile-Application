@@ -49,7 +49,7 @@ const BottomNavbar: React.FC<Props> = ({ currentRoute }) => {
 
       <TouchableOpacity onPress={() => handleNavigation('HelpDesk')} style={styles.tab}>
         <Icon
-          name={isActive('HelpDesk') ? "lifebuoy" : "lifebuoy"}
+          name={isActive('HelpDesk') ? "help-circle" : "help-circle-outline"}
           size={24}
           color={isActive('HelpDesk') ? "#6366F1" : "#444"}
         />

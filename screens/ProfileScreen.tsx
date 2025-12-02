@@ -18,6 +18,7 @@ import BottomNavbar from '../components/BottomNav';
 import { auth, firestore } from '../firebase/config';
 import { doc, setDoc, collection, getDoc, getDocs } from "firebase/firestore";
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system';
 // removed `react-native-progress` dependency and use a simple native progress bar instead
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -59,6 +60,7 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
   const [changePasswordSuccess, setChangePasswordSuccess] = useState('');
 
   const [avatarUploading, setAvatarUploading] = useState(false);
+  const FIRESTORE_MAX_BYTES = 700 * 1024; // only store small base64 previews in Firestore
 
   const handleSaveProfile = async () => {
     if (!auth.currentUser) return;
@@ -133,7 +135,7 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
       mediaTypes: 'images',
       allowsEditing: true,
       aspect: [1, 1],
-      quality: 0.7,
+      quality: 0.8,
     });
     if (!result.canceled && result.assets && result.assets.length > 0) {
       if (!auth.currentUser) {
@@ -143,25 +145,59 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
       try {
         setAvatarUploading(true);
         const localUri = result.assets[0].uri;
-        // Convert to blob (ScanConnect style)
-        const response = await fetch(localUri);
-        const blob = await response.blob();
-        // Upload to Firebase Storage
-        const storage = getStorage();
-        const fileName = `avatars/${auth.currentUser.uid}`;
-        const avatarRef = storageRef(storage, fileName);
-        await uploadBytes(avatarRef, blob);
-        // Get download URL
-        const downloadURL = await getDownloadURL(avatarRef);
-        // Save to Firestore
         const userDocRef = doc(firestore, "users", auth.currentUser.uid);
-        await setDoc(userDocRef, { avatar: downloadURL }, { merge: true });
-        setUserData({ ...userData, avatar: downloadURL });
+
+        // helper: read base64 and estimated bytes
+        const readBase64 = async (): Promise<{ base64: string | null; estimatedBytes: number }> => {
+          try {
+            const base64 = await FileSystem.readAsStringAsync(localUri, { encoding: FileSystem.EncodingType.Base64 });
+            const estimatedBytes = Math.ceil((base64.length * 3) / 4);
+            return { base64, estimatedBytes };
+          } catch (e) {
+            return { base64: null, estimatedBytes: 0 };
+          }
+        };
+
+        let storageUrl: string | null = null;
+        let base64ToSave: string | null = null;
+
+        // Try upload to Storage (always)
+        try {
+          const response = await fetch(localUri);
+          const blob = await response.blob();
+          const storage = getStorage();
+          const fileName = `avatars/${auth.currentUser.uid}`;
+          const avatarRef = storageRef(storage, fileName);
+          await uploadBytes(avatarRef, blob);
+          storageUrl = await getDownloadURL(avatarRef);
+        } catch (err: any) {
+          // write diagnostic but continue to attempt base64 preview
+          await setDoc(userDocRef, { lastAvatarUploadError: { time: new Date().toISOString(), message: String(err) } }, { merge: true });
+        }
+
+        // Attempt to read base64 preview and save if small enough
+        const r = await readBase64();
+        if (!r.base64) {
+          await setDoc(userDocRef, { lastAvatarReadBase64Error: { time: new Date().toISOString() } }, { merge: true });
+        } else if (r.estimatedBytes > FIRESTORE_MAX_BYTES) {
+          // Skip saving preview if too large, but keep storageUrl if present
+          await setDoc(userDocRef, { lastAvatarPreviewSkippedDueToSize: true, lastAvatarUploadAt: new Date().toISOString() }, { merge: true });
+        } else {
+          base64ToSave = r.base64;
+        }
+
+        // Persist results to user doc
+        const updatePayload: any = { updatedAt: new Date().toISOString() };
+        if (storageUrl) updatePayload.avatar = storageUrl;
+        if (base64ToSave) updatePayload.avatarBase64 = base64ToSave;
+        await setDoc(userDocRef, updatePayload, { merge: true });
+
+        setUserData({ ...userData, ...(storageUrl ? { avatar: storageUrl } : {}), ...(base64ToSave ? { avatarBase64: base64ToSave } : {}) });
         setAvatarChanged(true);
         Alert.alert('Success', 'Profile picture updated!');
       } catch (error) {
         Alert.alert('Error', 'Failed to upload profile picture.');
-        console.error('Firebase Storage upload error:', error);
+        console.error('ProfileScreen avatar upload error:', error);
         try {
           if (auth.currentUser) {
             await setDoc(doc(firestore, 'users', auth.currentUser.uid), { lastAvatarUploadError: { time: new Date().toISOString(), message: String(error) } }, { merge: true });
@@ -259,6 +295,8 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
     fetchUserData();
   }, []);
 
+  // no persisted avatar upload mode — always upload to Storage and optionally save small base64 preview
+
   const onRefresh = async () => {
     setRefreshing(true);
     await fetchUserData();
@@ -334,6 +372,9 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
     );
   }
 
+  // Prefer inline base64 preview when available for instant rendering
+  const avatarUri = userData && (userData.avatarBase64 ? `data:image/jpeg;base64,${userData.avatarBase64}` : (userData.avatar || undefined));
+
   return (
     <View style={styles.container}>
       <ScrollView
@@ -352,8 +393,8 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
               accessibilityRole="button"
               activeOpacity={0.7}
             >
-              {userData.avatar ? (
-                <Image source={{ uri: userData.avatar }} style={styles.avatar} />
+              {avatarUri ? (
+                <Image source={{ uri: avatarUri }} style={styles.avatar} />
               ) : (
                 <View style={[styles.avatar, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#eee' }]}>
                   <Ionicons name="person-circle" size={100} color="#bbb" />
@@ -694,6 +735,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     position: 'relative',
   },
+  
   avatar: {
     width: 120,
     height: 120,

@@ -28,12 +28,16 @@ const SignInScreen: React.FC<SignInProps> = ({ setIsLoggedIn }) => {
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (user: any) => {
       if (user) {
-  // If the user is already signed in, reset navigation to Home (stack name)
-  // Use 'as never' because navigation types in this repo are loose
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-  // @ts-ignore
-  (navigation as any).navigate('Home');
-  if (setIsLoggedIn) setIsLoggedIn(true);
+        // If the user is already signed in, prefer to let the app root react to the auth
+        // state by using the provided setIsLoggedIn callback. Avoid directly calling
+        // navigate('Home') here because the active navigator might not have that route
+        // (this causes the development-only 'action NAVIGATE not handled' warning).
+        if (setIsLoggedIn) {
+          setIsLoggedIn(true);
+        } else {
+          // Fallback: try to navigate but guard against missing parent
+          try { (navigation as any).getParent?.()?.navigate?.('Home'); } catch(e) { /* ignore */ }
+        }
       }
       setCheckingSession(false);
     });
@@ -48,10 +52,11 @@ const SignInScreen: React.FC<SignInProps> = ({ setIsLoggedIn }) => {
     setLoading(true);
     try {
         await signInWithEmailAndPassword(auth, email.trim(), password);
-        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-        // @ts-ignore
-        (navigation as any).navigate('Home');
+        // Mark logged in and let App switch to the main app screens. Avoid calling
+        // navigation.navigate('Home') directly since SignIn may be inside a different
+        // navigator and that would produce the development warning.
         if (setIsLoggedIn) setIsLoggedIn(true);
+        else { try { (navigation as any).getParent?.()?.navigate?.('Home'); } catch(e) { /* ignore */ } }
     } catch (e: any) {
       const code = e?.code ?? '';
       let message = 'Failed to sign in. Please try again.';

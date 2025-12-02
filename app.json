@@ -12,11 +12,11 @@
     },
     "extra": {
       "eas": {
-        "projectId": "a7dc48ec-f235-4a8f-a6c4-d3f0c88afa2b"
+        "projectId": "1a2453e6-0c3c-461d-aee8-666d92795e0d"
       },
       "ADMIN_FILE_FUNCTION_BASE_URL": "https://<region>-<project>.cloudfunctions.net/getAdminFile"
     },
-    "owner": "codetechy",
+    "owner": "popssicle",
     "scheme": "internquest"
   }
 }

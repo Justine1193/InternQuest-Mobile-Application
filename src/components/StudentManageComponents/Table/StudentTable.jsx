@@ -59,17 +59,32 @@ const StudentTable = ({
     <div className="student-table-container">
       <table>
         <colgroup>
-          <col /> {/* First Name */}
-          <col /> {/* Last Name */}
-          <col /> {/* Email */}
-          <col /> {/* Contact */}
-          <col /> {/* Program */}
-          <col /> {/* Field */}
-          <col /> {/* Company */}
-          <col /> {/* Skills */}
-          <col style={{ width: "60px" }} /> {/* Hired */}
-          <col /> {/* Location Preference */}
-          <col /> {/* Kebab */}
+          {[
+            // Profile Picture
+            <col key="profilePicture" style={{ width: "80px" }} />,
+            // First Name
+            <col key="firstName" />,
+            // Last Name
+            <col key="lastName" />,
+            // Email
+            <col key="email" />,
+            // Contact
+            <col key="contact" />,
+            // Program
+            <col key="program" />,
+            // Field
+            <col key="field" />,
+            // Company
+            <col key="company" />,
+            // Skills
+            <col key="skills" />,
+            // Hired (fixed width)
+            <col key="hired" style={{ width: "60px" }} />,
+            // Location Preference
+            <col key="locationPreference" />,
+            // Kebab
+            <col key="actions" />,
+          ]}
         </colgroup>
         <thead>
           <tr>
@@ -106,8 +121,9 @@ const StudentTable = ({
               </th>
             )}
             <th style={{ paddingLeft: selectionMode ? "8px" : undefined }}>
-              First Name
+              Photo
             </th>
+            <th>First Name</th>
             <th>Last Name</th>
             <th>Email</th>
             <th>Contact</th>

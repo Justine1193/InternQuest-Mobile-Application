@@ -424,17 +424,23 @@ export const dashboardHandlers = {
    * Sends a notification to Firestore
    */
   handleSendNotification: async (notificationText, setError, setNotificationText) => {
-    if (!notificationText.trim()) return;
+    if (!notificationText.trim()) {
+      throw new Error('Notification text cannot be empty');
+    }
     
     try {
+      // Get current user ID for tracking who sent the notification
+      const userId = auth.currentUser?.uid || null;
       await addDoc(collection(db, 'notifications'), {
         message: notificationText,
         timestamp: new Date().toISOString(),
-        read: false
+        read: false,
+        userId: userId // Add userId so rules can check ownership
       });
       setNotificationText?.('');
     } catch (error) {
       setError?.('Failed to send notification');
+      throw error; // Re-throw so caller can handle it
     }
   },
 

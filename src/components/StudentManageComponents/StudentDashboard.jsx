@@ -7,7 +7,7 @@
  * <StudentDashboard />
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { IoSettingsOutline } from "react-icons/io5";
 import { db } from "../../../firebase.js";
 import {
@@ -16,7 +16,14 @@ import {
   addDoc,
   deleteDoc,
   doc,
+  query,
+  orderBy,
+  limit,
+  updateDoc,
 } from "firebase/firestore";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { storage } from "../../../firebase.js";
+import { IoTrashOutline } from "react-icons/io5";
 import logo from "../../assets/InternQuest_Logo.png";
 import { signOut } from "firebase/auth";
 import { auth } from "../../../firebase.js";
@@ -27,6 +34,7 @@ import ConfirmModal from "../ConfirmModalComponents/ConfirmModal.jsx";
 import LoadingSpinner from "../LoadingSpinner.jsx";
 import StudentRequirementModal from "./StudentRequirementModal.jsx";
 import "./StudentDashboard.css";
+import "../DashboardOverview/DashboardOverview.css";
 import Footer from "../Footer/Footer.jsx";
 
 // --- Student Dashboard Main Component ---
@@ -79,6 +87,54 @@ const StudentDashboard = () => {
     locationPreference: "",
   });
 
+  // Auto-migrate avatars from Firestore to Storage
+  const migrateAvatarToStorage = async (userId, base64Data) => {
+    try {
+      // Detect MIME type
+      const mimeType = base64Data.startsWith("data:image/")
+        ? (base64Data.match(/data:image\/(\w+);base64,/) || [])[1] || "jpeg"
+        : base64Data.startsWith("iVBORw0KGgo")
+        ? "png"
+        : "jpeg";
+      const extension = mimeType === "png" ? "png" : "jpg";
+      const fileName = `profile.${extension}`;
+      const storagePath = `profilePictures/${userId}/${fileName}`;
+
+      // Convert base64 to blob
+      const base64DataClean = base64Data.replace(
+        /^data:image\/\w+;base64,/,
+        ""
+      );
+      const byteCharacters = atob(base64DataClean);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: `image/${mimeType}` });
+
+      // Upload to Storage
+      const storageRef = ref(storage, storagePath);
+      await uploadBytes(storageRef, blob, { contentType: `image/${mimeType}` });
+
+      // Get download URL
+      const downloadUrl = await getDownloadURL(storageRef);
+
+      // Update user document - remove base64 fields
+      const userRef = doc(db, "users", userId);
+      await updateDoc(userRef, {
+        profilePictureUrl: downloadUrl,
+        avatarBase64: null,
+        avatarbase64: null,
+      });
+
+      return { success: true, userId, downloadUrl };
+    } catch (error) {
+      console.warn(`Failed to migrate avatar for user ${userId}:`, error);
+      return { success: false, userId, error: error.message };
+    }
+  };
+
   // Fetch companies and students from Firestore on mount
   useEffect(() => {
     const fetchData = async () => {
@@ -100,6 +156,48 @@ const StudentDashboard = () => {
           totalCompanies: companiesData.length,
           totalStudents: studentsData.length,
         });
+
+        // Auto-migrate avatars in background (silently)
+        const usersWithAvatars = studentsData.filter(
+          (user) =>
+            (user.avatarBase64 || user.avatarbase64) && !user.profilePictureUrl
+        );
+
+        if (usersWithAvatars.length > 0) {
+          console.log(
+            `🔄 Auto-migrating ${usersWithAvatars.length} avatar(s) to Storage...`
+          );
+          // Run migration in background (don't block UI)
+          Promise.all(
+            usersWithAvatars.map((user) =>
+              migrateAvatarToStorage(
+                user.id,
+                user.avatarBase64 || user.avatarbase64
+              )
+            )
+          )
+            .then((results) => {
+              const successful = results.filter((r) => r.success).length;
+              const failed = results.filter((r) => !r.success).length;
+              console.log(
+                `✅ Avatar migration complete: ${successful} successful, ${failed} failed`
+              );
+
+              // Refresh students data after migration
+              if (successful > 0) {
+                getDocs(collection(db, "users")).then((snapshot) => {
+                  const updatedStudents = snapshot.docs.map((doc) => ({
+                    id: doc.id,
+                    ...doc.data(),
+                  }));
+                  setStudents(updatedStudents);
+                });
+              }
+            })
+            .catch((err) => {
+              console.warn("Avatar migration error:", err);
+            });
+        }
       } catch (err) {
         setError("Failed to fetch data. Please try again.");
       } finally {
@@ -117,17 +215,126 @@ const StudentDashboard = () => {
   }, [selectedItems, selectionMode]);
 
   // Handles sending a notification to Firestore
-  const handleSendNotification = async () => {
-    if (!notificationText.trim()) return;
+  const [isSendingNotification, setIsSendingNotification] = useState(false);
+  const [showNotificationSuccess, setShowNotificationSuccess] = useState(false);
+  const [sentNotifications, setSentNotifications] = useState([]);
+  const [showNotificationsList, setShowNotificationsList] = useState(false);
+  const audioContextRef = useRef(null);
+
+  // Initialize audio context
+  useEffect(() => {
     try {
+      audioContextRef.current = new (window.AudioContext ||
+        window.webkitAudioContext)();
+    } catch (e) {
+      console.warn("Audio context not available");
+    }
+  }, []);
+
+  // Play success sound when notification is sent
+  const playSuccessSound = () => {
+    try {
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext ||
+          window.webkitAudioContext)();
+      }
+
+      const ctx = audioContextRef.current;
+      // Resume context if suspended (browser autoplay policy)
+      if (ctx.state === "suspended") {
+        ctx.resume();
+      }
+
+      // Success sound: pleasant two-tone chime
+      const playTone = (frequency, startTime, duration) => {
+        const oscillator = ctx.createOscillator();
+        const gainNode = ctx.createGain();
+
+        oscillator.connect(gainNode);
+        gainNode.connect(ctx.destination);
+
+        oscillator.frequency.value = frequency;
+        oscillator.type = "sine";
+
+        gainNode.gain.setValueAtTime(0, startTime);
+        gainNode.gain.linearRampToValueAtTime(0.15, startTime + 0.01);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
+
+        oscillator.start(startTime);
+        oscillator.stop(startTime + duration);
+      };
+
+      // Play two tones for a pleasant chime effect
+      playTone(523.25, ctx.currentTime, 0.15); // C5
+      playTone(659.25, ctx.currentTime + 0.1, 0.2); // E5
+    } catch (e) {
+      // Silently fail if audio is not available
+    }
+  };
+
+  // Fetch recent notifications
+  const fetchNotifications = async () => {
+    try {
+      const notificationsQuery = query(
+        collection(db, "notifications"),
+        orderBy("timestamp", "desc"),
+        limit(10)
+      );
+      const snapshot = await getDocs(notificationsQuery);
+      const notifications = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      setSentNotifications(notifications);
+    } catch (error) {
+      console.error("Error fetching notifications:", error);
+    }
+  };
+
+  useEffect(() => {
+    fetchNotifications();
+  }, [showNotificationSuccess]); // Refetch when a new notification is sent
+
+  // Handle deleting a notification
+  const handleDeleteNotification = async (notificationId) => {
+    if (!window.confirm("Are you sure you want to delete this message?")) {
+      return;
+    }
+    try {
+      await deleteDoc(doc(db, "notifications", notificationId));
+      // Remove from local state
+      setSentNotifications((prev) =>
+        prev.filter((notif) => notif.id !== notificationId)
+      );
+    } catch (error) {
+      console.error("Error deleting notification:", error);
+      setError("Failed to delete notification. Please try again.");
+    }
+  };
+
+  const handleSendNotification = async () => {
+    if (!notificationText.trim() || isSendingNotification) return;
+    setIsSendingNotification(true);
+    try {
+      // Get current user ID for tracking who sent the notification
+      const userId = auth.currentUser?.uid || null;
       await addDoc(collection(db, "notifications"), {
         message: notificationText,
         timestamp: new Date().toISOString(),
         read: false,
+        userId: userId, // Add userId so rules can check ownership
       });
       setNotificationText("");
+      // Show success message and play sound
+      setShowNotificationSuccess(true);
+      playSuccessSound();
+      setTimeout(() => {
+        setShowNotificationSuccess(false);
+      }, 3000);
     } catch (error) {
       setError("Failed to send notification");
+    } finally {
+      setIsSendingNotification(false);
     }
   };
 
@@ -311,7 +518,17 @@ const StudentDashboard = () => {
               <div className="count">{overviewStats.totalStudents}</div>
             </div>
             <div className="card notification-card">
-              <h3>Notifications</h3>
+              <div className="notification-header">
+                <h3>Notifications</h3>
+                <button
+                  className="view-notifications-btn"
+                  onClick={() =>
+                    setShowNotificationsList(!showNotificationsList)
+                  }
+                >
+                  {showNotificationsList ? "Hide" : "View"} Messages
+                </button>
+              </div>
               <p>Quick Notifications</p>
               <div className="notification-content">
                 <input
@@ -319,14 +536,67 @@ const StudentDashboard = () => {
                   placeholder="Send alerts..."
                   value={notificationText}
                   onChange={(e) => setNotificationText(e.target.value)}
+                  onKeyPress={(e) => {
+                    if (e.key === "Enter" && !isSendingNotification) {
+                      handleSendNotification();
+                    }
+                  }}
                   className="notification-input"
+                  disabled={isSendingNotification}
                 />
                 <button
-                  className="send-notification-btn"
+                  className={`send-notification-btn ${
+                    isSendingNotification ? "sending" : ""
+                  }`}
                   onClick={handleSendNotification}
+                  disabled={isSendingNotification || !notificationText.trim()}
                 >
-                  Send Now
+                  {isSendingNotification ? (
+                    <>
+                      <span className="spinner-small"></span>
+                      Sending...
+                    </>
+                  ) : (
+                    "Send Now"
+                  )}
                 </button>
+                {showNotificationSuccess && (
+                  <div className="notification-success">
+                    <span className="success-icon">✓</span>
+                    Message sent
+                  </div>
+                )}
+                {showNotificationsList && (
+                  <div className="notifications-list">
+                    <h4>Recent Messages ({sentNotifications.length})</h4>
+                    {sentNotifications.length === 0 ? (
+                      <p className="no-notifications">No messages sent yet.</p>
+                    ) : (
+                      <div className="notifications-scroll">
+                        {sentNotifications.map((notif) => (
+                          <div key={notif.id} className="notification-item">
+                            <div className="notification-item-content">
+                              <p className="notification-message">
+                                {notif.message}
+                              </p>
+                              <span className="notification-time">
+                                {new Date(notif.timestamp).toLocaleString()}
+                              </span>
+                            </div>
+                            <button
+                              className="delete-notification-btn"
+                              onClick={() => handleDeleteNotification(notif.id)}
+                              title="Delete message"
+                              aria-label="Delete notification"
+                            >
+                              <IoTrashOutline />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>

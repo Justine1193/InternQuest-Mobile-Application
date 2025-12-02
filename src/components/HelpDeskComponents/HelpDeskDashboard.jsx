@@ -136,6 +136,23 @@ const HelpDeskDashboard = () => {
         return;
       }
 
+      // Debug: Log authentication status
+      console.log("=== UPLOAD DEBUG START ===");
+      console.log("Auth status:", {
+        isAuthenticated: !!auth.currentUser,
+        uid: auth.currentUser?.uid,
+        email: auth.currentUser?.email,
+        token: auth.currentUser?.accessToken ? "Has token" : "No token",
+      });
+
+      // Wait a moment for auth to be ready
+      if (!auth.currentUser) {
+        console.error("ERROR: User is not authenticated!");
+        setError("User is not authenticated. Please log out and log back in.");
+        setUploadingState(false);
+        return;
+      }
+
       // Get file extension from filename
       const fileExtension = selectedFile.name.split(".").pop() || "";
 
@@ -143,6 +160,11 @@ const HelpDeskDashboard = () => {
       const mimeType = selectedFile.type || "application/octet-stream";
 
       console.log("Uploading file to Firebase Storage...");
+      console.log("File info:", {
+        name: selectedFile.name,
+        size: selectedFile.size,
+        type: mimeType,
+      });
 
       // Decide storage folder based on category
       const folder =
@@ -154,8 +176,22 @@ const HelpDeskDashboard = () => {
       const path = `${folder}/${timestamp}-${safeFileName}`;
 
       // Upload to Storage
+      console.log("Storage path:", path);
+      console.log("Storage instance:", storage);
+      console.log(
+        "Storage bucket config:",
+        storage._delegate?.bucket || "unknown"
+      );
+
       const fileRef = storageRef(storage, path);
+      console.log("File ref created:", fileRef);
+      console.log("File ref full path:", fileRef.fullPath);
+      console.log("File ref bucket:", fileRef.bucket);
+      console.log("Attempting upload...");
+
       await uploadBytes(fileRef, selectedFile);
+      console.log("Upload successful!");
+      console.log("=== UPLOAD DEBUG END ===");
 
       // Get download URL from Storage
       const downloadUrl = await getDownloadURL(fileRef);
@@ -194,6 +230,9 @@ const HelpDeskDashboard = () => {
       await fetchFiles();
     } catch (err) {
       console.error("Upload error:", err);
+      console.error("Error code:", err.code);
+      console.error("Error message:", err.message);
+      console.error("Full error:", JSON.stringify(err, null, 2));
       setError(`Failed to upload file: ${err.message || "Unknown error"}`);
     } finally {
       setUploadingState(false);

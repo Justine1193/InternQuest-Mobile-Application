@@ -28,6 +28,8 @@
 import React, { useState } from "react";
 import PropTypes from "prop-types";
 import { IoEllipsisVertical } from "react-icons/io5";
+import { getStorage, ref, getDownloadURL } from "firebase/storage";
+import { storage } from "../../../../firebase.js";
 import KebabCell from "../../KebabcellComponents/KebabCell.jsx";
 import "./StudentTableRow.css";
 
@@ -56,6 +58,59 @@ const StudentTableRow = ({
 }) => {
   // State for toggling skill tag expansion
   const [showAllSkills, setShowAllSkills] = useState(false);
+  const [profilePictureUrl, setProfilePictureUrl] = useState(null);
+  const [profilePictureError, setProfilePictureError] = useState(false);
+
+  // Fetch profile picture URL
+  React.useEffect(() => {
+    const fetchProfilePicture = async () => {
+      if (!row?.id) return;
+
+      // Check Firestore profilePictureUrl first (fastest)
+      if (row.profilePictureUrl) {
+        setProfilePictureUrl(row.profilePictureUrl);
+        setProfilePictureError(false);
+        return;
+      }
+
+      // Only try Storage if user might have a picture (has avatarBase64)
+      // Skip Storage check if user has no avatarBase64 and no profilePictureUrl
+      // This prevents unnecessary 404 errors
+      if (!row.avatarBase64 && !row.avatarbase64) {
+        setProfilePictureError(true);
+        return;
+      }
+
+      // Try Storage - migration creates profile.jpg or profile.png
+      const fileNames = ["profile.jpg", "profile.png"];
+      let found = false;
+
+      for (const fileName of fileNames) {
+        try {
+          const profileRef = ref(
+            storage,
+            `profilePictures/${row.id}/${fileName}`
+          );
+          const url = await getDownloadURL(profileRef);
+          setProfilePictureUrl(url);
+          setProfilePictureError(false);
+          found = true;
+          break;
+        } catch (e) {
+          // Silently continue if file doesn't exist
+          // This means migration hasn't run yet or file doesn't exist
+          continue;
+        }
+      }
+
+      if (!found) {
+        setProfilePictureError(true);
+      }
+    };
+
+    fetchProfilePicture();
+  }, [row?.id, row?.profilePictureUrl, row?.avatarBase64, row?.avatarbase64]);
+
   const handleRowClick = () => {
     if (selectionMode) return;
     if (typeof onRowClick === "function") {
@@ -65,19 +120,13 @@ const StudentTableRow = ({
 
   const getCompanyName = () => {
     if (!row) return "";
-    if (typeof row.company === "string" && row.company.trim()) return row.company;
+    if (typeof row.company === "string" && row.company.trim())
+      return row.company;
     if (typeof row.companyName === "string" && row.companyName.trim())
       return row.companyName;
-    if (
-      typeof row.assignedCompany === "string" &&
-      row.assignedCompany.trim()
-    )
+    if (typeof row.assignedCompany === "string" && row.assignedCompany.trim())
       return row.assignedCompany;
-    if (
-      row.company &&
-      typeof row.company === "object" &&
-      row.company.name
-    ) {
+    if (row.company && typeof row.company === "object" && row.company.name) {
       return row.company.name;
     }
     return "";
@@ -102,6 +151,21 @@ const StudentTableRow = ({
           />
         </td>
       )}
+      <td className="student-profile-picture-cell">
+        {profilePictureUrl ? (
+          <img
+            src={profilePictureUrl}
+            alt={`${row.firstName} ${row.lastName}`}
+            className="student-profile-picture"
+            onError={() => setProfilePictureError(true)}
+          />
+        ) : (
+          <div className="student-profile-picture-placeholder">
+            {row.firstName?.[0]?.toUpperCase() || "?"}
+            {row.lastName?.[0]?.toUpperCase() || ""}
+          </div>
+        )}
+      </td>
       <td>{row.firstName}</td>
       <td>{row.lastName}</td>
       <td>

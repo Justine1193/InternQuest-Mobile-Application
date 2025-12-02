@@ -39,3 +39,50 @@
   min-height: 32px;
   margin-right: 16px;
 }
+
+/* Profile Picture Styles */
+.student-profile-picture-cell {
+  padding: 8px 12px !important;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.student-profile-picture {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #e0e0e0;
+  display: inline-block;
+  background: #f5f5f5;
+  transition: all 0.2s ease;
+}
+
+.student-profile-picture:hover {
+  border-color: #1976d2;
+  transform: scale(1.05);
+  box-shadow: 0 2px 8px rgba(25, 118, 210, 0.2);
+}
+
+.student-profile-picture-placeholder {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 16px;
+  border: 2px solid #e0e0e0;
+  transition: all 0.2s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.student-profile-picture-placeholder:hover {
+  border-color: #1976d2;
+  transform: scale(1.05);
+  box-shadow: 0 2px 8px rgba(25, 118, 210, 0.2);
+}

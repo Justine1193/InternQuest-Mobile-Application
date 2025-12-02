@@ -38,6 +38,58 @@ function CompanyModal({
   const [websiteStatus, setWebsiteStatus] = useState(null);
   const [websiteChecking, setWebsiteChecking] = useState(false);
   const [emailValid, setEmailValid] = useState(true);
+  const audioContextRef = useRef(null);
+
+  // Initialize audio context (only once)
+  useEffect(() => {
+    try {
+      audioContextRef.current = new (window.AudioContext ||
+        window.webkitAudioContext)();
+    } catch (e) {
+      console.warn("Audio context not available");
+    }
+  }, []);
+
+  // Play error sound when error appears
+  useEffect(() => {
+    if (error || localError) {
+      playErrorSound();
+    }
+  }, [error, localError]);
+
+  // Function to play error sound
+  const playErrorSound = () => {
+    try {
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext ||
+          window.webkitAudioContext)();
+      }
+
+      const ctx = audioContextRef.current;
+      // Resume context if suspended (browser autoplay policy)
+      if (ctx.state === "suspended") {
+        ctx.resume();
+      }
+
+      const oscillator = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+
+      oscillator.connect(gainNode);
+      gainNode.connect(ctx.destination);
+
+      // Error sound: lower pitch, quick beep
+      oscillator.frequency.value = 300;
+      oscillator.type = "sine";
+
+      gainNode.gain.setValueAtTime(0.2, ctx.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
+
+      oscillator.start(ctx.currentTime);
+      oscillator.stop(ctx.currentTime + 0.2);
+    } catch (e) {
+      // Silently fail if audio is not available
+    }
+  };
 
   const filteredSkills = suggestionSkills.filter(
     (skill) =>
@@ -231,15 +283,26 @@ function CompanyModal({
       <div className="modal-content">
         <h2>{isEditMode ? "Edit Company" : "Add New Company"}</h2>
         {(error || localError) && (
-          <div className="modal-error-message">
-            {error || localError}
-            <IoCloseOutline
-              className="error-icon"
-              onClick={() => {
-                setError && setError("");
-                setLocalError("");
-              }}
-            />
+          <div className="modal-error-message error-popup">
+            <div className="error-content">
+              <div className="error-icon-wrapper">
+                <span className="error-icon-symbol">⚠</span>
+              </div>
+              <div className="error-text-wrapper">
+                <p className="error-title">Error</p>
+                <p className="error-message-text">{error || localError}</p>
+              </div>
+              <button
+                className="error-close-btn"
+                onClick={() => {
+                  setError && setError("");
+                  setLocalError("");
+                }}
+                aria-label="Close error"
+              >
+                <IoCloseOutline />
+              </button>
+            </div>
           </div>
         )}
         <form onSubmit={(e) => e.preventDefault()}>
@@ -510,7 +573,7 @@ function CompanyModal({
                   name="moaValidityYears"
                   min="1"
                   step="1"
-                  placeholder="3"
+                  placeholder="Enter number of years"
                   value={formData.moaValidityYears}
                   onChange={handleInputChange}
                   disabled={!formData.moa}

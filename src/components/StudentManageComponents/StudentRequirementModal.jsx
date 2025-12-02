@@ -13,8 +13,9 @@
 import React, { useState, useEffect } from "react";
 import PropTypes from "prop-types";
 import { IoCloseOutline } from "react-icons/io5";
-import { db } from "../../../firebase.js";
+import { db, storage } from "../../../firebase.js";
 import { doc, getDoc, collection, getDocs } from "firebase/firestore";
+import { ref, getDownloadURL } from "firebase/storage";
 import "./StudentRequirementModal.css";
 
 const StudentRequirementModal = ({ open, student, onClose }) => {
@@ -23,6 +24,9 @@ const StudentRequirementModal = ({ open, student, onClose }) => {
   const [fetchError, setFetchError] = useState(null);
   const [viewingFile, setViewingFile] = useState(null);
   const [viewingFileName, setViewingFileName] = useState("");
+  const [profilePictureUrl, setProfilePictureUrl] = useState(null);
+  const [profilePictureError, setProfilePictureError] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
 
   // Fetch requirements from Firestore when modal opens
   useEffect(() => {
@@ -158,6 +162,60 @@ const StudentRequirementModal = ({ open, student, onClose }) => {
 
     fetchRequirements();
   }, [open, student]);
+
+  // Fetch profile picture when modal opens
+  useEffect(() => {
+    const fetchProfilePicture = async () => {
+      if (!open || !student?.id) {
+        setProfilePictureUrl(null);
+        setProfilePictureError(false);
+        return;
+      }
+
+      // Check Firestore profilePictureUrl first (fastest, no network request)
+      if (student.profilePictureUrl) {
+        setProfilePictureUrl(student.profilePictureUrl);
+        setProfilePictureError(false);
+        return;
+      }
+
+      // Only try Storage if user might have a picture (has avatarBase64)
+      // Skip Storage check if user has no avatarBase64 and no profilePictureUrl
+      // This prevents unnecessary 404 errors
+      if (!student.avatarBase64 && !student.avatarbase64) {
+        setProfilePictureError(true);
+        return;
+      }
+
+      // Try Storage - migration creates profile.jpg or profile.png
+      const fileNames = ["profile.jpg", "profile.png"];
+      let found = false;
+
+      for (const fileName of fileNames) {
+        try {
+          const profileRef = ref(
+            storage,
+            `profilePictures/${student.id}/${fileName}`
+          );
+          const url = await getDownloadURL(profileRef);
+          setProfilePictureUrl(url);
+          setProfilePictureError(false);
+          found = true;
+          break;
+        } catch (e) {
+          // Silently continue if file doesn't exist
+          // This means migration hasn't run yet or file doesn't exist
+          continue;
+        }
+      }
+
+      if (!found) {
+        setProfilePictureError(true);
+      }
+    };
+
+    fetchProfilePicture();
+  }, [open, student?.id, student?.profilePictureUrl]);
 
   if (!open || !student) return null;
 
@@ -362,11 +420,62 @@ const StudentRequirementModal = ({ open, student, onClose }) => {
 
         <div className="student-requirement-modal-content">
           <div className="student-info-section">
-            <h3>
-              {student.firstName} {student.lastName}
-            </h3>
-            <p className="student-email">{student.email || "N/A"}</p>
+            <div className="student-profile-header">
+              {profilePictureUrl ? (
+                <img
+                  src={profilePictureUrl}
+                  alt={`${student.firstName} ${student.lastName}`}
+                  className="student-modal-profile-picture clickable"
+                  onClick={() => setShowProfileModal(true)}
+                  onError={() => setProfilePictureError(true)}
+                  title="Click to view full size"
+                />
+              ) : (
+                <div
+                  className="student-modal-profile-picture-placeholder"
+                  title="No profile picture"
+                >
+                  {student.firstName?.[0]?.toUpperCase() || "?"}
+                  {student.lastName?.[0]?.toUpperCase() || ""}
+                </div>
+              )}
+              <div className="student-info-text">
+                <h3>
+                  {student.firstName} {student.lastName}
+                </h3>
+                <p className="student-email">{student.email || "N/A"}</p>
+              </div>
+            </div>
           </div>
+
+          {/* Profile Picture Modal */}
+          {showProfileModal && profilePictureUrl && (
+            <div
+              className="profile-picture-modal-backdrop"
+              onClick={() => setShowProfileModal(false)}
+            >
+              <div
+                className="profile-picture-modal-content"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <button
+                  className="profile-picture-modal-close"
+                  onClick={() => setShowProfileModal(false)}
+                  aria-label="Close"
+                >
+                  ×
+                </button>
+                <img
+                  src={profilePictureUrl}
+                  alt={`${student.firstName} ${student.lastName}`}
+                  className="profile-picture-modal-image"
+                />
+                <p className="profile-picture-modal-name">
+                  {student.firstName} {student.lastName}
+                </p>
+              </div>
+            </div>
+          )}
 
           {isLoadingRequirements ? (
             <div className="loading-requirements">

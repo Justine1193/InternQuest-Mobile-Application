@@ -573,3 +573,171 @@
     transform: translateX(0);
   }
 }
+
+/* Enhanced Error Message Styles */
+.modal-error-message {
+  background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%);
+  border: 2px solid #f44336;
+  border-radius: 12px;
+  padding: 1rem 1.2rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 4px 16px rgba(244, 67, 54, 0.2),
+    0 2px 8px rgba(244, 67, 54, 0.15);
+  animation: errorSlideIn 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55),
+    errorPulse 0.6s ease-in-out 0.4s;
+  position: relative;
+  overflow: hidden;
+}
+
+.modal-error-message::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.3),
+    transparent
+  );
+  animation: errorShine 1.5s ease-in-out 0.5s;
+}
+
+.error-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  position: relative;
+  z-index: 1;
+}
+
+.error-icon-wrapper {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  background: #f44336;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: errorIconBounce 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  box-shadow: 0 2px 8px rgba(244, 67, 54, 0.3);
+}
+
+.error-icon-symbol {
+  font-size: 1.5rem;
+  color: white;
+  font-weight: bold;
+  animation: errorIconRotate 0.5s ease-in-out;
+}
+
+.error-text-wrapper {
+  flex: 1;
+  min-width: 0;
+}
+
+.error-title {
+  margin: 0 0 0.25rem 0;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #c62828;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.error-message-text {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #b71c1c;
+  line-height: 1.4;
+  word-wrap: break-word;
+}
+
+.error-close-btn {
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  color: #d32f2f;
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  font-size: 1.3rem;
+  width: 28px;
+  height: 28px;
+}
+
+.error-close-btn:hover {
+  background-color: rgba(244, 67, 54, 0.1);
+  color: #b71c1c;
+  transform: rotate(90deg) scale(1.1);
+}
+
+.error-close-btn:active {
+  transform: rotate(90deg) scale(0.95);
+}
+
+/* Error Animations */
+@keyframes errorSlideIn {
+  0% {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.9);
+  }
+  50% {
+    transform: translateY(5px) scale(1.02);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes errorPulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.02);
+  }
+}
+
+@keyframes errorShine {
+  0% {
+    left: -100%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+
+@keyframes errorIconBounce {
+  0% {
+    transform: scale(0) rotate(-180deg);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.2) rotate(10deg);
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+@keyframes errorIconRotate {
+  0% {
+    transform: rotate(-20deg);
+  }
+  50% {
+    transform: rotate(20deg);
+  }
+  100% {
+    transform: rotate(0deg);
+  }
+}

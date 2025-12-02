@@ -13,157 +13,138 @@
 import React, { useState, useEffect } from "react";
 import PropTypes from "prop-types";
 import { IoCloseOutline } from "react-icons/io5";
-import { db, storage } from "../../../firebase.js";
-import { doc, getDoc, collection, getDocs } from "firebase/firestore";
-import { ref, getDownloadURL } from "firebase/storage";
+import { storage } from "../../../firebase.js";
+import { ref, getDownloadURL, listAll, getMetadata } from "firebase/storage";
 import "./StudentRequirementModal.css";
 
 const StudentRequirementModal = ({ open, student, onClose }) => {
-  const [requirements, setRequirements] = useState([]);
-  const [isLoadingRequirements, setIsLoadingRequirements] = useState(false);
-  const [fetchError, setFetchError] = useState(null);
   const [viewingFile, setViewingFile] = useState(null);
   const [viewingFileName, setViewingFileName] = useState("");
   const [profilePictureUrl, setProfilePictureUrl] = useState(null);
   const [profilePictureError, setProfilePictureError] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [storageFiles, setStorageFiles] = useState([]); // Files from Storage
+  const [isLoadingStorageFiles, setIsLoadingStorageFiles] = useState(false);
 
-  // Fetch requirements from Firestore when modal opens
+  // Fetch files from Storage when modal opens
   useEffect(() => {
-    const fetchRequirements = async () => {
+    const fetchStorageFiles = async () => {
       if (!open || !student || !student.id) {
-        setRequirements([]);
+        setStorageFiles([]);
         return;
       }
 
-      setIsLoadingRequirements(true);
-      setFetchError(null);
+      setIsLoadingStorageFiles(true);
       try {
-        // Try to fetch from user document first (more reliable, avoids Listen channel)
-        const userDocRef = doc(db, "users", student.id);
-        const userDocSnap = await getDoc(userDocRef);
+        // List all folders in the user's requirements folder
+        // Path structure: requirements/{userId}/{folderName}/{fileName}
+        const storagePath = `requirements/${student.id}`;
+        console.log("📂 Fetching files from Storage path:", storagePath);
+        const requirementsRef = ref(storage, storagePath);
+        const folderList = await listAll(requirementsRef);
 
-        if (userDocSnap.exists()) {
-          const userData = userDocSnap.data();
-          console.log("User data from Firestore:", userData);
-          console.log("Requirements field:", userData.requirements);
+        console.log(
+          `📁 Found ${folderList.prefixes.length} folder(s) in Storage`
+        );
 
-          // Check if requirements array exists in user document
-          if (userData.requirements && Array.isArray(userData.requirements)) {
-            console.log("Requirements is an array:", userData.requirements);
-            setRequirements(userData.requirements);
-          } else if (
-            userData.requirements &&
-            typeof userData.requirements === "object"
-          ) {
-            // If requirements is an object, convert to array
-            const requirementsArray = Object.values(userData.requirements);
-            console.log(
-              "Requirements is an object, converted to array:",
-              requirementsArray
-            );
-            setRequirements(requirementsArray);
-          } else {
-            // If no requirements in document, try subcollection as fallback
-            try {
-              const requirementsCollectionRef = collection(
-                db,
-                "users",
-                student.id,
-                "requirements"
-              );
-              const requirementsSnapshot = await getDocs(
-                requirementsCollectionRef
-              );
+        // Map folder names to requirement types
+        const folderMapping = {
+          "moa-memorandum-of-agreement": "MOA (Memorandum of Agreement)",
+          "parent-guardian-consent-form": "Parent/Guardian Consent Form",
+          "medical-certificate": "Medical Certificate",
+          "resume-cv": "Resume",
+          "police-clearance": "Clearance",
+          "academic-records": "Academic Records",
+          "cover-letter": "Cover Letter",
+          "insurance-certificate": "Insurance Certificate",
+        };
 
-              if (!requirementsSnapshot.empty) {
-                const requirementsData = requirementsSnapshot.docs.map(
-                  (doc) => ({
-                    id: doc.id,
-                    ...doc.data(),
-                  })
-                );
-                console.log(
-                  "Found requirements in subcollection:",
-                  requirementsData
-                );
-                setRequirements(requirementsData);
-              } else {
-                console.log("No requirements found");
-                setRequirements([]);
-              }
-            } catch (subcollectionError) {
-              console.log("Subcollection fetch failed, no requirements found");
-              setRequirements([]);
-            }
-          }
-        } else {
-          console.log("User document does not exist");
-          setRequirements([]);
-        }
-      } catch (error) {
-        console.error("Error fetching requirements:", error);
+        // Fetch files from each folder
+        const allFiles = [];
+        for (const folderPrefix of folderList.prefixes) {
+          const folderName = folderPrefix.name;
+          console.log(`📂 Checking folder: ${folderName}`);
 
-        // Check if it's a blocked request error
-        const errorMessage = error.message || error.toString();
-        if (
-          errorMessage.includes("ERR_BLOCKED_BY_CLIENT") ||
-          errorMessage.includes("blocked") ||
-          errorMessage.includes("network")
-        ) {
-          setFetchError(
-            "Firestore request was blocked. Please disable ad blockers or privacy extensions and try again."
-          );
-        } else {
-          // If subcollection doesn't exist, try user document
           try {
-            const userDocRef = doc(db, "users", student.id);
-            const userDocSnap = await getDoc(userDocRef);
+            const folderFiles = await listAll(folderPrefix);
+            console.log(
+              `  📄 Found ${folderFiles.items.length} file(s) in ${folderName}`
+            );
 
-            if (userDocSnap.exists()) {
-              const userData = userDocSnap.data();
-              if (userData.requirements) {
-                if (Array.isArray(userData.requirements)) {
-                  setRequirements(userData.requirements);
-                } else if (typeof userData.requirements === "object") {
-                  setRequirements(Object.values(userData.requirements));
+            // Get download URLs and metadata for each file in this folder
+            const filesWithUrls = await Promise.all(
+              folderFiles.items.map(async (itemRef) => {
+                try {
+                  const [downloadURL, metadata] = await Promise.all([
+                    getDownloadURL(itemRef),
+                    getMetadata(itemRef),
+                  ]);
+
+                  const fileData = {
+                    name: itemRef.name,
+                    fullPath: itemRef.fullPath,
+                    folderName: folderName,
+                    requirementType: folderMapping[folderName] || folderName,
+                    downloadURL,
+                    size: metadata.size,
+                    contentType: metadata.contentType,
+                    timeCreated: metadata.timeCreated,
+                    updated: metadata.updated,
+                  };
+
+                  console.log("✅ File data:", {
+                    name: fileData.name,
+                    folder: fileData.folderName,
+                    requirementType: fileData.requirementType,
+                    size: `${(fileData.size / 1024).toFixed(2)} KB`,
+                    path: fileData.fullPath,
+                  });
+
+                  return fileData;
+                } catch (error) {
+                  console.warn(
+                    `❌ Failed to get URL for ${itemRef.name}:`,
+                    error
+                  );
+                  return null;
                 }
-              } else {
-                setFetchError(null); // No error, just no requirements
-              }
-            } else {
-              setFetchError(null); // No error, document doesn't exist
-            }
-          } catch (fallbackError) {
-            console.error("Error in fallback fetch:", fallbackError);
-            const fallbackMessage =
-              fallbackError.message || fallbackError.toString();
-            if (
-              fallbackMessage.includes("ERR_BLOCKED_BY_CLIENT") ||
-              fallbackMessage.includes("blocked")
-            ) {
-              setFetchError(
-                "Firestore request was blocked. Please disable ad blockers or privacy extensions and try again."
-              );
-            } else {
-              setFetchError(
-                `Failed to fetch requirements: ${
-                  fallbackError.message || "Unknown error"
-                }`
-              );
-            }
-            setRequirements([]);
+              })
+            );
+
+            // Filter out null values and add to allFiles
+            const validFiles = filesWithUrls.filter((file) => file !== null);
+            allFiles.push(...validFiles);
+          } catch (error) {
+            console.warn(
+              `❌ Error fetching files from folder ${folderName}:`,
+              error
+            );
           }
+        }
+
+        console.log(
+          `✅ Successfully loaded ${allFiles.length} file(s) from Storage`
+        );
+        console.log("📋 All files data:", allFiles);
+        setStorageFiles(allFiles);
+      } catch (error) {
+        // If folder doesn't exist or no files, that's okay
+        if (error.code === "storage/object-not-found") {
+          console.log("No requirements folder found in Storage");
+          setStorageFiles([]);
+        } else {
+          console.error("Error fetching Storage files:", error);
+          setStorageFiles([]);
         }
       } finally {
-        setIsLoadingRequirements(false);
+        setIsLoadingStorageFiles(false);
       }
     };
 
-    fetchRequirements();
-  }, [open, student]);
+    fetchStorageFiles();
+  }, [open, student?.id]);
 
-  // Fetch profile picture when modal opens
+  // Fetch profile picture from Storage when modal opens
   useEffect(() => {
     const fetchProfilePicture = async () => {
       if (!open || !student?.id) {
@@ -172,25 +153,36 @@ const StudentRequirementModal = ({ open, student, onClose }) => {
         return;
       }
 
-      // Check Firestore profilePictureUrl first (fastest, no network request)
-      if (student.profilePictureUrl) {
-        setProfilePictureUrl(student.profilePictureUrl);
-        setProfilePictureError(false);
-        return;
+      // Fetch directly from Storage - prioritize avatars folder
+      try {
+        // First: Check avatars/{userId}/ folder (direct Storage access)
+        const avatarsRef = ref(storage, `avatars/${student.id}`);
+        const avatarsList = await listAll(avatarsRef);
+
+        if (avatarsList.items.length > 0) {
+          // Get the first file found in avatars folder
+          const avatarFile = avatarsList.items[0];
+          const url = await getDownloadURL(avatarFile);
+          setProfilePictureUrl(url);
+          setProfilePictureError(false);
+          console.log(
+            "✅ Profile picture found in avatars folder:",
+            avatarFile.name
+          );
+          return;
+        }
+      } catch (error) {
+        // If avatars folder doesn't exist, continue to other Storage paths
+        console.log("No avatars folder found, trying other Storage paths...");
       }
 
-      // Only try Storage if user might have a picture (has avatarBase64)
-      // Skip Storage check if user has no avatarBase64 and no profilePictureUrl
-      // This prevents unnecessary 404 errors
-      if (!student.avatarBase64 && !student.avatarbase64) {
-        setProfilePictureError(true);
-        return;
-      }
-
-      // Try Storage - migration creates profile.jpg or profile.png
-      const fileNames = ["profile.jpg", "profile.png"];
-      let found = false;
-
+      // Second: Try profilePictures/{userId}/ folder
+      const fileNames = [
+        "profile.jpg",
+        "profile.png",
+        "avatar.jpg",
+        "avatar.png",
+      ];
       for (const fileName of fileNames) {
         try {
           const profileRef = ref(
@@ -200,131 +192,34 @@ const StudentRequirementModal = ({ open, student, onClose }) => {
           const url = await getDownloadURL(profileRef);
           setProfilePictureUrl(url);
           setProfilePictureError(false);
-          found = true;
-          break;
+          console.log(
+            "✅ Profile picture found in profilePictures folder:",
+            fileName
+          );
+          return;
         } catch (e) {
           // Silently continue if file doesn't exist
-          // This means migration hasn't run yet or file doesn't exist
           continue;
         }
       }
 
-      if (!found) {
-        setProfilePictureError(true);
+      // Last fallback: Check Firestore profilePictureUrl (if exists)
+      if (student.profilePictureUrl) {
+        setProfilePictureUrl(student.profilePictureUrl);
+        setProfilePictureError(false);
+        return;
       }
+
+      // No picture found in Storage or Firestore
+      setProfilePictureError(true);
     };
 
     fetchProfilePicture();
-  }, [open, student?.id, student?.profilePictureUrl]);
+  }, [open, student?.id]);
 
   if (!open || !student) return null;
 
-  // Helper function to format status
-  const formatStatus = (status) => {
-    if (!status) return "Not Submitted";
-    const statusLower = status.toLowerCase();
-    if (
-      statusLower === "completed" ||
-      statusLower === "submitted" ||
-      statusLower === "yes"
-    ) {
-      return "Submitted";
-    }
-    if (statusLower === "pending" || statusLower === "in progress") {
-      return "Pending";
-    }
-    if (
-      statusLower === "not submitted" ||
-      statusLower === "no" ||
-      statusLower === "missing"
-    ) {
-      return "Not Submitted";
-    }
-    return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
-  };
-
-  // Helper function to get status color
-  const getStatusColor = (status) => {
-    const statusLower = status?.toLowerCase() || "";
-    if (
-      statusLower === "completed" ||
-      statusLower === "submitted" ||
-      statusLower === "yes"
-    ) {
-      return "#43a047"; // Green
-    }
-    if (statusLower === "pending" || statusLower === "in progress") {
-      return "#fb8c00"; // Orange
-    }
-    return "#f44336"; // Red
-  };
-
-  // Helper function to format date
-  const formatDate = (dateValue) => {
-    if (!dateValue) return "N/A";
-    try {
-      // If it's a Firestore Timestamp
-      if (dateValue.toDate) {
-        return dateValue.toDate().toLocaleDateString("en-US", {
-          year: "numeric",
-          month: "long",
-          day: "numeric",
-        });
-      }
-      // If it's a string or Date
-      const date = new Date(dateValue);
-      return date.toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      });
-    } catch (error) {
-      return dateValue.toString();
-    }
-  };
-
-  // Helper function to get uploaded files
-  const getUploadedFiles = (requirement) => {
-    if (!requirement) {
-      console.log("No requirement provided to getUploadedFiles");
-      return [];
-    }
-
-    console.log("Getting uploaded files for requirement:", requirement);
-    console.log("uploadedFiles field:", requirement.uploadedFiles);
-
-    // Check if uploadedFiles is an array
-    if (Array.isArray(requirement.uploadedFiles)) {
-      console.log("uploadedFiles is an array:", requirement.uploadedFiles);
-      return requirement.uploadedFiles;
-    }
-
-    // Check if uploadedFiles is an object
-    if (
-      requirement.uploadedFiles &&
-      typeof requirement.uploadedFiles === "object"
-    ) {
-      const filesArray = Object.values(requirement.uploadedFiles);
-      console.log(
-        "uploadedFiles is an object, converted to array:",
-        filesArray
-      );
-      return filesArray;
-    }
-
-    // Check for direct file URL fields (some structures might have files directly)
-    if (requirement.fileUrl || requirement.file || requirement.documentUrl) {
-      console.log("Found direct file URL fields");
-      return [
-        requirement.fileUrl || requirement.file || requirement.documentUrl,
-      ];
-    }
-
-    console.log("No uploaded files found");
-    return [];
-  };
-
-  // Helper function to get file type
+  // Helper function to get file type (for preview)
   const getFileType = (url) => {
     if (!url) return "unknown";
     const urlLower = url.toLowerCase();
@@ -347,6 +242,60 @@ const StudentRequirementModal = ({ open, student, onClose }) => {
     if (urlLower.includes(".xls") || urlLower.includes(".xlsx"))
       return "spreadsheet";
     return "other";
+  };
+
+  // Helper function to detect document type from filename
+  const getDocumentType = (fileName) => {
+    if (!fileName) return "Document";
+    const nameLower = fileName.toLowerCase();
+
+    // Check for common requirement types
+    if (nameLower.includes("moa") || nameLower.includes("memorandum")) {
+      return "MOA (Memorandum of Agreement)";
+    }
+    if (nameLower.includes("resume") || nameLower.includes("cv")) {
+      return "Resume";
+    }
+    if (nameLower.includes("clearance") || nameLower.includes("barangay")) {
+      return "Clearance";
+    }
+    if (nameLower.includes("waiver") || nameLower.includes("consent")) {
+      return "Waiver";
+    }
+    if (nameLower.includes("medical") || nameLower.includes("health")) {
+      return "Medical Certificate";
+    }
+    if (nameLower.includes("parent") || nameLower.includes("guardian")) {
+      return "Parent/Guardian Consent";
+    }
+    if (nameLower.includes("application") || nameLower.includes("form")) {
+      return "Application Form";
+    }
+    if (nameLower.includes("transcript") || nameLower.includes("grades")) {
+      return "Transcript of Records";
+    }
+    if (nameLower.includes("certificate") || nameLower.includes("cert")) {
+      return "Certificate";
+    }
+    if (nameLower.includes("id") || nameLower.includes("identification")) {
+      return "ID Document";
+    }
+
+    // Check file extension for generic types
+    if (nameLower.endsWith(".pdf")) {
+      return "PDF Document";
+    }
+    if (nameLower.match(/\.(jpg|jpeg|png|gif|webp)$/)) {
+      return "Image";
+    }
+    if (nameLower.match(/\.(doc|docx)$/)) {
+      return "Word Document";
+    }
+    if (nameLower.match(/\.(xls|xlsx)$/)) {
+      return "Excel Spreadsheet";
+    }
+
+    return "Document";
   };
 
   // Handle file click - open in viewer
@@ -408,7 +357,7 @@ const StudentRequirementModal = ({ open, student, onClose }) => {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="student-requirement-modal-header">
-          <h2>Student Requirements & Documents</h2>
+          <h2>Student Files</h2>
           <button
             className="close-btn"
             onClick={onClose}
@@ -477,165 +426,154 @@ const StudentRequirementModal = ({ open, student, onClose }) => {
             </div>
           )}
 
-          {isLoadingRequirements ? (
-            <div className="loading-requirements">
-              <p>Loading requirements...</p>
-            </div>
-          ) : fetchError ? (
-            <div className="error-requirements">
-              <p style={{ color: "#f44336", marginBottom: "8px" }}>
-                ⚠️ {fetchError}
-              </p>
-              <button
-                onClick={async () => {
-                  setFetchError(null);
-                  setIsLoadingRequirements(true);
-                  try {
-                    const userDocRef = doc(db, "users", student.id);
-                    const userDocSnap = await getDoc(userDocRef);
-                    if (userDocSnap.exists()) {
-                      const userData = userDocSnap.data();
-                      if (userData.requirements) {
-                        if (Array.isArray(userData.requirements)) {
-                          setRequirements(userData.requirements);
-                        } else if (typeof userData.requirements === "object") {
-                          setRequirements(Object.values(userData.requirements));
-                        }
-                      }
-                    }
-                  } catch (error) {
-                    setFetchError(`Retry failed: ${error.message}`);
-                  } finally {
-                    setIsLoadingRequirements(false);
-                  }
-                }}
-                style={{
-                  padding: "8px 16px",
-                  background: "#1976d2",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontSize: "0.9rem",
-                }}
-              >
-                Retry
-              </button>
-            </div>
-          ) : requirements.length > 0 ? (
-            <div className="requirement-section">
-              <h3>Required Documents</h3>
+          {/* Required Documents Section */}
+          <div className="requirement-section">
+            <h3>Required Documents</h3>
+            {isLoadingStorageFiles ? (
+              <div className="loading-requirements">
+                <p>Loading files from Storage...</p>
+              </div>
+            ) : (
               <div className="document-list">
-                {requirements.map((requirement, index) => {
-                  const uploadedFiles = getUploadedFiles(requirement);
-                  const status = formatStatus(requirement.status);
-                  const statusColor = getStatusColor(requirement.status);
+                {[
+                  {
+                    type: "MOA (Memorandum of Agreement)",
+                    description:
+                      "Signed agreement between your school and the company.",
+                    keywords: ["moa", "memorandum", "agreement"],
+                    folderName: "moa-memorandum-of-agreement",
+                  },
+                  {
+                    type: "Parent/Guardian Consent Form",
+                    description: "Signed consent form from parent or guardian.",
+                    keywords: ["parent", "guardian", "consent"],
+                    folderName: "parent-guardian-consent-form",
+                  },
+                  {
+                    type: "Medical Certificate",
+                    description: "Medical clearance from a licensed physician.",
+                    keywords: ["medical", "health", "clearance", "certificate"],
+                    folderName: "medical-certificate",
+                  },
+                  {
+                    type: "Resume",
+                    description: "Updated resume or curriculum vitae.",
+                    keywords: ["resume", "cv", "curriculum"],
+                    folderName: "resume-cv",
+                  },
+                  {
+                    type: "Clearance",
+                    description: "Barangay or community clearance certificate.",
+                    keywords: ["clearance", "barangay"],
+                    folderName: "police-clearance",
+                  },
+                  {
+                    type: "Academic Records",
+                    description: "Transcript of records or academic documents.",
+                    keywords: ["academic", "transcript", "records", "grades"],
+                    folderName: "academic-records",
+                  },
+                  {
+                    type: "Cover Letter",
+                    description: "Cover letter for internship application.",
+                    keywords: ["cover", "letter"],
+                    folderName: "cover-letter",
+                  },
+                  {
+                    type: "Insurance Certificate",
+                    description: "Insurance certificate or proof of coverage.",
+                    keywords: ["insurance", "certificate"],
+                    folderName: "insurance-certificate",
+                  },
+                ].map((requirement, index) => {
+                  // Find matching file from Storage by folder name first
+                  let matchingFile = storageFiles.find(
+                    (file) => file.folderName === requirement.folderName
+                  );
+
+                  // If no match by folder name, try requirementType matching
+                  if (!matchingFile) {
+                    matchingFile = storageFiles.find(
+                      (file) => file.requirementType === requirement.type
+                    );
+                  }
+
+                  // If still no match, try keyword matching as fallback
+                  if (!matchingFile) {
+                    matchingFile = storageFiles.find((file) => {
+                      const fileName = file.name.toLowerCase();
+                      const folderName = file.folderName?.toLowerCase() || "";
+                      const matches =
+                        requirement.keywords.some((keyword) =>
+                          fileName.includes(keyword.toLowerCase())
+                        ) ||
+                        requirement.keywords.some((keyword) =>
+                          folderName.includes(keyword.toLowerCase())
+                        );
+                      if (matches) {
+                        console.log(
+                          `✅ Matched "${file.name}" (from ${file.folderName}) to "${requirement.type}"`
+                        );
+                      }
+                      return matches;
+                    });
+                  } else {
+                    console.log(
+                      `✅ Matched file from folder "${matchingFile.folderName}" to "${requirement.type}"`
+                    );
+                  }
+
+                  // Debug: Log if no match found
+                  if (!matchingFile && storageFiles.length > 0) {
+                    console.log(
+                      `❌ No match for "${requirement.type}". Available files:`,
+                      storageFiles.map((f) => ({
+                        name: f.name,
+                        folder: f.folderName,
+                        type: f.requirementType,
+                      }))
+                    );
+                  }
+
+                  const status = matchingFile ? "Submitted" : "Pending";
+                  const statusColor = matchingFile ? "#43a047" : "#fb8c00";
 
                   return (
-                    <div
-                      key={requirement.id || index}
-                      className="document-item"
-                    >
+                    <div key={index} className="document-item">
                       <div className="document-info">
                         <div className="document-header">
                           <span className="document-name">
-                            {requirement.title || "Untitled Requirement"}
+                            {requirement.type}
                           </span>
                           <span
                             className="document-status"
-                            style={{ color: statusColor }}
+                            style={{
+                              color: statusColor,
+                              backgroundColor: "#f5f5f5",
+                            }}
                           >
                             {status}
                           </span>
                         </div>
-                        {requirement.description && (
-                          <p className="document-description">
-                            {requirement.description}
-                          </p>
-                        )}
-                        <div className="document-meta">
-                          {requirement.dueDate && (
-                            <span className="document-due-date">
-                              Due: {formatDate(requirement.dueDate)}
-                            </span>
-                          )}
-                        </div>
+                        <p className="document-description">
+                          {requirement.description}
+                        </p>
                       </div>
-                      {uploadedFiles.length > 0 ? (
+                      {matchingFile ? (
                         <div className="document-files">
-                          {uploadedFiles.map((file, fileIndex) => {
-                            // Handle different file formats - extract URL
-                            let fileUrl = null;
-                            let fileName = `File ${fileIndex + 1}`;
-
-                            console.log(`Processing file ${fileIndex}:`, file);
-
-                            if (typeof file === "string") {
-                              fileUrl = file;
-                              // Try to extract filename from URL
-                              try {
-                                const urlParts = file.split("/");
-                                fileName =
-                                  urlParts[urlParts.length - 1] ||
-                                  `File ${fileIndex + 1}`;
-                              } catch (e) {
-                                fileName = `File ${fileIndex + 1}`;
-                              }
-                            } else if (file && typeof file === "object") {
-                              // Try multiple possible URL fields
-                              fileUrl =
-                                file.url ||
-                                file.downloadURL ||
-                                file.downloadUrl ||
-                                file.fileUrl ||
-                                file.fileURL ||
-                                file.link ||
-                                file.src ||
-                                file.path ||
-                                file.uri ||
-                                file.downloadUri;
-
-                              // Extract file name
-                              fileName =
-                                file.name ||
-                                file.fileName ||
-                                file.originalName ||
-                                file.filename ||
-                                file.displayName ||
-                                (fileUrl
-                                  ? fileUrl.split("/").pop() ||
-                                    `File ${fileIndex + 1}`
-                                  : `File ${fileIndex + 1}`);
+                          <button
+                            onClick={(e) =>
+                              handleFileClick(
+                                e,
+                                matchingFile.downloadURL,
+                                matchingFile.name
+                              )
                             }
-
-                            console.log(
-                              `File ${fileIndex} - URL: ${fileUrl}, Name: ${fileName}`
-                            );
-
-                            return fileUrl ? (
-                              <button
-                                key={fileIndex}
-                                onClick={(e) =>
-                                  handleFileClick(e, fileUrl, fileName)
-                                }
-                                className="document-link"
-                                title={`View ${fileName}`}
-                              >
-                                📄 {fileName}
-                              </button>
-                            ) : (
-                              <div
-                                key={fileIndex}
-                                className="document-link-error"
-                                style={{
-                                  color: "#f44336",
-                                  fontSize: "0.85rem",
-                                }}
-                              >
-                                ⚠️ File {fileIndex + 1} - Invalid URL
-                              </div>
-                            );
-                          })}
+                            className="document-link"
+                            title={`View ${matchingFile.name}`}
+                          >
+                            📄 {matchingFile.name}
+                          </button>
                         </div>
                       ) : (
                         <div
@@ -653,12 +591,8 @@ const StudentRequirementModal = ({ open, student, onClose }) => {
                   );
                 })}
               </div>
-            </div>
-          ) : (
-            <div className="no-requirements">
-              <p>No requirements found for this student.</p>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         <div className="student-requirement-modal-actions">

@@ -268,15 +268,16 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 16px;
-  background: #f7f9fb;
+  padding: 20px;
+  background: #fff;
   border-radius: 8px;
   border: 1px solid #e0e0e0;
   transition: box-shadow 0.2s, border-color 0.2s;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .document-item:hover {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   border-color: #1976d2;
 }
 
@@ -292,24 +293,181 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 8px;
+  gap: 12px;
 }
 
 .document-name {
-  font-weight: 600;
+  font-weight: 700;
   color: #333;
+  font-size: 1.1rem;
+  flex: 1;
+}
+
+.document-title-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.document-type-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #1976d2;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: #e3f2fd;
+  padding: 2px 8px;
+  border-radius: 4px;
+  display: inline-block;
+  width: fit-content;
+}
+
+.document-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.delete-requirement-btn {
+  background: transparent;
+  border: none;
+  color: #f44336;
+  cursor: pointer;
+  padding: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s;
+  font-size: 16px;
+}
+
+.delete-requirement-btn:hover:not(:disabled) {
+  background: #ffebee;
+  color: #c62828;
+  transform: scale(1.1);
+}
+
+.delete-requirement-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.delete-requirement-btn:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+/* Storage Files Section Styles */
+.storage-file-item {
+  background: #f8f9fa;
+  border-left: 4px solid #1976d2;
+}
+
+.storage-file-item:hover {
+  border-left-color: #1565c0;
+  background: #f0f4f8;
+}
+
+.storage-status {
+  font-weight: 600;
+  padding: 4px 12px;
+  background: #e8f5e9;
+  border-radius: 12px;
+  font-size: 0.85rem;
+}
+
+.file-meta-item {
+  color: #666;
+  font-size: 0.9rem;
+  margin-right: 20px;
+}
+
+.file-meta-item strong {
+  color: #333;
+  font-weight: 600;
+  margin-right: 4px;
+}
+
+.storage-file-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+.storage-view-btn,
+.storage-download-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.storage-view-btn {
+  background: #fff;
+  color: #1976d2;
+  border: 1.5px solid #1976d2;
+}
+
+.storage-view-btn:hover {
+  background: #e3f2fd;
+  border-color: #1565c0;
+  color: #1565c0;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(25, 118, 210, 0.2);
+}
+
+.storage-download-btn {
+  background: #1976d2;
+  color: #fff;
+}
+
+.storage-download-btn:hover {
+  background: #1565c0;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(25, 118, 210, 0.3);
+}
+
+.storage-view-btn:active,
+.storage-download-btn:active {
+  transform: translateY(0);
+}
+
+.file-icon {
   font-size: 1rem;
 }
 
 .document-status {
   font-size: 0.9rem;
-  font-weight: 500;
+  font-weight: 700;
+  padding: 6px 16px;
+  border-radius: 20px;
+  background: #f5f5f5 !important;
+  color: #43a047;
+  border: none;
+  white-space: nowrap;
+  display: inline-block;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+}
+
+.document-status[style*="#fb8c00"] {
+  color: #fb8c00 !important;
+  background: #f5f5f5 !important;
 }
 
 .document-description {
-  margin: 8px 0;
+  margin: 8px 0 12px 0;
   color: #666;
-  font-size: 0.9rem;
-  line-height: 1.4;
+  font-size: 0.95rem;
+  line-height: 1.5;
 }
 
 .document-meta {
@@ -638,24 +796,28 @@
 
 /* Update document-link to look like a button */
 .document-link {
-  background: none;
-  border: 1px solid #1976d2;
+  background: #fff;
+  border: 1.5px solid #1976d2;
   color: #1976d2;
   text-decoration: none;
   font-size: 0.9rem;
   font-weight: 500;
-  padding: 8px 12px;
+  padding: 10px 16px;
   border-radius: 6px;
-  transition: background 0.2s, color 0.2s;
+  transition: all 0.2s;
   text-align: left;
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   cursor: pointer;
   font-family: inherit;
-  width: 100%;
-  text-align: center;
+  width: auto;
 }
 
 .document-link:hover {
-  background: #1976d2;
-  color: #fff;
+  background: #e3f2fd;
+  border-color: #1565c0;
+  color: #1565c0;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(25, 118, 210, 0.2);
 }

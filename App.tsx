@@ -54,7 +54,7 @@ export type RootStackParamList = {
   SignUp: undefined;
   SetupAccount: undefined;
   InternshipDetails: { post: Post };
-  CompanyProfile: { company: Post };
+  CompanyProfile: { companyId: string };
   RequirementsChecklist: undefined;
   OJTTracker: { post?: Post };
   WeeklyReport: undefined;

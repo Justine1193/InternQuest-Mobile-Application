@@ -458,7 +458,7 @@ const HelpDeskScreen: React.FC = () => {
         {/* If this is an image we already displayed it inline — hide Preview/Download actions.
             Otherwise keep the existing preview / download controls. */}
         {/* Determine special handling: images already inlined, PDFs should be download-only (no Preview) */}
-        {(() => {
+          {(() => {
           const fileName = String(item.fileName || item.name || '').toLowerCase();
           const fileType = String(item.fileType || '').toLowerCase();
           const isImage = fileType.startsWith('image') || /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(fileName);
@@ -479,14 +479,18 @@ const HelpDeskScreen: React.FC = () => {
             );
           }
 
-          // Otherwise show both Preview and Download
+          // Otherwise render exactly like the PDF row: single download action, compact style
           return (
-            <>
-              <View style={{ flexDirection: 'row' }}>
-                <Button mode="outlined" onPress={() => handlePreview(item)} color="#6366F1">Preview</Button>
+            <TouchableOpacity activeOpacity={0.9} onPress={() => handleDownload(item)} style={styles.pdfBox}>
+              <View style={styles.pdfBoxInner}>
+                <MaterialCommunityIcons name="file-document-outline" size={18} color="#0b2b34" style={{ marginRight: 10 }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontWeight: '600', color: '#0b2b34' }}>{item.fileName || item.name || 'document'}</Text>
+                  {item.uploadedAt ? <Text style={[styles.attachmentMeta, { marginTop: 2 }]}>Uploaded {new Date(item.uploadedAt).toLocaleDateString()}</Text> : null}
+                </View>
+                <MaterialCommunityIcons name="download" size={18} color="#6b7280" />
               </View>
-              <Button mode="contained" onPress={() => handleDownload(item)} color="#6366F1">Download</Button>
-            </>
+            </TouchableOpacity>
           );
         })()}
         {isAdmin && (
@@ -511,28 +515,22 @@ const HelpDeskScreen: React.FC = () => {
     return fileType.startsWith('image') || /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(fileName);
   });
 
-  const pdfTemplates = templates.filter(item => {
-    const fileName = String(item.fileName || item.name || '').toLowerCase();
-    const fileType = String(item.fileType || item.contentType || '').toLowerCase();
-    return fileType === 'application/pdf' || fileName.endsWith('.pdf');
-  });
-
-  const otherTemplates = templates.filter(item => {
+  // Combine all non-image templates (PDFs + other document types) and group them by 'requirement'
+  // so multiple attachments appear stacked inside the same card.
+  const docTemplates = templates.filter(item => {
     const fileName = String(item.fileName || item.name || '').toLowerCase();
     const fileType = String(item.fileType || item.contentType || '').toLowerCase();
     const isImage = fileType.startsWith('image') || /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(fileName);
-    const isPdf = fileType === 'application/pdf' || fileName.endsWith('.pdf');
-    return !isImage && !isPdf;
+    return !isImage; // keeps pdfs + docx + other documents
   });
 
-  // group pdfTemplates by 'requirement' (same description + dueDate) so multiple attachments can appear inside one card
-  const groupedPdfMap: Record<string, { description?: string, dueDate?: string | undefined, items: TemplateDoc[] }> = {};
-  pdfTemplates.forEach(p => {
+  const groupedDocMap: Record<string, { description?: string, dueDate?: string | undefined, items: TemplateDoc[] }> = {};
+  docTemplates.forEach(p => {
     const key = `${p.description || 'File Requirement'}||${p.dueDate || ''}`;
-    if (!groupedPdfMap[key]) groupedPdfMap[key] = { description: p.description, dueDate: p.dueDate, items: [] };
-    groupedPdfMap[key].items.push(p);
+    if (!groupedDocMap[key]) groupedDocMap[key] = { description: p.description, dueDate: p.dueDate, items: [] };
+    groupedDocMap[key].items.push(p);
   });
-  const groupedPdfs = Object.keys(groupedPdfMap).map(k => groupedPdfMap[k]);
+  const groupedDocs = Object.keys(groupedDocMap).map(k => groupedDocMap[k]);
 
   return (
     <View style={styles.page}>
@@ -586,10 +584,10 @@ const HelpDeskScreen: React.FC = () => {
               </View>
             )}
 
-            {/* 2. Render grouped PDF section next */}
-            {groupedPdfs.length > 0 && (
+            {/* 2. Render grouped document section next (PDFs + DOCs stacked together) */}
+            {groupedDocs.length > 0 && (
               <View style={styles.pdfSection}>
-                {groupedPdfs.map((g, idx) => (
+                {groupedDocs.map((g, idx) => (
                   <Card style={styles.requirementCard} key={idx}>
                     <View style={styles.requirementHeader}>
                       <Text style={styles.requirementTitle}>File Requirement</Text>
@@ -602,7 +600,15 @@ const HelpDeskScreen: React.FC = () => {
                         {g.items.map(att => (
                           <TouchableOpacity key={att.id} activeOpacity={0.9} onPress={() => handleDownload(att)} style={styles.attachmentRow}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                              <View style={styles.attachmentIconWrap}><MaterialCommunityIcons name="file-pdf-box" size={18} color="#fff" /></View>
+                                <View style={styles.attachmentIconWrap}>
+                                  {(() => {
+                                    // choose a suitable icon based on file type/extension
+                                    const fname = String(att.fileName || att.name || '').toLowerCase();
+                                    const ftype = String(att.fileType || att.contentType || '').toLowerCase();
+                                    if (ftype === 'application/pdf' || fname.endsWith('.pdf')) return <MaterialCommunityIcons name="file-pdf-box" size={18} color="#fff" />;
+                                    return <MaterialCommunityIcons name="file-document-outline" size={18} color="#fff" />;
+                                  })()}
+                                </View>
                               <View style={{ flex: 1 }}>
                                 <Text numberOfLines={1} ellipsizeMode='tail' style={styles.attachmentText}>{att.fileName || att.name || 'document.pdf'}</Text>
                                 {att.uploadedAt ? <Text style={styles.attachmentMeta}>Uploaded {new Date(att.uploadedAt).toLocaleDateString()}</Text> : null}
@@ -618,14 +624,7 @@ const HelpDeskScreen: React.FC = () => {
               </View>
             )}
 
-            {/* 3. Render any other (non-image, non-PDF) templates */}
-            {otherTemplates.length > 0 && (
-              <View style={{ marginTop: 16 }}>
-                {otherTemplates.map(item => (
-                  <React.Fragment key={item.id}>{renderItem({ item })}</React.Fragment>
-                ))}
-              </View>
-            )}
+            {/* 3. No further 'other' documents — all non-image docs are grouped above */}
           </>
         )}
       </ScrollView>

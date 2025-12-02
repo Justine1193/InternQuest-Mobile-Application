@@ -386,7 +386,7 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
               <TouchableOpacity
                 key={post.id}
                 style={styles.card}
-                onPress={() => navigation.navigate('CompanyProfile', { company: post })}
+                onPress={() => navigation.navigate('CompanyProfile', { companyId: post.id })}
               >
                 <View style={styles.cardHeader}>
                   <View style={styles.companyInfo}>

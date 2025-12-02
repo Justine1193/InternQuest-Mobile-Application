@@ -26,16 +26,57 @@ type ApplicationStatus = 'pending' | 'approved' | 'rejected' | 'not_applied';
 const CompanyProfileScreen: React.FC = () => {
     const navigation = useNavigation<CompanyProfileNavigationProp>();
     const route = useRoute<CompanyProfileRouteProp>();
-    const { company } = route.params;
+    const { companyId } = route.params;
+
+    const [company, setCompany] = useState<Post | null>(null);
+
+    useEffect(() => {
+        const loadCompany = async () => {
+            try {
+                const docRef = doc(firestore, 'companies', companyId);
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    const data = docSnap.data() as any;
+                    const mapped: Post = {
+                        id: docSnap.id,
+                        company: data.companyName || data.company || '',
+                        description: data.companyDescription || data.description || '',
+                        category: data.category || '',
+                        location: data.companyAddress || data.location || '',
+                        industry: data.fields || data.industry || '',
+                        tags: Array.isArray(data.skillsREq) ? data.skillsREq : (Array.isArray(data.tags) ? data.tags : []),
+                        website: data.companyWeb || data.website || '',
+                        email: data.companyEmail || data.email || '',
+                        moa: data.moa || '',
+                        modeOfWork: Array.isArray(data.modeOfWork) ? data.modeOfWork[0] : (data.modeOfWork || ''),
+                        latitude: data.latitude || 0,
+                        longitude: data.longitude || 0,
+                        createdAt: data.createdAt ? (data.createdAt.toDate ? data.createdAt.toDate() : new Date(data.createdAt)) : new Date(),
+                    };
+                    setCompany(mapped);
+                }
+            } catch (error) {
+                console.error('Error loading company:', error);
+            }
+        };
+        loadCompany();
+    }, [companyId]);
 
     const [isLoading, setIsLoading] = useState(false);
     const [applicationStatus, setApplicationStatus] = useState<ApplicationStatus>('not_applied');
     const [userProfile, setUserProfile] = useState<any>(null);
 
     useEffect(() => {
-        checkApplicationStatus();
+        // fetch profile regardless
         fetchUserProfile();
     }, []);
+
+    // when the company record has been loaded, check application status
+    useEffect(() => {
+        if (company) {
+            checkApplicationStatus();
+        }
+    }, [company]);
 
     const fetchUserProfile = async () => {
         if (!auth.currentUser) return;
@@ -52,13 +93,20 @@ const CompanyProfileScreen: React.FC = () => {
     const checkApplicationStatus = async () => {
         if (!auth.currentUser) return;
         try {
-            const applicationRef = doc(firestore, 'applications', `${auth.currentUser.uid}_${company.id}`);
+            const applicationRef = doc(firestore, 'applications', `${auth.currentUser.uid}_${companyId}`);
             const applicationDoc = await getDoc(applicationRef);
             if (applicationDoc.exists()) {
                 setApplicationStatus(applicationDoc.data().status || 'pending');
             }
         } catch (error) {
             console.error('Error checking application status:', error);
+            try {
+                if (auth.currentUser) {
+                    await setDoc(doc(firestore, 'users', auth.currentUser.uid), { lastApplicationStatusFetchError: { time: new Date().toISOString(), message: String(error), companyId } }, { merge: true });
+                }
+            } catch (diagErr) {
+                console.warn('CompanyProfile: failed to write lastApplicationStatusFetchError', diagErr);
+            }
         }
     };
 
@@ -77,8 +125,8 @@ const CompanyProfileScreen: React.FC = () => {
         try {
             const applicationData = {
                 userId: auth.currentUser.uid,
-                companyId: company.id,
-                companyName: company.company,
+                companyId: company!.id,
+                companyName: company!.company,
                 status: 'pending',
                 appliedAt: new Date(),
                 userProfile: {
@@ -89,7 +137,7 @@ const CompanyProfileScreen: React.FC = () => {
                 },
             };
 
-            const applicationRef = doc(firestore, 'applications', `${auth.currentUser.uid}_${company.id}`);
+            const applicationRef = doc(firestore, 'applications', `${auth.currentUser.uid}_${company!.id}`);
             await setDoc(applicationRef, applicationData);
 
             setApplicationStatus('pending');
@@ -105,12 +153,12 @@ const CompanyProfileScreen: React.FC = () => {
     const handleContact = (type: 'email' | 'website' | 'phone') => {
         switch (type) {
             case 'email':
-                if (company.email) {
-                    Linking.openURL(`mailto:${company.email}`);
+                    if (company?.email) {
+                        Linking.openURL(`mailto:${company.email}`);
                 }
                 break;
             case 'website':
-                if (company.website) {
+                if (company?.website) {
                     Linking.openURL(company.website);
                 }
                 break;
@@ -137,6 +185,14 @@ const CompanyProfileScreen: React.FC = () => {
             default: return 'Not Applied';
         }
     };
+
+    if (!company) {
+        return (
+            <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+                <ActivityIndicator size="large" color="#6366F1" />
+            </View>
+        );
+    }
 
     return (
         <View style={styles.container}>

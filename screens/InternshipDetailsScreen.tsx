@@ -89,6 +89,16 @@ const InternshipDetailsScreen: React.FC<Props> = ({ route }) => {
           Alert.alert('Geocoding Error', 'Unable to find coordinates for the given location.');
         }
       } catch (error) {
+        console.error('Geocoding Error:', error);
+        // Persist a short diagnostic so we can inspect server-side
+        try {
+          if (auth.currentUser) {
+            await setDoc(doc(firestore, 'users', auth.currentUser.uid), { lastGeocodeError: { time: new Date().toISOString(), message: String(error) } }, { merge: true });
+            console.log('InternshipDetails: wrote lastGeocodeError to user doc');
+          }
+        } catch (diagErr) {
+          console.warn('InternshipDetails: failed to write lastGeocodeError', diagErr);
+        }
         Alert.alert('Geocoding Error', 'There was an issue with retrieving the location.');
       }
     };
@@ -109,6 +119,14 @@ const InternshipDetailsScreen: React.FC<Props> = ({ route }) => {
         }
       } catch (error) {
         console.error('Error checking hired status:', error);
+        try {
+          if (auth.currentUser) {
+            await setDoc(doc(firestore, 'users', auth.currentUser.uid), { lastHiredStatusFetchError: { time: new Date().toISOString(), message: String(error) } }, { merge: true });
+            console.log('InternshipDetails: wrote lastHiredStatusFetchError to user doc');
+          }
+        } catch (diagErr) {
+          console.warn('InternshipDetails: failed to write lastHiredStatusFetchError', diagErr);
+        }
       }
     };
     checkHiredStatus();
@@ -130,6 +148,14 @@ const InternshipDetailsScreen: React.FC<Props> = ({ route }) => {
       }
     } catch (error) {
       console.error('Error fetching work mode:', error);
+      try {
+        if (auth.currentUser) {
+          await setDoc(doc(firestore, 'users', auth.currentUser.uid), { lastWorkModeFetchError: { time: new Date().toISOString(), message: String(error), companyId: post.id } }, { merge: true });
+          console.log('InternshipDetails: wrote lastWorkModeFetchError to user doc');
+        }
+      } catch (diagErr) {
+        console.warn('InternshipDetails: failed to write lastWorkModeFetchError', diagErr);
+      }
       Alert.alert('Error', 'Failed to load work mode information');
     }
   }, [post.id]);
@@ -219,16 +245,21 @@ const InternshipDetailsScreen: React.FC<Props> = ({ route }) => {
                   [
                     {
                       text: 'Go to OJT Tracker',
-                      onPress: () => {
-                        navigation.navigate('OJTTracker', {
-                          post,
-                        });
-                      }
+                        onPress: () => navigation.navigate('OJTTracker', {})
                     }
                   ]
                 );
               } catch (error) {
                 console.error('Error updating status:', error);
+                // Persist diagnostic info to the user's document
+                try {
+                  if (auth.currentUser) {
+                    await setDoc(doc(firestore, 'users', auth.currentUser.uid), { lastStatusUpdateError: { time: new Date().toISOString(), message: String(error), companyId: post.id } }, { merge: true });
+                    console.log('InternshipDetails: wrote lastStatusUpdateError to user doc');
+                  }
+                } catch (diagErr) {
+                  console.warn('InternshipDetails: failed to write lastStatusUpdateError', diagErr);
+                }
                 Alert.alert('Error', 'Failed to update status. Please try again.');
               } finally {
                 setIsLoading(false);

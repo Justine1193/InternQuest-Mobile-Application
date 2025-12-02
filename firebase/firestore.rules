@@ -1,6 +1,13 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // USERS COLLECTION
+    // Root user documents: the owner can read and write their top-level user doc
+    // Admin can read any user document
+ match /adminusers/{adminId} {
+      allow read: if true;
+      allow write: if false;
+    }
     // Users can only read/write their own data
     // Root user documents: the owner can read and write their top-level user doc
     match /users/{userId} {
@@ -48,15 +55,18 @@ service cloud.firestore {
     // Allow the authenticated owner to create/read/update/delete their own admin_files
     // records; allow administrators full access.
     match /admin_files/{docId} {
+      // Validate create: must include a userId field matching the caller (or caller is admin)
       allow create: if request.auth != null && (
-        // owner may create a record for themselves OR admin can create on behalf
-        request.resource.data.userId == request.auth.uid ||
+        (
+          request.resource.data.userId is string &&
+          request.resource.data.userId == request.auth.uid
+        ) ||
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
       );
 
+      // Owners or admins may read, update or delete
       allow read, update, delete: if request.auth != null && (
-        // owner or admin can read/update/delete
-        resource.data.userId == request.auth.uid ||
+        (resource.data.userId is string && resource.data.userId == request.auth.uid) ||
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
       );
     }
@@ -73,6 +83,15 @@ service cloud.firestore {
     // Requirements - users can only access their own requirements
     match /users/{userId}/requirements/{requirementId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Meta documents (program lists, fields, suggestion skills) – readable by any authenticated user
+    match /meta/{docId} {
+      // Allow authenticated users to read meta documents
+      allow read: if request.auth != null;
+      // Only admins should be able to create/update/delete meta documents
+      allow create, update, delete: if request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
     
     // Default deny all

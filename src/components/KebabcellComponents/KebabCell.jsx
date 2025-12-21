@@ -18,6 +18,7 @@ function KebabCell({
   selectedRowId = null,
   setSelectedRowId,
   handleDeleteSingle,
+  handleAcceptStudent = null,
   isDeleting = false,
   selectionMode = false,
   setSelectedItems,
@@ -28,6 +29,7 @@ function KebabCell({
   setSkills = null,
   setIsModalOpen = null,
   onEdit = null,
+  isAdviser = false,
 }) {
   const kebabRef = useRef(null);
   const [isClicked, setIsClicked] = useState(false);
@@ -90,6 +92,22 @@ function KebabCell({
     }
   };
 
+  /**
+   * Handles accept/approve action for pending students (advisers only)
+   */
+  const handleAccept = async () => {
+    if (window.confirm("Are you sure you want to accept this student?")) {
+      if (handleAcceptStudent) {
+        await handleAcceptStudent(row.id);
+      }
+      setOpenMenuId(null);
+      setSelectedRowId(null);
+    }
+  };
+
+  // Check if student is pending (not approved/hired)
+  const isPending = row.status === false || row.status === undefined || row.status === null;
+
   const hasEditProps = Boolean(
     setIsEditMode &&
       setEditCompanyId &&
@@ -126,23 +144,39 @@ function KebabCell({
           </button>
         )}
 
-        {selectedRowId !== row.id ? (
-          <button
-            className="select-btn"
-            onClick={handleSelect}
-            aria-label="Select item"
-          >
-            Select
-          </button>
+        {isAdviser ? (
+          // Adviser view: Show accept button for pending students
+          isPending && handleAcceptStudent ? (
+            <button
+              className="accept-btn"
+              onClick={handleAccept}
+              aria-label="Accept student"
+            >
+              Accept Student
+            </button>
+          ) : (
+            <span className="no-action-text">No actions available</span>
+          )
         ) : (
-          <button
-            className="delete"
-            onClick={handleDelete}
-            disabled={isDeleting}
-            aria-label={isDeleting ? "Deleting item" : "Delete item"}
-          >
-            {isDeleting ? "Deleting..." : "Delete"}
-          </button>
+          // Coordinator/Super Admin view: Show select/delete
+          selectedRowId !== row.id ? (
+            <button
+              className="select-btn"
+              onClick={handleSelect}
+              aria-label="Select item"
+            >
+              Select
+            </button>
+          ) : (
+            <button
+              className="delete"
+              onClick={handleDelete}
+              disabled={isDeleting}
+              aria-label={isDeleting ? "Deleting item" : "Delete item"}
+            >
+              {isDeleting ? "Deleting..." : "Delete"}
+            </button>
+          )
         )}
       </PortalDropdown>
     </span>
@@ -184,6 +218,10 @@ KebabCell.propTypes = {
   setIsModalOpen: PropTypes.func,
   /** Function to handle edit action */
   onEdit: PropTypes.func,
+  /** Function to handle accepting a student (for advisers) */
+  handleAcceptStudent: PropTypes.func,
+  /** Whether current user is an adviser */
+  isAdviser: PropTypes.bool,
 };
 
 export default KebabCell;

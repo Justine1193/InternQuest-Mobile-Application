@@ -53,9 +53,28 @@ const StudentTableRow = ({
   setSelectionMode,
   setSelectedItems,
   handleDeleteSingle,
+  handleAcceptStudent,
   isDeleting,
   onRowClick,
+  isAdviser,
+  requirementApprovals,
+  visibleColumns = [],
 }) => {
+  // Essential columns that must always be visible
+  const essentialColumns = [
+    "profilePicture",
+    "studentNumber",
+    "firstName",
+    "lastName",
+  ];
+
+  const isColumnVisible = (key) => {
+    // Essential columns are always visible
+    if (essentialColumns.includes(key)) return true;
+    // For non-essential columns, check if they're in the visibleColumns array
+    // visibleColumns should always be provided and include essential columns
+    return visibleColumns.includes(key);
+  };
   // State for toggling skill tag expansion
   const [showAllSkills, setShowAllSkills] = useState(false);
   const [profilePictureUrl, setProfilePictureUrl] = useState(null);
@@ -132,6 +151,69 @@ const StudentTableRow = ({
     return "";
   };
 
+  // Get requirements status indicator and counts
+  const getRequirementsStatus = () => {
+    if (!row?.id) return { status: null, notSubmitted: 8, pending: 0 };
+
+    // Get list of all required documents (should match StudentDashboard)
+    const REQUIRED_DOCUMENTS = [
+      "MOA (Memorandum of Agreement)",
+      "Parent/Guardian Consent Form",
+      "Medical Certificate",
+      "Resume",
+      "Clearance",
+      "Academic Records",
+      "Cover Letter",
+      "Insurance Certificate",
+    ];
+
+    // Get submitted requirements for this student (passed from parent)
+    const submittedRequirements = row.submittedRequirements || [];
+
+    // Count not submitted requirements
+    const notSubmitted = REQUIRED_DOCUMENTS.filter(
+      (req) => !submittedRequirements.includes(req)
+    ).length;
+
+    // Get approvals for this student
+    const studentApprovals = requirementApprovals?.[row.id] || {};
+
+    // Count approved requirements
+    const approved = submittedRequirements.filter((reqType) => {
+      const approval = studentApprovals[reqType];
+      return approval?.status === "accepted";
+    }).length;
+
+    // Count pending requirements (submitted but not approved)
+    const pending = submittedRequirements.filter((reqType) => {
+      const approval = studentApprovals[reqType];
+      return !approval || approval?.status !== "accepted";
+    }).length;
+
+    // Check if student has submitted ALL required documents
+    const hasAllSubmitted = REQUIRED_DOCUMENTS.every((req) =>
+      submittedRequirements.includes(req)
+    );
+
+    if (!hasAllSubmitted) {
+      return { status: null, notSubmitted, pending, approved }; // Not all requirements submitted
+    }
+
+    // Check if ALL submitted requirements are approved (accepted)
+    const allApproved = submittedRequirements.every((reqType) => {
+      const approval = studentApprovals[reqType];
+      return approval?.status === "accepted";
+    });
+
+    if (allApproved) {
+      return { status: "checked", notSubmitted: 0, pending: 0, approved: submittedRequirements.length }; // All requirements submitted and approved
+    }
+
+    return { status: null, notSubmitted: 0, pending, approved }; // All submitted but not all approved
+  };
+
+  const requirementsStatus = getRequirementsStatus();
+
   return (
     <tr
       className={isSelected ? "student-selected-row" : ""}
@@ -151,150 +233,195 @@ const StudentTableRow = ({
           />
         </td>
       )}
-      <td className="student-profile-picture-cell">
-        {profilePictureUrl ? (
-          <img
-            src={profilePictureUrl}
-            alt={`${row.firstName} ${row.lastName}`}
-            className="student-profile-picture"
-            onError={() => setProfilePictureError(true)}
-          />
-        ) : (
-          <div className="student-profile-picture-placeholder">
-            {row.firstName?.[0]?.toUpperCase() || "?"}
-            {row.lastName?.[0]?.toUpperCase() || ""}
-          </div>
-        )}
-      </td>
-      <td>{row.firstName}</td>
-      <td>{row.lastName}</td>
-      <td>
-        {row.email ? (
-          <a
-            href={`mailto:${row.email}`}
-            style={{ color: "#1976d2", textDecoration: "underline" }}
-          >
-            {row.email}
-          </a>
-        ) : (
-          ""
-        )}
-      </td>
-      <td>{row.contact}</td>
-      <td>{row.program}</td>
-      <td>{row.field}</td>
-      <td>{getCompanyName() || "—"}</td>
-      <td>{row.status === "hired" ? "Yes" : "No"}</td>
-      <td>
-        <div className="student-table-skills-tags">
-          {/* Render up to 3 skills, with show more/less toggle */}
-          {Array.isArray(row.skills) &&
-            (showAllSkills ? row.skills : row.skills.slice(0, 3)).map(
-              (skill, index) => {
-                let displayValue = "";
-                if (typeof skill === "object" && skill !== null) {
-                  if (
-                    typeof skill.id === "string" ||
-                    typeof skill.id === "number"
-                  ) {
-                    displayValue = String(skill.id);
-                  } else if (Object.keys(skill).length > 0) {
-                    displayValue = JSON.stringify(skill);
-                  } else {
-                    displayValue = "[object]";
+      {isColumnVisible("profilePicture") && (
+        <td className="student-profile-picture-cell">
+          {profilePictureUrl ? (
+            <img
+              src={profilePictureUrl}
+              alt={`${row.firstName} ${row.lastName}`}
+              className="student-profile-picture"
+              onError={() => setProfilePictureError(true)}
+            />
+          ) : (
+            <div className="student-profile-picture-placeholder">
+              {row.firstName?.[0]?.toUpperCase() || "?"}
+              {row.lastName?.[0]?.toUpperCase() || ""}
+            </div>
+          )}
+        </td>
+      )}
+      {isColumnVisible("studentNumber") && (
+        <td className="student-number-cell">
+          {row.studentNumber || row.studentId || "—"}
+        </td>
+      )}
+      {isColumnVisible("firstName") && <td>{row.firstName}</td>}
+      {isColumnVisible("lastName") && <td>{row.lastName}</td>}
+      {isColumnVisible("email") && (
+        <td>
+          {row.email && !row.email.includes("@student.internquest.local") ? (
+            <a
+              href={`mailto:${row.email}`}
+              style={{ color: "#1976d2", textDecoration: "underline" }}
+            >
+              {row.email}
+            </a>
+          ) : (
+            "—"
+          )}
+        </td>
+      )}
+      {isColumnVisible("contact") && <td>{row.contact || "—"}</td>}
+      {isColumnVisible("program") && <td>{row.program || "—"}</td>}
+      {isColumnVisible("section") && (
+        <td>{row.section ? row.section.toUpperCase() : "—"}</td>
+      )}
+      {isColumnVisible("field") && <td>{row.field || "—"}</td>}
+      {isColumnVisible("company") && <td>{getCompanyName() || "—"}</td>}
+      {isColumnVisible("hired") && (
+        <td>{row.status === "hired" ? "Yes" : "No"}</td>
+      )}
+      {isColumnVisible("skills") && (
+        <td>
+          <div className="student-table-skills-tags">
+            {/* Render up to 3 skills, with show more/less toggle */}
+            {Array.isArray(row.skills) && row.skills.length > 0 ? (
+              <>
+                {(showAllSkills ? row.skills : row.skills.slice(0, 3)).map(
+                  (skill, index) => {
+                    let displayValue = "";
+                    if (typeof skill === "object" && skill !== null) {
+                      if (
+                        typeof skill.id === "string" ||
+                        typeof skill.id === "number"
+                      ) {
+                        displayValue = String(skill.id);
+                      } else if (Object.keys(skill).length > 0) {
+                        displayValue = JSON.stringify(skill);
+                      } else {
+                        displayValue = "[object]";
+                      }
+                    } else if (
+                      typeof skill === "string" ||
+                      typeof skill === "number"
+                    ) {
+                      displayValue = String(skill);
+                    } else {
+                      displayValue = String(skill);
+                    }
+                    return (
+                      <span key={index} className="student-table-skill-tag">
+                        {displayValue}
+                      </span>
+                    );
                   }
-                } else if (
-                  typeof skill === "string" ||
-                  typeof skill === "number"
-                ) {
-                  displayValue = String(skill);
-                } else {
-                  displayValue = String(skill);
-                }
-                return (
-                  <span key={index} className="student-table-skill-tag">
-                    {displayValue}
+                )}
+                {/* Show more/less toggle for skills */}
+                {row.skills.length > 3 && !showAllSkills && (
+                  <span
+                    className="student-table-skill-tag"
+                    style={{ cursor: "pointer", background: "#555" }}
+                    onClick={() => setShowAllSkills(true)}
+                  >
+                    +{row.skills.length - 3} more
                   </span>
-                );
-              }
+                )}
+                {row.skills.length > 3 && showAllSkills && (
+                  <span
+                    className="student-table-skill-tag"
+                    style={{
+                      cursor: "pointer",
+                      background: "#aaa",
+                      color: "#222",
+                    }}
+                    onClick={() => setShowAllSkills(false)}
+                  >
+                    Show less
+                  </span>
+                )}
+              </>
+            ) : (
+              <span style={{ color: "#999" }}>—</span>
             )}
-          {/* Show more/less toggle for skills */}
-          {Array.isArray(row.skills) &&
-            row.skills.length > 3 &&
-            !showAllSkills && (
+          </div>
+        </td>
+      )}
+      {isColumnVisible("requirements") && (
+        <td className="requirements-status-cell">
+          {requirementsStatus.status === "checked" ? (
+            <span
+              className="requirements-checked-indicator"
+              title="All requirements submitted and approved"
+            >
+              ✓
+            </span>
+          ) : (
+            <div className="requirements-status-container">
               <span
-                className="student-table-skill-tag"
-                style={{ cursor: "pointer", background: "#555" }}
-                onClick={() => setShowAllSkills(true)}
+                className="requirements-unchecked-indicator"
+                title="Requirements not fully checked"
               >
-                +{row.skills.length - 3} more
+                —
               </span>
-            )}
-          {Array.isArray(row.skills) &&
-            row.skills.length > 3 &&
-            showAllSkills && (
-              <span
-                className="student-table-skill-tag"
-                style={{ cursor: "pointer", background: "#aaa", color: "#222" }}
-                onClick={() => setShowAllSkills(false)}
-              >
-                Show less
-              </span>
-            )}
-        </div>
-      </td>
-      <td>
-        <div className="student-table-mode-tags">
-          {/* Render location preference tags */}
-          {
-            // Convert object to array if needed
-            (Array.isArray(row.locationPreference)
-              ? row.locationPreference
-              : typeof row.locationPreference === "object" &&
-                row.locationPreference !== null
-              ? Object.entries(row.locationPreference)
-                  .filter(
-                    ([key, value]) =>
-                      ["onsite", "remote", "hybrid"].includes(
-                        key.toLowerCase()
-                      ) && value
-                  )
-                  .map(([key]) => key.charAt(0).toUpperCase() + key.slice(1))
-              : []
-            ).map((mode, idx) => (
-              <span
-                key={mode + idx}
-                className={`student-table-mode-tag-${mode
-                  .replace(/\s+/g, "")
-                  .toLowerCase()}`}
-              >
-                {mode}
-              </span>
-            ))
-          }
-        </div>
-      </td>
-      <td
-        className="student-kebab-cell"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <KebabCell
-          row={row}
-          openMenuId={openMenuId}
-          setOpenMenuId={setOpenMenuId}
-          selectedRowId={selectedRowId}
-          setSelectedRowId={setSelectedRowId}
-          setIsEditMode={setIsEditMode}
-          setEditStudentId={setEditStudentId}
-          setFormData={setFormData}
-          setSkills={setSkills}
-          setIsModalOpen={setIsModalOpen}
-          setSelectionMode={setSelectionMode}
-          setSelectedItems={setSelectedItems}
-          handleDeleteSingle={handleDeleteSingle}
-          isDeleting={isDeleting}
-        />
-      </td>
+              {(requirementsStatus.notSubmitted > 0 ||
+                requirementsStatus.pending > 0 ||
+                (requirementsStatus.approved > 0 && requirementsStatus.status !== "checked")) && (
+                <div className="requirements-count-badge">
+                  {requirementsStatus.approved > 0 && requirementsStatus.status !== "checked" && (
+                    <span
+                      className="requirements-count-item approved"
+                      title={`${requirementsStatus.approved} requirement(s) approved`}
+                    >
+                      {requirementsStatus.approved} ✓
+                    </span>
+                  )}
+                  {requirementsStatus.pending > 0 && (
+                    <span
+                      className="requirements-count-item pending"
+                      title={`${requirementsStatus.pending} requirement(s) pending approval`}
+                    >
+                      {requirementsStatus.pending} P
+                    </span>
+                  )}
+                  {requirementsStatus.notSubmitted > 0 && (
+                    <span
+                      className="requirements-count-item not-submitted"
+                      title={`${requirementsStatus.notSubmitted} requirement(s) not submitted`}
+                    >
+                      {requirementsStatus.notSubmitted} NS
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </td>
+      )}
+      {isColumnVisible("actions") && (
+        <td
+          className="student-kebab-cell"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <KebabCell
+            row={row}
+            openMenuId={openMenuId}
+            setOpenMenuId={setOpenMenuId}
+            selectedRowId={selectedRowId}
+            setSelectedRowId={setSelectedRowId}
+            setIsEditMode={setIsEditMode}
+            setEditStudentId={setEditStudentId}
+            setFormData={setFormData}
+            setSkills={setSkills}
+            setIsModalOpen={setIsModalOpen}
+            setSelectionMode={setSelectionMode}
+            setSelectedItems={setSelectedItems}
+            handleDeleteSingle={handleDeleteSingle}
+            handleAcceptStudent={handleAcceptStudent}
+            isDeleting={isDeleting}
+            isAdviser={isAdviser}
+          />
+        </td>
+      )}
     </tr>
   );
 };
@@ -318,8 +445,11 @@ StudentTableRow.propTypes = {
   setSelectionMode: PropTypes.func,
   setSelectedItems: PropTypes.func,
   handleDeleteSingle: PropTypes.func,
+  handleAcceptStudent: PropTypes.func,
   isDeleting: PropTypes.bool,
   onRowClick: PropTypes.func,
+  isAdviser: PropTypes.bool,
+  requirementApprovals: PropTypes.object,
 };
 
 export default StudentTableRow;

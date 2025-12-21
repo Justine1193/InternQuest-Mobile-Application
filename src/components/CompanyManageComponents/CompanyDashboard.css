@@ -1,5 +1,56 @@
 @import "../dashboardTheme.css";
 
+/* MOA Alert Banner */
+.moa-alert-banner {
+  padding: 1rem 1.5rem;
+  margin-bottom: 1.5rem;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  animation: slideDown 0.3s ease-out;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.moa-alert-banner.expired {
+  background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%);
+  border-left: 4px solid #c62828;
+  color: #c62828;
+}
+
+.moa-alert-banner.expiring {
+  background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+  border-left: 4px solid #f57c00;
+  color: #f57c00;
+}
+
+.moa-alert-banner .alert-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  flex: 1;
+}
+
+.moa-alert-banner .alert-content strong {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.moa-alert-banner .alert-content span {
+  font-size: 0.9rem;
+  opacity: 0.9;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .table-container {
   width: 100%;
   padding: 2rem 2rem 1rem 2rem;
@@ -19,6 +70,15 @@
   align-items: center;
   gap: 0.5rem;
   margin: 1.5rem 0 1rem 0;
+}
+
+.pagination-info {
+  text-align: center;
+  font-size: 0.9rem;
+  color: #666;
+  font-weight: 500;
+  margin-top: 0.5rem;
+  margin-bottom: 1rem;
 }
 
 .pagination-arrow,
@@ -70,6 +130,33 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+
+.import-btn {
+  background: #ff9800;
+  color: #fff;
+  border: none;
+  transition: background 0.2s;
+}
+
+.import-btn:hover:not(:disabled) {
+  background: #f57c00;
+}
+
+.import-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.export-btn {
+  background: #4caf50;
+  color: #fff;
+  border: none;
+  transition: background 0.2s;
+}
+
+.export-btn:hover {
+  background: #45a049;
 }
 
 .add-entry {

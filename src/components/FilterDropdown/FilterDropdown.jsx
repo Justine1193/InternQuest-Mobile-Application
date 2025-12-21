@@ -137,15 +137,28 @@ const FilterDropdown = ({
             />
           </div>
           <div>
-            <label className="new-filter-label" htmlFor="location-dropdown">
-              Location Preference:
+            <label className="new-filter-label" htmlFor="mode-dropdown">
+              Mode of Work:
             </label>
             <CustomDropdown
-              id="location-dropdown"
+              id="mode-dropdown"
               options={["All", "Onsite", "Remote", "Hybrid"]}
               value={pendingFilterValues.locationPreference || "All"}
               onChange={(val) =>
                 handleDropdownChange("locationPreference", val)
+              }
+            />
+          </div>
+          <div>
+            <label className="new-filter-label" htmlFor="approved-requirement-dropdown">
+              Approved Requirement:
+            </label>
+            <CustomDropdown
+              id="approved-requirement-dropdown"
+              options={["All", "Yes", "No"]}
+              value={pendingFilterValues.approvedRequirement || "All"}
+              onChange={(val) =>
+                handleDropdownChange("approvedRequirement", val)
               }
             />
           </div>
@@ -167,15 +180,24 @@ const FilterDropdown = ({
             />
           </div>
           <div>
-            <label className="new-filter-label" htmlFor="moa-dropdown">
-              MOA:
+            <label className="new-filter-label" htmlFor="moa-expiration-dropdown">
+              MOA Expiration Status:
             </label>
             <CustomDropdown
-              id="moa-dropdown"
-              options={["All", "Yes", "No"]}
-              value={pendingFilterValues.moa || "All"}
-              onChange={(val) => handleDropdownChange("moa", val)}
+              id="moa-expiration-dropdown"
+              options={["All", "Valid", "Expiring Soon", "Expired", "No MOA"]}
+              value={pendingFilterValues.moaExpirationStatus || "All"}
+              onChange={(val) => handleDropdownChange("moaExpirationStatus", val)}
             />
+            <small style={{ 
+              display: 'block', 
+              marginTop: '0.25rem', 
+              color: '#666', 
+              fontSize: '0.75rem',
+              fontStyle: 'italic'
+            }}>
+              Expiring Soon: 30 days or less
+            </small>
           </div>
         </>
       )}
@@ -210,6 +232,7 @@ FilterDropdown.propTypes = {
     program: PropTypes.string,
     hired: PropTypes.string,
     locationPreference: PropTypes.string,
+    approvedRequirement: PropTypes.string,
     modeOfWork: PropTypes.string,
     moa: PropTypes.string,
   }).isRequired,

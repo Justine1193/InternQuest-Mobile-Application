@@ -3,6 +3,7 @@ import { getFirestore } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { getDatabase } from 'firebase/database';
 import { getStorage } from 'firebase/storage';
+import { getFunctions } from 'firebase/functions';
 
 // Firebase config (from your Firebase console)
 const firebaseConfig = {
@@ -20,10 +21,11 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
-// Initialize Firestore, Auth, Realtime DB and Storage
+// Initialize Firestore, Auth, Realtime DB, Storage, and Functions
 const auth = getAuth(app);
 const db = getFirestore(app);
 const realtimeDb = getDatabase(app);
 const storage = getStorage(app);
+const functions = getFunctions(app);
 
-export { auth, db, realtimeDb, storage };
+export { auth, db, realtimeDb, storage, functions };

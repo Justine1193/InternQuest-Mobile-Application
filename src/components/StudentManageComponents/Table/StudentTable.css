@@ -30,6 +30,71 @@
   border-bottom: 2px solid #e3f2fd;
   padding: 18px 16px;
   text-align: left;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  user-select: none;
+  transition: background-color 0.2s ease;
+}
+
+.student-table-container table th {
+  transition: background-color var(--iq-transition-fast, 0.15s);
+}
+
+.student-table-container table th:hover {
+  background: #e8f4fd;
+}
+
+.student-table-container table th:focus-visible {
+  outline: 2px solid var(--iq-primary, #1976d2);
+  outline-offset: -2px;
+  background: #e8f4fd;
+}
+
+/* Sortable header indicator */
+.student-table-container table th.sortable {
+  cursor: pointer;
+  position: relative;
+  padding-right: 24px;
+}
+
+.student-table-container table th.sortable::after {
+  content: "↕";
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 12px;
+  color: #999;
+  opacity: 0.5;
+}
+
+.student-table-container table th.sortable:hover::after {
+  opacity: 1;
+  color: #1976d2;
+}
+
+.student-table-container table th.sortable.sorted-asc::after {
+  content: "↑";
+  opacity: 1;
+  color: #1976d2;
+}
+
+.student-table-container table th.sortable.sorted-desc::after {
+  content: "↓";
+  opacity: 1;
+  color: #1976d2;
+}
+
+.student-table-container table th.sortable:focus-visible {
+  outline: 2px solid #1976d2;
+  outline-offset: -2px;
+  background: #e8f4fd;
+}
+
+.student-table-container table th.sortable:focus-visible::after {
+  opacity: 1;
+  color: #1976d2;
 }
 
 .student-table-container table td {
@@ -39,6 +104,38 @@
   text-align: left;
   border-bottom: 1px solid #f0f0f0;
   background: transparent;
+  transition: background-color 0.2s ease;
+}
+
+/* Zebra striping for better readability */
+.student-table-container table tbody tr:nth-child(even) {
+  background-color: #fafbfc;
+}
+
+.student-table-container table tbody tr:nth-child(odd) {
+  background-color: #fff;
+}
+
+/* Row hover effect */
+.student-table-container table tbody tr {
+  transition: background-color var(--iq-transition-fast, 0.15s),
+    box-shadow var(--iq-transition-fast, 0.15s);
+}
+
+.student-table-container table tbody tr:hover {
+  background-color: #f0f7ff !important;
+  box-shadow: inset 3px 0 0 var(--iq-primary, #1976d2);
+}
+
+.student-table-container table tbody tr:focus-within {
+  background-color: #e8f4fd !important;
+  box-shadow: inset 3px 0 0 var(--iq-primary, #1976d2),
+    0 0 0 2px rgba(25, 118, 210, 0.2);
+  outline: none;
+}
+
+.student-table-container table tbody tr:hover td {
+  border-bottom-color: #e3f2fd;
 }
 
 /* Checkbox and Kebab Columns */
@@ -159,7 +256,7 @@
 
 /* Kebab Column Padding */
 .student-table-container table td:nth-child(10) {
-  /* Kebab column is 11th, so Location Preference is 10th */
+  /* Kebab column is now 10th after removing Location Preference */
   padding-right: 10px;
   padding-left: 50px;
 }
@@ -176,4 +273,65 @@
 .student-table-container table th:nth-child(5),
 .student-table-container table td:nth-child(5) {
   padding-left: 5px;
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+  .student-table-container {
+    padding: 1rem 0.5rem;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border-radius: 12px;
+  }
+
+  .student-table-container table {
+    font-size: 0.875rem;
+    min-width: 800px;
+  }
+
+  .student-table-container table th,
+  .student-table-container table td {
+    padding: 12px 8px;
+    font-size: 0.8rem;
+  }
+
+  .student-table-container table th {
+    font-size: 0.8rem;
+    padding: 14px 8px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  /* Improve touch targets on mobile */
+  .student-table-container table td {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .student-table-container {
+    padding: 0.75rem 0.25rem;
+    border-radius: 8px;
+    margin-top: 1rem;
+  }
+
+  .student-table-container table {
+    min-width: 700px;
+    font-size: 0.75rem;
+  }
+
+  .student-table-container table th,
+  .student-table-container table td {
+    padding: 10px 6px;
+    font-size: 0.75rem;
+  }
+
+  /* Stack action buttons on very small screens */
+  .student-table-container .bulk-action-btn {
+    font-size: 0.75rem;
+    padding: 0.5rem 0.75rem;
+  }
 }

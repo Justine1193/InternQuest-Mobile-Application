@@ -13,8 +13,10 @@
 import React, { useState, useEffect } from "react";
 import PropTypes from "prop-types";
 import { IoCloseOutline } from "react-icons/io5";
-import { storage } from "../../../firebase.js";
+import { storage, db } from "../../../firebase";
 import { ref, getDownloadURL, listAll, getMetadata } from "firebase/storage";
+import { doc, getDoc, setDoc } from "firebase/firestore";
+import { getAdminRole, hasAnyRole, ROLES } from "../../utils/auth";
 import "./StudentRequirementModal.css";
 
 const StudentRequirementModal = ({ open, student, onClose }) => {
@@ -25,6 +27,19 @@ const StudentRequirementModal = ({ open, student, onClose }) => {
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [storageFiles, setStorageFiles] = useState([]); // Files from Storage
   const [isLoadingStorageFiles, setIsLoadingStorageFiles] = useState(false);
+  const [approvalStatuses, setApprovalStatuses] = useState({}); // { requirementType: { status, reviewedBy, reviewedAt } }
+  const [isLoadingApprovals, setIsLoadingApprovals] = useState(false);
+  const [updatingRequirement, setUpdatingRequirement] = useState(null); // Track which requirement is being updated
+  // Denial modal state
+  const [showDenialModal, setShowDenialModal] = useState(false);
+  const [denialRequirementType, setDenialRequirementType] = useState(null);
+  const [denialReason, setDenialReason] = useState("");
+
+  // Check if current user can approve requirements (adviser or coordinator)
+  const canApproveRequirements = () => {
+    const role = getAdminRole();
+    return hasAnyRole([ROLES.ADVISER, ROLES.COORDINATOR, ROLES.SUPER_ADMIN]);
+  };
 
   // Fetch files from Storage when modal opens
   useEffect(() => {
@@ -217,6 +232,35 @@ const StudentRequirementModal = ({ open, student, onClose }) => {
     fetchProfilePicture();
   }, [open, student?.id]);
 
+  // Fetch approval statuses from Firestore
+  useEffect(() => {
+    const fetchApprovalStatuses = async () => {
+      if (!open || !student?.id) {
+        setApprovalStatuses({});
+        return;
+      }
+
+      setIsLoadingApprovals(true);
+      try {
+        const approvalRef = doc(db, "requirement_approvals", student.id);
+        const approvalSnap = await getDoc(approvalRef);
+        
+        if (approvalSnap.exists()) {
+          setApprovalStatuses(approvalSnap.data());
+        } else {
+          setApprovalStatuses({});
+        }
+      } catch (error) {
+        console.error("Error fetching approval statuses:", error);
+        setApprovalStatuses({});
+      } finally {
+        setIsLoadingApprovals(false);
+      }
+    };
+
+    fetchApprovalStatuses();
+  }, [open, student?.id]);
+
   if (!open || !student) return null;
 
   // Helper function to get file type (for preview)
@@ -350,6 +394,84 @@ const StudentRequirementModal = ({ open, student, onClose }) => {
     }
   };
 
+  // Handle accepting a requirement
+  const handleAcceptRequirement = async (requirementType) => {
+    if (!student?.id || !canApproveRequirements()) return;
+
+    setUpdatingRequirement(requirementType);
+    try {
+      const approvalRef = doc(db, "requirement_approvals", student.id);
+      const currentData = approvalStatuses || {};
+      
+      const updateData = {
+        ...currentData,
+        [requirementType]: {
+          status: "accepted",
+          reviewedBy: getAdminRole(),
+          reviewedAt: new Date().toISOString(),
+        },
+      };
+
+      await setDoc(approvalRef, updateData, { merge: true });
+      setApprovalStatuses(updateData);
+    } catch (error) {
+      console.error("Error accepting requirement:", error);
+      alert("Failed to accept requirement. Please try again.");
+    } finally {
+      setUpdatingRequirement(null);
+    }
+  };
+
+  // Handle opening denial modal
+  const handleDenyRequirement = (requirementType) => {
+    if (!student?.id || !canApproveRequirements()) return;
+    setDenialRequirementType(requirementType);
+    setDenialReason("");
+    setShowDenialModal(true);
+  };
+
+  // Handle closing denial modal
+  const handleCloseDenialModal = () => {
+    setShowDenialModal(false);
+    setDenialRequirementType(null);
+    setDenialReason("");
+  };
+
+  // Handle submitting denial
+  const handleSubmitDenial = async () => {
+    if (!student?.id || !denialRequirementType || !canApproveRequirements()) return;
+
+    setUpdatingRequirement(denialRequirementType);
+    try {
+      const approvalRef = doc(db, "requirement_approvals", student.id);
+      const currentData = approvalStatuses || {};
+      
+      const updateData = {
+        ...currentData,
+        [denialRequirementType]: {
+          status: "denied",
+          reviewedBy: getAdminRole(),
+          reviewedAt: new Date().toISOString(),
+          reason: denialReason.trim() || "",
+        },
+      };
+
+      await setDoc(approvalRef, updateData, { merge: true });
+      setApprovalStatuses(updateData);
+      handleCloseDenialModal();
+    } catch (error) {
+      console.error("Error denying requirement:", error);
+      alert("Failed to deny requirement. Please try again.");
+    } finally {
+      setUpdatingRequirement(null);
+    }
+  };
+
+  // Get approval status for a requirement
+  const getApprovalStatus = (requirementType) => {
+    return approvalStatuses[requirementType] || null;
+  };
+
   return (
     <div className="student-requirement-modal-backdrop" onClick={onClose}>
       <div
@@ -393,6 +515,18 @@ const StudentRequirementModal = ({ open, student, onClose }) => {
                   {student.firstName} {student.lastName}
                 </h3>
                 <p className="student-email">{student.email || "N/A"}</p>
+                <div className="student-additional-info">
+                  {student.studentNumber || student.studentId ? (
+                    <p className="student-id">
+                      <strong>Student ID:</strong> {student.studentNumber || student.studentId}
+                    </p>
+                  ) : null}
+                  {student.section ? (
+                    <p className="student-section">
+                      <strong>Section:</strong> {student.section}
+                    </p>
+                  ) : null}
+                </div>
               </div>
             </div>
           </div>
@@ -535,8 +669,22 @@ const StudentRequirementModal = ({ open, student, onClose }) => {
                     );
                   }
 
-                  const status = matchingFile ? "Submitted" : "Pending";
-                  const statusColor = matchingFile ? "#43a047" : "#fb8c00";
+                  const approvalStatus = getApprovalStatus(requirement.type);
+                  const isUpdating = updatingRequirement === requirement.type;
+                  
+                  // Determine display status
+                  let status = matchingFile ? "Submitted" : "Pending";
+                  let statusColor = matchingFile ? "#43a047" : "#fb8c00";
+                  
+                  if (approvalStatus) {
+                    if (approvalStatus.status === "accepted") {
+                      status = "Accepted";
+                      statusColor = "#2e7d32";
+                    } else if (approvalStatus.status === "denied") {
+                      status = "Denied";
+                      statusColor = "#d32f2f";
+                    }
+                  }
 
                   return (
                     <div key={index} className="document-item">
@@ -558,6 +706,26 @@ const StudentRequirementModal = ({ open, student, onClose }) => {
                         <p className="document-description">
                           {requirement.description}
                         </p>
+                        {approvalStatus?.reason && (
+                          <p className="denial-reason" style={{ 
+                            color: "#d32f2f", 
+                            fontSize: "0.85rem", 
+                            marginTop: "0.5rem",
+                            fontStyle: "italic"
+                          }}>
+                            Denial reason: {approvalStatus.reason}
+                          </p>
+                        )}
+                        {approvalStatus?.reviewedBy && (
+                          <p className="review-info" style={{ 
+                            color: "#666", 
+                            fontSize: "0.8rem", 
+                            marginTop: "0.25rem"
+                          }}>
+                            Reviewed by {approvalStatus.reviewedBy} on{" "}
+                            {new Date(approvalStatus.reviewedAt).toLocaleDateString()}
+                          </p>
+                        )}
                       </div>
                       {matchingFile ? (
                         <div className="document-files">
@@ -574,6 +742,46 @@ const StudentRequirementModal = ({ open, student, onClose }) => {
                           >
                             📄 {matchingFile.name}
                           </button>
+                          {canApproveRequirements() && !approvalStatus && (
+                            <div className="approval-actions">
+                              <button
+                                onClick={() => handleAcceptRequirement(requirement.type)}
+                                className="approve-btn"
+                                disabled={isUpdating}
+                                title="Accept this requirement"
+                              >
+                                {isUpdating ? "..." : "✓ Accept"}
+                              </button>
+                              <button
+                                onClick={() => handleDenyRequirement(requirement.type)}
+                                className="deny-btn"
+                                disabled={isUpdating}
+                                title="Deny this requirement"
+                              >
+                                {isUpdating ? "..." : "✗ Deny"}
+                              </button>
+                            </div>
+                          )}
+                          {canApproveRequirements() && approvalStatus && (
+                            <div className="approval-actions">
+                              <button
+                                onClick={() => handleAcceptRequirement(requirement.type)}
+                                className={`approve-btn ${approvalStatus.status === "accepted" ? "active" : ""}`}
+                                disabled={isUpdating}
+                                title="Accept this requirement"
+                              >
+                                {isUpdating ? "..." : "✓ Accept"}
+                              </button>
+                              <button
+                                onClick={() => handleDenyRequirement(requirement.type)}
+                                className={`deny-btn ${approvalStatus.status === "denied" ? "active" : ""}`}
+                                disabled={isUpdating}
+                                title="Deny this requirement"
+                              >
+                                {isUpdating ? "..." : "✗ Deny"}
+                              </button>
+                            </div>
+                          )}
                         </div>
                       ) : (
                         <div
@@ -601,6 +809,62 @@ const StudentRequirementModal = ({ open, student, onClose }) => {
           </button>
         </div>
       </div>
+
+      {/* Denial Reason Modal */}
+      {showDenialModal && (
+        <div className="denial-modal-backdrop" onClick={handleCloseDenialModal}>
+          <div
+            className="denial-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="denial-modal-header">
+              <h3>Deny Requirement</h3>
+              <button
+                className="denial-modal-close"
+                onClick={handleCloseDenialModal}
+                aria-label="Close modal"
+              >
+                <IoCloseOutline />
+              </button>
+            </div>
+            <div className="denial-modal-content">
+              <p className="denial-modal-question">
+                Please provide a reason for denying this requirement:
+              </p>
+              <p className="denial-modal-requirement">
+                <strong>Requirement:</strong> {denialRequirementType}
+              </p>
+              <textarea
+                className="denial-reason-input"
+                placeholder="Enter denial reason (optional but recommended)..."
+                value={denialReason}
+                onChange={(e) => setDenialReason(e.target.value)}
+                rows={5}
+                maxLength={500}
+              />
+              <div className="denial-modal-char-count">
+                {denialReason.length}/500 characters
+              </div>
+            </div>
+            <div className="denial-modal-actions">
+              <button
+                className="denial-cancel-btn"
+                onClick={handleCloseDenialModal}
+                disabled={updatingRequirement === denialRequirementType}
+              >
+                Cancel
+              </button>
+              <button
+                className="denial-submit-btn"
+                onClick={handleSubmitDenial}
+                disabled={updatingRequirement === denialRequirementType}
+              >
+                {updatingRequirement === denialRequirementType ? "Submitting..." : "Submit Denial"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* File Viewer Modal */}
       {viewingFile && (

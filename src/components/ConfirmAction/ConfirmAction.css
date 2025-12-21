@@ -1,0 +1,214 @@
+.confirm-action-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  animation: fadeIn 0.2s ease-in;
+  padding: 1rem;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.confirm-action-modal {
+  background: #fff;
+  border-radius: 12px;
+  padding: 2rem;
+  max-width: 450px;
+  width: 100%;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  animation: slideUp 0.3s ease-out;
+  position: relative;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.confirm-action-close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: #999;
+  cursor: pointer;
+  padding: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.confirm-action-close:hover:not(:disabled) {
+  background: #f5f5f5;
+  color: #333;
+}
+
+.confirm-action-close:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.confirm-action-icon {
+  font-size: 3rem;
+  margin: 0 auto 1rem;
+  display: flex;
+  justify-content: center;
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  align-items: center;
+}
+
+.confirm-action-icon-danger {
+  color: #f44336;
+  background: rgba(244, 67, 54, 0.1);
+}
+
+.confirm-action-icon-warning {
+  color: #ff9800;
+  background: rgba(255, 152, 0, 0.1);
+}
+
+.confirm-action-icon-info {
+  color: #2196f3;
+  background: rgba(33, 150, 243, 0.1);
+}
+
+.confirm-action-title {
+  margin: 0 0 0.5rem 0;
+  color: #333;
+  font-size: 1.5rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.confirm-action-message {
+  margin: 0 0 1.5rem 0;
+  color: #666;
+  font-size: 1rem;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.confirm-action-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+}
+
+.confirm-action-btn {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 100px;
+  justify-content: center;
+}
+
+.confirm-action-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.confirm-action-btn-cancel {
+  background: #f5f5f5;
+  color: #666;
+}
+
+.confirm-action-btn-cancel:hover:not(:disabled) {
+  background: #e0e0e0;
+  color: #333;
+}
+
+.confirm-action-btn-confirm {
+  color: #fff;
+}
+
+.confirm-action-btn-danger {
+  background: #f44336;
+}
+
+.confirm-action-btn-danger:hover:not(:disabled) {
+  background: #d32f2f;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(244, 67, 54, 0.3);
+}
+
+.confirm-action-btn-warning {
+  background: #ff9800;
+}
+
+.confirm-action-btn-warning:hover:not(:disabled) {
+  background: #f57c00;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(255, 152, 0, 0.3);
+}
+
+.confirm-action-btn-info {
+  background: #2196f3;
+}
+
+.confirm-action-btn-info:hover:not(:disabled) {
+  background: #1976d2;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(33, 150, 243, 0.3);
+}
+
+.spinner-small {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 480px) {
+  .confirm-action-modal {
+    padding: 1.5rem;
+  }
+
+  .confirm-action-actions {
+    flex-direction: column;
+  }
+
+  .confirm-action-btn {
+    width: 100%;
+  }
+}
+

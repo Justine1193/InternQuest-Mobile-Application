@@ -5,11 +5,18 @@
   background: #fff;
   border-radius: 16px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-  padding: 1.5rem 1.5rem 0.5rem 1.5rem;
+  padding: 1rem 1rem 0.5rem 1rem;
   margin-top: 2rem;
   overflow-x: auto;
   width: 100%;
   border: 1px solid #e3f2fd;
+}
+
+/* Ensure table fits viewport */
+.table-container table {
+  table-layout: auto;
+  width: 100%;
+  min-width: fit-content;
 }
 
 /* Table Styles */
@@ -25,20 +32,85 @@ table th {
   background: #f5faff;
   color: #111;
   font-weight: 600;
-  font-size: 15px;
+  font-size: 13px;
   border-top: none;
   border-bottom: 2px solid #e3f2fd;
-  padding: 18px 15px;
+  padding: 12px 8px;
   text-align: left;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  user-select: none;
+  transition: background-color 0.2s ease;
+  white-space: nowrap;
+}
+
+table th:hover {
+  background: #e8f4fd;
+}
+
+/* Sortable header indicator */
+table th.sortable {
+  cursor: pointer;
+  position: relative;
+  padding-right: 24px;
+}
+
+table th.sortable::after {
+  content: '↕';
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 12px;
+  color: #999;
+  opacity: 0.5;
+}
+
+table th.sortable:hover::after {
+  opacity: 1;
+  color: #1976d2;
+}
+
+table th.sortable.sorted-asc::after {
+  content: '↑';
+  opacity: 1;
+  color: #1976d2;
+}
+
+table th.sortable.sorted-desc::after {
+  content: '↓';
+  opacity: 1;
+  color: #1976d2;
 }
 
 table td {
   color: #333;
-  font-size: 14px;
-  padding: 18px 16px;
+  font-size: 13px;
+  padding: 12px 8px;
   text-align: left;
   border-bottom: 1px solid #f0f0f0;
   background: transparent;
+  transition: background-color 0.2s ease;
+}
+
+/* Zebra striping for better readability */
+table tbody tr:nth-child(even) {
+  background-color: #fafbfc;
+}
+
+table tbody tr:nth-child(odd) {
+  background-color: #fff;
+}
+
+/* Row hover effect */
+table tbody tr:hover {
+  background-color: #f0f7ff !important;
+  cursor: pointer;
+}
+
+table tbody tr:hover td {
+  border-bottom-color: #e3f2fd;
 }
 
 /* Checkbox and Kebab Columns */
@@ -77,31 +149,110 @@ table td {
   background-color: #e3f2fd !important;
 }
 
-/* Column Widths and Truncation */
-.table-container table th:nth-child(7),
-.table-container table td:nth-child(7) {
-  min-width: 200px;
-  max-width: 300px;
+/* Column Widths and Truncation - Optimized for fit */
+/* Company Name */
+.table-container table th:nth-child(1),
+.table-container table td:nth-child(1) {
+  min-width: 140px;
+  max-width: 180px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
+/* Description */
+.table-container table th:nth-child(2),
+.table-container table td:nth-child(2) {
+  min-width: 120px;
+  max-width: 180px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Address */
+.table-container table th:nth-child(3),
+.table-container table td:nth-child(3) {
+  min-width: 150px;
+  max-width: 200px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Email */
+.table-container table th:nth-child(4),
+.table-container table td:nth-child(4) {
+  min-width: 140px;
+  max-width: 180px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Website */
+.table-container table th:nth-child(5),
+.table-container table td:nth-child(5) {
+  min-width: 120px;
+  max-width: 160px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Field */
+.table-container table th:nth-child(6),
+.table-container table td:nth-child(6) {
+  min-width: 100px;
+  max-width: 140px;
+}
+
+/* Skills */
+.table-container table th:nth-child(7),
+.table-container table td:nth-child(7) {
+  min-width: 120px;
+  max-width: 160px;
+}
+
+/* Mode of Work */
+.table-container table th:nth-child(8),
+.table-container table td:nth-child(8) {
+  min-width: 100px;
+  max-width: 120px;
+}
+
+/* MOA Checkbox */
+.table-container table th:nth-child(9),
+.table-container table td:nth-child(9) {
+  min-width: 50px;
+  max-width: 60px;
+  text-align: center;
+}
+
+/* MOA Validity */
+.table-container table th:nth-child(10),
+.table-container table td:nth-child(10) {
+  min-width: 120px;
+  max-width: 140px;
+}
+
+/* MOA Expiration */
+.table-container table th:nth-child(11),
+.table-container table td:nth-child(11) {
+  min-width: 120px;
+  max-width: 140px;
+}
+
+/* Kebab Menu */
 .table-container table th:last-child,
 .table-container table td:last-child {
-  min-width: 60px;
+  min-width: 50px;
   max-width: 60px;
   width: 60px;
   text-align: center;
   padding-left: 0;
   padding-right: 0;
   white-space: nowrap;
-}
-
-.table-container table th:nth-child(2),
-.table-container table td:nth-child(2) {
-  max-width: 200px;
-  min-width: 100px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /* Responsive Scrollbars */
@@ -121,4 +272,47 @@ table td {
 
 ::-webkit-scrollbar-thumb:hover {
   background: #555;
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+  .table-container {
+    padding: 0.75rem 0.5rem;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  table {
+    font-size: 0.875rem;
+    min-width: 900px;
+  }
+
+  table th,
+  table td {
+    padding: 10px 6px;
+    font-size: 0.8rem;
+  }
+
+  table th {
+    font-size: 0.8rem;
+    padding: 12px 6px;
+  }
+}
+
+@media (max-width: 480px) {
+  .table-container {
+    padding: 0.5rem 0.25rem;
+    border-radius: 8px;
+  }
+
+  table {
+    min-width: 800px;
+    font-size: 0.75rem;
+  }
+
+  table th,
+  table td {
+    padding: 8px 4px;
+    font-size: 0.75rem;
+  }
 }

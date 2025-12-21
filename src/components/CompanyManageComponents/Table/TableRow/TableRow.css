@@ -1,8 +1,55 @@
 /* Company TableRow Component Styles */
 
+/* Company Name Cell and Tooltip */
+.company-name-cell {
+  max-width: 180px;
+  position: relative;
+}
+
+.company-name-content {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  padding: 8px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.company-name-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.company-name-content:hover .company-name-tooltip {
+  display: block;
+}
+
+.company-name-tooltip {
+  display: none;
+  position: absolute;
+  background: #fff;
+  border: 1px solid #ddd;
+  padding: 10px;
+  border-radius: 4px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  max-width: 300px;
+  white-space: normal;
+  word-wrap: break-word;
+  top: 100%;
+  left: 0;
+  color: #333;
+  font-weight: 500;
+}
+
 /* Description Cell and Tooltip */
 .description-cell {
-  max-width: 300px;
+  max-width: 180px;
   position: relative;
 }
 
@@ -45,8 +92,8 @@
   background: #1976d2;
   color: #fff;
   border-radius: 12px;
-  padding: 2px 10px;
-  font-size: 13px;
+  padding: 2px 8px;
+  font-size: 11px;
   font-weight: 500;
 }
 
@@ -64,8 +111,8 @@
   background: #26a69a;
   color: #fff;
   border-radius: 16px;
-  padding: 4px 12px;
-  font-size: 13px;
+  padding: 2px 8px;
+  font-size: 11px;
   font-weight: 600;
   white-space: normal;
   word-break: keep-all;
@@ -119,20 +166,20 @@
 }
 
 .moa-validity-cell {
-  padding-left: 1.5rem;
-  min-width: 175px;
+  padding-left: 0.5rem;
+  min-width: 120px;
 }
 
 .moa-validity-pill {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 90px;
-  padding: 4px 12px;
+  min-width: 70px;
+  padding: 3px 8px;
   border-radius: 999px;
-  font-size: 0.85rem;
+  font-size: 0.75rem;
   font-weight: 600;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
   text-transform: uppercase;
 }
 
@@ -149,6 +196,42 @@
 .moa-validity-pill-muted {
   background: #f0f2f5;
   color: #5f6a7a;
+}
+
+.moa-expiration-cell {
+  padding-left: 0.5rem;
+  min-width: 120px;
+}
+
+.moa-expiration-text {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.moa-expiration-text.valid {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.moa-expiration-text.expiring-soon {
+  background: #fff3e0;
+  color: #f57c00;
+  font-weight: 700;
+}
+
+.moa-expiration-text.expired {
+  background: #ffebee;
+  color: #c62828;
+  font-weight: 700;
+}
+
+.moa-expiration-text.muted {
+  color: #9e9e9e;
+  font-weight: 400;
 }
 
 
@@ -172,8 +255,8 @@
   background: #e8f5e9;
   color: #43a047;
   border-radius: 12px;
-  padding: 2px 10px;
-  font-size: 13px;
+  padding: 2px 8px;
+  font-size: 11px;
   font-weight: 500;
 }
 
@@ -181,8 +264,8 @@
   background: #fff3e0;
   color: #fb8c00;
   border-radius: 12px;
-  padding: 2px 10px;
-  font-size: 13px;
+  padding: 2px 8px;
+  font-size: 11px;
   font-weight: 500;
 }
 
@@ -190,7 +273,69 @@
   background: #f3e5f5;
   color: #8e24aa;
   border-radius: 12px;
-  padding: 2px 10px;
-  font-size: 13px;
+  padding: 2px 8px;
+  font-size: 11px;
   font-weight: 500;
+}
+
+/* Clickable row styles */
+.clickable-row {
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.clickable-row:hover {
+  background-color: #f0f7ff !important;
+}
+
+.clickable-row:hover td {
+  border-bottom-color: #e3f2fd;
+}
+
+/* MOA Warning Badge */
+.moa-warning-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+}
+
+.moa-warning-badge.expiring-soon {
+  background: #fff3e0;
+  color: #f57c00;
+}
+
+.moa-warning-badge.expired {
+  background: #ffebee;
+  color: #c62828;
+}
+
+.moa-warning-badge .warning-icon {
+  font-size: 16px;
+  width: 100%;
+  height: 100%;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.1);
+  }
+}
+
+/* Highlight row when MOA is expiring soon or expired */
+.clickable-row.moa-expiring-soon {
+  border-left: 3px solid #f57c00;
+}
+
+.clickable-row.moa-expired {
+  border-left: 3px solid #c62828;
 }

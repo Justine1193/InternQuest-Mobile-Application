@@ -29,6 +29,8 @@
 import React from "react";
 import PropTypes from "prop-types";
 import TableRow from "./TableRow/TableRow";
+import EmptyState from "../../EmptyState/EmptyState";
+import { IoBusinessOutline } from "react-icons/io5";
 import "./Table.css";
 
 // Renders the company table with all rows and selection logic
@@ -53,7 +55,22 @@ const Table = ({
   setSelectedItems,
   handleDeleteSingle,
   isDeleting,
+  sortConfig,
+  onSort,
+  onRowClick,
+  onClearFilters,
+  onAddCompany,
 }) => {
+  const getSortClass = (key) => {
+    if (!sortConfig || sortConfig.key !== key) return 'sortable';
+    return `sortable ${sortConfig.direction === 'asc' ? 'sorted-asc' : 'sorted-desc'}`;
+  };
+
+  const handleHeaderClick = (key) => {
+    if (onSort) {
+      onSort(key);
+    }
+  };
   return (
     <div className="table-container">
       <table>
@@ -73,44 +90,87 @@ const Table = ({
                 </div>
               </th>
             )}
-            <th>Company Name</th>
-            <th>Description</th>
-            <th>Address</th>
-            <th>Email</th>
-            <th>Company Website</th>
-            <th>Field</th>
+            <th 
+              className={getSortClass('companyName')}
+              onClick={() => handleHeaderClick('companyName')}
+            >
+              Company Name
+            </th>
+            <th 
+              className={getSortClass('fields')}
+              onClick={() => handleHeaderClick('fields')}
+            >
+              Field
+            </th>
             <th>Skills required</th>
             <th>Mode of work</th>
-            <th>MOA</th>
-            <th>MOA Validity (Years)</th>
+            <th 
+              className={getSortClass('moa')}
+              onClick={() => handleHeaderClick('moa')}
+            >
+              MOA
+            </th>
+            <th 
+              className={getSortClass('moaValidityYears')}
+              onClick={() => handleHeaderClick('moaValidityYears')}
+              title="MOA Validity (Years)"
+            >
+              MOA Validity
+            </th>
+            <th 
+              className={getSortClass('moaExpirationDate')}
+              onClick={() => handleHeaderClick('moaExpirationDate')}
+            >
+              MOA Expiration
+            </th>
             <th className="kebab-cell"></th>
           </tr>
         </thead>
         <tbody>
-          {data.map((row) => (
-            <TableRow
-              key={row.id}
-              row={row}
-              onEdit={onEdit}
-              onDelete={onDelete}
-              isSelected={selectedItems.includes(row.id)}
-              onSelect={() => onSelectItem(row.id)}
-              selectionMode={selectionMode}
-              openMenuId={openMenuId}
-              setOpenMenuId={setOpenMenuId}
-              selectedRowId={selectedRowId}
-              setSelectedRowId={setSelectedRowId}
-              setIsEditMode={setIsEditMode}
-              setEditCompanyId={setEditCompanyId}
-              setFormData={setFormData}
-              setSkills={setSkills}
-              setIsModalOpen={setIsModalOpen}
-              setSelectionMode={setSelectionMode}
-              setSelectedItems={setSelectedItems}
-              handleDeleteSingle={handleDeleteSingle}
-              isDeleting={isDeleting}
-            />
-          ))}
+          {data.length === 0 ? (
+            <tr>
+              <td colSpan={selectionMode ? 8 : 7} style={{ padding: 0, border: 'none' }}>
+                <EmptyState
+                  type={onClearFilters ? "search" : "document"}
+                  title={onClearFilters ? "No companies found" : "No companies yet"}
+                  message={
+                    onClearFilters
+                      ? "No companies match your current search or filters. Try adjusting your criteria or clear filters to see all companies."
+                      : "Get started by adding your first company. Use the 'Add Company' button above to create a new entry."
+                  }
+                  icon={IoBusinessOutline}
+                  actionLabel={onClearFilters ? "Clear All Filters" : onAddCompany ? "Add First Company" : undefined}
+                  onAction={onClearFilters || onAddCompany}
+                />
+              </td>
+            </tr>
+          ) : (
+            data.map((row) => (
+              <TableRow
+                key={row.id}
+                row={row}
+                onEdit={onEdit}
+                onDelete={onDelete}
+                isSelected={selectedItems.includes(row.id)}
+                onSelect={() => onSelectItem(row.id)}
+                selectionMode={selectionMode}
+                openMenuId={openMenuId}
+                setOpenMenuId={setOpenMenuId}
+                selectedRowId={selectedRowId}
+                setSelectedRowId={setSelectedRowId}
+                setIsEditMode={setIsEditMode}
+                setEditCompanyId={setEditCompanyId}
+                setFormData={setFormData}
+                setSkills={setSkills}
+                setIsModalOpen={setIsModalOpen}
+                setSelectionMode={setSelectionMode}
+                setSelectedItems={setSelectedItems}
+                handleDeleteSingle={handleDeleteSingle}
+                isDeleting={isDeleting}
+                onRowClick={onRowClick}
+              />
+            ))
+          )}
         </tbody>
       </table>
     </div>
@@ -138,6 +198,13 @@ Table.propTypes = {
   setSelectedItems: PropTypes.func,
   handleDeleteSingle: PropTypes.func,
   isDeleting: PropTypes.bool,
+  sortConfig: PropTypes.shape({
+    key: PropTypes.string,
+    direction: PropTypes.oneOf(['asc', 'desc']),
+  }),
+  onSort: PropTypes.func,
+  onClearFilters: PropTypes.func,
+  onAddCompany: PropTypes.func,
 };
 
 export default Table;

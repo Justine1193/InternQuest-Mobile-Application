@@ -1,0 +1,29 @@
+/* Enhanced Toast Container */
+.toast-container {
+  position: fixed;
+  top: var(--iq-spacing-xl, 2rem);
+  right: var(--iq-spacing-xl, 2rem);
+  z-index: var(--iq-z-tooltip, 3000);
+  display: flex;
+  flex-direction: column;
+  gap: var(--iq-spacing-md, 1rem);
+  pointer-events: none;
+  max-width: calc(100vw - 4rem);
+  width: auto;
+}
+
+.toast-container > * {
+  pointer-events: auto;
+}
+
+/* Responsive Design */
+@media (max-width: 600px) {
+  .toast-container {
+    top: var(--iq-spacing-md, 1rem);
+    right: var(--iq-spacing-md, 1rem);
+    left: var(--iq-spacing-md, 1rem);
+    max-width: none;
+    width: auto;
+  }
+}
+

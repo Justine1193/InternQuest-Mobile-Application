@@ -6,6 +6,215 @@
   margin: 0 auto;
 }
 
+/* Statistics Overview */
+.helpdesk-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.stat-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+.stat-icon {
+  font-size: 2.5rem;
+  color: #1976d2;
+  background: rgba(25, 118, 210, 0.1);
+  padding: 1rem;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stat-icon.tutorial {
+  color: #1976d2;
+  background: rgba(25, 118, 210, 0.1);
+}
+
+.stat-icon.requirement {
+  color: #f57c00;
+  background: rgba(245, 124, 0, 0.1);
+}
+
+.stat-icon.size {
+  color: #4caf50;
+  background: rgba(76, 175, 80, 0.1);
+}
+
+.stat-content {
+  flex: 1;
+}
+
+.stat-value {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #333;
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: 0.9rem;
+  color: #666;
+  margin-top: 0.25rem;
+}
+
+/* Search and Filter */
+.files-section-header {
+  margin-bottom: 1.5rem;
+}
+
+.files-controls {
+  display: flex;
+  gap: 1rem;
+  margin-top: 1rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.search-box {
+  position: relative;
+  flex: 1;
+  min-width: 250px;
+}
+
+.search-icon {
+  position: absolute;
+  left: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #999;
+  font-size: 1.25rem;
+}
+
+.search-input {
+  width: 100%;
+  padding: 0.75rem 1rem 0.75rem 3rem;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  transition: border-color 0.2s;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #1976d2;
+}
+
+.filter-controls {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.filter-select {
+  padding: 0.75rem 1rem;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  background: #fff;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.filter-select:focus {
+  outline: none;
+  border-color: #1976d2;
+}
+
+/* Drag and Drop */
+.upload-form.drag-active {
+  border: 2px dashed #1976d2;
+  background: rgba(25, 118, 210, 0.05);
+}
+
+.file-input-wrapper {
+  position: relative;
+}
+
+.drag-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(25, 118, 210, 0.1);
+  border: 2px dashed #1976d2;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  z-index: 10;
+}
+
+.drag-icon {
+  font-size: 3rem;
+  color: #1976d2;
+}
+
+.drag-overlay p {
+  color: #1976d2;
+  font-weight: 600;
+  margin: 0;
+}
+
+/* Upload Progress */
+.upload-progress {
+  margin-top: 0.75rem;
+  background: #f0f0f0;
+  border-radius: 8px;
+  height: 8px;
+  position: relative;
+  overflow: hidden;
+}
+
+.upload-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #1976d2, #42a5f5);
+  border-radius: 8px;
+  transition: width 0.3s ease;
+}
+
+.upload-progress-text {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #1976d2;
+}
+
+/* File Type Icons */
+.file-title-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.file-type-icon {
+  font-size: 1.5rem;
+  color: #1976d2;
+  flex-shrink: 0;
+}
+
 .helpdesk-section h1 {
   color: #333;
   margin-bottom: 0.5rem;

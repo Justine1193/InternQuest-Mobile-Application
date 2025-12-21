@@ -27,19 +27,31 @@ import {
   IoTrashOutline,
   IoDownloadOutline,
   IoEyeOutline,
-  IoSettingsOutline,
   IoCloseOutline,
+  IoDocumentTextOutline,
+  IoImageOutline,
+  IoDocumentOutline,
+  IoSearchOutline,
+  IoFilterOutline,
+  IoStatsChartOutline,
+  IoFolderOutline,
 } from "react-icons/io5";
-import logo from "../../assets/InternQuest_Logo.png";
 import { signOut } from "firebase/auth";
 import { clearAdminSession } from "../../utils/auth";
+import Navbar from "../Navbar/Navbar.jsx";
 import LoadingSpinner from "../LoadingSpinner.jsx";
+import { useNavigate } from "react-router-dom";
+import { useToast } from "../../hooks/useToast";
+import ToastContainer from "../Toast/ToastContainer";
+import ConfirmModal from "../ConfirmModalComponents/ConfirmModal";
+import EmptyState from "../EmptyState/EmptyState";
 import "./HelpDeskDashboard.css";
 
 const HelpDeskDashboard = () => {
+  const navigate = useNavigate();
+  const { toasts, success, error: showError, removeToast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [files, setFiles] = useState([]);
-  const [showLogout, setShowLogout] = useState(false);
   const [error, setError] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [uploadingTutorial, setUploadingTutorial] = useState(false);
@@ -52,11 +64,29 @@ const HelpDeskDashboard = () => {
   // Requirement files upload state
   const [selectedFileNeeded, setSelectedFileNeeded] = useState(null);
   const [fileDescriptionNeeded, setFileDescriptionNeeded] = useState("");
+  // Search and filter state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterCategory, setFilterCategory] = useState("all");
+  const [sortBy, setSortBy] = useState("date"); // date, name, size
+  // Delete confirmation
+  const [deleteConfirm, setDeleteConfirm] = useState({ open: false, fileId: null, fileName: "" });
+  // Drag and drop state
+  const [dragActiveTutorial, setDragActiveTutorial] = useState(false);
+  const [dragActiveNeeded, setDragActiveNeeded] = useState(false);
+  // Upload progress
+  const [uploadProgress, setUploadProgress] = useState({ tutorial: 0, needed: 0 });
 
   useEffect(() => {
     document.title = "Help Desk | InternQuest Admin";
     fetchFiles();
   }, []);
+
+  // Scroll to top when error occurs
+  useEffect(() => {
+    if (error) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [error]);
 
   // Fetch all help desk files from Firestore
   const fetchFiles = async () => {
@@ -228,22 +258,33 @@ const HelpDeskDashboard = () => {
 
       // Refresh file list
       await fetchFiles();
+      success(`File "${selectedFile.name}" uploaded successfully!`);
     } catch (err) {
       console.error("Upload error:", err);
       console.error("Error code:", err.code);
       console.error("Error message:", err.message);
       console.error("Full error:", JSON.stringify(err, null, 2));
-      setError(`Failed to upload file: ${err.message || "Unknown error"}`);
+      const errorMsg = `Failed to upload file: ${err.message || "Unknown error"}`;
+      setError(errorMsg);
+      showError(errorMsg);
     } finally {
       setUploadingState(false);
+      if (category === "tutorial") {
+        setUploadProgress({ ...uploadProgress, tutorial: 0 });
+      } else {
+        setUploadProgress({ ...uploadProgress, needed: 0 });
+      }
     }
   };
 
   // Delete file from Firestore (and Storage if applicable)
-  const handleDelete = async (fileId) => {
-    if (!window.confirm("Are you sure you want to delete this file?")) {
-      return;
-    }
+  const handleDeleteClick = (fileId, fileName) => {
+    setDeleteConfirm({ open: true, fileId, fileName });
+  };
+
+  const handleDeleteConfirm = async () => {
+    const { fileId } = deleteConfirm;
+    if (!fileId) return;
 
     try {
       setIsLoading(true);
@@ -270,12 +311,20 @@ const HelpDeskDashboard = () => {
 
       // Refresh file list
       await fetchFiles();
+      success(`File "${fileToDelete?.fileName || 'File'}" deleted successfully`);
     } catch (err) {
-      setError(`Failed to delete file: ${err.message}`);
+      const errorMsg = `Failed to delete file: ${err.message}`;
+      setError(errorMsg);
+      showError(errorMsg);
       console.error("Delete error:", err);
     } finally {
       setIsLoading(false);
+      setDeleteConfirm({ open: false, fileId: null, fileName: "" });
     }
+  };
+
+  const handleDeleteCancel = () => {
+    setDeleteConfirm({ open: false, fileId: null, fileName: "" });
   };
 
   // Format file size
@@ -319,6 +368,113 @@ const HelpDeskDashboard = () => {
       fileType === "application/pdf" ||
       fileType === "application/x-pdf"
     );
+  };
+
+  // Get file type icon
+  const getFileTypeIcon = (fileType, fileExtension) => {
+    if (!fileType && !fileExtension) return IoDocumentOutline;
+    
+    const type = fileType?.toLowerCase() || "";
+    const ext = fileExtension?.toLowerCase() || "";
+    
+    if (type.startsWith("image/") || ["jpg", "jpeg", "png", "gif", "webp", "svg"].includes(ext)) {
+      return IoImageOutline;
+    }
+    if (type.includes("pdf") || ext === "pdf") {
+      return IoDocumentTextOutline;
+    }
+    return IoDocumentOutline;
+  };
+
+  // Filter and sort files
+  const getFilteredAndSortedFiles = () => {
+    let filtered = [...files];
+
+    // Filter by search query
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(
+        (file) =>
+          file.fileName?.toLowerCase().includes(query) ||
+          file.description?.toLowerCase().includes(query)
+      );
+    }
+
+    // Filter by category
+    if (filterCategory !== "all") {
+      filtered = filtered.filter((file) => file.category === filterCategory);
+    }
+
+    // Sort files
+    filtered.sort((a, b) => {
+      switch (sortBy) {
+        case "name":
+          return (a.fileName || "").localeCompare(b.fileName || "");
+        case "size":
+          return (b.fileSize || 0) - (a.fileSize || 0);
+        case "date":
+        default:
+          return new Date(b.uploadedAt || 0) - new Date(a.uploadedAt || 0);
+      }
+    });
+
+    return filtered;
+  };
+
+  // Calculate statistics
+  const getStatistics = () => {
+    const tutorialFiles = files.filter((f) => f.category === "tutorial");
+    const requirementFiles = files.filter((f) => f.category === "fileNeeded");
+    const totalSize = files.reduce((sum, f) => sum + (f.fileSize || 0), 0);
+    
+    return {
+      total: files.length,
+      tutorial: tutorialFiles.length,
+      requirement: requirementFiles.length,
+      totalSize,
+    };
+  };
+
+  // Drag and drop handlers
+  const handleDrag = (e, category) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (category === "tutorial") {
+      setDragActiveTutorial(true);
+    } else {
+      setDragActiveNeeded(true);
+    }
+  };
+
+  const handleDragLeave = (e, category) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (category === "tutorial") {
+      setDragActiveTutorial(false);
+    } else {
+      setDragActiveNeeded(false);
+    }
+  };
+
+  const handleDrop = (e, category) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (category === "tutorial") {
+      setDragActiveTutorial(false);
+    } else {
+      setDragActiveNeeded(false);
+    }
+
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      const file = e.dataTransfer.files[0];
+      if (category === "tutorial") {
+        setSelectedFileTutorial(file);
+      } else {
+        setSelectedFileNeeded(file);
+      }
+      setError(null);
+    }
   };
 
   // Get preview URL from Storage (preferred) or base64 (fallback)
@@ -390,11 +546,14 @@ const HelpDeskDashboard = () => {
     try {
       await signOut(auth);
       clearAdminSession();
-      window.location.href = "/";
+      navigate("/", { replace: true });
     } catch (error) {
-      alert("Logout failed!");
+      console.error("Logout error:", error);
     }
   };
+
+  const stats = getStatistics();
+  const filteredFiles = getFilteredAndSortedFiles();
 
   return (
     <div className="dashboard-container">
@@ -402,41 +561,15 @@ const HelpDeskDashboard = () => {
         isLoading={isLoading}
         message="Loading help desk files..."
       />
-      <nav className="top-nav">
-        <div className="nav-left">
-          <div className="logo">
-            <img src={logo} alt="Logo" height="32" />
-          </div>
-          <div className="nav-links">
-            <a href="/dashboard" className="nav-link">
-              Manage Internships
-            </a>
-            <a href="/studentDashboard" className="nav-link">
-              Manage Students
-            </a>
-            <a href="/helpDesk" className="nav-link active">
-              Help Desk
-            </a>
-          </div>
-        </div>
-        <div className="nav-right">
-          <button
-            className="settings-icon"
-            onClick={() => setShowLogout((prev) => !prev)}
-            aria-label="Settings"
-            style={{ fontSize: "28px" }}
-          >
-            <IoSettingsOutline />
-          </button>
-          {showLogout && (
-            <div className="logout-dropdown">
-              <button onClick={handleLogout} className="logout-btn">
-                Logout
-              </button>
-            </div>
-          )}
-        </div>
-      </nav>
+      <Navbar onLogout={handleLogout} />
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+      <ConfirmModal
+        open={deleteConfirm.open}
+        message={`Are you sure you want to delete "${deleteConfirm.fileName}"? This action cannot be undone.`}
+        onConfirm={handleDeleteConfirm}
+        onCancel={handleDeleteCancel}
+        confirmButtonText="Yes, delete it!"
+      />
 
       <div className="dashboard-content">
         <div className="helpdesk-section">
@@ -444,6 +577,46 @@ const HelpDeskDashboard = () => {
           <p className="helpdesk-subtitle">
             Upload and manage files for student support and resources
           </p>
+
+          {/* Statistics Overview */}
+          <div className="helpdesk-stats">
+            <div className="stat-card">
+              <div className="stat-icon">
+                <IoFolderOutline />
+              </div>
+              <div className="stat-content">
+                <div className="stat-value">{stats.total}</div>
+                <div className="stat-label">Total Files</div>
+              </div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-icon tutorial">
+                <IoDocumentTextOutline />
+              </div>
+              <div className="stat-content">
+                <div className="stat-value">{stats.tutorial}</div>
+                <div className="stat-label">OJT Guides</div>
+              </div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-icon requirement">
+                <IoDocumentOutline />
+              </div>
+              <div className="stat-content">
+                <div className="stat-value">{stats.requirement}</div>
+                <div className="stat-label">Requirements</div>
+              </div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-icon size">
+                <IoStatsChartOutline />
+              </div>
+              <div className="stat-content">
+                <div className="stat-value">{formatFileSize(stats.totalSize)}</div>
+                <div className="stat-label">Total Size</div>
+              </div>
+            </div>
+          </div>
 
           {error && (
             <div className="error-message" role="alert">
@@ -467,23 +640,46 @@ const HelpDeskDashboard = () => {
                 Upload OJT files. You can upload multiple files.
               </p>
 
-              <div className="upload-form">
+              <div 
+                className={`upload-form ${dragActiveTutorial ? "drag-active" : ""}`}
+                onDragEnter={(e) => handleDrag(e, "tutorial")}
+                onDragLeave={(e) => handleDragLeave(e, "tutorial")}
+                onDragOver={(e) => handleDrag(e, "tutorial")}
+                onDrop={(e) => handleDrop(e, "tutorial")}
+              >
                 <div className="form-group">
                   <label htmlFor="file-input-tutorial">
-                    Select File <span style={{ color: "red" }}>*</span>
+                    Select File or Drag & Drop <span style={{ color: "red" }}>*</span>
                   </label>
-                  <input
-                    id="file-input-tutorial"
-                    type="file"
-                    onChange={handleFileSelectTutorial}
-                    className="file-input"
-                    disabled={uploadingTutorial}
-                    accept="image/*,.pdf"
-                  />
+                  <div className="file-input-wrapper">
+                    <input
+                      id="file-input-tutorial"
+                      type="file"
+                      onChange={handleFileSelectTutorial}
+                      className="file-input"
+                      disabled={uploadingTutorial}
+                      accept="image/*,.pdf"
+                    />
+                    {dragActiveTutorial && (
+                      <div className="drag-overlay">
+                        <IoCloudUploadOutline className="drag-icon" />
+                        <p>Drop file here</p>
+                      </div>
+                    )}
+                  </div>
                   {selectedFileTutorial && (
                     <div className="file-info">
                       <strong>Selected:</strong> {selectedFileTutorial.name} (
                       {formatFileSize(selectedFileTutorial.size)})
+                    </div>
+                  )}
+                  {uploadingTutorial && uploadProgress.tutorial > 0 && (
+                    <div className="upload-progress">
+                      <div 
+                        className="upload-progress-bar" 
+                        style={{ width: `${uploadProgress.tutorial}%` }}
+                      ></div>
+                      <span className="upload-progress-text">{uploadProgress.tutorial}%</span>
                     </div>
                   )}
                 </div>
@@ -514,18 +710,32 @@ const HelpDeskDashboard = () => {
                 for their OJT. These files will appear in the mobile app under
                 requirement files.
               </p>
-              <div className="upload-form">
+              <div 
+                className={`upload-form ${dragActiveNeeded ? "drag-active" : ""}`}
+                onDragEnter={(e) => handleDrag(e, "needed")}
+                onDragLeave={(e) => handleDragLeave(e, "needed")}
+                onDragOver={(e) => handleDrag(e, "needed")}
+                onDrop={(e) => handleDrop(e, "needed")}
+              >
                 <div className="form-group">
                   <label htmlFor="file-input-needed">
-                    Select File <span style={{ color: "red" }}>*</span>
+                    Select File or Drag & Drop <span style={{ color: "red" }}>*</span>
                   </label>
-                  <input
-                    id="file-input-needed"
-                    type="file"
-                    onChange={handleFileSelectNeeded}
-                    className="file-input"
-                    disabled={uploadingFileNeeded}
-                  />
+                  <div className="file-input-wrapper">
+                    <input
+                      id="file-input-needed"
+                      type="file"
+                      onChange={handleFileSelectNeeded}
+                      className="file-input"
+                      disabled={uploadingFileNeeded}
+                    />
+                    {dragActiveNeeded && (
+                      <div className="drag-overlay">
+                        <IoCloudUploadOutline className="drag-icon" />
+                        <p>Drop file here</p>
+                      </div>
+                    )}
+                  </div>
                   {selectedFileNeeded && (
                     <div className="file-info">
                       <strong>Selected:</strong> {selectedFileNeeded.name} (
@@ -535,6 +745,15 @@ const HelpDeskDashboard = () => {
                           ⚠️ File is too large. Maximum size is 900KB.
                         </div>
                       )}
+                    </div>
+                  )}
+                  {uploadingFileNeeded && uploadProgress.needed > 0 && (
+                    <div className="upload-progress">
+                      <div 
+                        className="upload-progress-bar" 
+                        style={{ width: `${uploadProgress.needed}%` }}
+                      ></div>
+                      <span className="upload-progress-text">{uploadProgress.needed}%</span>
                     </div>
                   )}
                 </div>
@@ -560,29 +779,77 @@ const HelpDeskDashboard = () => {
 
           {/* Files List Section */}
           <div className="files-section">
-            <h2>Uploaded Files ({files.length})</h2>
-            {files.length === 0 ? (
-              <div className="empty-state">
-                <p>No files uploaded yet. Upload your first file above.</p>
+            <div className="files-section-header">
+              <h2>Uploaded Files ({filteredFiles.length})</h2>
+              
+              {/* Search and Filter */}
+              <div className="files-controls">
+                <div className="search-box">
+                  <IoSearchOutline className="search-icon" />
+                  <input
+                    type="text"
+                    placeholder="Search files..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="search-input"
+                  />
+                </div>
+                <div className="filter-controls">
+                  <select
+                    value={filterCategory}
+                    onChange={(e) => setFilterCategory(e.target.value)}
+                    className="filter-select"
+                  >
+                    <option value="all">All Categories</option>
+                    <option value="tutorial">OJT Guides</option>
+                    <option value="fileNeeded">Requirements</option>
+                  </select>
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value)}
+                    className="filter-select"
+                  >
+                    <option value="date">Sort by Date</option>
+                    <option value="name">Sort by Name</option>
+                    <option value="size">Sort by Size</option>
+                  </select>
+                </div>
               </div>
+            </div>
+
+            {filteredFiles.length === 0 ? (
+              <EmptyState
+                type="document"
+                title={searchQuery || filterCategory !== "all" ? "No files found" : "No files uploaded yet"}
+                message={
+                  searchQuery || filterCategory !== "all"
+                    ? "Try adjusting your search or filter criteria."
+                    : "Upload your first file above to get started."
+                }
+              />
             ) : (
               <>
                 {/* OJT How to Start */}
-                {files.filter((f) => f.category === "tutorial").length > 0 && (
+                {filteredFiles.filter((f) => f.category === "tutorial").length > 0 && (
                   <div className="files-category-section">
                     <h3 className="category-title">
                       OJT How to Start (
-                      {files.filter((f) => f.category === "tutorial").length})
+                      {filteredFiles.filter((f) => f.category === "tutorial").length})
                     </h3>
                     <div className="files-grid">
-                      {files
+                      {filteredFiles
                         .filter((f) => f.category === "tutorial")
-                        .map((file) => (
+                        .map((file) => {
+                          const FileIcon = getFileTypeIcon(file.fileType, file.fileExtension);
+                          return (
                           <div key={file.id} className="file-card">
                             <div className="file-header">
-                              <h3>{file.fileName}</h3>
+                              <div className="file-title-wrapper">
+                                <FileIcon className="file-type-icon" />
+                                <h3>{file.fileName}</h3>
+                              </div>
                               <button
-                                onClick={() => handleDelete(file.id)}
+                                onClick={() => handleDeleteClick(file.id, file.fileName)}
                                 className="delete-btn"
                                 aria-label="Delete file"
                                 disabled={isLoading}
@@ -622,28 +889,34 @@ const HelpDeskDashboard = () => {
                               </button>
                             </div>
                           </div>
-                        ))}
+                          );
+                        })}
                     </div>
                   </div>
                 )}
 
                 {/* Requirement Files */}
-                {files.filter((f) => f.category === "fileNeeded").length >
+                {filteredFiles.filter((f) => f.category === "fileNeeded").length >
                   0 && (
                   <div className="files-category-section">
                     <h3 className="category-title">
                       Requirement Files (
-                      {files.filter((f) => f.category === "fileNeeded").length})
+                      {filteredFiles.filter((f) => f.category === "fileNeeded").length})
                     </h3>
                     <div className="files-grid">
-                      {files
+                      {filteredFiles
                         .filter((f) => f.category === "fileNeeded")
-                        .map((file) => (
+                        .map((file) => {
+                          const FileIcon = getFileTypeIcon(file.fileType, file.fileExtension);
+                          return (
                           <div key={file.id} className="file-card">
                             <div className="file-header">
-                              <h3>{file.fileName}</h3>
+                              <div className="file-title-wrapper">
+                                <FileIcon className="file-type-icon" />
+                                <h3>{file.fileName}</h3>
+                              </div>
                               <button
-                                onClick={() => handleDelete(file.id)}
+                                onClick={() => handleDeleteClick(file.id, file.fileName)}
                                 className="delete-btn"
                                 aria-label="Delete file"
                                 disabled={isLoading}
@@ -683,13 +956,14 @@ const HelpDeskDashboard = () => {
                               </button>
                             </div>
                           </div>
-                        ))}
+                          );
+                        })}
                     </div>
                   </div>
                 )}
 
                 {/* Files without category (for backward compatibility) */}
-                {files.filter(
+                {filteredFiles.filter(
                   (f) =>
                     !f.category ||
                     (f.category !== "tutorial" && f.category !== "fileNeeded")
@@ -698,7 +972,7 @@ const HelpDeskDashboard = () => {
                     <h3 className="category-title">
                       Other Files (
                       {
-                        files.filter(
+                        filteredFiles.filter(
                           (f) =>
                             !f.category ||
                             (f.category !== "tutorial" &&
@@ -708,19 +982,24 @@ const HelpDeskDashboard = () => {
                       )
                     </h3>
                     <div className="files-grid">
-                      {files
+                      {filteredFiles
                         .filter(
                           (f) =>
                             !f.category ||
                             (f.category !== "tutorial" &&
                               f.category !== "fileNeeded")
                         )
-                        .map((file) => (
+                        .map((file) => {
+                          const FileIcon = getFileTypeIcon(file.fileType, file.fileExtension);
+                          return (
                           <div key={file.id} className="file-card">
                             <div className="file-header">
-                              <h3>{file.fileName}</h3>
+                              <div className="file-title-wrapper">
+                                <FileIcon className="file-type-icon" />
+                                <h3>{file.fileName}</h3>
+                              </div>
                               <button
-                                onClick={() => handleDelete(file.id)}
+                                onClick={() => handleDeleteClick(file.id, file.fileName)}
                                 className="delete-btn"
                                 aria-label="Delete file"
                                 disabled={isLoading}
@@ -757,7 +1036,8 @@ const HelpDeskDashboard = () => {
                               </button>
                             </div>
                           </div>
-                        ))}
+                          );
+                        })}
                     </div>
                   </div>
                 )}

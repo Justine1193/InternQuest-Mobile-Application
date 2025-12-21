@@ -39,6 +39,7 @@ function CompanyModal({
   const [websiteChecking, setWebsiteChecking] = useState(false);
   const [emailValid, setEmailValid] = useState(true);
   const audioContextRef = useRef(null);
+  const [errorTrigger, setErrorTrigger] = useState(0); // Track error occurrences to trigger scroll
 
   // Initialize audio context (only once)
   useEffect(() => {
@@ -50,12 +51,29 @@ function CompanyModal({
     }
   }, []);
 
-  // Play error sound when error appears
+  // Track when error prop changes from parent to trigger scroll
+  const prevErrorRef = useRef(error);
+  useEffect(() => {
+    if (error && error !== prevErrorRef.current) {
+      setErrorTrigger((prev) => prev + 1); // Increment to trigger scroll
+      prevErrorRef.current = error;
+    }
+  }, [error]);
+
+  // Play error sound and scroll modal to top when error appears
   useEffect(() => {
     if (error || localError) {
       playErrorSound();
+      // Only scroll modal content to top, not the entire page
+      // Use a small delay to ensure modal content is rendered
+      setTimeout(() => {
+        const modalContent = document.querySelector('.modal-content');
+        if (modalContent) {
+          modalContent.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+      }, 100);
     }
-  }, [error, localError]);
+  }, [error, localError, shakeKey, errorTrigger]); // errorTrigger increments each time validation fails, ensuring scroll on repeated errors
 
   // Function to play error sound
   const playErrorSound = () => {
@@ -116,11 +134,12 @@ function CompanyModal({
 
   // Validation function
   const validateForm = () => {
+    // MOA is now always required, so always check validity years and start date
     const requiresMoaValidity =
-      formData.moa &&
-      (!formData.moaValidityYears ||
-        Number(formData.moaValidityYears) <= 0 ||
-        Number.isNaN(Number(formData.moaValidityYears)));
+      !formData.moaValidityYears ||
+      Number(formData.moaValidityYears) <= 0 ||
+      Number.isNaN(Number(formData.moaValidityYears));
+    const requiresMoaStartDate = !formData.moaStartDate;
     if (
       !formData.companyName.trim() ||
       !formData.description.trim() ||
@@ -131,13 +150,17 @@ function CompanyModal({
       fields.length === 0 ||
       !formData.modeOfWork ||
       formData.modeOfWork.length === 0 ||
-      requiresMoaValidity
+      requiresMoaValidity ||
+      requiresMoaStartDate
     ) {
       setLocalError(
-        requiresMoaValidity
-          ? "Please specify how many years the MOA is valid."
+        requiresMoaStartDate
+          ? "Please specify the MOA start date. MOA is required."
+          : requiresMoaValidity
+          ? "Please specify how many years the MOA is valid. MOA is required."
           : "Please fill in all required fields."
       );
+      setErrorTrigger((prev) => prev + 1); // Increment to trigger scroll
       setShakeKey((k) => k + 1); // Force re-render for animation
       return false;
     }
@@ -174,11 +197,12 @@ function CompanyModal({
   // New minimal update handler
   const handleUpdate = () => {
     console.log("Update clicked", { formData, fields, skills, editCompanyId });
+    // MOA is now always required, so always check validity years and start date
     const requiresMoaValidity =
-      formData.moa &&
-      (!formData.moaValidityYears ||
-        Number(formData.moaValidityYears) <= 0 ||
-        Number.isNaN(Number(formData.moaValidityYears)));
+      !formData.moaValidityYears ||
+      Number(formData.moaValidityYears) <= 0 ||
+      Number.isNaN(Number(formData.moaValidityYears));
+    const requiresMoaStartDate = !formData.moaStartDate;
     if (
       !formData.companyName ||
       !formData.description ||
@@ -189,13 +213,18 @@ function CompanyModal({
       fields.length === 0 ||
       !formData.modeOfWork ||
       formData.modeOfWork.length === 0 ||
-      requiresMoaValidity
+      requiresMoaValidity ||
+      requiresMoaStartDate
     ) {
       setLocalError(
-        requiresMoaValidity
-          ? "Please specify how many years the MOA is valid."
+        requiresMoaStartDate
+          ? "Please specify the MOA start date. MOA is required."
+          : requiresMoaValidity
+          ? "Please specify how many years the MOA is valid. MOA is required."
           : "Please fill in all required fields."
       );
+      setErrorTrigger((prev) => prev + 1); // Increment to trigger scroll
+      setShakeKey((k) => k + 1); // Force re-render for animation
       return;
     }
     setLocalError("");
@@ -269,13 +298,11 @@ function CompanyModal({
   }, [isEditMode]);
 
   useEffect(() => {
-    if (!formData.moa && formData.moaValidityYears) {
-      setFormData((prev) => ({
-        ...prev,
-        moaValidityYears: "",
-      }));
+    // MOA is always required, so ensure it's always true
+    if (!formData.moa) {
+      setFormData((prev) => ({ ...prev, moa: true }));
     }
-  }, [formData.moa, formData.moaValidityYears, setFormData]);
+  }, [formData.moa, setFormData]);
 
   if (!open) return null;
   return (
@@ -470,6 +497,45 @@ function CompanyModal({
             )}
           </div>
           <div className="form-group">
+            <label htmlFor="contactPersonName">
+              Contact Person Name:
+            </label>
+            <input
+              id="contactPersonName"
+              type="text"
+              name="contactPersonName"
+              value={formData.contactPersonName || ""}
+              onChange={handleInputChange}
+              placeholder="Enter contact person name"
+            />
+          </div>
+          <div className="form-group">
+            <label htmlFor="contactPersonEmail">
+              Contact Person Email:
+            </label>
+            <input
+              id="contactPersonEmail"
+              type="email"
+              name="contactPersonEmail"
+              value={formData.contactPersonEmail || ""}
+              onChange={handleInputChange}
+              placeholder="Enter contact person email"
+            />
+          </div>
+          <div className="form-group">
+            <label htmlFor="contactPersonPhone">
+              Contact Person Phone:
+            </label>
+            <input
+              id="contactPersonPhone"
+              type="tel"
+              name="contactPersonPhone"
+              value={formData.contactPersonPhone || ""}
+              onChange={handleInputChange}
+              placeholder="Enter contact person phone"
+            />
+          </div>
+          <div className="form-group">
             <label htmlFor="skills">
               Skills Required: <span style={{ color: "red" }}>*</span>
             </label>
@@ -539,34 +605,37 @@ function CompanyModal({
           </div>
           <div className="moa-validity-card">
             <div className="moa-toggle">
-              <label htmlFor="moa" className="checkbox-label">
+              <div>
+                <span className="moa-title">
+                  MOA (Memorandum of Agreement) <span className="moa-required">*</span>
+                </span>
+                <p className="moa-subtitle">
+                  Track current agreements and show validity to students. MOA is required for all companies.
+                </p>
+              </div>
+            </div>
+            <div className="moa-validity-input">
+              <div className="moa-validity-label">
+                <span>Start Date</span>
+                <span className="moa-required">*</span>
+              </div>
+              <div className="moa-input-wrapper">
                 <input
-                  id="moa"
-                  type="checkbox"
-                  name="moa"
-                  checked={formData.moa}
+                  id="moaStartDate"
+                  type="date"
+                  name="moaStartDate"
+                  value={formData.moaStartDate}
                   onChange={handleInputChange}
+                  required
                 />
-                <div>
-                  <span className="moa-title">
-                    MOA (Memorandum of Agreement)
-                  </span>
-                  <p className="moa-subtitle">
-                    Track current agreements and show validity to students.
-                  </p>
-                </div>
-              </label>
+              </div>
             </div>
             <div className="moa-validity-input">
               <div className="moa-validity-label">
                 <span>Validity</span>
-                {formData.moa && <span className="moa-required">*</span>}
+                <span className="moa-required">*</span>
               </div>
-              <div
-                className={`moa-input-wrapper${
-                  !formData.moa ? " disabled" : ""
-                }`}
-              >
+              <div className="moa-input-wrapper">
                 <input
                   id="moaValidityYears"
                   type="number"
@@ -576,11 +645,32 @@ function CompanyModal({
                   placeholder="Enter number of years"
                   value={formData.moaValidityYears}
                   onChange={handleInputChange}
-                  disabled={!formData.moa}
+                  required
                 />
                 <span className="moa-unit">years</span>
               </div>
             </div>
+            {formData.moaStartDate && formData.moaValidityYears && (
+              <div className="moa-expiration-preview">
+                <span className="expiration-label">Expiration Date:</span>
+                <span className="expiration-value">
+                  {(() => {
+                    const startDate = new Date(formData.moaStartDate);
+                    const years = Number(formData.moaValidityYears);
+                    if (!isNaN(years) && years > 0) {
+                      const expirationDate = new Date(startDate);
+                      expirationDate.setFullYear(expirationDate.getFullYear() + years);
+                      return expirationDate.toLocaleDateString('en-US', { 
+                        year: 'numeric', 
+                        month: 'short', 
+                        day: 'numeric' 
+                      });
+                    }
+                    return 'N/A';
+                  })()}
+                </span>
+              </div>
+            )}
             <p className="moa-hint">
               This value syncs to the mobile app so interns immediately see how
               long the partnership is active.
@@ -643,9 +733,13 @@ function CompanyModal({
                 address: "",
                 email: "",
                 skills: "",
-                moa: false,
+                moa: true, // MOA is now required
                 moaValidityYears: "",
+                moaStartDate: "",
                 modeOfWork: [],
+                contactPersonName: "",
+                contactPersonTitle: "",
+                contactPersonPhone: "",
               });
               setSkills([]);
               setFields([]);

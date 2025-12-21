@@ -29,6 +29,8 @@
 import React from "react";
 import PropTypes from "prop-types";
 import StudentTableRow from "./StudentTableRow";
+import EmptyState from "../../EmptyState/EmptyState";
+import { IoPeopleOutline } from "react-icons/io5";
 import "./StudentTable.css";
 
 // Renders the student table with all rows and selection logic
@@ -53,15 +55,76 @@ const StudentTable = ({
   setSelectionMode,
   setSelectedItems,
   handleDeleteSingle,
+  handleAcceptStudent,
   isDeleting,
+  isAdviser,
+  requirementApprovals,
+  sortConfig,
+  onSort,
+  visibleColumns = [],
+  onClearFilters,
+  onAddStudent,
 }) => {
+  // Default to all columns if not provided
+  const defaultVisibleColumns = [
+    "profilePicture",
+    "studentNumber",
+    "firstName",
+    "lastName",
+    "email",
+    "contact",
+    "program",
+    "section",
+    "field",
+    "company",
+    "skills",
+    "hired",
+    "requirements",
+    "actions",
+  ];
+  // Essential columns that must always be visible
+  const essentialColumns = [
+    "profilePicture",
+    "studentNumber",
+    "firstName",
+    "lastName",
+  ];
+
+  // Always include essential columns, merge with visibleColumns
+  // visibleColumns should already include essential columns, but we ensure they're there
+  const columnsToShow =
+    visibleColumns.length > 0
+      ? [...new Set([...essentialColumns, ...visibleColumns])]
+      : defaultVisibleColumns;
+
+  const isColumnVisible = (key) => {
+    // Essential columns are always visible
+    if (essentialColumns.includes(key)) return true;
+    // For non-essential columns, check if they're in the visibleColumns array
+    const isVisible = visibleColumns.includes(key);
+    return isVisible;
+  };
+  const getSortClass = (key) => {
+    if (!sortConfig || sortConfig.key !== key) return "sortable";
+    return `sortable ${
+      sortConfig.direction === "asc" ? "sorted-asc" : "sorted-desc"
+    }`;
+  };
+
+  const handleHeaderClick = (key) => {
+    if (onSort) {
+      onSort(key);
+    }
+  };
   return (
     <div className="student-table-container">
-      <table>
+      <table role="table" aria-label="Students table">
         <colgroup>
           {[
             // Profile Picture
             <col key="profilePicture" style={{ width: "80px" }} />,
+            // Student Number
+            <col key="studentNumber" style={{ width: "120px" }} />,
             // First Name
             <col key="firstName" />,
             // Last Name
@@ -72,6 +135,8 @@ const StudentTable = ({
             <col key="contact" />,
             // Program
             <col key="program" />,
+            // Section
+            <col key="section" style={{ width: "100px" }} />,
             // Field
             <col key="field" />,
             // Company
@@ -80,8 +145,8 @@ const StudentTable = ({
             <col key="skills" />,
             // Hired (fixed width)
             <col key="hired" style={{ width: "60px" }} />,
-            // Location Preference
-            <col key="locationPreference" />,
+            // Requirements Status
+            <col key="requirements" style={{ width: "100px" }} />,
             // Kebab
             <col key="actions" />,
           ]}
@@ -120,48 +185,227 @@ const StudentTable = ({
                 </div>
               </th>
             )}
-            <th style={{ paddingLeft: selectionMode ? "8px" : undefined }}>
-              Photo
+            <th style={{ paddingLeft: selectionMode ? "8px" : undefined }}></th>
+            <th
+              className={getSortClass("studentNumber")}
+              onClick={() => handleHeaderClick("studentNumber")}
+              role="columnheader"
+              aria-sort={
+                sortConfig?.key === "studentNumber"
+                  ? sortConfig.direction === "asc"
+                    ? "ascending"
+                    : "descending"
+                  : "none"
+              }
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  handleHeaderClick("studentNumber");
+                }
+              }}
+            >
+              Student ID
             </th>
-            <th>First Name</th>
-            <th>Last Name</th>
-            <th>Email</th>
-            <th>Contact</th>
-            <th>Program</th>
-            <th>Field</th>
-            <th>Company</th>
-            <th>Hired</th>
-            <th>Skills</th>
-            <th>Location Preference</th>
-            <th className="student-kebab-cell"></th>
+            <th
+              className={getSortClass("firstName")}
+              onClick={() => handleHeaderClick("firstName")}
+              role="columnheader"
+              aria-sort={
+                sortConfig?.key === "firstName"
+                  ? sortConfig.direction === "asc"
+                    ? "ascending"
+                    : "descending"
+                  : "none"
+              }
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  handleHeaderClick("firstName");
+                }
+              }}
+            >
+              First Name
+            </th>
+            <th
+              className={getSortClass("lastName")}
+              onClick={() => handleHeaderClick("lastName")}
+              role="columnheader"
+              aria-sort={
+                sortConfig?.key === "lastName"
+                  ? sortConfig.direction === "asc"
+                    ? "ascending"
+                    : "descending"
+                  : "none"
+              }
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  handleHeaderClick("lastName");
+                }
+              }}
+            >
+              Last Name
+            </th>
+            <th
+              className={getSortClass("email")}
+              onClick={() => handleHeaderClick("email")}
+              role="columnheader"
+              aria-sort={
+                sortConfig?.key === "email"
+                  ? sortConfig.direction === "asc"
+                    ? "ascending"
+                    : "descending"
+                  : "none"
+              }
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  handleHeaderClick("email");
+                }
+              }}
+            >
+              Email
+            </th>
+            <th
+              className={getSortClass("contact")}
+              onClick={() => handleHeaderClick("contact")}
+              role="columnheader"
+              aria-sort={
+                sortConfig?.key === "contact"
+                  ? sortConfig.direction === "asc"
+                    ? "ascending"
+                    : "descending"
+                  : "none"
+              }
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  handleHeaderClick("contact");
+                }
+              }}
+            >
+              Contact
+            </th>
+            <th
+              className={getSortClass("program")}
+              onClick={() => handleHeaderClick("program")}
+              role="columnheader"
+              aria-sort={
+                sortConfig?.key === "program"
+                  ? sortConfig.direction === "asc"
+                    ? "ascending"
+                    : "descending"
+                  : "none"
+              }
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  handleHeaderClick("program");
+                }
+              }}
+            >
+              Program
+            </th>
+            <th
+              className={getSortClass("section")}
+              onClick={() => handleHeaderClick("section")}
+              role="columnheader"
+              aria-sort={
+                sortConfig?.key === "section"
+                  ? sortConfig.direction === "asc"
+                    ? "ascending"
+                    : "descending"
+                  : "none"
+              }
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  handleHeaderClick("section");
+                }
+              }}
+            >
+              Section
+            </th>
+            {isColumnVisible("field") && (
+              <th
+                className={getSortClass("field")}
+                onClick={() => handleHeaderClick("field")}
+              >
+                Field
+              </th>
+            )}
+            {isColumnVisible("company") && <th>Company</th>}
+            {isColumnVisible("hired") && <th>Hired</th>}
+            {isColumnVisible("skills") && <th>Skills</th>}
+            {isColumnVisible("requirements") && <th>Requirements</th>}
+            {isColumnVisible("actions") && (
+              <th className="student-kebab-cell"></th>
+            )}
           </tr>
         </thead>
         <tbody>
-          {data.map((row) => (
-            <StudentTableRow
-              key={row.id}
-              row={row}
-              onEdit={onEdit}
-              onDelete={onDelete}
-              onRowClick={onRowClick}
-              isSelected={selectedItems.includes(row.id)}
-              onSelect={() => onSelectItem(row.id)}
-              selectionMode={selectionMode}
-              openMenuId={openMenuId}
-              setOpenMenuId={setOpenMenuId}
-              selectedRowId={selectedRowId}
-              setSelectedRowId={setSelectedRowId}
-              setIsEditMode={setIsEditMode}
-              setEditStudentId={setEditStudentId}
-              setFormData={setFormData}
-              setSkills={setSkills}
-              setIsModalOpen={setIsModalOpen}
-              setSelectionMode={setSelectionMode}
-              setSelectedItems={setSelectedItems}
-              handleDeleteSingle={handleDeleteSingle}
-              isDeleting={isDeleting}
-            />
-          ))}
+          {data.length === 0 ? (
+            <tr>
+              <td
+                colSpan={
+                  selectionMode
+                    ? columnsToShow.length + 1
+                    : columnsToShow.length
+                }
+                style={{ padding: 0, border: "none" }}
+              >
+                <EmptyState
+                  type={onClearFilters ? "filtered" : "students"}
+                  title={onClearFilters ? "No students found" : "No students yet"}
+                  message={
+                    onClearFilters
+                      ? "No students match your current search or filters. Try adjusting your criteria or clear filters to see all students."
+                      : "Get started by adding your first student. You can add students individually or import them from a CSV file."
+                  }
+                  icon={IoPeopleOutline}
+                  actionLabel={onClearFilters ? "Clear All Filters" : onAddStudent ? "Add First Student" : undefined}
+                  onAction={onClearFilters || onAddStudent}
+                />
+              </td>
+            </tr>
+          ) : (
+            data.map((row) => (
+              <StudentTableRow
+                key={row.id}
+                row={row}
+                onEdit={onEdit}
+                onDelete={onDelete}
+                onRowClick={onRowClick}
+                isSelected={selectedItems.includes(row.id)}
+                onSelect={() => onSelectItem(row.id)}
+                selectionMode={selectionMode}
+                openMenuId={openMenuId}
+                setOpenMenuId={setOpenMenuId}
+                selectedRowId={selectedRowId}
+                setSelectedRowId={setSelectedRowId}
+                setIsEditMode={setIsEditMode}
+                setEditStudentId={setEditStudentId}
+                setFormData={setFormData}
+                setSkills={setSkills}
+                setIsModalOpen={setIsModalOpen}
+                setSelectionMode={setSelectionMode}
+                setSelectedItems={setSelectedItems}
+                handleDeleteSingle={handleDeleteSingle}
+                handleAcceptStudent={handleAcceptStudent}
+                isDeleting={isDeleting}
+                isAdviser={isAdviser}
+                requirementApprovals={requirementApprovals}
+                visibleColumns={columnsToShow}
+              />
+            ))
+          )}
         </tbody>
       </table>
     </div>
@@ -189,7 +433,17 @@ StudentTable.propTypes = {
   setSelectionMode: PropTypes.func,
   setSelectedItems: PropTypes.func,
   handleDeleteSingle: PropTypes.func,
+  handleAcceptStudent: PropTypes.func,
   isDeleting: PropTypes.bool,
+  isAdviser: PropTypes.bool,
+  requirementApprovals: PropTypes.object,
+  sortConfig: PropTypes.shape({
+    key: PropTypes.string,
+    direction: PropTypes.oneOf(["asc", "desc"]),
+  }),
+  onSort: PropTypes.func,
+  onClearFilters: PropTypes.func,
+  onAddStudent: PropTypes.func,
 };
 
 export default StudentTable;

@@ -220,8 +220,8 @@
 
 .mode-checkbox {
   display: flex;
-  align-items: flex-start;
-  gap: 100rem;
+  align-items: center;
+  gap: 0.75rem;
   cursor: pointer;
   user-select: none;
   font-size: 1rem;
@@ -420,6 +420,28 @@
   text-transform: uppercase;
   letter-spacing: 0.4em;
   margin-left: 1.3rem;
+}
+
+.moa-expiration-preview {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  background: #e3f2fd;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.expiration-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #1565c0;
+}
+
+.expiration-value {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #0d47a1;
 }
 
 .moa-hint {

@@ -27,7 +27,7 @@
 
 import React, { useState } from "react";
 import PropTypes from "prop-types";
-import { IoEllipsisVertical } from "react-icons/io5";
+import { IoEllipsisVertical, IoWarningOutline, IoAlertCircle } from "react-icons/io5";
 import KebabCell from "../../../KebabcellComponents/KebabCell.jsx";
 import "./TableRow.css";
 
@@ -52,6 +52,7 @@ const TableRow = ({
   setSelectedItems,
   handleDeleteSingle,
   isDeleting,
+  onRowClick,
 }) => {
   // State for toggling skill tag expansion
   const [showAllSkills, setShowAllSkills] = useState(false);
@@ -76,8 +77,69 @@ const TableRow = ({
   };
   const moaValidity = getMoaValidityDisplay();
 
+  // Check if MOA is expiring soon (within 30 days) or expired
+  const getMoaExpirationStatus = () => {
+    if (row.moa !== "Yes" || !row.moaExpirationDate) {
+      return null;
+    }
+    
+    try {
+      const expirationDate = new Date(row.moaExpirationDate);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const expDate = new Date(expirationDate);
+      expDate.setHours(0, 0, 0, 0);
+      
+      const daysUntilExpiration = Math.ceil((expDate - today) / (1000 * 60 * 60 * 24));
+      
+      if (daysUntilExpiration < 0) {
+        return { status: "expired", days: Math.abs(daysUntilExpiration) };
+      } else if (daysUntilExpiration <= 30) {
+        return { status: "expiring-soon", days: daysUntilExpiration };
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  };
+
+  const expirationStatus = getMoaExpirationStatus();
+
+  const handleRowClick = (e) => {
+    // Don't trigger if clicking on checkbox, kebab menu, links, or interactive elements
+    const target = e.target;
+    const isCheckbox = target.type === 'checkbox' || target.closest('.table-checkbox') || target.closest('input[type="checkbox"]');
+    const isKebab = target.closest('.kebab-cell') || target.closest('[class*="kebab"]');
+    const isLink = target.tagName === 'A' || target.closest('a');
+    const isButton = target.tagName === 'BUTTON' || target.closest('button');
+    const isClickableTag = target.closest('.table-skill-tag') || target.closest('.table-field-tag');
+    
+    if (isCheckbox || isKebab || isLink || isButton || isClickableTag) {
+      return;
+    }
+    
+    // Prevent default and stop propagation
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (onRowClick && typeof onRowClick === 'function') {
+      onRowClick(row);
+    }
+  };
+
+  // Add class for expiring/expired MOA
+  const rowClassName = [
+    isSelected ? "selected-row" : "",
+    onRowClick ? "clickable-row" : "",
+    expirationStatus?.status === "expiring-soon" ? "moa-expiring-soon" : "",
+    expirationStatus?.status === "expired" ? "moa-expired" : "",
+  ].filter(Boolean).join(" ");
+
   return (
-    <tr className={isSelected ? "selected-row" : ""}>
+    <tr 
+      className={rowClassName}
+      onClick={handleRowClick}
+    >
       {selectionMode && (
         <td className="checkbox-cell">
           <input
@@ -88,51 +150,27 @@ const TableRow = ({
           />
         </td>
       )}
-      <td>{row.companyName}</td>
-      <td className="description-cell">
-        <div className="description-content">
-          {row.companyDescription && row.companyDescription.length > 100
-            ? `${row.companyDescription.substring(0, 100)}...`
-            : row.companyDescription}
-          {row.companyDescription && row.companyDescription.length > 100 && (
-            <div className="description-tooltip">{row.companyDescription}</div>
+      <td className="company-name-cell">
+        <div className="company-name-content" title={row.companyName}>
+          <span className="company-name-text">{row.companyName}</span>
+          {expirationStatus && (
+            <span 
+              className={`moa-warning-badge ${expirationStatus.status}`}
+              title={
+                expirationStatus.status === "expired"
+                  ? `MOA expired ${expirationStatus.days} day${expirationStatus.days !== 1 ? 's' : ''} ago`
+                  : `MOA expiring in ${expirationStatus.days} day${expirationStatus.days !== 1 ? 's' : ''}`
+              }
+            >
+              {expirationStatus.status === "expired" ? (
+                <IoAlertCircle className="warning-icon" />
+              ) : (
+                <IoWarningOutline className="warning-icon" />
+              )}
+            </span>
           )}
+          <div className="company-name-tooltip">{row.companyName}</div>
         </div>
-      </td>
-      <td>{row.companyAddress}</td>
-      <td>
-        {row.companyEmail ? (
-          <a
-            href={`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(
-              row.companyEmail
-            )}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{ color: "#1976d2", textDecoration: "underline" }}
-          >
-            {row.companyEmail}
-          </a>
-        ) : (
-          ""
-        )}
-      </td>
-      <td>
-        {row.companyWeb ? (
-          <a
-            href={
-              row.companyWeb.startsWith("http")
-                ? row.companyWeb
-                : `https://${row.companyWeb}`
-            }
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{ color: "#1976d2", textDecoration: "underline" }}
-          >
-            {row.companyWeb}
-          </a>
-        ) : (
-          ""
-        )}
       </td>
       <td>
         <div className="table-fields-tags">
@@ -206,6 +244,48 @@ const TableRow = ({
         >
           {moaValidity.text}
         </span>
+      </td>
+      <td className="moa-expiration-cell">
+        {(() => {
+          if (row.moa !== "Yes" || !row.moaExpirationDate) {
+            return <span className="moa-expiration-text muted">N/A</span>;
+          }
+          
+          const expirationDate = new Date(row.moaExpirationDate);
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const expDate = new Date(expirationDate);
+          expDate.setHours(0, 0, 0, 0);
+          
+          const daysUntilExpiration = Math.ceil((expDate - today) / (1000 * 60 * 60 * 24));
+          const isExpired = daysUntilExpiration < 0;
+          const isExpiringSoon = daysUntilExpiration >= 0 && daysUntilExpiration <= 30;
+          
+          let statusClass = "valid";
+          let statusText = expirationDate.toLocaleDateString('en-US', { 
+            year: 'numeric', 
+            month: 'short', 
+            day: 'numeric' 
+          });
+          
+          if (isExpired) {
+            statusClass = "expired";
+            statusText = `Expired ${Math.abs(daysUntilExpiration)} day${Math.abs(daysUntilExpiration) !== 1 ? 's' : ''} ago`;
+          } else if (isExpiringSoon) {
+            statusClass = "expiring-soon";
+            statusText = `${daysUntilExpiration} day${daysUntilExpiration !== 1 ? 's' : ''} left`;
+          }
+          
+          return (
+            <span className={`moa-expiration-text ${statusClass}`} title={expirationDate.toLocaleDateString('en-US', { 
+              year: 'numeric', 
+              month: 'long', 
+              day: 'numeric' 
+            })}>
+              {statusText}
+            </span>
+          );
+        })()}
       </td>
       <td className="kebab-cell">
         <KebabCell

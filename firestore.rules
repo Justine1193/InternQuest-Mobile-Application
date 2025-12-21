@@ -1,15 +1,177 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow read access to adminusers collection
-    match /adminusers/{document} {
-      allow read: if true;  // Allow anyone to read admin users (for testing)
-      allow write: if true; // Allow anyone to write (for testing)
+
+    // --- Helper functions ---
+    function isSignedIn() {
+      return request.auth != null;
     }
-    
-    // Allow read/write access to other collections
+
+    function isAdmin() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // ADMIN USERS
+    match /adminusers/{adminId} {
+      allow read: if true;
+      allow create: if request.auth != null;  // Allow authenticated users to create admin accounts
+      // Allow delete for authenticated users (app logic blocks super_admin deletion)
+      allow delete: if request.auth != null;
+      // Allow update for authenticated users (app logic blocks super_admin editing)
+      allow update: if request.auth != null;
+    }
+
+    match /users/{userId} {
+      allow read, write: if request.auth != null;
+    }
+
+    match /users/{userId}/{allPaths=**} {
+      allow read, write: if request.auth != null &&
+        (request.auth.uid == userId || isAdmin());
+    }
+
+    // COMPANIES COLLECTION
+    match /companies/{companyId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // WEEKLY REPORTS
+    match /users/{userId}/weeklyReports/{reportId} {
+      allow read, write: if request.auth != null &&
+        (request.auth.uid == userId || isAdmin());
+    }
+
+    // OJT LOGS
+    match /users/{userId}/ojtLogs/{logId} {
+      allow read, write: if request.auth != null &&
+        (request.auth.uid == userId || isAdmin());
+    }
+
+    // HIDDEN NOTIFICATIONS
+    match /users/{userId}/hiddenNotifications/{notificationId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null && (
+        resource.data.userId == request.auth.uid || isAdmin()
+      );
+    }
+
+    // HELP DESK FILES - CHANGED: Allow any authenticated user
+    match /helpDeskFiles/{fileId} {
+      allow read: if isSignedIn();
+      // Allow any authenticated user to create (for now)
+      allow create, update, delete: if isSignedIn();
+    }
+
+    // ADMIN FILES
+    match /admin_files/{docId} {
+      allow create: if request.auth != null && (
+        request.resource.data.userId == request.auth.uid || isAdmin()
+      );
+      allow read, update, delete: if request.auth != null && (
+        resource.data.userId == request.auth.uid || isAdmin()
+      );
+    }
+
+    // DELETED STUDENTS
+    match /deleted_students/{docId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow delete: if request.auth != null; // Allow delete for restore functionality
+      allow update: if false; // Never allow updates
+    }
+
+    // DELETED COMPANIES
+    match /deleted_companies/{docId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow delete: if request.auth != null; // Allow delete for restore functionality
+      allow update: if false; // Never allow updates
+    }
+
+    // ADMIN DELETIONS HISTORY
+    match /admin_deletions/{docId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update, delete: if false;
+    }
+
+    // NOTIFICATIONS
+    match /notifications/{notificationId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null && (
+        resource.data.userId == request.auth.uid || isAdmin()
+      );
+    }
+
+    // REQUIREMENTS
+    match /users/{userId}/requirements/{requirementId} {
+      allow read, write: if request.auth != null &&
+        (request.auth.uid == userId || isAdmin());
+    }
+
+    // REQUIREMENT APPROVALS
+    // Allow authenticated users to read (students can see their approval status)
+    // Allow authenticated users to write (app logic ensures only advisers/coordinators can approve)
+    match /requirement_approvals/{studentId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+
+    // ACTIVITY LOGS
+    // Allow authenticated users to create and read activity logs (for audit trail)
+    // App logic determines who can view via ProtectedRoute
+    // Note: Requires Firestore index on activity_logs collection: timestamp (descending)
+    match /activity_logs/{logId} {
+      allow create: if request.auth != null;
+      allow read: if request.auth != null;
+      allow update, delete: if false; // Activity logs should not be modified or deleted
+    }
+
+    // APPLICATIONS
+    match /applications/{applicationId} {
+      allow read: if request.auth != null && (
+        applicationId.matches('^' + request.auth.uid + '_.+$') ||
+        (resource.data.userId is string && resource.data.userId == request.auth.uid) ||
+        isAdmin()
+      );
+      allow create: if request.auth != null && (
+        (request.resource.data.userId is string &&
+          request.resource.data.userId == request.auth.uid) ||
+        isAdmin()
+      );
+      allow update, delete: if request.auth != null && (
+        (resource.data.userId is string && resource.data.userId == request.auth.uid) ||
+        isAdmin()
+      );
+    }
+
+    // META collection
+    match /meta/{docId} {
+      // Allow read for everyone (skills/fields suggestions)
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // COLLEGES collection
+    match /colleges/{collegeId} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
+    }
+
+    // PROGRAMS collection
+    match /programs/{programId} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
+    }
+
+    // Default: everything else denied
     match /{document=**} {
-      allow read, write: if true;  // Allow all access (for testing)
+      allow read, write: if false;
     }
   }
 }

@@ -27,6 +27,7 @@ npm run provision:user -- --help
 ```
 
 Authentication for the CLI:
+
 - Recommended: set `GOOGLE_APPLICATION_CREDENTIALS` to a Firebase Admin service account JSON (do not commit it)
 - Alternative: `gcloud auth application-default login`
 

@@ -172,6 +172,19 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
     return snapshot.docs.map((doc: any) => doc.data().name);
   };
 
+  // --- Persist newly added options (programs/fields/skills) ---
+  const persistNewOption = async (kind: 'program' | 'field' | 'skill', value: string) => {
+    const clean = String(value).trim();
+    if (!clean) return;
+    try {
+      // Add to dedicated collection for prefix search
+      const coll = kind === 'program' ? 'programs' : kind === 'field' ? 'fields' : 'skills';
+      await addDoc(collection(firestore, coll), { name: clean, createdAt: serverTimestamp() });
+    } catch (e) {
+      console.warn('persistNewOption failed', kind, value, e);
+    }
+  };
+
   // --- Handlers for dropdown search ---
   const debouncedFetchPrograms = useRef(debounce(async (text: string) => {
     setProgramLoading(true);
@@ -514,8 +527,7 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
                   showsVerticalScrollIndicator={true}
                   style={{ maxHeight: 220 }}
                 >
-                  {programList
-                    .filter(p => programSearch && smartMatch(p, programSearch))
+                  {(programOptions.length > 0 ? programOptions : programList.filter(p => programSearch && smartMatch(p, programSearch)))
                     .map((p, idx) => (
                       <TouchableOpacity
                         key={idx}
@@ -535,7 +547,7 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
                         <Text style={styles.dropdownItemText}>{p}</Text>
                       </TouchableOpacity>
                     ))}
-                  {programList.filter(p => programSearch && smartMatch(p, programSearch)).length === 0 && programSearch.trim().length > 0 && (
+                  {((programOptions.length === 0) && (programList.filter(p => programSearch && smartMatch(p, programSearch)).length === 0)) && programSearch.trim().length > 0 && (
                     <TouchableOpacity
                       style={[styles.skillPillUnselected, { alignSelf: 'flex-start', width: '100%', marginVertical: 4 }]}
                       onPress={() => {
@@ -544,6 +556,8 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
                           setProgramList(prev => [...prev, newProgram]);
                           setProgram(newProgram);
                           setProgramSearch(newProgram);
+                          // Persist for future users
+                          persistNewOption('program', newProgram);
                           setShowProgramOptions(false);
                           setParentScrollEnabled(true);
                           programRef.current?.blur();
@@ -614,8 +628,7 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
                   showsVerticalScrollIndicator={true}
                   style={{ maxHeight: 220 }}
                 >
-                  {fieldList
-                    .filter(f => fieldSearch && smartMatch(f, fieldSearch))
+                  {(fieldOptions.length > 0 ? fieldOptions : fieldList.filter(f => fieldSearch && smartMatch(f, fieldSearch)))
                     .map((f, idx) => (
                       <TouchableOpacity
                         key={idx}
@@ -635,7 +648,7 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
                         <Text style={styles.dropdownItemText}>{f}</Text>
                       </TouchableOpacity>
                     ))}
-                  {fieldList.filter(f => fieldSearch && smartMatch(f, fieldSearch)).length === 0 && fieldSearch.trim().length > 0 && (
+                  {((fieldOptions.length === 0) && (fieldList.filter(f => fieldSearch && smartMatch(f, fieldSearch)).length === 0)) && fieldSearch.trim().length > 0 && (
                     <TouchableOpacity
                       style={[styles.skillPillUnselected, { alignSelf: 'flex-start', width: '100%', marginVertical: 4 }]}
                       onPress={() => {
@@ -644,6 +657,8 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
                           setFieldList(prev => [...prev, newField]);
                           setField(newField);
                           setFieldSearch(newField);
+                          // Persist for future users
+                          persistNewOption('field', newField);
                           setShowFieldOptions(false);
                           setParentScrollEnabled(true);
                           fieldRef.current?.blur();
@@ -734,6 +749,8 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
                       if (newSkill && !skills.includes(newSkill)) {
                         setAvailableSkills(prev => [...prev, newSkill]);
                         setSkills(prev => [...prev, newSkill]);
+                        // Persist for future users
+                        persistNewOption('skill', newSkill);
                         setSkillSearch("");
                       }
                     }}

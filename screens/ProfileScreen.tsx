@@ -473,16 +473,16 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
           <View style={styles.statCard}>
             <Ionicons name="business-outline" size={24} color="#6366F1" style={{ marginBottom: 4 }} />
             <Text style={styles.statLabel}>Company</Text>
-              <TouchableOpacity onPress={handleCompanyPress} accessibilityRole="button">
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Text style={styles.statValue}>{userData.company || userData.appliedCompanyName || 'Not Applied'}</Text>
-                  {userData.appliedCompanyName ? (
-                    <TouchableOpacity onPress={handleClearAppliedCompanyProfile} style={styles.removeButton} accessibilityLabel="Remove applied company">
-                      <Ionicons name="trash" size={18} color="#ff5252" />
-                    </TouchableOpacity>
-                  ) : null}
-                </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <TouchableOpacity onPress={handleCompanyPress} accessibilityRole="button" style={{ flexShrink: 1 }}>
+                <Text style={styles.statValue}>{userData.company || userData.appliedCompanyName || 'Not Applied'}</Text>
               </TouchableOpacity>
+              {userData.appliedCompanyName && !userData.company && userData.status !== 'hired' ? (
+                <TouchableOpacity onPress={handleClearAppliedCompanyProfile} style={styles.removeButton} accessibilityLabel="Remove applied company">
+                  <Ionicons name="trash" size={18} color="#ff5252" />
+                </TouchableOpacity>
+              ) : null}
+            </View>
           </View>
         </View>
 

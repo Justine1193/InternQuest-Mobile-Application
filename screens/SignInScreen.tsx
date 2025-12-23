@@ -12,7 +12,9 @@ import {
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useNavigation } from '@react-navigation/native';
 import { auth } from '../firebase/config';
+import { LOOKUP_EMAIL_FUNCTION_BASE_URL, STUDENT_ID_EMAIL_DOMAIN } from '../firebase/config';
 import { signInWithEmailAndPassword, sendPasswordResetEmail, onAuthStateChanged } from 'firebase/auth';
+import { SecurityUtils } from '../services/security';
 
 type SignInProps = {
   setIsLoggedIn?: (v: boolean) => void;
@@ -20,10 +22,20 @@ type SignInProps = {
 
 const SignInScreen: React.FC<SignInProps> = ({ setIsLoggedIn }) => {
   const navigation = useNavigation();
-  const [email, setEmail] = useState('');
+  const [studentId, setStudentId] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
+
+  const formatStudentId = (text: string) => {
+    // If the input looks like an email (admin login), do not format
+    if (text.includes('@')) return text.trim();
+    let cleaned = text.replace(/[^0-9-]/g, '');
+    cleaned = cleaned.replace(/-/g, '');
+    if (cleaned.length > 2) cleaned = cleaned.slice(0, 2) + '-' + cleaned.slice(2);
+    if (cleaned.length > 8) cleaned = cleaned.slice(0, 8) + '-' + cleaned.slice(8);
+    return cleaned;
+  };
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (user: any) => {
@@ -45,40 +57,111 @@ const SignInScreen: React.FC<SignInProps> = ({ setIsLoggedIn }) => {
   }, [navigation]);
 
   const handleSignIn = async () => {
-    if (!email || !password) {
-      Alert.alert('Missing fields', 'Please enter both email and password.');
+    const identifier = SecurityUtils.sanitizeInput(studentId);
+
+    if (!identifier || !password) {
+      Alert.alert('Missing fields', 'Please enter your Student ID or admin email, and password.');
       return;
     }
+
+    const isStudentId = SecurityUtils.validateStudentId(identifier);
+    const isEmail = SecurityUtils.validateEmail(identifier);
+
+    if (!(isStudentId || isEmail)) {
+      Alert.alert('Invalid credentials', 'Enter a valid Student ID (XX-XXXXX-XXX) or an admin email (@neu.edu.ph).');
+      return;
+    }
+
     setLoading(true);
     try {
-        await signInWithEmailAndPassword(auth, email.trim(), password);
-        // Mark logged in and let App switch to the main app screens. Avoid calling
-        // navigation.navigate('Home') directly since SignIn may be inside a different
-        // navigator and that would produce the development warning.
+      // Admin login: if identifier is an email, sign in directly
+      if (isEmail) {
+        await signInWithEmailAndPassword(auth, identifier.trim(), password);
         if (setIsLoggedIn) setIsLoggedIn(true);
-        else { try { (navigation as any).getParent?.()?.navigate?.('Home'); } catch(e) { /* ignore */ } }
+        setLoading(false);
+        return;
+      }
+
+      // Student login: require Cloud Function lookup since emails are personalized
+      if (!LOOKUP_EMAIL_FUNCTION_BASE_URL) {
+        Alert.alert(
+          'Configuration Error',
+          'LOOKUP_EMAIL_FUNCTION_BASE_URL is not configured. Please set this in your Expo app.json or environment variables.'
+        );
+        setLoading(false);
+        return;
+      }
+
+      let emailToUse: string | null = null;
+      try {
+        console.log('🔍 Calling function:', LOOKUP_EMAIL_FUNCTION_BASE_URL);
+        const res = await fetch(LOOKUP_EMAIL_FUNCTION_BASE_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ studentId: identifier })
+        });
+        if (!res.ok) {
+          console.error('Lookup service returned status:', res.status);
+          Alert.alert('Lookup Error', 'Email lookup service is unavailable. Please try again later or contact your adviser.');
+          setLoading(false);
+          return;
+        }
+
+        const data = await res.json();
+        console.log('📧 Function response:', data);
+        if (data?.email && typeof data.email === 'string') {
+          emailToUse = data.email;
+        }
+      } catch (fetchErr) {
+        console.error('❌ Function call failed:', fetchErr);
+        Alert.alert('Lookup Error', 'Could not reach email lookup service. Check your internet connection.');
+        setLoading(false);
+        return;
+      }
+
+      if (!emailToUse) {
+        Alert.alert(
+          'Account Not Found',
+          `No account found for Student ID: ${identifier}. Please contact your adviser.`
+        );
+        setLoading(false);
+        return;
+      }
+
+      // DEBUG: Show which email will be used for sign-in
+      console.log('🔍 DEBUG: Attempting sign-in with email:', emailToUse);
+      Alert.alert(
+        'Debug Info',
+        `Signing in with:\nIdentifier: ${identifier}\nResolved Email: ${emailToUse}`
+      );
+
+      // Sign in using the resolved email and admin-provided password
+      await signInWithEmailAndPassword(auth, emailToUse.trim(), password);
+
+      if (setIsLoggedIn) setIsLoggedIn(true);
+      else { try { (navigation as any).getParent?.()?.navigate?.('Home'); } catch(e) { /* ignore */ } }
     } catch (e: any) {
       const code = e?.code ?? '';
+      console.error('❌ Sign-in error code:', code);
+      console.error('❌ Full error:', e);
       let message = 'Failed to sign in. Please try again.';
-      if (code === 'auth/user-not-found') message = 'No account found for that email.';
+      if (code === 'auth/user-not-found') message = 'No account found for that Student ID. Please contact your adviser.';
       if (code === 'auth/wrong-password') message = 'Incorrect password.';
-      Alert.alert('Sign in error', message);
+      if (code === 'permission-denied') message = 'Permission denied. Please contact your adviser.';
+      Alert.alert(
+        'Sign in error',
+        `${message}\n\nError code: ${code || 'unknown'}`
+      );
     } finally {
       setLoading(false);
     }
   };
 
   const handleResetPassword = async () => {
-    if (!email) {
-      Alert.alert('Missing email', 'Enter your email to receive a password reset link.');
-      return;
-    }
-    try {
-      await sendPasswordResetEmail(auth, email.trim());
-      Alert.alert('Email sent', 'Password reset email has been sent.');
-    } catch (e) {
-      Alert.alert('Error', 'Unable to send password reset email.');
-    }
+    Alert.alert(
+      'Password help',
+      'Please contact your adviser or coordinator to reset your password.'
+    );
   };
 
   if (checkingSession) {
@@ -95,16 +178,16 @@ const SignInScreen: React.FC<SignInProps> = ({ setIsLoggedIn }) => {
       <Text style={styles.title}>Sign In</Text>
       <Text style={styles.subtitle}>Welcome back — please sign in to continue</Text>
 
-      <Text style={styles.label}>Email</Text>
+      <Text style={styles.label}>Student ID</Text>
       <View style={styles.inputWrapper}>
-        <Icon name="email-outline" size={20} color="#6366F1" style={styles.icon} />
+        <Icon name="card-account-details-outline" size={20} color="#6366F1" style={styles.icon} />
         <TextInput
           style={styles.input}
-          placeholder="Enter email"
-          value={email}
-          onChangeText={setEmail}
+          placeholder="Enter student ID (e.g., XX-XXXXX-XXX)"
+          value={studentId}
+          onChangeText={(t) => setStudentId(formatStudentId(t))}
           autoCapitalize="none"
-          keyboardType="email-address"
+          keyboardType="default"
         />
       </View>
 
@@ -113,7 +196,7 @@ const SignInScreen: React.FC<SignInProps> = ({ setIsLoggedIn }) => {
         <Icon name="lock-outline" size={20} color="#6366F1" style={styles.icon} />
         <TextInput
           style={styles.input}
-          placeholder="Enter password"
+          placeholder="Enter password (provided by admin)"
           secureTextEntry
           value={password}
           onChangeText={setPassword}
@@ -128,9 +211,7 @@ const SignInScreen: React.FC<SignInProps> = ({ setIsLoggedIn }) => {
         <Text style={styles.loginLink}>Forgot password?</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity onPress={() => (navigation as any).navigate('SignUp')}>
-        <Text style={styles.signupLink}>Don't have an account? Sign Up</Text>
-      </TouchableOpacity>
+      <Text style={styles.helperNote}>No account? Please contact your adviser/coordinator.</Text>
     </View>
   );
 };
@@ -217,10 +298,9 @@ const styles = StyleSheet.create({
     color: '#6366F1',
     textAlign: 'center',
   },
-    signupLink: {
-      fontWeight: '700',
-      color: '#6366F1',
+    helperNote: {
       textAlign: 'center',
+      color: '#666',
       marginTop: 16,
     },
 });

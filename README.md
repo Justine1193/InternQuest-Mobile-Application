@@ -16,6 +16,20 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
     npx expo start
    ```
 
+## Admin provisioning (create accounts)
+
+This app expects students to log in via **Student ID + password**. Student IDs are mapped to personalized emails via the `users` Firestore collection.
+
+To create accounts (Auth + Firestore) from your machine:
+
+```bash
+npm run provision:user -- --help
+```
+
+Authentication for the CLI:
+- Recommended: set `GOOGLE_APPLICATION_CREDENTIALS` to a Firebase Admin service account JSON (do not commit it)
+- Alternative: `gcloud auth application-default login`
+
 In the output, you'll find options to open the app in a
 
 - [development build](https://docs.expo.dev/develop/development-builds/introduction/)

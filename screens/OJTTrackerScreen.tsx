@@ -684,7 +684,7 @@ const OJTTrackerScreen: React.FC = () => {
           <Text style={styles.infoLabel}>Company</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <Text style={styles.infoValue}>{userCompany || appliedCompanyName || 'Not Applied'}</Text>
-            {appliedCompanyName ? (
+            {appliedCompanyName && !userCompany && userStatus !== 'hired' ? (
               <TouchableOpacity onPress={handleClearAppliedCompany} style={styles.removeButton} accessibilityLabel="Remove applied company">
                 <Feather name="trash-2" size={18} color="#ff5252" />
               </TouchableOpacity>

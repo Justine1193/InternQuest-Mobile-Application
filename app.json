@@ -14,7 +14,12 @@
       "eas": {
         "projectId": "1a2453e6-0c3c-461d-aee8-666d92795e0d"
       },
-      "ADMIN_FILE_FUNCTION_BASE_URL": "https://<region>-<project>.cloudfunctions.net/getAdminFile"
+      "USE_FUNCTIONS_EMULATOR": "false",
+      "FUNCTIONS_EMULATOR_HOST": "192.168.1.4",
+      "FUNCTIONS_REGION": "asia-southeast1",
+      "ADMIN_FILE_FUNCTION_BASE_URL": "https://asia-southeast1-neuinternshipdb.cloudfunctions.net/getAdminFile",
+      "LOOKUP_EMAIL_FUNCTION_BASE_URL": "https://asia-southeast1-neuinternshipdb.cloudfunctions.net/lookupEmailByStudentId",
+      "CREATE_USER_FUNCTION_BASE_URL": "https://asia-southeast1-neuinternshipdb.cloudfunctions.net/createUserAccount"
     },
     "owner": "popssicle",
     "scheme": "internquest"

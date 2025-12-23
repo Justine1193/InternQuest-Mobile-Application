@@ -40,8 +40,43 @@ const storage = getStorage(app);
 // Cloud functions (optional) - pick up value from environment variable or Expo runtime config (app.json / eas.json)
 import Constants from 'expo-constants';
 
-const fromEnv = process.env.ADMIN_FILE_FUNCTION_BASE_URL;
-const fromConstants = (Constants && ((Constants.expoConfig && Constants.expoConfig.extra) || (Constants.manifest && Constants.manifest.extra)))?.ADMIN_FILE_FUNCTION_BASE_URL;
-export const ADMIN_FILE_FUNCTION_BASE_URL = fromEnv || fromConstants || 'https://<region>-<project>.cloudfunctions.net/getAdminFile';
+const extras = (Constants && ((Constants.expoConfig && Constants.expoConfig.extra) || (Constants.manifest && Constants.manifest.extra))) || {};
+
+const FUNCTIONS_REGION = process.env.FUNCTIONS_REGION || extras?.FUNCTIONS_REGION || 'asia-southeast1';
+const FUNCTIONS_EMULATOR_HOST = process.env.FUNCTIONS_EMULATOR_HOST || extras?.FUNCTIONS_EMULATOR_HOST || '';
+const USE_FUNCTIONS_EMULATOR = String(process.env.USE_FUNCTIONS_EMULATOR ?? extras?.USE_FUNCTIONS_EMULATOR ?? '').toLowerCase() === 'true';
+
+const buildFunctionsEmulatorUrl = (functionName: string) => {
+  if (!FUNCTIONS_EMULATOR_HOST) return '';
+  const projectId = firebaseConfig.projectId;
+  return `http://${FUNCTIONS_EMULATOR_HOST}:5001/${projectId}/${FUNCTIONS_REGION}/${functionName}`;
+};
+
+const ADMIN_FILE_FROM_ENV = process.env.ADMIN_FILE_FUNCTION_BASE_URL;
+const ADMIN_FILE_FROM_CONSTANTS = extras?.ADMIN_FILE_FUNCTION_BASE_URL;
+export const ADMIN_FILE_FUNCTION_BASE_URL = ADMIN_FILE_FROM_ENV || ADMIN_FILE_FROM_CONSTANTS || 'https://<region>-<project>.cloudfunctions.net/getAdminFile';
+
+// Optional: Cloud Function to look up email by studentId prior to auth
+// REQUIRED: Email addresses are personalized, not derived from Student ID
+const LOOKUP_EMAIL_FROM_ENV = process.env.LOOKUP_EMAIL_FUNCTION_BASE_URL;
+const LOOKUP_EMAIL_FROM_CONSTANTS = extras?.LOOKUP_EMAIL_FUNCTION_BASE_URL;
+export const LOOKUP_EMAIL_FUNCTION_BASE_URL =
+  (USE_FUNCTIONS_EMULATOR && FUNCTIONS_EMULATOR_HOST)
+    ? buildFunctionsEmulatorUrl('lookupEmailByStudentId')
+    : (LOOKUP_EMAIL_FROM_ENV || LOOKUP_EMAIL_FROM_CONSTANTS || '');
+
+// Admin-only: Cloud Function to create user accounts
+const CREATE_USER_FROM_ENV = process.env.CREATE_USER_FUNCTION_BASE_URL;
+const CREATE_USER_FROM_CONSTANTS = extras?.CREATE_USER_FUNCTION_BASE_URL;
+export const CREATE_USER_FUNCTION_BASE_URL =
+  (USE_FUNCTIONS_EMULATOR && FUNCTIONS_EMULATOR_HOST)
+    ? buildFunctionsEmulatorUrl('createUserAccount')
+    : (CREATE_USER_FROM_ENV || CREATE_USER_FROM_CONSTANTS || '');
+
+// Domain to construct fallback auth email from Student ID when no lookup function is configured
+// (Not used when LOOKUP_EMAIL_FUNCTION_BASE_URL is configured, which is required for this app)
+const STUDENT_ID_DOMAIN_FROM_ENV = process.env.STUDENT_ID_EMAIL_DOMAIN;
+const STUDENT_ID_DOMAIN_FROM_CONSTANTS = extras?.STUDENT_ID_EMAIL_DOMAIN;
+export const STUDENT_ID_EMAIL_DOMAIN = STUDENT_ID_DOMAIN_FROM_ENV || STUDENT_ID_DOMAIN_FROM_CONSTANTS || 'student.internquest.local';
 
 export { firestore, db, app, auth, storage };

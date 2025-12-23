@@ -35,7 +35,7 @@ type Props = {
 const userPreferences = ['Programming', 'AI', 'React Native', 'Cloud'];
 
 // Advanced filter options
-const locationOptions = ['Manila', 'Quezon City', 'Makati', 'Taguig', 'Pasig', 'All Locations'];
+const skillOptions = ['Python', 'JavaScript', 'React', 'Node.js', 'Cloud Computing', 'Data Science', 'All Skills'];
 const industryOptions = ['Technology', 'Finance', 'Healthcare', 'Education', 'Manufacturing', 'All Industries'];
 const workModeOptions = ['On-site', 'Remote', 'Hybrid', 'All Modes'];
 
@@ -50,13 +50,14 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [userFields, setUserFields] = useState<string[]>([]);
   const [userSkills, setUserSkills] = useState<string[]>([]);
+  const [userCourseOrProgram, setUserCourseOrProgram] = useState<string>('');
 
   // Realtime MOA validity info (companyId -> validity metadata)
   const [moaValidity, setMoaValidity] = useState<{ [companyId: string]: MoaValidity }>({});
 
   // Advanced filters
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
-  const [selectedLocation, setSelectedLocation] = useState('All Locations');
+  const [selectedSkill, setSelectedSkill] = useState('All Skills');
   const [selectedIndustry, setSelectedIndustry] = useState('All Industries');
   const [selectedWorkMode, setSelectedWorkMode] = useState('All Modes');
 
@@ -102,6 +103,10 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
         const userDoc = await getDoc(doc(firestore, 'users', auth.currentUser.uid));
         if (userDoc.exists()) {
           const data = userDoc.data();
+          const courseOrProgram = (typeof data.course === 'string' && data.course.trim())
+            ? data.course.trim()
+            : (typeof data.program === 'string' && data.program.trim() ? data.program.trim() : '');
+          setUserCourseOrProgram(courseOrProgram);
           const fields = Array.isArray(data.field) ? data.field : [data.field];
           setUserFields(fields.filter(Boolean));
           const skills = Array.isArray(data.skills) ? data.skills : [];
@@ -174,6 +179,100 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
     };
   }, []);
 
+  const toTokens = (value: unknown): string[] => {
+    if (typeof value !== 'string') return [];
+    return value
+      .toLowerCase()
+      .split(/[^a-z0-9]+/g)
+      .map(t => t.trim())
+      .filter(Boolean);
+  };
+
+  const buildUserMatchTokens = (): string[] => {
+    const tokens = new Set<string>();
+    toTokens(userCourseOrProgram).forEach(t => tokens.add(t));
+    (Array.isArray(userFields) ? userFields : []).forEach((f) => toTokens(String(f)).forEach(t => tokens.add(t)));
+    (Array.isArray(userSkills) ? userSkills : []).forEach((s) => toTokens(String(s)).forEach(t => tokens.add(t)));
+    return Array.from(tokens);
+  };
+
+  const relevanceScoreForPost = (post: Post, userTokens: string[], courseOrProgram: string): number => {
+    const company = typeof post.company === 'string' ? post.company.toLowerCase() : '';
+    const description = typeof post.description === 'string' ? post.description.toLowerCase() : '';
+    const industry = typeof post.industry === 'string' ? post.industry.toLowerCase() : '';
+    const category = typeof post.category === 'string' ? post.category.toLowerCase() : '';
+    const tags = Array.isArray(post.tags) ? post.tags.map(t => String(t).toLowerCase()) : [];
+
+    const blob = `${company} ${industry} ${category} ${description} ${tags.join(' ')}`;
+
+    let score = 0;
+    
+    // PROGRAM/COURSE MATCHING (Highest Priority)
+    const fullPhrase = (courseOrProgram || '').trim().toLowerCase();
+    if (fullPhrase && blob.includes(fullPhrase)) score += 50;  // Exact program match - highest weight
+    
+    // Also check for partial program word matches
+    const programTokens = toTokens(courseOrProgram);
+    const programTokenMatches = programTokens.filter(token => {
+      return tags.some(t => t.includes(token)) || 
+             industry.includes(token) || 
+             category.includes(token);
+    }).length;
+    score += programTokenMatches * 15;  // Each program token match = 15 points
+
+    // If there is no program alignment at all (no exact phrase and no token match),
+    // push the post down to avoid unrelated industries surfacing (e.g., medical).
+    if (programTokens.length > 0 && !fullPhrase && programTokenMatches === 0) {
+      score -= 60; // strong penalty for zero program relevance
+    }
+
+    // FIELD/SKILL MATCHING (High priority - close to program)
+    // Separate scoring for fields vs skills for better matching
+    for (const token of userTokens) {
+      if (!token || token.length < 2) continue;
+      
+      // Check for tag matches (highest for fields/skills)
+      if (tags.some(t => t.includes(token))) {
+        score += 13;  // Fields/skills match company tags - very high priority
+      } 
+      // Check for industry/category matches
+      else if (industry.includes(token) || category.includes(token)) {
+        score += 11;  // Fields/skills match industry/category - very high priority
+      } 
+      // Check for description/company matches
+      else if (description.includes(token) || company.includes(token)) {
+        score += 6;   // Fields/skills in description - moderate priority
+      }
+    }
+
+    // Domain affinity heuristics
+    // If user's program is IT/CS-related, strongly prefer tech-aligned posts
+    // and demote clearly medical/healthcare-only posts when there's no program token match.
+    const programAll = (courseOrProgram || '').toLowerCase();
+    const isTechProgram = /(information\s+technology|computer\s+science|it\b|cs\b|software|comput(er|ing)|data\s+(science|analytics)|information\s+systems)/.test(programAll);
+
+    if (isTechProgram) {
+      const techBoostTerms = [
+        'software', 'developer', 'development', 'engineering', 'engineer', 'technology', 'tech', 'it', 'computer', 'programming', 'programmer',
+        'systems', 'information systems', 'data', 'analytics', 'ai', 'machine learning', 'ml', 'cloud', 'network', 'security', 'cyber', 'devops',
+      ];
+      const medicalTerms = ['hospital', 'clinic', 'medical', 'healthcare', 'nurse', 'nursing', 'pharma', 'pharmaceutical', 'laboratory', 'clinical'];
+
+      // Boost for any tech keyword hit
+      for (const kw of techBoostTerms) {
+        if (blob.includes(kw)) score += 8;
+      }
+
+      // Extra demotion if clearly medical and no program token match
+      const isClearlyMedical = medicalTerms.some(m => blob.includes(m));
+      if (isClearlyMedical && programTokens.length > 0 && programTokenMatches === 0) {
+        score -= 40; // demote medical listings for IT program when no alignment
+      }
+    }
+
+    return score;
+  };
+
   // Enhanced search and filtering logic
   const filteredPosts = (activeFilter === 'Saved Internship' ? savedInternships : companies)
     .filter(post => {
@@ -198,10 +297,12 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
     })
     .filter(post => {
       // Apply advanced filters
-      if (selectedLocation !== 'All Locations' &&
-        typeof post.location === 'string' &&
-        !post.location.toLowerCase().includes(selectedLocation.toLowerCase())) {
-        return false;
+      if (selectedSkill !== 'All Skills') {
+        const postTags = Array.isArray(post.tags) ? post.tags.map(t => String(t).toLowerCase()) : [];
+        const selectedSkillLower = selectedSkill.toLowerCase();
+        if (!postTags.some(tag => tag.includes(selectedSkillLower))) {
+          return false;
+        }
       }
 
       if (selectedIndustry !== 'All Industries' &&
@@ -219,8 +320,28 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
       return true;
     })
     .sort((a, b) => {
-      // Sort by Most Recent
-      return (b.createdAt?.getTime?.() || 0) - (a.createdAt?.getTime?.() || 0);
+      const aTime = (a.createdAt?.getTime?.() || 0);
+      const bTime = (b.createdAt?.getTime?.() || 0);
+
+      const isDefaultBrowse =
+        activeFilter === 'Most Recent' &&
+        !searchText.trim() &&
+        selectedSkill === 'All Skills' &&
+        selectedIndustry === 'All Industries' &&
+        selectedWorkMode === 'All Modes';
+
+      if (isDefaultBrowse) {
+        const userTokens = buildUserMatchTokens();
+        const aScore = relevanceScoreForPost(a as Post, userTokens, userCourseOrProgram);
+        const bScore = relevanceScoreForPost(b as Post, userTokens, userCourseOrProgram);
+
+        if (bScore !== aScore) return bScore - aScore;
+        // Tie-break by recency
+        return bTime - aTime;
+      }
+
+      // Otherwise keep Most Recent behavior
+      return bTime - aTime;
     });
 
   const handleToggleExpand = (id: string) => {
@@ -332,15 +453,15 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
         </View>
 
         {/* Active Filters Display */}
-        {(selectedLocation !== 'All Locations' ||
+        {(selectedSkill !== 'All Skills' ||
           selectedIndustry !== 'All Industries' || selectedWorkMode !== 'All Modes') && (
             <View style={styles.activeFiltersContainer}>
               <Text style={styles.activeFiltersLabel}>Active Filters:</Text>
               <View style={styles.activeFiltersList}>
-                {selectedLocation !== 'All Locations' && (
+                {selectedSkill !== 'All Skills' && (
                   <View style={styles.activeFilterChip}>
-                    <Text style={styles.activeFilterChipText}>{selectedLocation}</Text>
-                    <TouchableOpacity onPress={() => setSelectedLocation('All Locations')}>
+                    <Text style={styles.activeFilterChipText}>{selectedSkill}</Text>
+                    <TouchableOpacity onPress={() => setSelectedSkill('All Skills')}>
                       <Ionicons name="close" size={14} color="#fff" />
                     </TouchableOpacity>
                   </View>
@@ -473,24 +594,24 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
             </View>
 
             <ScrollView style={styles.modalScroll}>
-              {/* Location Filter */}
+              {/* Skills Filter */}
               <View style={styles.filterSection}>
-                <Text style={styles.filterSectionTitle}>Location</Text>
+                <Text style={styles.filterSectionTitle}>Skills</Text>
                 <View style={styles.filterOptions}>
-                  {locationOptions.map((location, index) => (
+                  {skillOptions.map((skill, index) => (
                     <TouchableOpacity
                       key={index}
                       style={[
                         styles.filterOption,
-                        selectedLocation === location && styles.selectedFilterOption
+                        selectedSkill === skill && styles.selectedFilterOption
                       ]}
-                      onPress={() => setSelectedLocation(location)}
+                      onPress={() => setSelectedSkill(skill)}
                     >
                       <Text style={[
                         styles.filterOptionText,
-                        selectedLocation === location && styles.selectedFilterOptionText
+                        selectedSkill === skill && styles.selectedFilterOptionText
                       ]}>
-                        {location}
+                        {skill}
                       </Text>
                     </TouchableOpacity>
                   ))}
@@ -550,7 +671,7 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
               <TouchableOpacity
                 style={styles.clearFiltersButton}
                 onPress={() => {
-                  setSelectedLocation('All Locations');
+                  setSelectedSkill('All Skills');
                   setSelectedIndustry('All Industries');
                   setSelectedWorkMode('All Modes');
                   setSelectedTags([]);

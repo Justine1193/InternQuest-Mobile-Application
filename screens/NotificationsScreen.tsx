@@ -15,8 +15,9 @@ import { RootStackParamList } from '../App';
 import BottomNavbar from '../components/BottomNav';
 import { Swipeable } from 'react-native-gesture-handler';
 import { auth, firestore } from '../firebase/config';
-import { doc, getDoc, collection, getDocs, query, orderBy, setDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, getDocs, query, orderBy, setDoc, where } from 'firebase/firestore';
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import { SecurityUtils } from '../services/security';
 
 type Props = {
   navigation: StackNavigationProp<RootStackParamList, 'Notifications'>;
@@ -30,12 +31,55 @@ type NotificationItem = {
   action?: string;
 };
 
+type PendingApplicationItem = {
+  id: string;
+  userId: string;
+  companyId: string;
+  companyName: string;
+  appliedAt?: string;
+  applicantName?: string;
+  applicantEmail?: string;
+};
+
 const NotificationsScreen: React.FC<Props> = ({ navigation }) => {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [selectedNotification, setSelectedNotification] = useState<NotificationItem | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [userName, setUserName] = useState('');
   const [reminders, setReminders] = useState<string[]>([]);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [pendingApplications, setPendingApplications] = useState<PendingApplicationItem[]>([]);
+
+  const fetchPendingApplications = async () => {
+    try {
+      const applicationsRef = collection(firestore, 'applications');
+      const pendingQuery = query(applicationsRef, where('status', '==', 'pending'), orderBy('appliedAt', 'desc'));
+      const snapshot = await getDocs(pendingQuery);
+      const items: PendingApplicationItem[] = snapshot.docs.map((docSnap: any) => {
+        const data = docSnap.data();
+        const appliedAtDate = data.appliedAt?.toDate ? data.appliedAt.toDate() : (data.appliedAt ? new Date(data.appliedAt) : null);
+        return {
+          id: docSnap.id,
+          userId: data.userId || '',
+          companyId: data.companyId || '',
+          companyName: data.companyName || 'Unknown Company',
+          appliedAt: appliedAtDate ? appliedAtDate.toLocaleString() : undefined,
+          applicantName: data.userProfile?.name,
+          applicantEmail: data.userProfile?.email,
+        };
+      });
+      setPendingApplications(items);
+    } catch (error) {
+      console.error('Failed to fetch pending applications:', error);
+      try {
+        if (auth.currentUser) {
+          await setDoc(doc(firestore, 'users', auth.currentUser.uid), { lastPendingApplicationsFetchError: { time: new Date().toISOString(), message: String(error) } }, { merge: true });
+        }
+      } catch (diagErr) {
+        console.warn('NotificationsScreen: failed to write lastPendingApplicationsFetchError', diagErr);
+      }
+    }
+  };
 
   useEffect(() => {
     const fetchUserName = async () => {
@@ -55,6 +99,13 @@ const NotificationsScreen: React.FC<Props> = ({ navigation }) => {
     fetchUserName();
     fetchReminders();
     fetchNotifications();
+    (async () => {
+      const admin = await SecurityUtils.isAdmin();
+      setIsAdmin(admin);
+      if (admin) {
+        fetchPendingApplications();
+      }
+    })();
   }, []);
 
   const fetchNotifications = async () => {
@@ -261,6 +312,32 @@ const NotificationsScreen: React.FC<Props> = ({ navigation }) => {
           data={feed}
           keyExtractor={(_, idx) => idx.toString()}
           contentContainerStyle={styles.scrollContent}
+          ListHeaderComponent={
+            isAdmin && pendingApplications.length > 0 ? (
+              <View style={styles.adminSection}>
+                <Text style={styles.adminSectionTitle}>Pending Applications</Text>
+                {pendingApplications.slice(0, 20).map((app: PendingApplicationItem) => (
+                  <TouchableOpacity
+                    key={app.id}
+                    style={styles.adminAppCard}
+                    onPress={() => {
+                      if (app.companyId) {
+                        navigation.navigate('CompanyProfile', { companyId: app.companyId });
+                      }
+                    }}
+                    accessibilityRole="button"
+                  >
+                    <Text style={styles.adminAppTitle}>{app.companyName}</Text>
+                    <Text style={styles.adminAppSub}>
+                      Applicant: {app.applicantName || app.userId || 'Unknown'}
+                      {app.applicantEmail ? ` (${app.applicantEmail})` : ''}
+                    </Text>
+                    {app.appliedAt ? <Text style={styles.adminAppMeta}>Applied: {app.appliedAt}</Text> : null}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ) : null
+          }
           renderItem={({ item }) => {
             if (item.type === 'reminder' && 'text' in item) {
               // Make reminders clickable: go to RequirementsChecklist or WeeklyReport
@@ -508,6 +585,39 @@ const styles = StyleSheet.create({
     color: '#b26a00',
     fontSize: 15,
     flex: 1,
+  },
+  adminSection: {
+    marginBottom: 12,
+    paddingHorizontal: 16,
+  },
+  adminSectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111',
+    marginBottom: 8,
+  },
+  adminAppCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#eef2ff',
+  },
+  adminAppTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#111',
+  },
+  adminAppSub: {
+    marginTop: 4,
+    fontSize: 12,
+    color: '#555',
+  },
+  adminAppMeta: {
+    marginTop: 2,
+    fontSize: 11,
+    color: '#777',
   },
   sectionHeader: {
     fontSize: 24, // Increased from 18 for better prominence

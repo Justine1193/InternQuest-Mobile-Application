@@ -14,7 +14,6 @@ import { SavedInternshipsProvider } from './context/SavedInternshipsContext';
 // Screens
 import LaunchScreen from './screens/LaunchScreen';
 import SignInScreen from './screens/SignInScreen';
-import SignUpScreen from './screens/SignUpScreen';
 import { SetupAccountScreen } from './screens/SetupAccountScreen';
 import HomeScreen from './screens/HomeScreen';
 import ProfileScreen from './screens/ProfileScreen';
@@ -51,7 +50,6 @@ export type RootStackParamList = {
   Launch: undefined;
   Home: undefined;
   SignIn: undefined;
-  SignUp: undefined;
   SetupAccount: undefined;
   InternshipDetails: { post: Post };
   CompanyProfile: { companyId: string };
@@ -144,7 +142,6 @@ const App: React.FC = () => {
           <Stack.Screen name="SignIn">
             {props => <SignInScreen {...props} setIsLoggedIn={setIsLoggedIn} />}
           </Stack.Screen>
-          <Stack.Screen name="SignUp" component={SignUpScreen} />
         </>
       );
     }

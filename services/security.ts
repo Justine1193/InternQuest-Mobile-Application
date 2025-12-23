@@ -22,7 +22,7 @@ export class SecurityUtils {
             const userDoc = await getDoc(doc(firestore, 'users', auth.currentUser.uid));
             if (userDoc.exists()) {
                 const userData = userDoc.data();
-                return userData.role === 'admin';
+                return userData.role === 'admin' || userData.role === 'super_admin';
             }
             return false;
         } catch (error) {

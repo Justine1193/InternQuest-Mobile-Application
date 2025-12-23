@@ -15,12 +15,13 @@ import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../App';
 import { auth, firestore, storage, ADMIN_FILE_FUNCTION_BASE_URL } from '../firebase/config';
-import { doc, getDoc, updateDoc, setDoc, collection, addDoc, deleteDoc, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, setDoc, collection, addDoc, deleteDoc, query, where, getDocs, serverTimestamp } from 'firebase/firestore';
 import * as DocumentPicker from 'expo-document-picker';
 import { Linking } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+import OJTChecklistGenerator from '../services/ojtChecklistGenerator';
 
 type RequirementsNavigationProp = StackNavigationProp<RootStackParamList, 'RequirementsChecklist'>;
 
@@ -30,14 +31,20 @@ interface Requirement {
     description: string;
     category: 'documents' | 'forms' | 'certifications' | 'other';
     status: 'pending' | 'completed' | 'overdue';
+    approvalStatus?: 'pending_review' | 'approved' | 'rejected' | 'not_submitted';
+    rejectionReason?: string;
+    adviserNotes?: string;
+    reviewedBy?: string;
+    reviewedAt?: string;
     dueDate?: Date;
     uploadedFiles: Array<
         | string
-        | { name: string; url?: string; path?: string; contentType?: string; uploadedAt?: string }
+        | { name: string; url?: string; path?: string; contentType?: string; uploadedAt?: string; providedByAdmin?: boolean }
         | { name: string; adminDocId: string; storedInFirestore: boolean; downloadUrl?: string; uploadedAt?: string }
     >;
     notes?: string;
     isRequired: boolean;
+    adminProvided?: boolean;
 }
 
 const RequirementsChecklistScreen: React.FC = () => {
@@ -81,9 +88,135 @@ const RequirementsChecklistScreen: React.FC = () => {
             const userDoc = await getDoc(doc(firestore, 'users', auth.currentUser.uid));
             if (userDoc.exists()) {
                 const data = userDoc.data();
-                const savedRequirements = (data.requirements || getDefaultRequirements()) as any[];
+                const savedRequirements = (data.requirements || []) as any[];
+
+                const normalizeKey = (value: string) => String(value || '')
+                    .toLowerCase()
+                    .replace(/\([^)]*\)/g, '')
+                    .replace(/[^a-z0-9]+/g, ' ')
+                    .trim();
+
+                const defaultReqs = getDefaultRequirements();
+
+                const findMatch = (target: Requirement, existing: any[]): any | null => {
+                    const t = normalizeKey(target.title);
+                    const aliases: string[] = [];
+
+                    // known legacy titles -> new titles
+                    if (t.includes('notarized parental consent')) {
+                        aliases.push(normalizeKey('Parent/Guardian Consent Form'));
+                    }
+                    if (t.includes('proof of insurance')) {
+                        aliases.push(normalizeKey('Insurance Certificate'));
+                    }
+                    if (t.includes('curriculum vitae')) {
+                        aliases.push(normalizeKey('Resume/CV'));
+                    }
+                    if (t.includes('memorandum of agreement') || t === 'moa') {
+                        aliases.push(normalizeKey('MOA (Memorandum of Agreement)'));
+                    }
+                    if (t.includes('proof of enrollment')) {
+                        aliases.push(normalizeKey('Academic Records'));
+                    }
+
+                    const candidates = [t, ...aliases];
+                    for (const r of existing) {
+                        const rt = normalizeKey(String(r?.title || ''));
+                        if (!rt) continue;
+                        if (candidates.includes(rt)) return r;
+                        // allow partial match as last resort
+                        if (rt.includes(t) || t.includes(rt)) return r;
+                    }
+                    return null;
+                };
+
+                // Migrate: replace the requirement list with the new one, carrying over existing uploads/status where possible.
+                const mergedFromDefaults: Requirement[] = defaultReqs.map((d) => {
+                    const match = findMatch(d, savedRequirements);
+                    if (!match) return d;
+                    const uploadedFiles = Array.isArray(match.uploadedFiles) ? match.uploadedFiles : [];
+                    const status = match.status || (uploadedFiles.length > 0 ? 'completed' : 'pending');
+                    return {
+                        ...d,
+                        uploadedFiles,
+                        status,
+                        approvalStatus: match.approvalStatus,
+                        rejectionReason: match.rejectionReason,
+                        adviserNotes: match.adviserNotes,
+                        reviewedBy: match.reviewedBy,
+                        reviewedAt: match.reviewedAt,
+                    } as Requirement;
+                });
+
+                // Pull admin-provided documents (MOA & OJT Orientation) from Help Desk templates
+                const resolveTemplateUrl = async (t: any): Promise<string | null> => {
+                    const possibleUrl = t?.url || t?.fileUrl || t?.downloadUrl || t?.downloadURL || t?.fileDownloadUrl;
+                    if (possibleUrl) return String(possibleUrl);
+                    const possiblePath = t?.path || t?.filePath || t?.storagePath || t?.file_path || t?.file_pathname;
+                    if (possiblePath) {
+                        try {
+                            return await getDownloadURL(storageRef(storage, String(possiblePath)));
+                        } catch (e) {
+                            return null;
+                        }
+                    }
+                    return null;
+                };
+
+                const helpDeskDocs: any[] = [];
+                try {
+                    const snap = await getDocs(query(collection(firestore, 'helpDeskFiles')));
+                    snap.forEach((d: any) => helpDeskDocs.push({ id: d.id, ...(d.data() as any) }));
+                } catch (e) {
+                    console.warn('RequirementsChecklist: failed to load helpDeskFiles for admin-provided docs', e);
+                }
+
+                const pickTemplateForRequirement = (reqTitle: string): any | null => {
+                    const titleKey = normalizeKey(reqTitle);
+                    const keys: string[] = [];
+                    if (titleKey.includes('ojt orientation')) keys.push('ojt orientation', 'orientation');
+                    if (titleKey.includes('memorandum of agreement')) keys.push('memorandum of agreement', 'moa');
+
+                    for (const t of helpDeskDocs) {
+                        const name = String(t?.fileName || t?.name || '').toLowerCase();
+                        const desc = String(t?.description || '').toLowerCase();
+                        const hay = `${name} ${desc}`;
+                        if (keys.some(k => hay.includes(k))) return t;
+                    }
+                    return null;
+                };
+
+                const mergedWithAdminFiles: Requirement[] = [];
+                for (const req of mergedFromDefaults) {
+                    if (!req.adminProvided) {
+                        mergedWithAdminFiles.push(req);
+                        continue;
+                    }
+
+                    const template = pickTemplateForRequirement(req.title);
+                    const url = template ? await resolveTemplateUrl(template) : null;
+
+                    if (url) {
+                        const name = String(template?.fileName || template?.name || req.title);
+                        const adminEntry = { name, url, uploadedAt: template?.uploadedAt, providedByAdmin: true } as any;
+                        mergedWithAdminFiles.push({
+                            ...req,
+                            uploadedFiles: [adminEntry],
+                            status: 'completed',
+                            approvalStatus: 'approved',
+                        });
+                    } else {
+                        mergedWithAdminFiles.push({
+                            ...req,
+                            uploadedFiles: [],
+                            status: 'pending',
+                            approvalStatus: 'pending_review',
+                        });
+                    }
+                }
+
                 // Normalize statuses: if there are no uploadedFiles, ensure status is 'pending'
-                const normalized = savedRequirements.map(r => {
+                const normalized = mergedWithAdminFiles.map(r => {
                     const uploadedFiles = Array.isArray(r.uploadedFiles) ? r.uploadedFiles : [];
                     let status = r.status || (uploadedFiles.length > 0 ? 'completed' : 'pending');
                     if (!uploadedFiles || uploadedFiles.length === 0) status = 'pending';
@@ -98,6 +231,64 @@ const RequirementsChecklistScreen: React.FC = () => {
                 });
                 setRequirements(normalized as any);
                 calculateProgress(normalized as any);
+
+                // Persist migrated list back to the user doc (best-effort)
+                try {
+                    const currentTitles = (savedRequirements || []).map((r: any) => String(r?.title || '')).filter(Boolean);
+                    const desiredTitles = getDefaultRequirements().map(r => r.title);
+                    const titleMismatch = currentTitles.length !== desiredTitles.length || currentTitles.some((t: string) => !desiredTitles.includes(t));
+                    if (titleMismatch) {
+                        await setDoc(doc(firestore, 'users', auth.currentUser.uid), { requirements: normalized }, { merge: true });
+                    }
+                } catch (e) {
+                    console.warn('RequirementsChecklist: failed to persist migrated requirements list', e);
+                }
+
+                // Auto-transition to hired when all REQUIRED requirements are approved.
+                // Minimal rule: if user has appliedCompanyName (and no finalized company yet), mark hired.
+                try {
+                    const required = (normalized as any[]).filter((r: any) => r.isRequired !== false);
+                    const allRequiredApproved = required.length > 0 && required.every((req: any) =>
+                        req.approvalStatus === 'approved' &&
+                        Array.isArray(req.uploadedFiles) && req.uploadedFiles.length > 0
+                    );
+
+                    const alreadyHired = data.status === 'hired';
+                    const hasFinalCompany = Boolean(data.company);
+                    const appliedCompanyName = data.appliedCompanyName;
+
+                    if (allRequiredApproved && !alreadyHired && !hasFinalCompany && appliedCompanyName) {
+                        await setDoc(doc(firestore, 'users', auth.currentUser.uid), {
+                            status: 'hired',
+                            company: appliedCompanyName,
+                            hiredAt: serverTimestamp(),
+                            lastUpdated: serverTimestamp(),
+                            appliedCompanyId: null,
+                            appliedCompanyName: null,
+                        }, { merge: true });
+
+                        // Best-effort: mark their application doc as approved (if it exists)
+                        try {
+                            if (data.appliedCompanyId) {
+                                await setDoc(doc(firestore, 'applications', `${auth.currentUser.uid}_${data.appliedCompanyId}`), {
+                                    status: 'approved',
+                                    approvedAt: serverTimestamp(),
+                                }, { merge: true });
+                            }
+                        } catch (appErr) {
+                            console.warn('RequirementsChecklist: failed to update application status to approved', appErr);
+                        }
+
+                        // Auto-generate OJT Checklist with coordinator/adviser signatures
+                        try {
+                            await generateOJTChecklistOnApproval(data, normalized as any);
+                        } catch (checklistErr) {
+                            console.warn('RequirementsChecklist: failed to generate OJT Checklist', checklistErr);
+                        }
+                    }
+                } catch (e) {
+                    console.warn('RequirementsChecklist: auto-hired check failed', e);
+                }
             } else {
                 const defaultRequirements = getDefaultRequirements();
                 setRequirements(defaultRequirements);
@@ -114,21 +305,19 @@ const RequirementsChecklistScreen: React.FC = () => {
     const getDefaultRequirements = (): Requirement[] => [
         {
             id: '1',
-            title: 'MOA (Memorandum of Agreement)',
-            description: 'Signed agreement between your school and the company',
+            title: 'Proof of Enrollment (COM)',
+            description: 'Certificate of Matriculation / proof of enrollment',
             category: 'documents',
             status: 'pending',
-            dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
             uploadedFiles: [],
             isRequired: true,
         },
         {
             id: '2',
-            title: 'Parent/Guardian Consent Form',
-            description: 'Signed consent form from parent or guardian',
+            title: 'Notarized Parental Consent',
+            description: 'Notarized consent from parent or guardian',
             category: 'forms',
             status: 'pending',
-            dueDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000), // 5 days from now
             uploadedFiles: [],
             isRequired: true,
         },
@@ -138,57 +327,53 @@ const RequirementsChecklistScreen: React.FC = () => {
             description: 'Medical clearance from a licensed physician',
             category: 'certifications',
             status: 'pending',
-            dueDate: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000), // 10 days from now
             uploadedFiles: [],
             isRequired: true,
         },
         {
             id: '4',
-            title: 'Police Clearance',
-            description: 'Police clearance certificate',
+            title: 'Psychological Test Certification',
+            description: 'Psychological test certification (if required)',
             category: 'certifications',
             status: 'pending',
-            dueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14 days from now
             uploadedFiles: [],
             isRequired: true,
         },
         {
             id: '5',
-            title: 'Resume/CV',
-            description: 'Updated resume or curriculum vitae',
-            category: 'documents',
+            title: 'Proof of Insurance',
+            description: 'Student insurance coverage proof/certificate',
+            category: 'certifications',
             status: 'pending',
-            dueDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000), // 3 days from now
             uploadedFiles: [],
             isRequired: true,
         },
         {
             id: '6',
-            title: 'Cover Letter',
-            description: 'Personalized cover letter for the internship',
-            category: 'documents',
+            title: 'OJT Orientation',
+            description: 'Orientation document/certificate provided by the school',
+            category: 'other',
             status: 'pending',
-            dueDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000), // 3 days from now
             uploadedFiles: [],
-            isRequired: false,
+            isRequired: true,
+            adminProvided: true,
         },
         {
             id: '7',
-            title: 'Academic Records',
-            description: 'Official transcript of records',
+            title: 'Memorandum of Agreement',
+            description: 'MOA document provided by the school/administrator',
             category: 'documents',
             status: 'pending',
-            dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
             uploadedFiles: [],
             isRequired: true,
+            adminProvided: true,
         },
         {
             id: '8',
-            title: 'Insurance Certificate',
-            description: 'Student insurance coverage certificate',
-            category: 'certifications',
+            title: 'Curriculum Vitae',
+            description: 'Updated resume / CV',
+            category: 'documents',
             status: 'pending',
-            dueDate: new Date(Date.now() + 12 * 24 * 60 * 60 * 1000), // 12 days from now
             uploadedFiles: [],
             isRequired: true,
         },
@@ -343,7 +528,12 @@ const RequirementsChecklistScreen: React.FC = () => {
 
                     const updatedRequirements = requirements.map(req =>
                         req.id === selectedRequirement.id
-                            ? { ...req, uploadedFiles: [...req.uploadedFiles, uploadedEntry], status: 'completed' as 'completed' }
+                            ? { 
+                                ...req, 
+                                uploadedFiles: [...req.uploadedFiles, uploadedEntry], 
+                                status: 'completed' as 'completed',
+                                approvalStatus: 'pending_review' as 'pending_review'
+                            }
                             : req
                     );
 
@@ -396,7 +586,12 @@ const RequirementsChecklistScreen: React.FC = () => {
 
                     const updatedRequirements = requirements.map(req =>
                         req.id === selectedRequirement.id
-                            ? { ...req, uploadedFiles: [...req.uploadedFiles, uploadedEntry], status: 'completed' as 'completed' }
+                            ? { 
+                                ...req, 
+                                uploadedFiles: [...req.uploadedFiles, uploadedEntry], 
+                                status: 'completed' as 'completed',
+                                approvalStatus: 'pending_review' as 'pending_review'
+                            }
                             : req
                     );
 
@@ -480,7 +675,104 @@ const RequirementsChecklistScreen: React.FC = () => {
         }
     };
 
+    const generateOJTChecklistOnApproval = async (userData: any, reqs: Requirement[]) => {
+        try {
+            // Fetch coordinator and adviser profiles for signatures
+            let coordinatorName = 'OJT Coordinator';
+            let coordinatorSignatureUrl: string | undefined;
+            let adviserName = 'OJT Adviser';
+            let adviserSignatureUrl: string | undefined;
+
+            try {
+                // Look for coordinator (admin)
+                const adminSnap = await getDocs(query(collection(firestore, 'users'), where('role', '==', 'admin')));
+                for (const doc of adminSnap.docs) {
+                    const admin = doc.data();
+                    if (admin.role === 'admin') {
+                        coordinatorName = admin.fullName || admin.name || 'OJT Coordinator';
+                        coordinatorSignatureUrl = admin.signatureUrl || admin.signature;
+                        break;
+                    }
+                }
+
+                // Check if student has a specific adviser assigned
+                if (userData.adviserId) {
+                    try {
+                        const adviserDoc = await getDoc(doc(firestore, 'users', userData.adviserId));
+                        if (adviserDoc.exists()) {
+                            const adviser = adviserDoc.data();
+                            adviserName = adviser.fullName || adviser.name || 'OJT Adviser';
+                            adviserSignatureUrl = adviser.signatureUrl || adviser.signature;
+                        }
+                    } catch (e) {
+                        console.warn('Failed to fetch assigned adviser:', e);
+                    }
+                } else {
+                    // Fall back to finding any super_admin
+                    const adviserSnap = await getDocs(query(collection(firestore, 'users'), where('role', '==', 'super_admin')));
+                    for (const doc of adviserSnap.docs) {
+                        const adviser = doc.data();
+                        if (adviser.role === 'super_admin') {
+                            adviserName = adviser.fullName || adviser.name || 'OJT Adviser';
+                            adviserSignatureUrl = adviser.signatureUrl || adviser.signature;
+                            break;
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn('Failed to fetch coordinator/adviser signatures:', e);
+            }
+
+            // Prepare checklist data
+            const checklistData = {
+                studentName: userData.fullName || userData.name || 'Student',
+                studentId: userData.studentId || '',
+                course: userData.course || userData.program || 'Computer Studies',
+                companyName: userData.company || userData.appliedCompanyName || 'Company',
+                departmentAssigned: userData.departmentAssigned || 'Department',
+                startDate: userData.ojt?.startDate || new Date().toLocaleDateString(),
+                endDate: userData.ojt?.endDate || new Date().toLocaleDateString(),
+                completedDate: new Date().toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                }),
+                coordinatorName,
+                coordinatorSignatureUrl,
+                adviserName,
+                adviserSignatureUrl,
+                requirements: reqs.map(r => ({
+                    title: r.title,
+                    status: (r.approvalStatus === 'approved' ? 'approved' : r.approvalStatus === 'rejected' ? 'rejected' : 'pending') as 'pending' | 'approved' | 'rejected',
+                })),
+            };
+
+            // Generate PDF
+            const pdfUri = await OJTChecklistGenerator.generateOJTChecklistPDF(checklistData);
+
+            // Store in Firestore
+            if (auth.currentUser) {
+                await setDoc(doc(firestore, 'users', auth.currentUser.uid), {
+                    generatedDocuments: {
+                        ojtChecklistPdf: pdfUri,
+                        generatedAt: serverTimestamp(),
+                        studentName: checklistData.studentName,
+                        companyName: checklistData.companyName,
+                    }
+                }, { merge: true });
+
+                console.log('OJT Checklist generated and saved:', pdfUri);
+            }
+        } catch (error) {
+            console.error('Error generating OJT Checklist:', error);
+        }
+    };
+
     const removeUploadedFile = async (requirementId: string, fileAny: any, index: number) => {
+        if (fileAny && fileAny.providedByAdmin) {
+            Alert.alert('Not allowed', 'This file is provided by the admin/super admin and cannot be removed.');
+            return;
+        }
         Alert.alert('Remove file', 'Are you sure you want to remove this uploaded file?', [
             { text: 'Cancel', style: 'cancel' },
             {
@@ -682,20 +974,74 @@ const RequirementsChecklistScreen: React.FC = () => {
                                                         <Ionicons name="document" size={16} color="#007aff" />
                                                         <Text style={styles.fileName}>{displayName}</Text>
                                                     </TouchableOpacity>
-                                                    <TouchableOpacity onPress={() => removeUploadedFile(requirement.id, fileAny, index)} style={styles.deleteButton}>
-                                                        <Ionicons name="trash" size={18} color="#d32f2f" />
-                                                    </TouchableOpacity>
+                                                    {!fileAny?.providedByAdmin ? (
+                                                        <TouchableOpacity onPress={() => removeUploadedFile(requirement.id, fileAny, index)} style={styles.deleteButton}>
+                                                            <Ionicons name="trash" size={18} color="#d32f2f" />
+                                                        </TouchableOpacity>
+                                                    ) : null}
                                                 </View>
                                             );
                                         })}
                                     </View>
                                 )}
 
+                                {/* Approval Status Badge */}
+                                {requirement.uploadedFiles.length > 0 && (
+                                    <View style={styles.approvalStatusContainer}>
+                                        {requirement.approvalStatus === 'approved' && (
+                                            <View style={[styles.approvalBadge, { backgroundColor: '#4CAF50' }]}>
+                                                <Ionicons name="checkmark-circle" size={16} color="#fff" />
+                                                <Text style={styles.approvalBadgeText}>Approved</Text>
+                                            </View>
+                                        )}
+                                        {requirement.approvalStatus === 'pending_review' && (
+                                            <View style={[styles.approvalBadge, { backgroundColor: '#FF9800' }]}>
+                                                <Ionicons name="time" size={16} color="#fff" />
+                                                <Text style={styles.approvalBadgeText}>Pending Review</Text>
+                                            </View>
+                                        )}
+                                        {requirement.approvalStatus === 'rejected' && (
+                                            <View style={[styles.approvalBadge, { backgroundColor: '#F44336' }]}>
+                                                <Ionicons name="close-circle" size={16} color="#fff" />
+                                                <Text style={styles.approvalBadgeText}>Rejected</Text>
+                                            </View>
+                                        )}
+                                    </View>
+                                )}
+
+                                {/* Rejection Reason */}
+                                {requirement.approvalStatus === 'rejected' && requirement.rejectionReason && (
+                                    <View style={styles.rejectionReasonContainer}>
+                                        <Text style={styles.rejectionReasonLabel}>Reason for rejection:</Text>
+                                        <Text style={styles.rejectionReasonText}>{requirement.rejectionReason}</Text>
+                                    </View>
+                                )}
+
+                                {/* Adviser Notes */}
+                                {requirement.adviserNotes && (
+                                    <View style={styles.adviserNotesContainer}>
+                                        <View style={styles.adviserNotesHeader}>
+                                            <Ionicons name="chatbox-ellipses" size={16} color="#1976D2" />
+                                            <Text style={styles.adviserNotesLabel}>
+                                                {requirement.reviewedBy ? `Message from ${requirement.reviewedBy}` : 'Adviser Notes'}
+                                            </Text>
+                                        </View>
+                                        <Text style={styles.adviserNotesText}>{requirement.adviserNotes}</Text>
+                                        {requirement.reviewedAt && (
+                                            <Text style={styles.adviserNotesDate}>
+                                                {new Date(requirement.reviewedAt).toLocaleString()}
+                                            </Text>
+                                        )}
+                                    </View>
+                                )}
+
                                 <View style={styles.actionButtons}>
-                                    {requirement.uploadedFiles.length > 0 ? (
+                                    {requirement.uploadedFiles.length > 0 && !requirement.adminProvided ? (
                                         <View style={styles.doneIndicator}>
                                             <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
-                                            <Text style={styles.doneText}>Done</Text>
+                                            <Text style={styles.doneText}>
+                                                {requirement.approvalStatus === 'approved' ? 'Approved' : 'Submitted'}
+                                            </Text>
                                         </View>
                                     ) : (
                                         <TouchableOpacity
@@ -706,7 +1052,13 @@ const RequirementsChecklistScreen: React.FC = () => {
                                             }}
                                         >
                                             <Ionicons name="cloud-upload" size={16} color="#007aff" />
-                                            <Text style={styles.uploadButtonText}>Upload File</Text>
+                                            <Text style={styles.uploadButtonText}>
+                                                {requirement.adminProvided && requirement.uploadedFiles.some((f: any) => f?.providedByAdmin) 
+                                                    ? 'Upload Your Copy' 
+                                                    : requirement.adminProvided 
+                                                    ? 'Upload File (Ask Coordinator)' 
+                                                    : 'Upload File'}
+                                            </Text>
                                         </TouchableOpacity>
                                     )}
                                 </View>
@@ -951,6 +1303,74 @@ const styles = StyleSheet.create({
         color: '#6366F1',
         marginLeft: 4,
         fontWeight: '500',
+    },
+    approvalStatusContainer: {
+        marginTop: 8,
+        marginBottom: 4,
+    },
+    approvalBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 6,
+        alignSelf: 'flex-start',
+        gap: 4,
+    },
+    approvalBadgeText: {
+        color: '#fff',
+        fontSize: 13,
+        fontWeight: '600',
+        marginLeft: 4,
+    },
+    rejectionReasonContainer: {
+        marginTop: 8,
+        padding: 10,
+        backgroundColor: '#FFEBEE',
+        borderRadius: 6,
+        borderLeftWidth: 3,
+        borderLeftColor: '#F44336',
+    },
+    rejectionReasonLabel: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#D32F2F',
+        marginBottom: 4,
+    },
+    rejectionReasonText: {
+        fontSize: 13,
+        color: '#C62828',
+        fontStyle: 'italic',
+    },
+    adviserNotesContainer: {
+        marginTop: 8,
+        padding: 12,
+        backgroundColor: '#E3F2FD',
+        borderRadius: 8,
+        borderLeftWidth: 3,
+        borderLeftColor: '#1976D2',
+    },
+    adviserNotesHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 6,
+        gap: 6,
+    },
+    adviserNotesLabel: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: '#1565C0',
+    },
+    adviserNotesText: {
+        fontSize: 14,
+        color: '#0D47A1',
+        lineHeight: 20,
+    },
+    adviserNotesDate: {
+        fontSize: 11,
+        color: '#42A5F5',
+        marginTop: 6,
+        fontStyle: 'italic',
     },
     modalOverlay: {
         flex: 1,

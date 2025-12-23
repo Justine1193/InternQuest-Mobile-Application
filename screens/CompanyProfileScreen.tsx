@@ -17,6 +17,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList, Post } from '../App';
 import { auth, firestore } from '../firebase/config';
 import { doc, getDoc, setDoc, collection, addDoc } from 'firebase/firestore';
+import * as FileSystem from 'expo-file-system';
 
 type CompanyProfileRouteProp = RouteProp<RootStackParamList, 'CompanyProfile'>;
 type CompanyProfileNavigationProp = StackNavigationProp<RootStackParamList, 'CompanyProfile'>;
@@ -29,6 +30,8 @@ const CompanyProfileScreen: React.FC = () => {
     const { companyId } = route.params;
 
     const [company, setCompany] = useState<Post | null>(null);
+    const [requirementsComplete, setRequirementsComplete] = useState(false);
+    const [loadingRequirements, setLoadingRequirements] = useState(true);
 
     useEffect(() => {
         const loadCompany = async () => {
@@ -67,8 +70,9 @@ const CompanyProfileScreen: React.FC = () => {
     const [userProfile, setUserProfile] = useState<any>(null);
 
     useEffect(() => {
-        // fetch profile regardless
+        // fetch profile and requirements status
         fetchUserProfile();
+        checkRequirementsStatus();
     }, []);
 
     // when the company record has been loaded, check application status
@@ -77,6 +81,29 @@ const CompanyProfileScreen: React.FC = () => {
             checkApplicationStatus();
         }
     }, [company]);
+
+    const checkRequirementsStatus = async () => {
+        if (!auth.currentUser) {
+            setLoadingRequirements(false);
+            return;
+        }
+        try {
+            const userDoc = await getDoc(doc(firestore, 'users', auth.currentUser.uid));
+            if (userDoc.exists()) {
+                const requirements = userDoc.data().requirements || [];
+                // Requirements must be approved by adviser to unlock MOA
+                const allComplete = requirements.length > 0 && requirements.every((req: any) => 
+                    req.approvalStatus === 'approved' && 
+                    (req.uploadedFiles && req.uploadedFiles.length > 0)
+                );
+                setRequirementsComplete(allComplete);
+            }
+        } catch (error) {
+            console.error('Error checking requirements:', error);
+        } finally {
+            setLoadingRequirements(false);
+        }
+    };
 
     const fetchUserProfile = async () => {
         if (!auth.currentUser) return;
@@ -87,6 +114,25 @@ const CompanyProfileScreen: React.FC = () => {
             }
         } catch (error) {
             console.error('Error fetching user profile:', error);
+        }
+    };
+
+    const handleDownloadMOA = async () => {
+        if (!company?.moa) {
+            Alert.alert('No MOA available', 'The MOA link is not available for this company.');
+            return;
+        }
+
+        try {
+            // If it's a URL, open it directly
+            if (company.moa.startsWith('http')) {
+                await Linking.openURL(company.moa);
+            } else {
+                Alert.alert('MOA Information', company.moa);
+            }
+        } catch (error) {
+            Alert.alert('Error', 'Could not open the MOA. Please try again.');
+            console.error('Error downloading MOA:', error);
         }
     };
 
@@ -293,16 +339,42 @@ const CompanyProfileScreen: React.FC = () => {
                             })()} />
                             <Text style={styles.detailText}>Mode: {company.modeOfWork || 'Not specified'}</Text>
                         </View>
-                        <View style={styles.detailRow}>
-                            <Ionicons name="document" size={20} color={(() => {
-                                const s = String(company.moa || '').toLowerCase();
-                                if (['yes', 'y', 'true', '1'].includes(s)) return '#4CAF50';
-                                return '#F44336';
-                            })()} />
-                            <Text style={styles.detailText}>MOA: {company.moa || 'Not specified'}</Text>
-                        </View>
                     </Card.Content>
                 </Card>
+
+                {/* MOA Download Section */}
+                {company.moa && (
+                    <Card style={[styles.sectionCard, { borderLeftWidth: 4, borderLeftColor: requirementsComplete ? '#4CAF50' : '#F44336' }]}>
+                        <Card.Content>
+                            <Text style={styles.sectionTitle}>Memorandum of Agreement (MOA)</Text>
+                            {loadingRequirements ? (
+                                <ActivityIndicator size="small" color="#6366F1" style={{ marginVertical: 8 }} />
+                            ) : requirementsComplete ? (
+                                <>
+                                    <Text style={styles.description}>✓ Requirements approved! You can now download the MOA.</Text>
+                                    <TouchableOpacity
+                                        style={[styles.moaButton, { backgroundColor: '#4CAF50' }]}
+                                        onPress={handleDownloadMOA}
+                                    >
+                                        <Ionicons name="download" size={18} color="#fff" style={{ marginRight: 8 }} />
+                                        <Text style={styles.moaButtonText}>Download MOA</Text>
+                                    </TouchableOpacity>
+                                </>
+                            ) : (
+                                <>
+                                    <Text style={styles.description}>⚠ Submit all requirements and wait for adviser approval to unlock the MOA.</Text>
+                                    <TouchableOpacity
+                                        style={[styles.moaButton, { backgroundColor: '#6366F1' }]}
+                                        onPress={() => navigation.navigate('RequirementsChecklist')}
+                                    >
+                                        <Ionicons name="documents" size={18} color="#fff" style={{ marginRight: 8 }} />
+                                        <Text style={styles.moaButtonText}>Submit Requirements to Unlock</Text>
+                                    </TouchableOpacity>
+                                </>
+                            )}
+                        </Card.Content>
+                    </Card>
+                )}
 
                 {/* Required Skills */}
                 <Card style={styles.sectionCard}>
@@ -483,6 +555,20 @@ const styles = StyleSheet.create({
     },
     skillChip: {
         marginBottom: 8,
+    },
+    moaButton: {
+        flexDirection: 'row',
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        borderRadius: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 12,
+    },
+    moaButtonText: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: '600',
     },
     contactRow: {
         flexDirection: 'row',

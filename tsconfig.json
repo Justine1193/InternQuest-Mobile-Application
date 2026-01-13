@@ -19,5 +19,6 @@
     "**/build/**",
     "functions/**",
     "tools/**"
-  ]
+  ],
+  "extends": "expo/tsconfig.base"
 }

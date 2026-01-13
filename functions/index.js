@@ -8,6 +8,7 @@ const { setGlobalOptions } = require('firebase-functions/v2');
 const { initializeApp } = require('firebase-admin/app');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { getAuth } = require('firebase-admin/auth');
+const { Expo } = require('expo-server-sdk');
 
 try { initializeApp(); } catch (e) { /* already initialized */ }
 setGlobalOptions({ region: 'asia-southeast1' });
@@ -15,6 +16,49 @@ setGlobalOptions({ region: 'asia-southeast1' });
 const API_KEY = process.env.LOOKUP_EMAIL_API_KEY || null;
 const USERS_COLLECTION = process.env.USERS_COLLECTION_PATH || 'users';
 const STUDENT_ID_FIELD = process.env.STUDENT_ID_FIELD || 'studentId';
+
+const getBearerToken = (req) => {
+  const authHeader = String(req.get('Authorization') || '');
+  const match = authHeader.match(/^Bearer\s+(.+)$/i);
+  return match ? match[1] : null;
+};
+
+const verifyCaller = async (req) => {
+  const token = getBearerToken(req);
+  if (!token) return { ok: false, status: 401, error: 'Missing Authorization bearer token' };
+  try {
+    const decoded = await getAuth().verifyIdToken(token);
+    return { ok: true, decoded };
+  } catch (e) {
+    return { ok: false, status: 401, error: 'Invalid auth token' };
+  }
+};
+
+const isAdminRole = (role) => role === 'admin' || role === 'super_admin';
+
+const sendExpoPush = async ({ tokens, title, body, data }) => {
+  const expo = new Expo();
+  const messages = [];
+  for (const token of tokens) {
+    if (!Expo.isExpoPushToken(token)) continue;
+    messages.push({
+      to: token,
+      sound: 'default',
+      title,
+      body,
+      data: data && typeof data === 'object' ? data : undefined,
+    });
+  }
+
+  const chunks = expo.chunkPushNotifications(messages);
+  const tickets = [];
+  for (const chunk of chunks) {
+    // eslint-disable-next-line no-await-in-loop
+    const t = await expo.sendPushNotificationsAsync(chunk);
+    tickets.push(...t);
+  }
+  return tickets;
+};
 
 exports.lookupEmailByStudentId = onRequest(async (req, res) => {
   res.set('Access-Control-Allow-Origin', '*');
@@ -139,5 +183,81 @@ exports.createUserAccount = onRequest(async (req, res) => {
     console.error('createUserAccount error:', err);
     const msg = err && err.message ? err.message : 'Internal error';
     return res.status(500).json({ error: msg });
+  }
+});
+
+// Send a push notification to the caller's own device (any authenticated user).
+// HTTP endpoint: POST { title, body, data? }
+exports.sendPushToSelf = onRequest(async (req, res) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+
+  if (req.method === 'OPTIONS') return res.status(204).send('');
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const verified = await verifyCaller(req);
+  if (!verified.ok) return res.status(verified.status).json({ error: verified.error });
+
+  const { uid } = verified.decoded;
+  const title = String((req.body && req.body.title) || 'InternQuest');
+  const body = String((req.body && req.body.body) || 'You have a new notification.');
+  const data = (req.body && req.body.data) || undefined;
+
+  try {
+    const db = getFirestore();
+    const snap = await db.collection('users').doc(uid).get();
+    const expoPushToken = snap.exists ? snap.data().expoPushToken : null;
+    if (!expoPushToken || typeof expoPushToken !== 'string') {
+      return res.status(400).json({ error: 'No expoPushToken saved for this user' });
+    }
+
+    const tickets = await sendExpoPush({ tokens: [expoPushToken], title, body, data });
+    return res.status(200).json({ ok: true, ticketsCount: tickets.length, tickets });
+  } catch (e) {
+    console.error('sendPushToSelf error:', e);
+    return res.status(500).json({ error: 'Internal error' });
+  }
+});
+
+// Send a push notification to any user (admin/super_admin only).
+// HTTP endpoint: POST { userId, title, body, data? }
+exports.sendPushToUser = onRequest(async (req, res) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+
+  if (req.method === 'OPTIONS') return res.status(204).send('');
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const verified = await verifyCaller(req);
+  if (!verified.ok) return res.status(verified.status).json({ error: verified.error });
+
+  const callerRole = verified.decoded && verified.decoded.role;
+  if (!isAdminRole(callerRole)) {
+    return res.status(403).json({ error: 'Forbidden: admin role required' });
+  }
+
+  const userId = String((req.body && req.body.userId) || '');
+  const title = String((req.body && req.body.title) || 'InternQuest');
+  const body = String((req.body && req.body.body) || 'You have a new notification.');
+  const data = (req.body && req.body.data) || undefined;
+
+  if (!userId) return res.status(400).json({ error: 'userId is required' });
+
+  try {
+    const db = getFirestore();
+    const snap = await db.collection('users').doc(userId).get();
+    if (!snap.exists) return res.status(404).json({ error: 'User not found' });
+    const expoPushToken = snap.data().expoPushToken;
+    if (!expoPushToken || typeof expoPushToken !== 'string') {
+      return res.status(400).json({ error: 'Target user has no expoPushToken saved' });
+    }
+
+    const tickets = await sendExpoPush({ tokens: [expoPushToken], title, body, data });
+    return res.status(200).json({ ok: true, ticketsCount: tickets.length, tickets });
+  } catch (e) {
+    console.error('sendPushToUser error:', e);
+    return res.status(500).json({ error: 'Internal error' });
   }
 });

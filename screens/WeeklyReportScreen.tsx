@@ -16,6 +16,7 @@ import { collection, addDoc, Timestamp } from 'firebase/firestore';
 import { firestore, storage } from '../firebase/config';
 import { getAuth } from 'firebase/auth';
 import PDFGenerator, { WeeklyReportEntry, WeeklyReportData } from '../services/pdfGenerator';
+import { colors, radii, shadows } from '../ui/theme';
 
 type WeeklyReportEntryForm = Omit<WeeklyReportEntry, 'hours'> & { hours: string };
 
@@ -331,7 +332,7 @@ const WeeklyReportScreen: React.FC = () => {
                     disabled={isPdfGenerating}
                 >
                     {isPdfGenerating ? (
-                        <ActivityIndicator color="#fff" />
+                        <ActivityIndicator color={colors.onPrimary} />
                     ) : (
                         <Text style={styles.actionButtonText}>Export PDF</Text>
                     )}
@@ -342,7 +343,7 @@ const WeeklyReportScreen: React.FC = () => {
                     disabled={loading}
                 >
                     {loading ? (
-                        <ActivityIndicator color="#fff" />
+                        <ActivityIndicator color={colors.onPrimary} />
                     ) : (
                         <Text style={styles.actionButtonText}>Submit Report</Text>
                     )}
@@ -355,27 +356,25 @@ const WeeklyReportScreen: React.FC = () => {
 const styles = StyleSheet.create({
     scroll: {
         padding: 20,
-        backgroundColor: '#f2f6ff',
+        backgroundColor: colors.bg,
     },
     section: {
-        backgroundColor: '#fff',
-        borderRadius: 12,
+        backgroundColor: colors.surface,
+        borderRadius: radii.lg,
         padding: 16,
         marginBottom: 16,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-        elevation: 1,
+        borderWidth: 1,
+        borderColor: colors.border,
+        ...shadows.card,
     },
     title: {
         fontSize: 22,
         fontWeight: 'bold',
-        color: '#1a1a1a',
+        color: colors.text,
     },
     description: {
         marginTop: 8,
-        color: '#555',
+        color: colors.textMuted,
         fontSize: 14,
         lineHeight: 20,
     },
@@ -383,7 +382,7 @@ const styles = StyleSheet.create({
         fontSize: 18,
         fontWeight: '600',
         marginBottom: 12,
-        color: '#1a1a1a',
+        color: colors.text,
     },
     sectionHeader: {
         flexDirection: 'row',
@@ -392,12 +391,13 @@ const styles = StyleSheet.create({
     },
     input: {
         borderWidth: 1,
-        borderColor: '#d7dce5',
-        borderRadius: 8,
+        borderColor: colors.border,
+        borderRadius: radii.md,
         padding: 12,
         marginBottom: 12,
         fontSize: 15,
-        backgroundColor: '#fdfdfd',
+        backgroundColor: colors.surface,
+        color: colors.text,
     },
     row: {
         flexDirection: 'row',
@@ -413,11 +413,11 @@ const styles = StyleSheet.create({
     },
     entryCard: {
         borderWidth: 1,
-        borderColor: '#e4e9f2',
-        borderRadius: 10,
+        borderColor: colors.border,
+        borderRadius: radii.lg,
         padding: 12,
         marginBottom: 12,
-        backgroundColor: '#fbfcff',
+        backgroundColor: colors.surfaceAlt,
     },
     entryHeader: {
         flexDirection: 'row',
@@ -427,39 +427,39 @@ const styles = StyleSheet.create({
     },
     entryTitle: {
         fontWeight: '600',
-        color: '#1a1a1a',
+        color: colors.text,
     },
     removeText: {
-        color: '#d9534f',
+        color: colors.danger,
         fontWeight: '600',
     },
     addButton: {
         paddingHorizontal: 12,
         paddingVertical: 6,
-        borderRadius: 6,
-        backgroundColor: '#e6f0ff',
+        borderRadius: radii.sm,
+        backgroundColor: colors.primarySoft,
     },
     addButtonText: {
-        color: '#6366F1',
+        color: colors.primary,
         fontWeight: '600',
     },
     totalHours: {
         textAlign: 'right',
         fontWeight: 'bold',
-        color: '#1a1a1a',
+        color: colors.text,
         marginTop: 4,
     },
     fileButton: {
-        backgroundColor: '#fff',
-        borderRadius: 10,
+        backgroundColor: colors.surface,
+        borderRadius: radii.lg,
         padding: 14,
         alignItems: 'center',
         borderWidth: 1,
-        borderColor: '#d7dce5',
+        borderColor: colors.border,
         marginBottom: 16,
     },
     fileButtonText: {
-        color: '#6366F1',
+        color: colors.primary,
         fontWeight: '600',
     },
     buttonRow: {
@@ -471,18 +471,18 @@ const styles = StyleSheet.create({
     },
     actionButton: {
         flex: 1,
-        borderRadius: 10,
+        borderRadius: radii.lg,
         paddingVertical: 14,
         alignItems: 'center',
     },
     primaryButton: {
-        backgroundColor: '#6366F1',
+        backgroundColor: colors.primary,
     },
     secondaryButton: {
-        backgroundColor: '#8b5cf6',
+        backgroundColor: colors.primary,
     },
     actionButtonText: {
-        color: '#fff',
+        color: colors.onPrimary,
         fontSize: 16,
         fontWeight: '600',
     },

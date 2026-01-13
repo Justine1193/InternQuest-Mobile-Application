@@ -15,6 +15,7 @@ import { auth } from '../firebase/config';
 import { LOOKUP_EMAIL_FUNCTION_BASE_URL, STUDENT_ID_EMAIL_DOMAIN } from '../firebase/config';
 import { signInWithEmailAndPassword, sendPasswordResetEmail, onAuthStateChanged } from 'firebase/auth';
 import { SecurityUtils } from '../services/security';
+import { colors, radii, shadows, spacing } from '../ui/theme';
 
 type SignInProps = {
   setIsLoggedIn?: (v: boolean) => void;
@@ -128,14 +129,8 @@ const SignInScreen: React.FC<SignInProps> = ({ setIsLoggedIn }) => {
         return;
       }
 
-      // DEBUG: Show which email will be used for sign-in
-      console.log('🔍 DEBUG: Attempting sign-in with email:', emailToUse);
-      Alert.alert(
-        'Debug Info',
-        `Signing in with:\nIdentifier: ${identifier}\nResolved Email: ${emailToUse}`
-      );
-
       // Sign in using the resolved email and admin-provided password
+      console.log('🔍 Attempting sign-in with email:', emailToUse);
       await signInWithEmailAndPassword(auth, emailToUse.trim(), password);
 
       if (setIsLoggedIn) setIsLoggedIn(true);
@@ -145,13 +140,18 @@ const SignInScreen: React.FC<SignInProps> = ({ setIsLoggedIn }) => {
       console.error('❌ Sign-in error code:', code);
       console.error('❌ Full error:', e);
       let message = 'Failed to sign in. Please try again.';
-      if (code === 'auth/user-not-found') message = 'No account found for that Student ID. Please contact your adviser.';
-      if (code === 'auth/wrong-password') message = 'Incorrect password.';
-      if (code === 'permission-denied') message = 'Permission denied. Please contact your adviser.';
-      Alert.alert(
-        'Sign in error',
-        `${message}\n\nError code: ${code || 'unknown'}`
-      );
+      
+      if (code === 'auth/user-not-found') {
+        message = `No account found for Student ID: ${identifier}\n\nPlease contact your adviser to create an account.`;
+      } else if (code === 'auth/wrong-password') {
+        message = 'Incorrect password.\n\nDefault password is: Student@123\n\nIf you\'ve changed it and forgot, contact your adviser to reset it.';
+      } else if (code === 'auth/invalid-login-credentials') {
+        message = 'Invalid Student ID or password.\n\nPlease check:\n• Student ID format: XX-XXXXX-XXX\n• Default password: Student@123\n\nIf the problem persists, contact your adviser.';
+      } else if (code === 'permission-denied') {
+        message = 'Permission denied. Please contact your adviser.';
+      }
+      
+      Alert.alert('Sign In Failed', message);
     } finally {
       setLoading(false);
     }
@@ -167,7 +167,7 @@ const SignInScreen: React.FC<SignInProps> = ({ setIsLoggedIn }) => {
   if (checkingSession) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#6366F1" />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -180,7 +180,7 @@ const SignInScreen: React.FC<SignInProps> = ({ setIsLoggedIn }) => {
 
       <Text style={styles.label}>Student ID</Text>
       <View style={styles.inputWrapper}>
-        <Icon name="card-account-details-outline" size={20} color="#6366F1" style={styles.icon} />
+        <Icon name="card-account-details-outline" size={20} color={colors.primary} style={styles.icon} />
         <TextInput
           style={styles.input}
           placeholder="Enter student ID (e.g., XX-XXXXX-XXX)"
@@ -193,7 +193,7 @@ const SignInScreen: React.FC<SignInProps> = ({ setIsLoggedIn }) => {
 
       <Text style={styles.label}>Password</Text>
       <View style={styles.inputWrapper}>
-        <Icon name="lock-outline" size={20} color="#6366F1" style={styles.icon} />
+        <Icon name="lock-outline" size={20} color={colors.primary} style={styles.icon} />
         <TextInput
           style={styles.input}
           placeholder="Enter password (provided by admin)"
@@ -204,7 +204,7 @@ const SignInScreen: React.FC<SignInProps> = ({ setIsLoggedIn }) => {
       </View>
 
       <TouchableOpacity style={styles.button} onPress={handleSignIn} disabled={loading}>
-        {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Sign In</Text>}
+        {loading ? <ActivityIndicator color={colors.onPrimary} /> : <Text style={styles.buttonText}>Sign In</Text>}
       </TouchableOpacity>
 
       <TouchableOpacity onPress={handleResetPassword}>
@@ -220,9 +220,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     justifyContent: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: spacing.xl,
     paddingVertical: 32,
-    backgroundColor: '#f2f6ff',
+    backgroundColor: colors.bg,
   },
   centered: {
     flex: 1,
@@ -238,32 +238,33 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '800',
-    color: '#6366F1',
+    color: colors.primary,
     textAlign: 'center',
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
     textAlign: 'center',
-    color: '#666',
+    color: colors.textMuted,
     marginBottom: 24,
   },
   label: {
     fontSize: 14,
     marginBottom: 8,
     fontWeight: '500',
-    color: '#333',
+    color: colors.text,
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderColor: '#ccc',
+    borderColor: colors.border,
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: radii.md,
     paddingHorizontal: 12,
     marginBottom: 12,
     height: 50,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: colors.surfaceAlt,
+    ...shadows.card,
   },
   icon: {
     marginRight: 8,
@@ -271,14 +272,14 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     fontSize: 16,
-    color: '#333',
+    color: colors.text,
     height: '100%',
     paddingVertical: 0,
   },
   button: {
-    backgroundColor: '#6366F1',
+    backgroundColor: colors.primary,
     paddingVertical: 14,
-    borderRadius: 8,
+    borderRadius: radii.md,
     marginTop: 8,
     marginBottom: 24,
     alignItems: 'center',
@@ -290,17 +291,17 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     fontSize: 18,
-    color: '#fff',
+    color: colors.onPrimary,
     fontWeight: '600',
   },
   loginLink: {
     fontWeight: '700',
-    color: '#6366F1',
+    color: colors.primary,
     textAlign: 'center',
   },
     helperNote: {
       textAlign: 'center',
-      color: '#666',
+      color: colors.textMuted,
       marginTop: 16,
     },
 });

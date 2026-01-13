@@ -19,9 +19,21 @@
       "FUNCTIONS_REGION": "asia-southeast1",
       "ADMIN_FILE_FUNCTION_BASE_URL": "https://asia-southeast1-neuinternshipdb.cloudfunctions.net/getAdminFile",
       "LOOKUP_EMAIL_FUNCTION_BASE_URL": "https://asia-southeast1-neuinternshipdb.cloudfunctions.net/lookupEmailByStudentId",
-      "CREATE_USER_FUNCTION_BASE_URL": "https://asia-southeast1-neuinternshipdb.cloudfunctions.net/createUserAccount"
+      "CREATE_USER_FUNCTION_BASE_URL": "https://asia-southeast1-neuinternshipdb.cloudfunctions.net/createUserAccount",
+      "SEND_PUSH_SELF_FUNCTION_BASE_URL": "https://asia-southeast1-neuinternshipdb.cloudfunctions.net/sendPushToSelf",
+      "SEND_PUSH_USER_FUNCTION_BASE_URL": "https://asia-southeast1-neuinternshipdb.cloudfunctions.net/sendPushToUser"
     },
     "owner": "popssicle",
     "scheme": "internquest"
+    ,
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/ship.png",
+          "color": "#6366F1"
+        }
+      ]
+    ]
   }
 }

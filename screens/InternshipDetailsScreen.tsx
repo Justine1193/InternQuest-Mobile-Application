@@ -19,6 +19,7 @@ import { useSavedInternships } from '../context/SavedInternshipsContext';
 import { Platform } from 'react-native';
 import { doc, setDoc, getDoc, serverTimestamp, collection, query, where, getDocs } from 'firebase/firestore';
 import { auth, firestore } from '../firebase/config';
+import { colors, radii, shadows } from '../ui/theme';
 
 // Types
 import type { NavigationProp } from '@react-navigation/native';
@@ -309,11 +310,11 @@ const InternshipDetailsScreen: React.FC<Props> = ({ route }) => {
       {/* Fixed Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Icon name="arrow-left" size={24} color="#fff" />
+          <Icon name="arrow-left" size={24} color={colors.onPrimary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Internship Details</Text>
         <TouchableOpacity onPress={handleSaveInternship}>
-          <Icon name={isSaved ? "bookmark" : "bookmark-outline"} size={24} color="#fff" />
+          <Icon name={isSaved ? "bookmark" : "bookmark-outline"} size={24} color={colors.onPrimary} />
         </TouchableOpacity>
       </View>
 
@@ -331,14 +332,14 @@ const InternshipDetailsScreen: React.FC<Props> = ({ route }) => {
         <View style={styles.contentContainer}>
           {/* Company Name */}
           <View style={styles.companyHeader}>
-            <View style={[styles.cardAccent, { backgroundColor: '#6366F1' }]} />
+            <View style={[styles.cardAccent, { backgroundColor: colors.primary }]} />
             <View style={styles.companyNameRow}>
               <Text style={styles.companyName}>{post.company}</Text>
             <TouchableOpacity onPress={openWebsite}>
               <Text style={styles.companyLink}>{post.website || 'Company Site'}</Text>
             </TouchableOpacity>
               <View style={styles.locationRow}>
-              <Icon name="map-marker" size={16} color="#9ca3af" />
+              <Icon name="map-marker" size={16} color={colors.textSubtle} />
               <Text style={styles.locationText}>{post.location}</Text>
               </View>
             </View>
@@ -360,7 +361,7 @@ const InternshipDetailsScreen: React.FC<Props> = ({ route }) => {
               <TouchableOpacity onPress={openWebsite} style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <Text style={styles.link}>{post.website || 'N/A'}</Text>
                   {post.website && (
-                  <Icon name="open-in-new" size={16} color="#6366F1" style={{ marginLeft: 4 }} />
+                  <Icon name="open-in-new" size={16} color={colors.primary} style={{ marginLeft: 4 }} />
                 )}
               </TouchableOpacity>
             </View>
@@ -408,7 +409,7 @@ const InternshipDetailsScreen: React.FC<Props> = ({ route }) => {
             onPress={() => Alert.alert('NDA Info', 'This internship requires an NDA.')}
           >
             {/* removed large icon, keeping concise label */}
-            <View style={[styles.smallBadge, { backgroundColor: '#eef2ff' }]} />
+            <View style={[styles.smallBadge, { backgroundColor: colors.primarySoft }]} />
             <Text style={styles.tagLabel}>Approved</Text>
             <Text style={styles.tagSubLabel}>MOA</Text>
           </TouchableOpacity>
@@ -416,7 +417,7 @@ const InternshipDetailsScreen: React.FC<Props> = ({ route }) => {
             style={styles.tagBox}
             onPress={() => Alert.alert('Work Mode', workMode.description)}
           >
-            <View style={[styles.smallBadge, { backgroundColor: '#e6fffa' }]} />
+            <View style={[styles.smallBadge, { backgroundColor: colors.successSoft }]} />
             <Text style={styles.tagLabel}>{workMode.type}</Text>
             <Text style={styles.tagSubLabel}>Mode of Work</Text>
           </TouchableOpacity>
@@ -491,7 +492,7 @@ const InternshipDetailsScreen: React.FC<Props> = ({ route }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f2f6ff'
+    backgroundColor: colors.bg
   },
   scrollContent: {
     paddingHorizontal: 16,
@@ -508,28 +509,29 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#6366F1',
+    backgroundColor: colors.primary,
     borderBottomWidth: 0,
     zIndex: 10,
   },
-  headerTitle: { fontSize: 16, fontWeight: '700', color: '#fff' },
+  headerTitle: { fontSize: 16, fontWeight: '700', color: colors.onPrimary },
   companyHeader: { marginBottom: 16, flexDirection: 'row', alignItems: 'center' },
   cardAccent: { width: 8, height: 64, borderRadius: 4, marginRight: 12 },
   companyNameRow: { flex: 1 },
   companyName: { fontSize: 20, fontWeight: 'bold', marginBottom: 4 },
-  companyLink: { color: '#6366F1', marginBottom: 6 },
+  companyLink: { color: colors.primary, marginBottom: 6 },
   locationRow: { flexDirection: 'row', alignItems: 'center' },
-  locationText: { color: '#555', marginLeft: 4 },
+  locationText: { color: colors.textMuted, marginLeft: 4 },
   card: {
-    backgroundColor: '#fff',
-    borderRadius: 10,
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#eee',
+    borderColor: colors.border,
     marginBottom: 16,
+    ...shadows.card,
   },
-  cardTitle: { fontSize: 16, fontWeight: 'bold', marginBottom: 8 },
-  cardContent: { fontSize: 14, color: '#444' },
+  cardTitle: { fontSize: 16, fontWeight: 'bold', marginBottom: 8, color: colors.text },
+  cardContent: { fontSize: 14, color: colors.textMuted },
   infoTable: {
     marginTop: 8,
     marginBottom: 8,
@@ -541,19 +543,19 @@ const styles = StyleSheet.create({
   },
   infoLabel: {
     fontWeight: 'bold',
-    color: '#333',
+    color: colors.text,
     fontSize: 14,
     minWidth: 80,
     marginRight: 8,
   },
   detailText: {
     fontSize: 14,
-    color: '#444',
+    color: colors.textMuted,
     flex: 1,
     flexWrap: 'wrap',
   },
   link: {
-    color: '#6366F1',
+    color: colors.primary,
     textDecorationLine: 'underline',
     fontSize: 14,
   },
@@ -566,7 +568,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 12,
     borderRadius: 12,
-    backgroundColor: '#e6f0ff',
+    backgroundColor: colors.primarySoft,
     flex: 1,
     marginHorizontal: 6,
     minHeight: 100,
@@ -580,8 +582,8 @@ const styles = StyleSheet.create({
   tagIcon: {
     marginBottom: 8,
   },
-  tagLabel: { fontWeight: 'bold', color: '#6366F1' },
-  tagSubLabel: { fontSize: 12, color: '#555' },
+  tagLabel: { fontWeight: 'bold', color: colors.primary },
+  tagSubLabel: { fontSize: 12, color: colors.textMuted },
   mapContainer: {
     height: 200,
     marginBottom: 20,
@@ -601,11 +603,11 @@ const styles = StyleSheet.create({
   mapFallback: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#eef2f6',
+    backgroundColor: colors.surfaceAlt,
     borderRadius: 12,
   },
   mapFallbackText: {
-    color: '#6b7280',
+    color: colors.textMuted,
     fontSize: 13,
   },
   bottomButtons: {
@@ -616,31 +618,31 @@ const styles = StyleSheet.create({
   },
   hiredButton: {
     flex: 1,
-    backgroundColor: '#6366F1',
+    backgroundColor: colors.primary,
     padding: 12,
     borderRadius: 25,
     alignItems: 'center',
   },
   hiredButtonText: {
-    color: '#fff',
+    color: colors.onPrimary,
     fontWeight: 'bold',
   },
   saveButton: {
     flex: 1,
-    backgroundColor: '#e0f7fa',
+    backgroundColor: colors.surfaceAlt,
     padding: 12,
     borderRadius: 25,
     alignItems: 'center',
   },
   savedButton: {
-    backgroundColor: '#00796b',
+    backgroundColor: colors.primaryDark,
   },
   saveText: {
-    color: '#00796b',
+    color: colors.primaryDark,
     fontWeight: 'bold',
   },
   savedText: {
-    color: '#fff',
+    color: colors.onPrimary,
   },
   skillsContainer: {
     marginTop: 8,
@@ -649,7 +651,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   skillPill: {
-    backgroundColor: '#e0f2f1',
+    backgroundColor: colors.successSoft,
     borderRadius: 10,
     marginRight: 2,
     marginBottom: 2,
@@ -658,20 +660,20 @@ const styles = StyleSheet.create({
   },
   skillPillText: {
     fontSize: 12,
-    color: '#00796b',
+    color: colors.success,
     fontWeight: 'bold',
     paddingHorizontal: 10,
     paddingVertical: 4,
   },
   noSkillsText: {
     fontSize: 14,
-    color: '#888',
+    color: colors.textMuted,
     fontStyle: 'italic',
     textAlign: 'center',
     marginTop: 8,
   },
   disabledButton: {
-    backgroundColor: '#ccc',
+    backgroundColor: colors.border,
     opacity: 0.7,
   },
   loadingButton: {

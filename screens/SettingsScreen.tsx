@@ -24,6 +24,8 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import BottomNavbar from '../components/BottomNav';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { doc, deleteDoc } from 'firebase/firestore';
+import { colors, radii, shadows } from '../ui/theme';
+import { clearExpoPushTokenForCurrentUser, sendLocalTestNotification, sendRemoteTestPushToSelf, syncExpoPushTokenForCurrentUser } from '../services/notifications';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'Settings'>;
 
@@ -167,26 +169,40 @@ const SettingsScreen: React.FC = () => {
           <Text style={styles.cardTitle}>Notifications</Text>
           <View style={styles.settingRow}>
             <View style={styles.settingLabelRow}>
-              <Icon name="email-outline" size={20} color="#6366F1" style={{ marginRight: 8 }} />
+              <Icon name="email-outline" size={20} color={colors.primary} style={{ marginRight: 8 }} />
               <Text style={styles.settingText}>Email Notifications</Text>
             </View>
             <Switch
               value={emailNotif}
               onValueChange={setEmailNotif}
-              trackColor={{ false: '#ccc', true: '#6366F1' }}
-              thumbColor={emailNotif ? '#fff' : '#f4f3f4'}
+              trackColor={{ false: colors.border, true: colors.primary }}
+              thumbColor={emailNotif ? colors.onPrimary : colors.surfaceAlt}
             />
           </View>
           <View style={styles.settingRow}>
             <View style={styles.settingLabelRow}>
-              <Icon name="bell-outline" size={20} color="#6366F1" style={{ marginRight: 8 }} />
+              <Icon name="bell-outline" size={20} color={colors.primary} style={{ marginRight: 8 }} />
               <Text style={styles.settingText}>Push Notifications</Text>
             </View>
             <Switch
               value={pushNotif}
-              onValueChange={setPushNotif}
-              trackColor={{ false: '#ccc', true: '#6366F1' }}
-              thumbColor={pushNotif ? '#fff' : '#f4f3f4'}
+              onValueChange={async (value) => {
+                setPushNotif(value);
+
+                if (value) {
+                  const res = await syncExpoPushTokenForCurrentUser();
+                  if (!res.ok) {
+                    Alert.alert(
+                      'Push notifications not enabled',
+                      'We could not register this device for push notifications. Please allow notification permission and try again.'
+                    );
+                  }
+                } else {
+                  await clearExpoPushTokenForCurrentUser();
+                }
+              }}
+              trackColor={{ false: colors.border, true: colors.primary }}
+              thumbColor={pushNotif ? colors.onPrimary : colors.surfaceAlt}
             />
           </View>
         </View>
@@ -196,26 +212,26 @@ const SettingsScreen: React.FC = () => {
           <Text style={styles.cardTitle}>Preferences</Text>
           <View style={styles.settingRow}>
             <View style={styles.settingLabelRow}>
-              <Icon name="map-marker-outline" size={20} color="#4caf50" style={{ marginRight: 8 }} />
+              <Icon name="map-marker-outline" size={20} color={colors.success} style={{ marginRight: 8 }} />
               <Text style={styles.settingText}>Location Access</Text>
             </View>
             <Switch
               value={locationAccess}
               onValueChange={setLocationAccess}
-              trackColor={{ false: '#ccc', true: '#4caf50' }}
-              thumbColor={locationAccess ? '#fff' : '#f4f3f4'}
+              trackColor={{ false: colors.border, true: colors.success }}
+              thumbColor={locationAccess ? colors.onPrimary : colors.surfaceAlt}
             />
           </View>
           <View style={styles.settingRow}>
             <View style={styles.settingLabelRow}>
-              <Icon name="update" size={20} color="#4caf50" style={{ marginRight: 8 }} />
+              <Icon name="update" size={20} color={colors.success} style={{ marginRight: 8 }} />
               <Text style={styles.settingText}>Auto-Update App</Text>
             </View>
             <Switch
               value={autoUpdate}
               onValueChange={setAutoUpdate}
-              trackColor={{ false: '#ccc', true: '#4caf50' }}
-              thumbColor={autoUpdate ? '#fff' : '#f4f3f4'}
+              trackColor={{ false: colors.border, true: colors.success }}
+              thumbColor={autoUpdate ? colors.onPrimary : colors.surfaceAlt}
             />
           </View>
         </View>
@@ -225,22 +241,69 @@ const SettingsScreen: React.FC = () => {
           <Text style={styles.cardTitle}>Language</Text>
           <TouchableOpacity style={styles.settingRow} onPress={() => setShowLanguageModal(true)}>
             <View style={styles.settingLabelRow}>
-              <Icon name="translate" size={20} color="#ff9800" style={{ marginRight: 8 }} />
+              <Icon name="translate" size={20} color={colors.warning} style={{ marginRight: 8 }} />
               <Text style={styles.settingText}>{language}</Text>
             </View>
-            <Icon name="chevron-right" size={24} color="#bbb" />
+            <Icon name="chevron-right" size={24} color={colors.textSubtle} />
           </TouchableOpacity>
         </View>
 
         {/* Notification Preview/Test */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Notification Preview</Text>
-          <TouchableOpacity style={styles.settingRow} onPress={() => setShowNotifPreview(true)}>
+          <TouchableOpacity
+            style={styles.settingRow}
+            onPress={async () => {
+              if (!pushNotif) {
+                Alert.alert('Notifications are off', 'Turn on Push Notifications in Settings to receive device notifications.');
+                return;
+              }
+
+              const result = await sendLocalTestNotification();
+              if (!result.ok) {
+                Alert.alert(
+                  'Notifications permission needed',
+                  'Please allow notifications for InternQuest in your device settings to receive alerts.'
+                );
+                return;
+              }
+
+              // Keep the in-app preview too.
+              setShowNotifPreview(true);
+            }}
+          >
             <View style={styles.settingLabelRow}>
-              <Icon name="bell-ring-outline" size={20} color="#6366F1" style={{ marginRight: 8 }} />
+              <Icon name="bell-ring-outline" size={20} color={colors.primary} style={{ marginRight: 8 }} />
               <Text style={styles.settingText}>Show Test Notification</Text>
             </View>
-            <Icon name="chevron-right" size={24} color="#bbb" />
+            <Icon name="chevron-right" size={24} color={colors.textSubtle} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.settingRow}
+            onPress={async () => {
+              if (!pushNotif) {
+                Alert.alert('Notifications are off', 'Turn on Push Notifications in Settings to receive device notifications.');
+                return;
+              }
+
+              const res = await sendRemoteTestPushToSelf();
+              if (!res.ok) {
+                Alert.alert(
+                  'Remote push failed',
+                  'Could not send a remote push notification. Make sure you are on a real device, allowed notifications, and try again.'
+                );
+                return;
+              }
+
+              Alert.alert('Sent!', 'A remote push notification was sent to this device.');
+            }}
+          >
+            <View style={styles.settingLabelRow}>
+              <Icon name="cloud-outline" size={20} color={colors.primary} style={{ marginRight: 8 }} />
+              <Text style={styles.settingText}>Send Remote Push Test (Cloud)</Text>
+            </View>
+            <Icon name="chevron-right" size={24} color={colors.textSubtle} />
           </TouchableOpacity>
         </View>
 
@@ -249,10 +312,10 @@ const SettingsScreen: React.FC = () => {
           <Text style={styles.cardTitle}>Account Security</Text>
           <TouchableOpacity style={styles.settingRow} onPress={() => setShowSecurityModal(true)}>
             <View style={styles.settingLabelRow}>
-              <Icon name="shield-lock-outline" size={20} color="#4caf50" style={{ marginRight: 8 }} />
+              <Icon name="shield-lock-outline" size={20} color={colors.success} style={{ marginRight: 8 }} />
               <Text style={styles.settingText}>2FA & Recent Activity</Text>
             </View>
-            <Icon name="chevron-right" size={24} color="#bbb" />
+            <Icon name="chevron-right" size={24} color={colors.textSubtle} />
           </TouchableOpacity>
         </View>
 
@@ -261,10 +324,10 @@ const SettingsScreen: React.FC = () => {
           <Text style={styles.cardTitle}>Help & Support</Text>
           <TouchableOpacity style={styles.settingRow} onPress={() => setShowSupportModal(true)}>
             <View style={styles.settingLabelRow}>
-              <Icon name="help-circle-outline" size={20} color="#6366F1" style={{ marginRight: 8 }} />
+              <Icon name="help-circle-outline" size={20} color={colors.primary} style={{ marginRight: 8 }} />
               <Text style={styles.settingText}>FAQ, Contact, Support</Text>
             </View>
-            <Icon name="chevron-right" size={24} color="#bbb" />
+            <Icon name="chevron-right" size={24} color={colors.textSubtle} />
           </TouchableOpacity>
         </View>
 
@@ -273,10 +336,10 @@ const SettingsScreen: React.FC = () => {
           <Text style={styles.cardTitle}>About App</Text>
           <TouchableOpacity style={styles.settingRow} onPress={() => setShowAboutModal(true)}>
             <View style={styles.settingLabelRow}>
-              <Icon name="information-outline" size={20} color="#ff9800" style={{ marginRight: 8 }} />
+              <Icon name="information-outline" size={20} color={colors.warning} style={{ marginRight: 8 }} />
               <Text style={styles.settingText}>Version, Privacy Policy, Terms</Text>
             </View>
-            <Icon name="chevron-right" size={24} color="#bbb" />
+            <Icon name="chevron-right" size={24} color={colors.textSubtle} />
           </TouchableOpacity>
         </View>
 
@@ -289,9 +352,9 @@ const SettingsScreen: React.FC = () => {
             disabled={isDeleting}
           >
             {isDeleting ? (
-              <ActivityIndicator color="#fff" style={{ marginRight: 8 }} />
+              <ActivityIndicator color={colors.onPrimary} style={{ marginRight: 8 }} />
             ) : (
-              <Icon name="account-remove-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
+              <Icon name="account-remove-outline" size={20} color={colors.onPrimary} style={{ marginRight: 8 }} />
             )}
             <Text style={styles.deleteButtonText}>
               {isDeleting ? 'Deleting Account...' : 'Delete Account'}
@@ -301,7 +364,7 @@ const SettingsScreen: React.FC = () => {
 
         {/* Log Out Button */}
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Icon name="logout" size={20} color="#fff" style={{ marginRight: 8 }} />
+          <Icon name="logout" size={20} color={colors.onPrimary} style={{ marginRight: 8 }} />
           <Text style={styles.logoutText}>Log Out</Text>
         </TouchableOpacity>
       </ScrollView>
@@ -311,7 +374,7 @@ const SettingsScreen: React.FC = () => {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <TouchableOpacity style={styles.closeIcon} onPress={() => setShowLanguageModal(false)}>
-              <Icon name="close" size={24} color="#888" />
+              <Icon name="close" size={24} color={colors.textMuted} />
             </TouchableOpacity>
             <Text style={styles.modalTitle}>Select Language</Text>
             {['English', 'Filipino', 'Spanish', 'Chinese'].map((lang) => (
@@ -328,11 +391,11 @@ const SettingsScreen: React.FC = () => {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <TouchableOpacity style={styles.closeIcon} onPress={() => setShowNotifPreview(false)}>
-              <Icon name="close" size={24} color="#888" />
+              <Icon name="close" size={24} color={colors.textMuted} />
             </TouchableOpacity>
-            <Icon name="bell-ring-outline" size={40} color="#6366F1" style={{ alignSelf: 'center', marginBottom: 12 }} />
+            <Icon name="bell-ring-outline" size={40} color={colors.primary} style={{ alignSelf: 'center', marginBottom: 12 }} />
             <Text style={styles.modalTitle}>This is a test notification!</Text>
-            <Text style={{ color: '#555', textAlign: 'center', marginBottom: 20 }}>You can preview how notifications will look here.</Text>
+            <Text style={{ color: colors.textMuted, textAlign: 'center', marginBottom: 20 }}>You can preview how notifications will look here.</Text>
           </View>
         </View>
       </Modal>
@@ -342,10 +405,10 @@ const SettingsScreen: React.FC = () => {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <TouchableOpacity style={styles.closeIcon} onPress={() => setShowSecurityModal(false)}>
-              <Icon name="close" size={24} color="#888" />
+              <Icon name="close" size={24} color={colors.textMuted} />
             </TouchableOpacity>
             <Text style={styles.modalTitle}>Account Security</Text>
-            <Text style={{ color: '#555', marginBottom: 16 }}>2FA and recent activity features coming soon.</Text>
+            <Text style={{ color: colors.textMuted, marginBottom: 16 }}>2FA and recent activity features coming soon.</Text>
           </View>
         </View>
       </Modal>
@@ -355,10 +418,10 @@ const SettingsScreen: React.FC = () => {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <TouchableOpacity style={styles.closeIcon} onPress={() => setShowSupportModal(false)}>
-              <Icon name="close" size={24} color="#888" />
+              <Icon name="close" size={24} color={colors.textMuted} />
             </TouchableOpacity>
             <Text style={styles.modalTitle}>Help & Support</Text>
-            <Text style={{ color: '#555', marginBottom: 16 }}>For help, contact us at support@internquest.com or visit our FAQ.</Text>
+            <Text style={{ color: colors.textMuted, marginBottom: 16 }}>For help, contact us at support@internquest.com or visit our FAQ.</Text>
           </View>
         </View>
       </Modal>
@@ -368,11 +431,11 @@ const SettingsScreen: React.FC = () => {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <TouchableOpacity style={styles.closeIcon} onPress={() => setShowAboutModal(false)}>
-              <Icon name="close" size={24} color="#888" />
+              <Icon name="close" size={24} color={colors.textMuted} />
             </TouchableOpacity>
             <Text style={styles.modalTitle}>About InternQuest</Text>
-            <Text style={{ color: '#555', marginBottom: 8 }}>Version 1.3.1</Text>
-            <Text style={{ color: '#555', marginBottom: 8 }}>Privacy Policy | Terms of Service</Text>
+            <Text style={{ color: colors.textMuted, marginBottom: 8 }}>Version 1.3.1</Text>
+            <Text style={{ color: colors.textMuted, marginBottom: 8 }}>Privacy Policy | Terms of Service</Text>
           </View>
         </View>
       </Modal>
@@ -386,30 +449,28 @@ const styles = StyleSheet.create({
   container: {
     padding: 20,
     paddingTop: 40,
-    backgroundColor: '#f2f6ff',
+    backgroundColor: colors.bg,
   },
   header: {
     fontSize: 28,
     fontWeight: 'bold',
     marginBottom: 30,
-    color: '#111827',
+    color: colors.text,
     alignSelf: 'center',
   },
   card: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
+    backgroundColor: colors.surface,
+    borderRadius: radii.xl,
     padding: 20,
     marginBottom: 24,
-    shadowColor: '#000',
-    shadowOpacity: 0.07,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.card,
   },
   cardTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#333',
+    color: colors.text,
     marginBottom: 18,
   },
   settingRow: {
@@ -424,21 +485,21 @@ const styles = StyleSheet.create({
   },
   settingText: {
     fontSize: 16,
-    color: '#444',
+    color: colors.text,
   },
   logoutButton: {
     flexDirection: 'row',
     marginTop: 10,
-    backgroundColor: '#6366F1',
+    backgroundColor: colors.primary,
     paddingVertical: 14,
-    borderRadius: 8,
+    borderRadius: radii.md,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 30,
     elevation: 1,
   },
   logoutText: {
-    color: '#fff',
+    color: colors.onPrimary,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -446,20 +507,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#d9534f',
+    backgroundColor: colors.danger,
     paddingVertical: 14,
-    borderRadius: 8,
+    borderRadius: radii.md,
     marginTop: 10,
     marginBottom: 10,
   },
   deleteButtonText: {
-    color: '#fff',
+    color: colors.onPrimary,
     fontSize: 16,
     fontWeight: '600',
   },
   deleteButtonDisabled: {
     opacity: 0.7,
-    backgroundColor: '#999',
+    backgroundColor: colors.textSubtle,
   },
   profileRow: {
     flexDirection: 'row',
@@ -470,7 +531,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#eee',
+    backgroundColor: colors.surfaceAlt,
   },
   profilePicLargeWrap: {
     alignItems: 'center',
@@ -480,59 +541,62 @@ const styles = StyleSheet.create({
     width: 90,
     height: 90,
     borderRadius: 45,
-    backgroundColor: '#eee',
+    backgroundColor: colors.surfaceAlt,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
+    borderColor: colors.border,
+    borderRadius: radii.md,
     padding: 10,
     marginBottom: 14,
     fontSize: 16,
-    backgroundColor: '#fafafa',
+    backgroundColor: colors.surfaceAlt,
   },
   saveButton: {
-    backgroundColor: '#6366F1',
+    backgroundColor: colors.primary,
     paddingVertical: 12,
-    borderRadius: 8,
+    borderRadius: radii.md,
     alignItems: 'center',
     marginBottom: 10,
   },
   saveButtonText: {
-    color: '#fff',
+    color: colors.onPrimary,
     fontSize: 16,
     fontWeight: '600',
   },
   cancelButton: {
-    backgroundColor: '#eee',
+    backgroundColor: colors.surfaceAlt,
     paddingVertical: 12,
-    borderRadius: 8,
+    borderRadius: radii.md,
     alignItems: 'center',
     marginBottom: 10,
   },
   cancelButtonText: {
-    color: '#333',
+    color: colors.text,
     fontSize: 16,
     fontWeight: '600',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    backgroundColor: colors.overlay,
     justifyContent: 'center',
     alignItems: 'center',
   },
   modalContent: {
     width: '90%',
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     padding: 24,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.card,
   },
   modalTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     marginBottom: 18,
-    color: '#222',
+    color: colors.text,
   },
   languageOption: {
     paddingVertical: 12,
@@ -541,7 +605,7 @@ const styles = StyleSheet.create({
   },
   languageText: {
     fontSize: 16,
-    color: '#333',
+    color: colors.text,
   },
   closeIcon: {
     position: 'absolute',

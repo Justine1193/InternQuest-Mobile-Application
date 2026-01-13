@@ -74,18 +74,33 @@ service cloud.firestore {
     }
 
     // NOTIFICATIONS
-    // Authenticated users can read all notifications
-    // Only the owner or admin can create/update/delete
+    // Users can only read notifications intended for them (or admins).
+    // Only the owner or admin can create/update/delete.
     match /notifications/{notificationId} {
-      allow read: if request.auth != null;
+      allow read: if request.auth != null && (
+        // Recipient can read (supports both legacy and current schemas)
+        (resource.data.userId is string && resource.data.userId == request.auth.uid) ||
+        (resource.data.targetStudentId is string && resource.data.targetStudentId == request.auth.uid) ||
+        // Admins can read all
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'super_admin']
+      );
       allow create: if request.auth != null && (
         request.resource.data.userId == request.auth.uid ||
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'super_admin']
       );
       allow update, delete: if request.auth != null && (
         resource.data.userId == request.auth.uid ||
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'super_admin']
       );
+    }
+
+    // META
+    // App-wide lookup data (programs/fields/skills suggestions) used by SetupAccountScreen.
+    // Safe to read by anyone; writes restricted to admins.
+    match /meta/{docId} {
+      allow read: if true;
+      allow write: if request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'super_admin'];
     }
     
     // REQUIREMENTS - users can access their own, admin can access all
@@ -127,6 +142,30 @@ service cloud.firestore {
     match /fields/{fieldId} {
       allow read, create, update, delete: if request.auth != null &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // TEACHER SIGNATURES
+    // Stored by teacher uid: teacher_signatures/{teacherUid}
+    // Students need read access to their assigned adviser's signature,
+    // and also to coordinator/adviser signatures used in generated PDFs.
+    match /teacher_signatures/{teacherId} {
+      allow read: if request.auth != null && (
+        // owner can read their own signature
+        request.auth.uid == teacherId ||
+        // admins can read all signatures
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'super_admin'] ||
+        // student can read their assigned adviser's signature
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.adviserId == teacherId ||
+        // any signed-in user can read signatures for users who are admins/super_admins
+        get(/databases/$(database)/documents/users/$(teacherId)).data.role in ['admin', 'super_admin']
+      );
+
+      allow write: if request.auth != null && (
+        // owner can write their own signature
+        request.auth.uid == teacherId ||
+        // admins can write any signature (for back-office fixes)
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'super_admin']
+      );
     }
     
     // ADMIN QUERY ACCESS

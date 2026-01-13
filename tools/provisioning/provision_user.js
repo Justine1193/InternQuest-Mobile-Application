@@ -34,6 +34,7 @@ Required:
 Optional:
   --firstName <string>
   --lastName <string>
+  --contact <11-digit phone>           (Philippines format)
   --role <student|admin|super_admin>   (default: student)
   --projectId <firebase project id>    (only needed for some ADC setups)
   --dryRun                             (prints actions, does not write)
@@ -50,7 +51,7 @@ Examples:
 };
 
 const args = minimist(process.argv.slice(2), {
-  string: ['email', 'password', 'studentId', 'firstName', 'lastName', 'role', 'projectId'],
+  string: ['email', 'password', 'studentId', 'firstName', 'lastName', 'role', 'projectId', 'contact'],
   boolean: ['dryRun', 'updateIfExists', 'help'],
   alias: { h: 'help' },
   default: { role: 'student', dryRun: false, updateIfExists: false },
@@ -68,6 +69,7 @@ const firstName = (args.firstName || '').trim();
 const lastName = (args.lastName || '').trim();
 const role = String(args.role || 'student').trim();
 const projectId = (args.projectId || '').trim();
+const contact = (args.contact || '').trim();
 
 const allowedRoles = new Set(['student', 'admin', 'super_admin']);
 if (!allowedRoles.has(role)) {
@@ -150,17 +152,21 @@ const run = async () => {
     console.log('Set custom claims role:', role);
   }
 
-  await db.collection('users').doc(userRecord.uid).set(
-    {
-      email,
-      studentId,
-      firstName,
-      lastName,
-      role,
-      createdAt: FieldValue.serverTimestamp(),
-    },
-    { merge: true }
-  );
+  const firestoreData = {
+    email,
+    studentId,
+    firstName,
+    lastName,
+    role,
+    createdAt: FieldValue.serverTimestamp(),
+  };
+
+  // Add contact if provided
+  if (contact) {
+    firestoreData.contact = contact;
+  }
+
+  await db.collection('users').doc(userRecord.uid).set(firestoreData, { merge: true });
 
   console.log('Upserted Firestore doc: users/' + userRecord.uid);
   console.log('Done.');

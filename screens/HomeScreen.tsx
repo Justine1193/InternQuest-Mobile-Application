@@ -17,7 +17,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSavedInternships } from '../context/SavedInternshipsContext';
 import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
 import { firestore, db, auth } from '../firebase/config';
+import { onAuthStateChanged } from 'firebase/auth';
 import { ref, onValue } from 'firebase/database';
+import { accentPalette, colors, radii, shadows } from '../ui/theme';
 
 type MoaValidity = {
   years: number | null;
@@ -77,6 +79,8 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
           tags: data.skillsREq || [],
           website: data.companyWeb || '',
           email: data.companyEmail || '',
+          contactPersonName: data.contactPersonName || data.companyContactPerson || data.contactPerson || '',
+          contactPersonPhone: data.contactPersonPhone || data.companyContactPhone || data.contactPhone || data.phone || '',
           moa: data.moa || '',
           modeOfWork: Array.isArray(data.modeofwork) ? data.modeofwork[0] : data.modeofwork || '',
           latitude: data.latitude || 0,
@@ -118,63 +122,88 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
     };
     fetchUserFieldsAndSkills();
 
-    // subscribe to realtime MOA validity for all companies
-    let unsubListener: any = null;
-    try {
-      const companiesRef = ref(db, 'companies');
-      unsubListener = onValue(companiesRef, (snapshot: any) => {
-        const companies = snapshot.val() || {};
-        const processed: { [key: string]: MoaValidity } = {};
+    // Subscribe to realtime MOA validity for all companies.
+    // IMPORTANT: RTDB rules typically require auth; avoid subscribing while auth is still null.
+    let unsubListener: null | (() => void) = null;
+    let unsubAuth: null | (() => void) = null;
 
-        Object.entries(companies).forEach(([companyId, data]) => {
-          const rawYears = (data as any)?.moaValidityYears;
-          const parsedYears = typeof rawYears === 'number' ? rawYears : Number(rawYears);
-          const years = Number.isFinite(parsedYears) ? parsedYears : null;
-          const updatedAt = (data as any)?.updatedAt ?? null;
-          const companyName = typeof (data as any)?.companyName === 'string'
-            ? (data as any).companyName.trim().toLowerCase()
-            : null;
+    const startMoaSubscription = () => {
+      if (unsubListener) return;
+      try {
+        const companiesRef = ref(db, 'companies');
+        unsubListener = onValue(
+          companiesRef,
+          (snapshot: any) => {
+            const companies = snapshot.val() || {};
+            const processed: { [key: string]: MoaValidity } = {};
 
-          let expiresOn: string | null = null;
-          let expired = false;
-          if (updatedAt && years !== null) {
-            const updatedDate = new Date(updatedAt);
-            if (!Number.isNaN(updatedDate.getTime())) {
-              const expiryDate = new Date(updatedDate);
-              expiryDate.setFullYear(expiryDate.getFullYear() + years);
-              expiresOn = expiryDate.toISOString();
-              expired = expiryDate.getTime() < Date.now();
-            }
+            Object.entries(companies).forEach(([companyId, data]) => {
+              const rawYears = (data as any)?.moaValidityYears;
+              const parsedYears = typeof rawYears === 'number' ? rawYears : Number(rawYears);
+              const years = Number.isFinite(parsedYears) ? parsedYears : null;
+              const updatedAt = (data as any)?.updatedAt ?? null;
+              const companyName = typeof (data as any)?.companyName === 'string'
+                ? (data as any).companyName.trim().toLowerCase()
+                : null;
+
+              let expiresOn: string | null = null;
+              let expired = false;
+              if (updatedAt && years !== null) {
+                const updatedDate = new Date(updatedAt);
+                if (!Number.isNaN(updatedDate.getTime())) {
+                  const expiryDate = new Date(updatedDate);
+                  expiryDate.setFullYear(expiryDate.getFullYear() + years);
+                  expiresOn = expiryDate.toISOString();
+                  expired = expiryDate.getTime() < Date.now();
+                }
+              }
+
+              processed[companyId] = {
+                years,
+                updatedAt,
+                expiresOn,
+                expired,
+              };
+
+              if (companyName) {
+                processed[companyName] = {
+                  years,
+                  updatedAt,
+                  expiresOn,
+                  expired,
+                };
+              }
+            });
+
+            setMoaValidity(processed);
+          },
+          (error: any) => {
+            console.error('Failed to read MOA validity from Realtime DB', error);
           }
+        );
+      } catch (e) {
+        console.warn('Realtime DB MOA subscription skipped:', e);
+      }
+    };
 
-          processed[companyId] = {
-            years,
-            updatedAt,
-            expiresOn,
-            expired,
-          };
-
-          if (companyName) {
-            processed[companyName] = {
-              years,
-              updatedAt,
-              expiresOn,
-              expired,
-            };
+    if (auth.currentUser) {
+      startMoaSubscription();
+    } else {
+      unsubAuth = onAuthStateChanged(auth, (user) => {
+        if (user) {
+          startMoaSubscription();
+          if (unsubAuth) {
+            unsubAuth();
+            unsubAuth = null;
           }
-        });
-
-        setMoaValidity(processed);
-      }, (error: any) => {
-        console.error('Failed to read MOA validity from Realtime DB', error);
+        }
       });
-    } catch (e) {
-      console.warn('Realtime DB MOA subscription skipped:', e);
     }
 
     return () => {
       try {
         if (unsubListener) unsubListener();
+        if (unsubAuth) unsubAuth();
       } catch (e) { }
     };
   }, []);
@@ -364,9 +393,8 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
 
   const getCompanyLogo = (companyName: string) => {
     const firstLetter = companyName.charAt(0).toUpperCase();
-    const colors = ['#2196F3', '#4CAF50', '#FF9800', '#9C27B0', '#F44336', '#00BCD4'];
-    const colorIndex = companyName.length % colors.length;
-    return { letter: firstLetter, color: colors[colorIndex] };
+    const colorIndex = companyName.length % accentPalette.length;
+    return { letter: firstLetter, color: accentPalette[colorIndex] };
   };
 
   const formatMoaValidity = (post: Post) => {
@@ -410,13 +438,13 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
         {/* Search Bar + Filter Icon Row */}
         <View style={styles.searchRow}>
           <View style={styles.searchContainer}>
-            <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
+            <Ionicons name="search" size={20} color={colors.textMuted} style={styles.searchIcon} />
             <TextInput
               style={styles.searchInput}
               placeholder="Search companies"
               value={searchText}
               onChangeText={setSearchText}
-              placeholderTextColor="#999"
+              placeholderTextColor={colors.textSubtle}
               autoCapitalize="none"
               autoCorrect={false}
               clearButtonMode="while-editing"
@@ -424,7 +452,7 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
             />
             {searchText.length > 0 && (
               <TouchableOpacity onPress={() => setSearchText('')} style={styles.clearButton}>
-                <Ionicons name="close-circle" size={20} color="#999" />
+                <Ionicons name="close-circle" size={20} color={colors.textSubtle} />
               </TouchableOpacity>
             )}
           </View>
@@ -432,7 +460,7 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
             style={styles.filterButtonNext}
             onPress={() => setShowAdvancedFilters(true)}
           >
-            <Ionicons name="filter" size={22} color="#333" />
+            <Ionicons name="filter" size={22} color={colors.text} />
           </TouchableOpacity>
         </View>
 
@@ -447,7 +475,7 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
               <Text style={[styles.filterPillText, activeFilter === label && styles.activeFilterText]}>
                 {label}
               </Text>
-              {activeFilter === label && <Ionicons name="checkmark" size={16} color="#fff" style={{ marginLeft: 4 }} />}
+              {activeFilter === label && <Ionicons name="checkmark" size={16} color={colors.onPrimary} style={{ marginLeft: 4 }} />}
             </TouchableOpacity>
           ))}
         </View>
@@ -462,7 +490,7 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
                   <View style={styles.activeFilterChip}>
                     <Text style={styles.activeFilterChipText}>{selectedSkill}</Text>
                     <TouchableOpacity onPress={() => setSelectedSkill('All Skills')}>
-                      <Ionicons name="close" size={14} color="#fff" />
+                      <Ionicons name="close" size={14} color={colors.onPrimary} />
                     </TouchableOpacity>
                   </View>
                 )}
@@ -470,7 +498,7 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
                   <View style={styles.activeFilterChip}>
                     <Text style={styles.activeFilterChipText}>{selectedIndustry}</Text>
                     <TouchableOpacity onPress={() => setSelectedIndustry('All Industries')}>
-                      <Ionicons name="close" size={14} color="#fff" />
+                      <Ionicons name="close" size={14} color={colors.onPrimary} />
                     </TouchableOpacity>
                   </View>
                 )}
@@ -478,7 +506,7 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
                   <View style={styles.activeFilterChip}>
                     <Text style={styles.activeFilterChipText}>{selectedWorkMode}</Text>
                     <TouchableOpacity onPress={() => setSelectedWorkMode('All Modes')}>
-                      <Ionicons name="close" size={14} color="#fff" />
+                      <Ionicons name="close" size={14} color={colors.onPrimary} />
                     </TouchableOpacity>
                   </View>
                 )}
@@ -494,7 +522,7 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
         {/* Company Cards */}
         {filteredPosts.length === 0 && searchText.trim() !== '' ? (
           <View style={styles.noResultsContainer}>
-            <Ionicons name="search" size={48} color="#ccc" />
+            <Ionicons name="search" size={48} color={colors.textSubtle} />
             <Text style={styles.noResultsText}>No internships found</Text>
             <Text style={styles.noResultsSubtext}>
               Try adjusting your search terms or filters
@@ -516,11 +544,11 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
                     <View style={styles.companyDetails}>
                       <Text style={styles.companyName}>{post.company}</Text>
                       <Text style={styles.companyLocation}>
-                        <Ionicons name="location" size={14} color="#666" />
+                        <Ionicons name="location" size={14} color={colors.textMuted} />
                         {' '}{typeof post.location === 'string' ? post.location : 'Location not specified'}
                       </Text>
                       <Text style={styles.companyIndustry}>
-                        <Ionicons name="briefcase" size={14} color="#666" />
+                        <Ionicons name="briefcase" size={14} color={colors.textMuted} />
                         {' '}{typeof post.industry === 'string' ? post.industry : 'Industry not specified'}
                       </Text>
                       {typeof post.id === 'string' && (
@@ -537,7 +565,7 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
                     <Ionicons
                       name={savedInternships.some(saved => saved.id === post.id) ? 'bookmark' : 'bookmark-outline'}
                       size={20}
-                      color="#007aff"
+                      color={colors.primary}
                     />
                   </TouchableOpacity>
                 </View>
@@ -589,7 +617,7 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Advanced Filters</Text>
               <TouchableOpacity onPress={() => setShowAdvancedFilters(false)}>
-                <Ionicons name="close" size={24} color="#333" />
+                <Ionicons name="close" size={24} color={colors.text} />
               </TouchableOpacity>
             </View>
 
@@ -694,7 +722,7 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
         style={styles.ojtTrackerButton}
         onPress={() => navigation.navigate('OJTTracker', {})}
       >
-        <Ionicons name="calendar" size={24} color="#fff" />
+        <Ionicons name="calendar" size={24} color={colors.onPrimary} />
       </TouchableOpacity>
 
       <BottomNavbar navigation={navigation} currentRoute="Home" />
@@ -705,7 +733,7 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f2f6ff',
+    backgroundColor: colors.bg,
   },
   header: {
     flexDirection: 'row',
@@ -714,18 +742,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 50,
     paddingBottom: 16,
-    backgroundColor: '#6366F1',
+    backgroundColor: colors.primary,
     borderBottomWidth: 0,
   },
   headerTitle: {
     fontSize: 24,
     fontWeight: '800',
-    color: '#fff',
+    color: colors.onPrimary,
   },
   filterButton: {
     padding: 8,
-    borderRadius: 8,
-    backgroundColor: '#f0f0f0',
+    borderRadius: radii.md,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   scrollContent: {
     padding: 16,
@@ -742,16 +772,14 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 12,
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
     paddingHorizontal: 12,
     marginRight: 8,
     height: 44,
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.card,
   },
   searchIcon: {
     marginRight: 12,
@@ -759,7 +787,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 16,
-    color: '#333',
+    color: colors.text,
     paddingVertical: 8,
     backgroundColor: 'transparent',
   },
@@ -776,28 +804,26 @@ const styles = StyleSheet.create({
   noResultsText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#666',
+    color: colors.textMuted,
     marginTop: 16,
     marginBottom: 8,
   },
   noResultsSubtext: {
     fontSize: 14,
-    color: '#999',
+    color: colors.textSubtle,
     textAlign: 'center',
   },
   filterButtonNext: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
     padding: 10,
     justifyContent: 'center',
     alignItems: 'center',
     height: 44,
     width: 44,
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 1,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.card,
   },
   topFilters: {
     flexDirection: 'row',
@@ -806,30 +832,27 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   filterPill: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 20,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 1,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   activeFilter: {
-    backgroundColor: '#007aff',
-    borderColor: '#007aff',
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   filterPillText: {
     fontSize: 14,
-    color: '#333',
+    color: colors.text,
     fontWeight: '500',
   },
   activeFilterText: {
-    color: '#fff',
+    color: colors.onPrimary,
   },
   activeFiltersContainer: {
     marginBottom: 16,
@@ -837,7 +860,7 @@ const styles = StyleSheet.create({
   activeFiltersLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#333',
+    color: colors.text,
     marginBottom: 8,
   },
   activeFiltersList: {
@@ -846,7 +869,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   activeFilterChip: {
-    backgroundColor: '#007aff',
+    backgroundColor: colors.primary,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
@@ -855,27 +878,25 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   activeFilterChipText: {
-    color: '#fff',
+    color: colors.onPrimary,
     fontSize: 12,
     fontWeight: '500',
   },
   resultsCount: {
     fontSize: 14,
-    color: '#666',
+    color: colors.textMuted,
     marginBottom: 16,
     fontWeight: '500',
   },
   card: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderRadius: 18,
     padding: 18,
     paddingLeft: 18,
     marginBottom: 16,
-    shadowColor: '#000',
-    shadowOpacity: 0.09,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 6,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.card,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -902,21 +923,21 @@ const styles = StyleSheet.create({
   companyName: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#111827',
+    color: colors.text,
     marginBottom: 6,
   },
   companyLocation: {
     fontSize: 13,
-    color: '#6b7280',
+    color: colors.textMuted,
     marginBottom: 2,
   },
   companyIndustry: {
     fontSize: 13,
-    color: '#6b7280',
+    color: colors.textMuted,
   },
   moaRemaining: {
     fontSize: 12,
-    color: '#ff5722',
+    color: colors.warning,
     marginTop: 6,
     fontWeight: '700',
   },
@@ -928,11 +949,11 @@ const styles = StyleSheet.create({
   },
   description: {
     fontSize: 15,
-    color: '#374151',
+    color: colors.text,
     lineHeight: 22,
   },
   readMore: {
-    color: '#007aff',
+    color: colors.primary,
     fontSize: 14,
     fontWeight: '600',
     marginTop: 8,
@@ -949,18 +970,18 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   tag: {
-    backgroundColor: '#eef2ff',
+    backgroundColor: colors.primarySoft,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
   },
   tagText: {
-    color: '#4338ca',
+    color: colors.primary,
     fontSize: 12,
     fontWeight: '500',
   },
   moreTagsText: {
-    color: '#666',
+    color: colors.textMuted,
     fontSize: 12,
     fontStyle: 'italic',
   },
@@ -969,31 +990,29 @@ const styles = StyleSheet.create({
   },
   workMode: {
     fontSize: 12,
-    color: '#10b981',
+    color: colors.success,
     fontWeight: '700',
     marginBottom: 4,
   },
   timeStamp: {
     fontSize: 11,
-    color: '#999',
+    color: colors.textSubtle,
   },
   tagDropdown: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
     padding: 12,
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     marginBottom: 16,
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.card,
     gap: 8,
   },
   tagDropdownTag: {
-    backgroundColor: '#f0f0f0',
+    backgroundColor: colors.surfaceAlt,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
@@ -1002,11 +1021,11 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: colors.overlay,
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     maxHeight: '80%',
@@ -1017,12 +1036,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: colors.border,
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
+    color: colors.text,
   },
   modalScroll: {
     padding: 20,
@@ -1033,7 +1052,7 @@ const styles = StyleSheet.create({
   filterSectionTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: colors.text,
     marginBottom: 12,
   },
   filterOptions: {
@@ -1045,34 +1064,34 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: colors.surfaceAlt,
   },
   selectedFilterOption: {
-    backgroundColor: '#007aff',
+    backgroundColor: colors.primary,
   },
   filterOptionText: {
     fontSize: 14,
-    color: '#333',
+    color: colors.text,
   },
   selectedFilterOptionText: {
-    color: '#fff',
+    color: colors.onPrimary,
   },
   modalFooter: {
     flexDirection: 'row',
     padding: 20,
     borderTopWidth: 1,
-    borderTopColor: '#eee',
+    borderTopColor: colors.border,
     gap: 12,
   },
   clearFiltersButton: {
     flex: 1,
     paddingVertical: 12,
     borderRadius: 8,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
   },
   clearFiltersText: {
-    color: '#666',
+    color: colors.textMuted,
     fontSize: 14,
     fontWeight: '500',
   },
@@ -1080,11 +1099,11 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 12,
     borderRadius: 8,
-    backgroundColor: '#007aff',
+    backgroundColor: colors.primary,
     alignItems: 'center',
   },
   applyFiltersText: {
-    color: '#fff',
+    color: colors.onPrimary,
     fontSize: 14,
     fontWeight: '600',
   },
@@ -1092,20 +1111,13 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 20,
     bottom: 80,
-    backgroundColor: '#007aff',
+    backgroundColor: colors.primary,
     width: 56,
     height: 56,
     borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
+    ...shadows.card,
   },
 });
 

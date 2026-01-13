@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Image, StyleSheet, Text, ActivityIndicator } from 'react-native';
+import { colors, radii, spacing } from '../ui/theme';
 
 type Props = {
   userEmail?: string | null;
@@ -14,7 +15,7 @@ const LaunchScreen: React.FC<Props> = ({ userEmail }) => {
         style={styles.logo}
         resizeMode="contain"
       />
-      <ActivityIndicator size="large" color="#6366F1" style={styles.loader} />
+      <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />
       {userEmail ? (
         <View style={styles.statusContainer}>
           <Text style={styles.statusText}>Auto-logging in...</Text>
@@ -32,10 +33,10 @@ export default LaunchScreen;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f2f6ff',
+    backgroundColor: colors.bg,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: spacing.xl,
   },
   headerStripe: {
     position: 'absolute',
@@ -43,16 +44,16 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 140,
-    backgroundColor: '#6366F1',
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
+    backgroundColor: colors.primary,
+    borderBottomLeftRadius: radii.xl,
+    borderBottomRightRadius: radii.xl,
     zIndex: -1,
   },
   logo: {
     width: 140,
     height: 140,
     marginBottom: 20,
-    borderRadius: 18,
+    borderRadius: radii.lg,
     overflow: 'hidden',
   },
   loader: {
@@ -64,13 +65,13 @@ const styles = StyleSheet.create({
   },
   statusText: {
     fontSize: 16,
-    color: '#374151',
+    color: colors.textMuted,
     marginTop: 12,
     fontWeight: '600',
   },
   emailText: {
     fontSize: 14,
-    color: '#6366F1',
+    color: colors.primary,
     marginTop: 8,
     fontWeight: '700',
   },

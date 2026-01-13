@@ -1,3 +1,4 @@
+import { colors, radii, shadows } from '../ui/theme';
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
@@ -18,7 +19,7 @@ import {
 import RNPickerSelect from 'react-native-picker-select';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../App';
-import { doc, setDoc, serverTimestamp, collection, query, where, getDocs, updateDoc, getDoc, orderBy, startAt, endAt, addDoc } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, collection, query, where, getDocs, updateDoc, getDoc, orderBy, startAt, endAt, addDoc, deleteDoc } from 'firebase/firestore';
 import { auth, firestore } from '../firebase/config';
 import { updatePassword } from "firebase/auth";
 import { Portal } from 'react-native-portalize';
@@ -49,8 +50,11 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
   onSetupComplete,
 }) => {
   // --- State: Personal Info ---
+  const [studentId, setStudentId] = useState('');
+  const [email, setEmail] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+  const [contact, setContact] = useState('');
   const [gender, setGender] = useState('');
   const [program, setProgram] = useState('');
   const [fields, setFields] = useState<string[]>([]);
@@ -85,6 +89,10 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
   const [programLoading, setProgramLoading] = useState(false);
   const [fieldLoading, setFieldLoading] = useState(false);
   const [skillLoading, setSkillLoading] = useState(false);
+
+  // If the admin created the user doc under a different document ID than auth.uid,
+  // we remember that legacy doc id so we can migrate it and avoid duplicates.
+  const [legacyUserDocId, setLegacyUserDocId] = useState<string | null>(null);
 
   // --- Refs ---
   const scrollViewRef = useRef<ScrollView>(null);
@@ -229,10 +237,38 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
   useEffect(() => {
     const fetchMeta = async () => {
       try {
-        const programDoc = await getDoc(doc(firestore, 'meta', 'programs'));
-        if (programDoc.exists()) setProgramList(programDoc.data().list || []);
+        console.log('📚 Fetching programs from meta/programs document...');
+        // Fetch programs from the 'meta/programs' document
+        const programsDoc = await getDoc(doc(firestore, 'meta', 'programs'));
+        const programs: string[] = [];
+        
+        if (programsDoc.exists()) {
+          const data = programsDoc.data();
+          console.log('📚 Programs document data:', data);
+          
+          // Extract all program names from the nested structure
+          Object.values(data).forEach((college: any) => {
+            if (typeof college === 'object' && college !== null) {
+              Object.values(college).forEach((program: any) => {
+                if (typeof program === 'string') {
+                  programs.push(program);
+                }
+              });
+            }
+          });
+        }
+        
+        console.log('📚 Loaded programs:', programs);
+        setProgramList(programs);
+
+        console.log('📚 Fetching fields...');
         const fieldDoc = await getDoc(doc(firestore, 'meta', 'field'));
-        if (fieldDoc.exists()) setFieldList(fieldDoc.data().list || []);
+        if (fieldDoc.exists()) {
+          console.log('📚 Field data:', fieldDoc.data());
+          setFieldList(fieldDoc.data().list || []);
+        } else {
+          console.log('⚠️ No field document found');
+        }
         // Fetch skills for dropdown
         const skillsDoc = await getDoc(doc(firestore, 'meta', 'suggestionSkills'));
         if (skillsDoc.exists()) {
@@ -254,21 +290,93 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
     fetchMeta();
   }, []);
 
-  // --- Auth check ---
+  // --- Auth check and fetch user data ---
   useEffect(() => {
-    if (!auth.currentUser) {
-      Alert.alert(
-        'Authentication Required',
-        'Please sign in to continue.',
-        [
-          {
-            text: 'OK',
-            onPress: () => navigation.replace('SignIn')
+    const fetchUserData = async () => {
+      console.log('🔄 useEffect running, currentUser:', auth.currentUser?.uid);
+      console.log('🔄 currentUser email:', auth.currentUser?.email);
+      if (!auth.currentUser) {
+        console.log('⚠️ No current user');
+        return; // Don't show alert here, just skip
+      }
+
+      // Fetch existing user data from Firestore
+      try {
+        const uid = auth.currentUser.uid;
+        const userEmail = auth.currentUser.email;
+        console.log('📋 Fetching user data for UID:', uid);
+        console.log('📋 Email:', userEmail);
+        
+        // Set email from auth
+        if (userEmail) setEmail(userEmail);
+        
+        const userDocRef = doc(firestore, 'users', uid);
+        console.log('📋 User doc ref path:', userDocRef.path);
+        
+        let userDoc: any = await getDoc(userDocRef);
+        
+        // If not found, try searching by email
+        if (!userDoc.exists() && userEmail) {
+          console.log('⚠️ UID search failed, trying email search:', userEmail);
+          const userQuery = query(collection(firestore, 'users'), where('email', '==', userEmail));
+          const querySnapshot = await getDocs(userQuery);
+          if (!querySnapshot.empty) {
+            console.log('✅ Found user by email');
+            userDoc = querySnapshot.docs[0];
+            if (userDoc.id && userDoc.id !== uid) {
+              console.log('🧩 Found legacy user doc id (different from auth.uid):', userDoc.id);
+              setLegacyUserDocId(userDoc.id);
+            }
           }
-        ]
-      );
-    }
-  }, []);
+        }
+        
+        if (userDoc.exists()) {
+          const data = userDoc.data();
+          console.log('📋 User data found:', JSON.stringify(data, null, 2));
+          if (data.studentId) {
+            console.log('✅ Setting studentId:', data.studentId);
+            setStudentId(data.studentId);
+          }
+          if (data.firstName) {
+            console.log('✅ Setting firstName:', data.firstName);
+            setFirstName(data.firstName);
+          } else {
+            console.log('⚠️ No firstName in data');
+          }
+          if (data.lastName) {
+            console.log('✅ Setting lastName:', data.lastName);
+            setLastName(data.lastName);
+          } else {
+            console.log('⚠️ No lastName in data');
+          }
+          if (data.contact || data.contactNumber || data.phoneNumber || data.phone) {
+            const contactValue = data.contact || data.contactNumber || data.phoneNumber || data.phone;
+            console.log('✅ Setting contact:', contactValue);
+            setContact(contactValue);
+          }
+          // Optionally pre-populate other fields if they exist
+          if (data.gender) setGender(data.gender);
+          if (data.program) {
+            setProgram(data.program);
+            setProgramSearch(data.program);
+          }
+          if (data.field) {
+            setField(data.field);
+            setFieldSearch(data.field);
+          }
+          if (data.locationPreference) setLocationPreference(data.locationPreference);
+          if (data.skills && Array.isArray(data.skills)) setSkills(data.skills);
+        } else {
+          console.log('⚠️ User document does not exist at path:', userDocRef.path);
+          console.log('⚠️ Tried both UID and email search - profile not found');
+        }
+      } catch (error) {
+        console.error('Error fetching user data:', error);
+      }
+    };
+
+    fetchUserData();
+  }, [auth.currentUser?.uid]);
 
   // --- Checkbox toggle ---
   const selectLocationPreference = (type: 'remote' | 'onsite' | 'hybrid') => {
@@ -286,6 +394,42 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
     try {
       const userId = auth.currentUser.uid;
       const userRef = doc(firestore, 'users', userId);
+
+      // If the account was provisioned by admin under a different Firestore doc ID,
+      // migrate that legacy doc into the UID doc to prevent duplicate rows in admin lists.
+      if (legacyUserDocId && legacyUserDocId !== userId) {
+        try {
+          console.log('🧩 Migrating legacy user doc to UID doc:', { legacyUserDocId, userId });
+          const legacyRef = doc(firestore, 'users', legacyUserDocId);
+          const legacySnap = await getDoc(legacyRef);
+          if (legacySnap.exists()) {
+            const legacyData: any = legacySnap.data();
+            // Copy everything from legacy into UID doc first (keeps createdAt, studentId, etc.)
+            await setDoc(userRef, {
+              ...legacyData,
+              migratedFromUserDocId: legacyUserDocId,
+              migratedToAuthUidAt: serverTimestamp(),
+            }, { merge: true });
+          }
+
+          // Best-effort cleanup: delete the legacy doc so admin won't see duplicates.
+          try {
+            await deleteDoc(doc(firestore, 'users', legacyUserDocId));
+            console.log('🧹 Deleted legacy user doc:', legacyUserDocId);
+            setLegacyUserDocId(null);
+          } catch (delErr) {
+            console.warn('⚠️ Could not delete legacy user doc; archiving instead', delErr);
+            await setDoc(doc(firestore, 'users', legacyUserDocId), {
+              archived: true,
+              archivedReason: 'migrated_to_uid_doc',
+              migratedToUserId: userId,
+              migratedAt: serverTimestamp(),
+            }, { merge: true });
+          }
+        } catch (migErr) {
+          console.warn('⚠️ Legacy user doc migration skipped/failed:', migErr);
+        }
+      }
       // Get the selected program and field details
       const selectedProgram = programList.find(p => p === program);
       const programCategory = programCategories.find(cat =>
@@ -297,10 +441,12 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
         id: program,
         name: selectedProgram || '',
       };
-      const userData = {
+      const userData: any = {
         // Basic Information
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
+        // Don't overwrite admin-set names with blank values.
+        ...(firstName.trim() ? { firstName: firstName.trim() } : {}),
+        ...(lastName.trim() ? { lastName: lastName.trim() } : {}),
+        contact: contact.trim(),
         gender,
         email: auth.currentUser.email,
 
@@ -325,7 +471,7 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
         },
 
         // Timestamps
-        createdAt: serverTimestamp(),
+        // Note: createdAt is NOT updated - it preserves the original timestamp from when admin created the account
         updatedAt: serverTimestamp(),
 
         // Account Status
@@ -383,8 +529,7 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
   // --- Validation ---
   const validateForm = () => {
     const errors: string[] = [];
-    if (!firstName.trim()) errors.push('First name is required');
-    if (!lastName.trim()) errors.push('Last name is required');
+    // firstName and lastName are pre-populated by admin, so they're optional here
     if (!gender) errors.push('Gender is required');
     if (!program) errors.push('Program is required');
     if (!field) errors.push('Field is required');
@@ -416,7 +561,7 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
   if (isLoading) {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color="#007aff" />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -437,24 +582,51 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
         >
           <Text style={styles.title}>Set up Your Profile</Text>
 
+          <Text style={styles.label}>Student ID</Text>
+          <TextInput
+            style={[styles.input, styles.inputReadOnly]}
+            placeholder="Student ID"
+            value={studentId}
+            editable={false}
+          />
+
+          <Text style={styles.label}>Email</Text>
+          <TextInput
+            style={[styles.input, styles.inputReadOnly]}
+            placeholder="Email"
+            value={email}
+            editable={false}
+          />
+
           <Text style={styles.label}>First Name</Text>
           <TextInput
             ref={firstNameRef}
-            style={styles.input}
+            style={[styles.input, styles.inputReadOnly]}
             placeholder="Enter Your First Name"
             value={firstName}
-            onChangeText={setFirstName}
-            onFocus={() => scrollToInput(firstNameRef)}
+            editable={false}
           />
 
           <Text style={styles.label}>Last Name</Text>
           <TextInput
             ref={lastNameRef}
-            style={styles.input}
+            style={[styles.input, styles.inputReadOnly]}
             placeholder="Enter Your Last Name"
             value={lastName}
-            onChangeText={setLastName}
-            onFocus={() => scrollToInput(lastNameRef)}
+            editable={false}
+          />
+
+          <Text style={styles.label}>Contact Number</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Enter Your Contact Number"
+            value={contact}
+            onChangeText={(text) => {
+              const digitsOnly = String(text || '').replace(/\D+/g, '').slice(0, 11);
+              setContact(digitsOnly);
+            }}
+            keyboardType="phone-pad"
+            maxLength={11}
           />
 
           <Text style={styles.label}>Gender</Text>
@@ -487,7 +659,7 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
                 showProgramOptions && styles.inputFocused
               ]}
               placeholder="Search your program"
-              placeholderTextColor="#999"
+              placeholderTextColor={colors.textSubtle}
               value={programSearch}
               onChangeText={text => {
                 setProgramSearch(text);
@@ -581,7 +753,7 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
                 showFieldOptions && styles.inputFocused
               ]}
               placeholder="Search your preferred field"
-              placeholderTextColor="#999"
+              placeholderTextColor={colors.textSubtle}
               value={fieldSearch}
               onChangeText={text => {
                 setFieldSearch(text);
@@ -673,7 +845,7 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
             )}
           </View>
 
-          <Text style={styles.label}>Location Preference</Text>
+          <Text style={styles.label}>Mode of Work</Text>
           <View style={styles.checkboxContainer}>
             {['remote', 'onsite', 'hybrid'].map((type) => (
               <TouchableOpacity
@@ -765,11 +937,11 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
           <TouchableOpacity
             style={[
               styles.button,
-              (!firstName || !lastName || !gender || !program || !field || skills.length === 0) &&
+              (!gender || !program || !field || skills.length === 0) &&
               styles.buttonDisabled
             ]}
             onPress={finishSetup}
-            disabled={!firstName || !lastName || !gender || !program || !field || skills.length === 0}
+            disabled={!gender || !program || !field || skills.length === 0}
           >
             <Text style={styles.buttonText}>Complete Setup</Text>
           </TouchableOpacity>
@@ -782,49 +954,56 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F4F5F9',
+    backgroundColor: colors.bg,
     paddingTop: 40,
     paddingHorizontal: 20,
   },
   header: {
     fontSize: 20,
     fontWeight: '500',
-    color: '#4A4A4A',
+    color: colors.text,
     marginBottom: 10,
   },
   card: {
-    backgroundColor: '#fff',
-    borderRadius: 10,
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
     padding: 20,
-    elevation: 3,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.card,
     paddingBottom: 30,
   },
   title: {
     fontWeight: 'bold',
     fontSize: 16,
     marginBottom: 15,
-    color: '#000',
+    color: colors.text,
   },
   label: {
     fontSize: 14,
     marginTop: 10,
     marginBottom: 5,
     fontWeight: '500',
+    color: colors.text,
   },
   input: {
     fontSize: 14,
     paddingVertical: 12,
     paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
-    borderRadius: 8,
-    backgroundColor: '#F8F9FA',
-    color: '#333',
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    backgroundColor: colors.surfaceAlt,
+    color: colors.text,
     marginBottom: 10,
   },
   inputFocused: {
-    borderColor: '#00A8E8',
-    backgroundColor: '#FFFFFF',
+    borderColor: colors.primary,
+    backgroundColor: colors.surface,
+  },
+  inputReadOnly: {
+    backgroundColor: colors.surfaceAlt,
+    color: colors.text,
   },
   genderContainer: {
     flexDirection: 'column',
@@ -840,15 +1019,15 @@ const styles = StyleSheet.create({
     width: 16,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#555',
+    borderColor: colors.textMuted,
     marginRight: 10,
   },
   selectedRadio: {
-    backgroundColor: '#00A8E8',
+    backgroundColor: colors.primary,
   },
   genderLabel: {
     fontSize: 14,
-    color: '#000',
+    color: colors.text,
   },
   checkboxContainer: {
     marginTop: 10,
@@ -864,14 +1043,15 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 3,
     borderWidth: 1,
-    borderColor: '#555',
+    borderColor: colors.textMuted,
     marginRight: 10,
   },
   checkedBox: {
-    backgroundColor: '#00A8E8',
+    backgroundColor: colors.primary,
   },
   checkboxLabel: {
     fontSize: 14,
+    color: colors.text,
   },
   skillPillContainer: {
     flexDirection: 'row',
@@ -880,7 +1060,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   skillPillSelected: {
-    backgroundColor: '#00A8E8',
+    backgroundColor: colors.primary,
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: 20,
@@ -889,7 +1069,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   skillPillUnselected: {
-    backgroundColor: '#EAEAEA',
+    backgroundColor: colors.surfaceAlt,
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: 20,
@@ -898,28 +1078,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   skillText: {
-    color: '#fff',
+    color: colors.onPrimary,
     fontSize: 13,
     fontWeight: '500',
   },
   skillTextUnselected: {
-    color: '#333',
+    color: colors.text,
     fontSize: 13,
     fontWeight: '500',
   },
   button: {
-    backgroundColor: '#00A8E8',
+    backgroundColor: colors.primary,
     paddingVertical: 10,
     alignItems: 'center',
-    borderRadius: 5,
+    borderRadius: radii.sm,
     marginTop: 10,
   },
   buttonText: {
-    color: '#fff',
+    color: colors.onPrimary,
     fontWeight: '600',
   },
   buttonDisabled: {
-    backgroundColor: '#ccc',
+    backgroundColor: colors.textSubtle,
     opacity: 0.7,
   },
   inputContainer: {
@@ -929,37 +1109,30 @@ const styles = StyleSheet.create({
   },
   dropdownContainer: {
     position: 'absolute',
-    backgroundColor: 'white',
+    backgroundColor: colors.surface,
     borderRadius: 8,
     padding: 8,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
+    ...shadows.card,
     zIndex: 1000,
     maxHeight: 220,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
+    borderColor: colors.border,
   },
   dropdownItem: {
     padding: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: colors.border,
   },
   dropdownItemSelected: {
-    backgroundColor: '#F0F8FF',
+    backgroundColor: colors.infoSoft,
   },
   dropdownItemText: {
     fontSize: 14,
-    color: '#333',
+    color: colors.text,
   },
   noResultsText: {
     padding: 12,
-    color: '#888',
+    color: colors.textMuted,
     fontSize: 14,
     textAlign: 'center',
     fontStyle: 'italic',
@@ -969,7 +1142,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   removeSkillText: {
-    color: '#fff',
+    color: colors.onPrimary,
     fontSize: 16,
     fontWeight: '500',
     marginLeft: 4,
@@ -982,10 +1155,10 @@ const pickerSelectStyles = {
     paddingVertical: 10,
     paddingHorizontal: 10,
     borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 5,
-    backgroundColor: '#F4F5F9',
-    color: 'black',
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    backgroundColor: colors.surfaceAlt,
+    color: colors.text,
     paddingRight: 30,
     marginBottom: 10,
   },
@@ -994,19 +1167,19 @@ const pickerSelectStyles = {
     paddingHorizontal: 10,
     paddingVertical: 10,
     borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 5,
-    backgroundColor: '#F4F5F9',
-    color: 'black',
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    backgroundColor: colors.surfaceAlt,
+    color: colors.text,
     paddingRight: 30,
     marginBottom: 10,
   },
   placeholder: {
-    color: '#666',
+    color: colors.textMuted,
   },
   disabled: {
-    color: '#999',
-    backgroundColor: '#f5f5f5',
+    color: colors.textSubtle,
+    backgroundColor: colors.surfaceAlt,
   },
 };
 

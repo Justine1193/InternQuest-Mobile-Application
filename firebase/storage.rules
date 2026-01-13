@@ -35,6 +35,12 @@ service firebase.storage {
         firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
+    // Generated documents (e.g., OJT Completion Checklist) are stored per-user.
+    // Users can read/write their own generated PDFs.
+    match /generatedDocuments/{userId}/{allPaths=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
     // Some older / alternative folders live under helpDesk/... (e.g. helpDesk/requirement,
     // helpDesk/tutorial). Allow authenticated reads for those folders too so users can
     // view images and download files placed there, while keeping writes admin-only.

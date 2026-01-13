@@ -18,6 +18,7 @@ declare module 'firebase/firestore' {
   export function endAt(...args: any[]): any;
   export function updateDoc(...args: any[]): Promise<any> | any;
   export function deleteDoc(...args: any[]): Promise<any> | any;
+  export function deleteField(...args: any[]): any;
   export function onSnapshot(ref: any, cb: (snap: any) => any): any;
   export function serverTimestamp(): any;
   export const Timestamp: any;

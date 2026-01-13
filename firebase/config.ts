@@ -73,6 +73,22 @@ export const CREATE_USER_FUNCTION_BASE_URL =
     ? buildFunctionsEmulatorUrl('createUserAccount')
     : (CREATE_USER_FROM_ENV || CREATE_USER_FROM_CONSTANTS || '');
 
+// Any authenticated user: Cloud Function to send a push notification to themselves
+const SEND_PUSH_SELF_FROM_ENV = process.env.SEND_PUSH_SELF_FUNCTION_BASE_URL;
+const SEND_PUSH_SELF_FROM_CONSTANTS = extras?.SEND_PUSH_SELF_FUNCTION_BASE_URL;
+export const SEND_PUSH_SELF_FUNCTION_BASE_URL =
+  (USE_FUNCTIONS_EMULATOR && FUNCTIONS_EMULATOR_HOST)
+    ? buildFunctionsEmulatorUrl('sendPushToSelf')
+    : (SEND_PUSH_SELF_FROM_ENV || SEND_PUSH_SELF_FROM_CONSTANTS || '');
+
+// Admin-only: Cloud Function to send a push notification to a specific user
+const SEND_PUSH_USER_FROM_ENV = process.env.SEND_PUSH_USER_FUNCTION_BASE_URL;
+const SEND_PUSH_USER_FROM_CONSTANTS = extras?.SEND_PUSH_USER_FUNCTION_BASE_URL;
+export const SEND_PUSH_USER_FUNCTION_BASE_URL =
+  (USE_FUNCTIONS_EMULATOR && FUNCTIONS_EMULATOR_HOST)
+    ? buildFunctionsEmulatorUrl('sendPushToUser')
+    : (SEND_PUSH_USER_FROM_ENV || SEND_PUSH_USER_FROM_CONSTANTS || '');
+
 // Domain to construct fallback auth email from Student ID when no lookup function is configured
 // (Not used when LOOKUP_EMAIL_FUNCTION_BASE_URL is configured, which is required for this app)
 const STUDENT_ID_DOMAIN_FROM_ENV = process.env.STUDENT_ID_EMAIL_DOMAIN;

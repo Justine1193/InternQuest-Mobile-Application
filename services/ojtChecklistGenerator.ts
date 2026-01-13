@@ -5,22 +5,34 @@ import * as Sharing from 'expo-sharing';
 export interface OJTChecklistData {
   studentName: string;
   studentId?: string;
-  course?: string;
-  companyName: string;
-  departmentAssigned?: string;
-  startDate?: string;
-  endDate?: string;
-  completedDate: string;
-  coordinatorName: string;
-  coordinatorSignatureUrl?: string;
+  program?: string;
+  section?: string;
+  studentEmail?: string;
+  contactNumber?: string;
   adviserName: string;
   adviserSignatureUrl?: string;
+
+  companyName?: string;
+  companyContactPerson?: string;
+  companyJobTitle?: string;
+  companyEmail?: string;
+  companyAddress?: string;
+
+  // Optional extra fields (kept for compatibility / future)
+  startDate?: string;
+  endDate?: string;
+  completedDate?: string;
+
   requirements: Array<{
     title: string;
     status: 'approved' | 'rejected' | 'pending';
+    dateCompleted?: string;
+    remarks?: string;
   }>;
-  schoolLogoUrl?: string;
-  companyLogoUrl?: string;
+
+  // Optional logos (if you later upload official logos to Storage and pass URLs)
+  leftLogoUrl?: string;
+  rightLogoUrl?: string;
 }
 
 export class OJTChecklistGenerator {
@@ -58,215 +70,367 @@ export class OJTChecklistGenerator {
   }
 
   private static generateHTMLContent(data: OJTChecklistData): string {
-    const coordinatorSignatureHtml = data.coordinatorSignatureUrl
-      ? `<img src="${data.coordinatorSignatureUrl}" alt="Coordinator Signature" style="max-width: 120px; max-height: 60px; margin-top: 8px;" />`
-      : `<div style="margin-top: 30px; border-top: 1px solid #000; width: 150px;"></div>`;
+    const safe = (v: any) => (v === null || v === undefined ? '' : String(v));
 
-    const adviserSignatureHtml = data.adviserSignatureUrl
-      ? `<img src="${data.adviserSignatureUrl}" alt="Adviser Signature" style="max-width: 120px; max-height: 60px; margin-top: 8px;" />`
-      : `<div style="margin-top: 30px; border-top: 1px solid #000; width: 150px;"></div>`;
+    const leftLogo = data.leftLogoUrl
+      ? `<img src="${data.leftLogoUrl}" style="width: 100%; height: 100%; object-fit: contain;" />`
+      : `<div style="font-size: 10px; color: #666;">LOGO</div>`;
 
-    const requirementRows = data.requirements
-      .map(
-        (req, idx) => `
-        <tr>
-          <td style="text-align: center;">${idx + 1}</td>
-          <td>${req.title}</td>
-          <td style="text-align: center;">
-            ${
-              req.status === 'approved'
-                ? '<span style="color: #4CAF50; font-weight: bold;">✓</span>'
-                : req.status === 'rejected'
-                  ? '<span style="color: #F44336; font-weight: bold;">✗</span>'
-                  : '<span style="color: #FF9800;">Pending</span>'
-            }
-          </td>
-        </tr>`
-      )
-      .join('');
+    const rightLogo = data.rightLogoUrl
+      ? `<img src="${data.rightLogoUrl}" style="width: 100%; height: 100%; object-fit: contain;" />`
+      : `<div style="font-size: 10px; color: #666;">LOGO</div>`;
 
-    const headerLogos = `
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-        <div style="width: 80px; height: 80px; border: 1px solid #ddd; border-radius: 50%; display: flex; align-items: center; justify-content: center; overflow: hidden;">
-          ${
-            data.schoolLogoUrl
-              ? `<img src="${data.schoolLogoUrl}" alt="School Logo" style="width: 100%; height: 100%; object-fit: contain;" />`
-              : '<div style="font-size: 12px; color: #999;">SCHOOL</div>'
+    const adviserSignatureImg = data.adviserSignatureUrl
+      ? `<img src="${data.adviserSignatureUrl}" alt="Adviser Signature" style="max-width: 90px; max-height: 34px; display: block; margin: 0 auto;" />`
+      : '';
+
+    const statusText = (s: 'approved' | 'rejected' | 'pending') => {
+      if (s === 'approved') return 'APPROVED';
+      if (s === 'rejected') return 'REJECTED';
+      return '';
+    };
+
+    const buildRows = (rows: Array<{ title: string; status?: 'approved' | 'rejected' | 'pending'; dateCompleted?: string; remarks?: string }>) =>
+      rows
+        .map(
+          (r) => {
+            const hasSigned = r.status === 'approved' && Boolean(adviserSignatureImg);
+            return `
+              <tr>
+                <td class="cell req">${safe(r.title)}</td>
+                <td class="cell date">${safe(r.dateCompleted)}</td>
+                <td class="cell remarks">${safe(r.remarks || (r.status ? statusText(r.status) : ''))}</td>
+                <td class="cell sig">${hasSigned ? adviserSignatureImg : ''}</td>
+              </tr>
+            `;
           }
-        </div>
-        <div style="text-align: center;">
-          <h2 style="margin: 0; font-size: 18px;">NEW ERA UNIVERSITY</h2>
-          <p style="margin: 4px 0; font-size: 12px;">College of Computer Studies</p>
-          <p style="margin: 4px 0; font-size: 12px;">Department of Information Technology</p>
-          <h1 style="margin: 8px 0; font-size: 16px; text-transform: uppercase;">OJT Completion Checklist</h1>
-        </div>
-        <div style="width: 80px; height: 80px; border: 1px solid #ddd; border-radius: 50%; display: flex; align-items: center; justify-content: center; overflow: hidden;">
-          ${
-            data.companyLogoUrl
-              ? `<img src="${data.companyLogoUrl}" alt="Company Logo" style="width: 100%; height: 100%; object-fit: contain;" />`
-              : '<div style="font-size: 12px; color: #999;">COMPANY</div>'
-          }
-        </div>
-      </div>
-    `;
+        )
+        .join('');
+
+    // Map the app-tracked requirements into Section A rows.
+    const sectionARows = data.requirements.map((r) => ({
+      title: r.title,
+      status: r.status,
+      dateCompleted: r.dateCompleted,
+      remarks: r.remarks,
+    }));
+
+    // The screenshot shows additional sections that may not be tracked in-app.
+    // We include them as blank rows so the PDF matches the form layout.
+    const sectionBRows = [
+      { title: 'Internship Contract' },
+      { title: 'Site Visit (by the OJT Adviser)' },
+    ];
+
+    const sectionCRows = [
+      { title: 'A. HTE Evaluation of the Student' },
+      { title: 'B. Student Performance Evaluation of the HTE' },
+      { title: 'C. Student Outcomes Evaluation of the HTE' },
+      { title: 'D. SIP Evaluation of the Student' },
+      { title: 'E. Certificate of Completion' },
+      { title: 'F. Internship Journal' },
+      { title: 'G. LINKDIN Account and Link' },
+    ];
 
     return `
       <!DOCTYPE html>
       <html>
         <head>
           <meta charset="utf-8">
-          <title>OJT Completion Checklist</title>
+          <title>Student Internship Program - Internship Checklist</title>
           <style>
+            @page { size: A4; margin: 16mm; }
+            * { box-sizing: border-box; }
             body {
-              font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+              font-family: 'Times New Roman', Times, serif;
               margin: 0;
-              padding: 32px;
-              background-color: #f6f6f6;
-              color: #333;
-            }
-            .checklist {
+              padding: 0;
+              color: #000;
               background: #fff;
-              max-width: 900px;
-              margin: 0 auto;
-              padding: 32px 40px;
-              border: 1px solid #dcdcdc;
             }
-            .header {
-              text-align: center;
-              margin-bottom: 24px;
-            }
-            .info-table {
-              width: 100%;
-              border-collapse: collapse;
-              margin: 20px 0;
-              font-size: 12px;
-            }
-            .info-table td {
-              border: 1px solid #000;
-              padding: 10px;
-            }
-            .info-label {
-              font-weight: bold;
-              width: 25%;
-              background-color: #f0f0f0;
-            }
-            .requirements-table {
-              width: 100%;
-              border-collapse: collapse;
-              margin: 20px 0;
-              font-size: 12px;
-            }
-            .requirements-table th,
-            .requirements-table td {
-              border: 1px solid #000;
-              padding: 10px;
-              text-align: left;
-            }
-            .requirements-table th {
-              background-color: #f0f0f0;
-              font-weight: bold;
-              text-align: center;
-            }
-            .signatures {
-              margin-top: 40px;
+            .page { width: 100%; }
+            .pageBreak { page-break-after: always; }
+
+            .topHeader {
               display: flex;
+              align-items: center;
               justify-content: space-between;
+              gap: 10px;
+              margin-bottom: 6px;
+            }
+            .logoCircle {
+              width: 54px;
+              height: 54px;
+              border-radius: 999px;
+              border: 1px solid #000;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              overflow: hidden;
+              flex: 0 0 auto;
+            }
+            .headerText {
+              flex: 1;
               text-align: center;
+              line-height: 1.1;
+            }
+            .headerText .u { font-size: 18px; font-style: italic; font-weight: 600; }
+            .headerText .c { font-size: 11px; font-weight: 700; }
+            .headerText .a { font-size: 10px; }
+            .headerText .t { margin-top: 6px; font-size: 12px; font-weight: 700; }
+            .headerText .tt { font-size: 12px; font-weight: 700; }
+
+            .formTitle {
+              margin-top: 6px;
+              text-align: center;
+              font-weight: 700;
               font-size: 12px;
             }
-            .signature-block {
-              width: 45%;
-            }
-            .signature-line {
-              margin-top: 50px;
-              padding-top: 8px;
-              border-top: 1px solid #000;
-              min-height: 60px;
-              display: flex;
-              align-items: flex-end;
-              justify-content: center;
-            }
-            .signature-title {
-              margin-top: 8px;
-              font-weight: bold;
-              text-transform: uppercase;
-            }
-            .submitted-date {
-              margin-top: 20px;
-              text-align: right;
+
+            table.form {
+              width: 100%;
+              border-collapse: collapse;
               font-size: 11px;
+              margin-top: 10px;
+            }
+            table.form td, table.form th {
+              border: 1px solid #000;
+              padding: 4px 6px;
+              vertical-align: middle;
+            }
+            .label { width: 26%; }
+            .value { width: 74%; }
+
+            .sectionTitle {
+              margin: 12px 0 6px;
+              text-align: center;
+              font-size: 11px;
+              font-style: italic;
+              font-weight: 700;
+            }
+
+            table.checklist {
+              width: 100%;
+              border-collapse: collapse;
+              font-size: 11px;
+              margin-top: 6px;
+            }
+            table.checklist th, table.checklist td {
+              border: 1px solid #000;
+              padding: 6px 6px;
+              vertical-align: top;
+            }
+            table.checklist th {
+              background: #000;
+              color: #fff;
+              text-align: center;
+              font-weight: 700;
+              padding: 5px 4px;
+            }
+            .cell.req { width: 40%; }
+            .cell.date { width: 18%; text-align: center; }
+            .cell.remarks { width: 22%; }
+            .cell.sig { width: 20%; text-align: center; }
+            .subSection {
+              margin-top: 10px;
+              font-weight: 700;
+              font-size: 11px;
+              text-align: center;
+            }
+
+            .blackBar {
+              background: #000;
+              color: #fff;
+              text-align: center;
+              font-weight: 700;
+              font-size: 11px;
+              padding: 6px 8px;
+              margin-top: 12px;
+            }
+
+            .notesBox {
+              width: 100%;
+              height: 160px;
+              border: 1px solid #000;
+              margin-top: 0;
             }
           </style>
         </head>
         <body>
-          <div class="checklist">
-            ${headerLogos}
+          <!-- PAGE 1 -->
+          <div class="page pageBreak">
+            <div class="topHeader">
+              <div class="logoCircle">${leftLogo}</div>
+              <div class="headerText">
+                <div class="u">New Era University</div>
+                <div class="c">COLLEGE OF INFORMATICS AND COMPUTING STUDIES</div>
+                <div class="a">No. 9 Central Avenue, New Era University</div>
+                <div class="a">(02) 8981 4221 local 3285 • computstudies@neu.edu.ph</div>
+              </div>
+              <div class="logoCircle">${rightLogo}</div>
+            </div>
 
-            <table class="info-table">
+            <div class="formTitle">STUDENT INTERNSHIP PROGRAM</div>
+            <div class="formTitle">INTERNSHIP CHECKLIST</div>
+
+            <table class="form">
               <tr>
-                <td class="info-label">Student Name:</td>
-                <td>${data.studentName}</td>
-                <td class="info-label">Student ID:</td>
-                <td>${data.studentId || 'N/A'}</td>
+                <td class="label"><b>Program:</b></td>
+                <td class="value">${safe(data.program)}</td>
+                <td class="label"><b>Section:</b></td>
+                <td class="value">${safe(data.section)}</td>
               </tr>
               <tr>
-                <td class="info-label">Course:</td>
-                <td>${data.course || 'N/A'}</td>
-                <td class="info-label">Company:</td>
-                <td>${data.companyName}</td>
+                <td class="label"><b>Student Name (LN, FN, MI):</b></td>
+                <td class="value" colspan="3">${safe(data.studentName)}</td>
               </tr>
               <tr>
-                <td class="info-label">Department Assigned:</td>
-                <td>${data.departmentAssigned || 'N/A'}</td>
-                <td class="info-label">OJT Period:</td>
-                <td>${data.startDate || 'N/A'} to ${data.endDate || 'N/A'}</td>
+                <td class="label"><b>E-mail Address:</b></td>
+                <td class="value" colspan="3">${safe(data.studentEmail)}</td>
+              </tr>
+              <tr>
+                <td class="label"><b>Contact Number:</b></td>
+                <td class="value" colspan="3">${safe(data.contactNumber)}</td>
+              </tr>
+              <tr>
+                <td class="label"><b>Adviser:</b></td>
+                <td class="value" colspan="3">${safe(data.adviserName)}</td>
               </tr>
             </table>
 
-            <h3 style="text-align: center; margin: 24px 0 12px;">Requirements Status</h3>
-            <table class="requirements-table">
+            <table class="form" style="margin-top: 10px;">
+              <tr>
+                <td class="label"><b>Company Name:</b></td>
+                <td class="value" colspan="3">${safe(data.companyName)}</td>
+              </tr>
+              <tr>
+                <td class="label"><b>Contact Person:</b></td>
+                <td class="value" colspan="3">${safe(data.companyContactPerson)}</td>
+              </tr>
+              <tr>
+                <td class="label"><b>Job Title:</b></td>
+                <td class="value" colspan="3">${safe(data.companyJobTitle)}</td>
+              </tr>
+              <tr>
+                <td class="label"><b>E-mail Address:</b></td>
+                <td class="value" colspan="3">${safe(data.companyEmail)}</td>
+              </tr>
+              <tr>
+                <td class="label"><b>Company Address:</b></td>
+                <td class="value" colspan="3">${safe(data.companyAddress)}</td>
+              </tr>
+            </table>
+
+            <div class="sectionTitle">A. Pre-deployment Requirements</div>
+            <table class="checklist">
               <thead>
                 <tr>
-                  <th style="width: 8%;">No.</th>
-                  <th style="width: 70%;">Requirement</th>
-                  <th style="width: 22%;">Status</th>
+                  <th>Requirement/s:</th>
+                  <th>Date Completed/Submitted:</th>
+                  <th>Remarks:</th>
+                  <th>Adviser's Signature:</th>
                 </tr>
               </thead>
               <tbody>
-                ${requirementRows}
+                ${buildRows(sectionARows)}
               </tbody>
             </table>
 
-            <p style="text-align: center; margin-top: 16px; font-size: 12px;">
-              <strong>Date Completed:</strong> ${data.completedDate}
-            </p>
+            <div class="blackBar">OJT Endorsement Letter<br><span style="font-weight: 400; font-size: 10px;">(To be filled-up by the Receiving Staff at the Dean's Office)</span></div>
+            <table class="checklist" style="margin-top: 0;">
+              <thead>
+                <tr>
+                  <th>Issued by:</th>
+                  <th>Remarks:</th>
+                  <th>Date Received:</th>
+                  <th>Received by:</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="cell" style="height: 34px;"></td>
+                  <td class="cell"></td>
+                  <td class="cell"></td>
+                  <td class="cell"></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
 
-            <div class="signatures">
-              <div class="signature-block">
-                <div style="font-size: 11px; font-weight: bold;">VERIFIED BY COORDINATOR</div>
-                <div class="signature-line">
-                  ${coordinatorSignatureHtml}
-                </div>
-                <div class="signature-title">${data.coordinatorName}</div>
-                <div style="font-size: 10px; color: #666;">OJT Coordinator</div>
-              </div>
-              <div class="signature-block">
-                <div style="font-size: 11px; font-weight: bold;">APPROVED BY ADVISER</div>
-                <div class="signature-line">
-                  ${adviserSignatureHtml}
-                </div>
-                <div class="signature-title">${data.adviserName}</div>
-                <div style="font-size: 10px; color: #666;">OJT Adviser</div>
-              </div>
-            </div>
+          <!-- PAGE 2 -->
+          <div class="page">
+            <div class="sectionTitle">B. Training Requirements</div>
+            <table class="checklist">
+              <thead>
+                <tr>
+                  <th>Requirement/s:</th>
+                  <th>Date Completed/Submitted:</th>
+                  <th>Remarks:</th>
+                  <th>Adviser's Signature:</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${buildRows(sectionBRows)}
+              </tbody>
+            </table>
 
-            <div class="submitted-date">
-              Generated on: ${new Date().toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-              })}
-            </div>
+            <div class="sectionTitle">C. Post/ Final Requirements</div>
+            <table class="checklist">
+              <thead>
+                <tr>
+                  <th>Requirement/s:</th>
+                  <th>Date Completed/Submitted:</th>
+                  <th>Remarks:</th>
+                  <th>Adviser's Signature:</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${buildRows(sectionCRows)}
+              </tbody>
+            </table>
+
+            <div class="blackBar">COMPILATION OF WEEKLY ACCOMPLISHMENT REPORT<br><span style="font-weight: 400; font-size: 10px;">(To be filled-up by the OJT Adviser)</span></div>
+            <table class="checklist" style="margin-top: 0;">
+              <thead>
+                <tr>
+                  <th>Date of Deployment:</th>
+                  <th>Date of Completion:</th>
+                  <th>Duration:</th>
+                  <th>Signature:</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td style="height: 30px;"></td>
+                  <td></td>
+                  <td></td>
+                  <td>${adviserSignatureImg}</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div class="blackBar">OTHER REMARKS/ COMMENTS:</div>
+            <div class="notesBox"></div>
+
+            <div class="blackBar">FINAL SUBMISSION<br><span style="font-weight: 400; font-size: 10px;">(To be filled-up by the OJT Adviser)</span></div>
+            <table class="checklist" style="margin-top: 0;">
+              <thead>
+                <tr>
+                  <th>Submitted by:</th>
+                  <th>Date of Submission:</th>
+                  <th>Remarks:</th>
+                  <th>Signature:</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td style="height: 30px;"></td>
+                  <td></td>
+                  <td></td>
+                  <td>${adviserSignatureImg}</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </body>
       </html>

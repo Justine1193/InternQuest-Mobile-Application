@@ -18,6 +18,7 @@ import { auth, firestore } from '../firebase/config';
 import { doc, getDoc, collection, getDocs, query, orderBy, setDoc, where } from 'firebase/firestore';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { SecurityUtils } from '../services/security';
+import { colors, radii, shadows } from '../ui/theme';
 
 type Props = {
   navigation: StackNavigationProp<RootStackParamList, 'Notifications'>;
@@ -29,6 +30,7 @@ type NotificationItem = {
   description: string;
   time: string;
   action?: string;
+  ts?: number;
 };
 
 type PendingApplicationItem = {
@@ -111,23 +113,48 @@ const NotificationsScreen: React.FC<Props> = ({ navigation }) => {
   const fetchNotifications = async () => {
     if (!auth.currentUser) return;
     try {
+      const uid = auth.currentUser.uid;
       const notificationsRef = collection(firestore, 'notifications');
-      const notificationsQuery = query(notificationsRef, orderBy('timestamp', 'desc'));
-      const snapshot = await getDocs(notificationsQuery);
-      const items: NotificationItem[] = snapshot.docs.map((docSnap: any) => {
-        const data = docSnap.data();
-        const timestamp = data.timestamp?.toDate ? data.timestamp.toDate() : (data.timestamp ? new Date(data.timestamp) : null);
-        return {
-          id: docSnap.id,
-          title: data.title || 'Notification',
-          description: data.message || data.description || '',
-          time: timestamp ? timestamp.toLocaleString() : (data.time || ''),
-          action: data.action,
-        };
+      // IMPORTANT: historical docs may store the recipient under `targetStudentId`
+      // while others use `userId`. We query both and merge client-side.
+      // (We sort client-side to avoid requiring composite indexes.)
+      const [snapByUserId, snapByTargetStudentId] = await Promise.all([
+        getDocs(query(notificationsRef, where('userId', '==', uid))),
+        getDocs(query(notificationsRef, where('targetStudentId', '==', uid))),
+      ]);
+
+      const byId = new Map<string, NotificationItem>();
+      const addFromSnap = (snap: any) => {
+        snap.docs.forEach((docSnap: any) => {
+          const data = docSnap.data();
+          const timestampObj = data.timestamp?.toDate
+            ? data.timestamp.toDate()
+            : (data.timestamp ? new Date(data.timestamp) : null);
+          const ts = timestampObj ? timestampObj.getTime() : 0;
+
+          byId.set(docSnap.id, {
+            id: docSnap.id,
+            title: data.title || 'Notification',
+            description: data.message || data.description || '',
+            time: timestampObj ? timestampObj.toLocaleString() : (data.time || ''),
+            action: data.action,
+            ts,
+          });
+        });
+      };
+
+      addFromSnap(snapByUserId);
+      addFromSnap(snapByTargetStudentId);
+
+      const items: NotificationItem[] = Array.from(byId.values());
+
+      // Newest first (best-effort).
+      items.sort((a, b) => {
+        return (b.ts || 0) - (a.ts || 0);
       });
+
       // Now filter out any notifications this user has hidden
       try {
-        const uid = auth.currentUser.uid;
         const hiddenSnap = await getDocs(collection(firestore, `users/${uid}/hiddenNotifications`));
         const hiddenIds = new Set(hiddenSnap.docs.map((d: any) => d.id));
         if (hiddenIds.size > 0) {
@@ -256,7 +283,7 @@ const NotificationsScreen: React.FC<Props> = ({ navigation }) => {
       style={styles.deleteButton}
       onPress={() => handleDelete(id)}
     >
-      <Icon name="delete" size={24} color="#fff" />
+      <Icon name="delete" size={24} color={colors.onPrimary} />
       <Text style={styles.deleteText}>Delete</Text>
     </TouchableOpacity>
   );
@@ -273,13 +300,13 @@ const NotificationsScreen: React.FC<Props> = ({ navigation }) => {
       <TouchableOpacity onPress={() => handleNotificationPress(item)}>
         <View style={styles.card}>
           <View style={styles.cardHeader}>
-            <View style={[styles.cardBadge, { backgroundColor: '#6366F1' }]} />
+            <View style={[styles.cardBadge, { backgroundColor: colors.primary }]} />
             <View style={styles.cardContent}>
               <Text style={styles.cardTitle}>{item.title}</Text>
               <Text style={styles.cardTime}>{item.time}</Text>
             </View>
             <TouchableOpacity>
-              <Icon name="dots-horizontal" size={24} color="#999" />
+              <Icon name="dots-horizontal" size={24} color={colors.textSubtle} />
             </TouchableOpacity>
           </View>
           {item.action && (
@@ -350,7 +377,7 @@ const NotificationsScreen: React.FC<Props> = ({ navigation }) => {
               return (
                 <TouchableOpacity onPress={onPress} disabled={!onPress}>
                   <View style={styles.reminderCard}>
-                    <Ionicons name="alert-circle" size={20} color="#ff9800" style={{ marginRight: 8 }} />
+                    <Ionicons name="alert-circle" size={20} color={colors.warning} style={{ marginRight: 8 }} />
                     <Text style={styles.reminderText}>{item.text}</Text>
                   </View>
                 </TouchableOpacity>
@@ -366,7 +393,7 @@ const NotificationsScreen: React.FC<Props> = ({ navigation }) => {
               return (
                 <Swipeable renderRightActions={() => renderRightActions(item.id)}>
                   <View style={styles.notificationCard}>
-                    <Icon name="bell" size={20} color="#6366F1" style={{ marginRight: 8 }} />
+                    <Icon name="bell" size={20} color={colors.primary} style={{ marginRight: 8 }} />
                     <View>
                       <Text style={styles.notificationTitle}>{item.title}</Text>
                       <Text style={styles.notificationText}>{item.description}</Text>
@@ -424,7 +451,7 @@ const NotificationsScreen: React.FC<Props> = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f2f6ff',
+    backgroundColor: colors.bg,
     padding: 16,
     paddingTop: 30,
   },
@@ -434,11 +461,11 @@ const styles = StyleSheet.create({
     marginBottom: 18,
     paddingHorizontal: 8,
     paddingVertical: 12,
-    backgroundColor: '#6366F1',
-    borderRadius: 12,
+    backgroundColor: colors.primary,
+    borderRadius: radii.lg,
   },
-  headerTitle: { flex: 1, fontSize: 18, fontWeight: '700', color: '#fff' },
-  headerSubtitle: { fontSize: 12, color: 'rgba(255,255,255,0.9)', marginTop: 2 },
+  headerTitle: { flex: 1, fontSize: 18, fontWeight: '700', color: colors.onPrimary },
+  headerSubtitle: { fontSize: 12, color: colors.onPrimaryMuted, marginTop: 2 },
   profileImage: {
     width: 40,
     height: 40,
@@ -449,20 +476,18 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
+    color: colors.text,
   },
   list: {
     gap: 12,
   },
   card: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
     padding: 16,
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.card,
     marginBottom: 12,
   },
   cardHeader: {
@@ -476,36 +501,36 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#333',
+    color: colors.text,
   },
   cardTime: {
     fontSize: 12,
-    color: '#999',
+    color: colors.textSubtle,
     marginTop: 4,
   },
   actionButton: {
     marginTop: 12,
     alignSelf: 'flex-start',
-    backgroundColor: '#eef2ff',
+    backgroundColor: colors.primarySoft,
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 20,
   },
   actionButtonText: {
     fontSize: 14,
-    color: '#6366F1',
+    color: colors.primary,
     fontWeight: '800',
   },
   deleteButton: {
-    backgroundColor: '#ff3b30',
+    backgroundColor: colors.danger,
     justifyContent: 'center',
     alignItems: 'center',
     width: 80,
-    borderRadius: 12,
+    borderRadius: radii.lg,
     marginBottom: 12,
   },
   deleteText: {
-    color: '#fff',
+    color: colors.onPrimary,
     fontSize: 12,
     fontWeight: 'bold',
     marginTop: 4,
@@ -514,56 +539,53 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: colors.overlay,
   },
   modalContent: {
     width: '90%',
-    backgroundColor: '#fff',
-    borderRadius: 10,
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
     padding: 20,
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 10,
-    elevation: 5,
+    ...shadows.card,
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     marginBottom: 10,
-    color: '#333',
+    color: colors.text,
   },
   modalDescription: {
     fontSize: 14,
-    color: '#555',
+    color: colors.textMuted,
     marginBottom: 20,
   },
   modalTime: {
     fontSize: 12,
-    color: '#999',
+    color: colors.textSubtle,
     marginBottom: 20,
   },
   modalActionButton: {
-    backgroundColor: '#007aff',
+    backgroundColor: colors.primary,
     paddingVertical: 10,
     paddingHorizontal: 20,
-    borderRadius: 5,
+    borderRadius: radii.md,
     alignSelf: 'flex-start',
     marginBottom: 20,
   },
   modalActionButtonText: {
-    color: '#fff',
+    color: colors.onPrimary,
     fontSize: 14,
     fontWeight: 'bold',
   },
   modalCloseButton: {
-    backgroundColor: '#d9534f',
+    backgroundColor: colors.danger,
     paddingVertical: 10,
     paddingHorizontal: 20,
-    borderRadius: 5,
+    borderRadius: radii.md,
     alignSelf: 'center',
   },
   modalCloseButtonText: {
-    color: '#fff',
+    color: colors.onPrimary,
     fontSize: 14,
     fontWeight: 'bold',
   },
@@ -574,15 +596,15 @@ const styles = StyleSheet.create({
   reminderCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fffbe6',
-    borderRadius: 10,
+    backgroundColor: colors.warningSoft,
+    borderRadius: radii.md,
     padding: 12,
     marginBottom: 8,
     borderLeftWidth: 4,
-    borderLeftColor: '#ff9800',
+    borderLeftColor: colors.warning,
   },
   reminderText: {
-    color: '#b26a00',
+    color: colors.text,
     fontSize: 15,
     flex: 1,
   },
@@ -593,36 +615,37 @@ const styles = StyleSheet.create({
   adminSectionTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#111',
+    color: colors.text,
     marginBottom: 8,
   },
   adminAppCard: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: 12,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: '#eef2ff',
+    borderColor: colors.border,
+    ...shadows.card,
   },
   adminAppTitle: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#111',
+    color: colors.text,
   },
   adminAppSub: {
     marginTop: 4,
     fontSize: 12,
-    color: '#555',
+    color: colors.textMuted,
   },
   adminAppMeta: {
     marginTop: 2,
     fontSize: 11,
-    color: '#777',
+    color: colors.textSubtle,
   },
   sectionHeader: {
     fontSize: 24, // Increased from 18 for better prominence
     fontWeight: 'bold',
-    color: '#333',
+    color: colors.text,
     marginTop: 24,
     marginBottom: 12,
     paddingHorizontal: 16,
@@ -630,12 +653,13 @@ const styles = StyleSheet.create({
   notificationCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 10,
+    backgroundColor: colors.surface,
+    borderRadius: radii.md,
     padding: 12,
     marginBottom: 8,
     borderLeftWidth: 4,
-    borderLeftColor: '#6366F1',
+    borderLeftColor: colors.primary,
+    ...shadows.card,
   },
 
   cardBadge: {
@@ -645,12 +669,12 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   notificationTitle: {
-    color: '#222',
+    color: colors.text,
     fontSize: 15,
     fontWeight: 'bold',
   },
   notificationText: {
-    color: '#222',
+    color: colors.text,
     fontSize: 14,
   },
   scrollContent: {

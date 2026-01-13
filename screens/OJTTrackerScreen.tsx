@@ -17,6 +17,7 @@ import RNBlobUtil from 'react-native-blob-util';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import Feather from 'react-native-vector-icons/Feather';
+import { colors, radii, shadows } from '../ui/theme';
 
 // Types
 type TimeLog = {
@@ -666,7 +667,7 @@ const OJTTrackerScreen: React.FC = () => {
   return (
     <><ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
       <View style={styles.header}>
-        <Icon name="arrow-back" size={24} color="#fff" onPress={() => navigation.goBack()} />
+        <Icon name="arrow-back" size={24} color={colors.onPrimary} onPress={() => navigation.goBack()} />
         <Text style={styles.headerText}>OJT Personal Tracker</Text>
       </View>
 
@@ -686,7 +687,7 @@ const OJTTrackerScreen: React.FC = () => {
             <Text style={styles.infoValue}>{userCompany || appliedCompanyName || 'Not Applied'}</Text>
             {appliedCompanyName && !userCompany && userStatus !== 'hired' ? (
               <TouchableOpacity onPress={handleClearAppliedCompany} style={styles.removeButton} accessibilityLabel="Remove applied company">
-                <Feather name="trash-2" size={18} color="#ff5252" />
+                <Feather name="trash-2" size={18} color={colors.danger} />
               </TouchableOpacity>
             ) : null}
           </View>
@@ -694,7 +695,7 @@ const OJTTrackerScreen: React.FC = () => {
       </View>
 
       <View style={styles.noteBox}>
-        <Icon name="warning-outline" size={18} color="#ff9800" />
+        <Icon name="warning-outline" size={18} color={colors.warning} />
         <Text style={styles.noteText}>
           This tracker is for personal use only. For official time logs, please check with your HR.
         </Text>
@@ -704,7 +705,7 @@ const OJTTrackerScreen: React.FC = () => {
         style={styles.weeklyReportButton}
         onPress={() => navigation.navigate('WeeklyReport')}
       >
-        <Icon name="document-text-outline" size={18} color="#fff" />
+        <Icon name="document-text-outline" size={18} color={colors.onPrimary} />
         <Text style={styles.weeklyReportButtonText}>Submit Weekly Report</Text>
       </TouchableOpacity>
 
@@ -723,10 +724,10 @@ const OJTTrackerScreen: React.FC = () => {
             <Text style={styles.tableCell}>{item.clockOut}</Text>
             <Text style={styles.tableCell}>{item.hours}</Text>
             <TouchableOpacity onPress={() => openModal(item, index)}>
-              <Icon name="create-outline" size={18} color="#6366F1" />
+              <Icon name="create-outline" size={18} color={colors.primary} />
             </TouchableOpacity>
             <TouchableOpacity onPress={() => handleDelete(index)}>
-              <Icon name="trash-outline" size={18} color="#ef4444" style={{ marginLeft: 8 }} />
+              <Icon name="trash-outline" size={18} color={colors.danger} style={{ marginLeft: 8 }} />
             </TouchableOpacity>
           </View>
         ))}
@@ -775,25 +776,25 @@ const OJTTrackerScreen: React.FC = () => {
       {isDropdownVisible && (
         <View style={styles.dropdownContainer}>
           <FAB
-            style={[styles.dropdownButton, { backgroundColor: '#888', borderRadius: 24, width: 48, height: 48, justifyContent: 'center', alignItems: 'center' }]}
+            style={[styles.dropdownButton, { backgroundColor: colors.textMuted, borderRadius: 24, width: 48, height: 48, justifyContent: 'center', alignItems: 'center' }]}
             icon="download"
-            color="#fff"
+            color={colors.onPrimary}
             onPress={handleSaveCSV} />
           <FAB
-            style={[styles.dropdownButton, { backgroundColor: '#4CAF50', borderRadius: 24, width: 48, height: 48, justifyContent: 'center', alignItems: 'center' }]}
+            style={[styles.dropdownButton, { backgroundColor: colors.success, borderRadius: 24, width: 48, height: 48, justifyContent: 'center', alignItems: 'center' }]}
             icon={({ color, size }) => (
               <Feather name="file-plus" size={size} color={color} />
             )}
-            color="#fff"
+            color={colors.onPrimary}
             onPress={() => openModal()} />
         </View>
       )}
 
       {/* Plus Button */}
       <FAB
-        style={[styles.fabPlus, { backgroundColor: '#6366F1' }]}
+        style={[styles.fabPlus, { backgroundColor: colors.primary }]}
         icon="plus"
-        color="#fff"
+        color={colors.onPrimary}
         onPress={toggleDropdown} />
 
       {/* Bottom Navbar */}
@@ -814,7 +815,7 @@ const OJTTrackerScreen: React.FC = () => {
                 onPress={() => setShowDatePicker(true)}
               >
                 <View style={styles.dateInputContent}>
-                  <Icon name="calendar-outline" size={20} color="#6366F1" style={styles.dateIcon} />
+                  <Icon name="calendar-outline" size={20} color={colors.primary} style={styles.dateIcon} />
                   <Text style={[
                     styles.dateInputText,
                     !formData.date && styles.dateInputPlaceholder
@@ -822,7 +823,7 @@ const OJTTrackerScreen: React.FC = () => {
                     {formData.date || 'Select Date'}
                   </Text>
                 </View>
-                <Icon name="chevron-down" size={20} color="#666" />
+                <Icon name="chevron-down" size={20} color={colors.textMuted} />
               </TouchableOpacity>
             </View>
 
@@ -997,7 +998,7 @@ const OJTTrackerScreen: React.FC = () => {
                 <Text>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={handleSave} style={styles.saveBtn}>
-                <Text style={{ color: 'white' }}>Save</Text>
+                <Text style={{ color: colors.onPrimary }}>Save</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1022,7 +1023,7 @@ const OJTTrackerScreen: React.FC = () => {
                 <Text>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={saveGoal} style={styles.saveBtn}>
-                <Text style={{ color: 'white' }}>Save</Text>
+                <Text style={{ color: colors.onPrimary }}>Save</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1033,34 +1034,34 @@ const OJTTrackerScreen: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { padding: 16, backgroundColor: '#f2f6ff', flex: 1, paddingTop: 30 },
+  container: { padding: 16, backgroundColor: colors.bg, flex: 1, paddingTop: 30 },
   scrollContent: { paddingBottom: 100 },
-  header: { flexDirection: 'row', alignItems: 'center', marginBottom: 16, padding: 12, backgroundColor: '#6366F1', borderRadius: 12 },
-  headerText: { fontSize: 18, fontWeight: '700', marginLeft: 8, color: '#fff' },
+  header: { flexDirection: 'row', alignItems: 'center', marginBottom: 16, padding: 12, backgroundColor: colors.primary, borderRadius: radii.lg },
+  headerText: { fontSize: 18, fontWeight: '700', marginLeft: 8, color: colors.onPrimary },
   infoRow: { flexDirection: 'row', justifyContent: 'space-between' },
   infoBox: {
-    width: '48%', backgroundColor: '#fff', borderRadius: 12, padding: 14,
-    borderWidth: 0, alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 2,
+    width: '48%', backgroundColor: colors.surface, borderRadius: radii.lg, padding: 14,
+    borderWidth: 1, borderColor: colors.border, alignItems: 'center', ...shadows.card,
   },
-  infoLabel: { color: '#6366F1', fontWeight: '800' },
-  infoValue: { fontSize: 16, fontWeight: 'bold', marginVertical: 4 },
+  infoLabel: { color: colors.primary, fontWeight: '800' },
+  infoValue: { fontSize: 16, fontWeight: 'bold', marginVertical: 4, color: colors.text },
   removeButton: { marginLeft: 8, padding: 6, borderRadius: 6, backgroundColor: 'transparent' },
-  subText: { fontSize: 12, color: '#888' },
+  subText: { fontSize: 12, color: colors.textMuted },
   noteBox: {
     marginVertical: 16, flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#fffbe6', padding: 10, borderRadius: 8,
-    borderColor: '#ffdd57', borderWidth: 1,
+    backgroundColor: colors.surfaceAlt, padding: 10, borderRadius: radii.md,
+    borderColor: colors.border, borderWidth: 1,
   },
-  noteText: { color: '#ff8800', marginLeft: 8, fontSize: 13 },
-  tableCard: { borderRadius: 10, overflow: 'hidden', marginTop: 10, marginBottom: 20 },
+  noteText: { color: colors.text, marginLeft: 8, fontSize: 13 },
+  tableCard: { borderRadius: radii.lg, overflow: 'hidden', marginTop: 10, marginBottom: 20, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   tableHeader: {
     flexDirection: 'row',
-    backgroundColor: '#6366F1',
+    backgroundColor: colors.primary,
     padding: 10,
     alignItems: 'flex-start'
   },
   tableHeaderText: {
-    color: 'white',
+    color: colors.onPrimary,
     flex: 1,
     fontWeight: 'bold',
     fontSize: 12,
@@ -1069,14 +1070,15 @@ const styles = StyleSheet.create({
   tableRow: {
     flexDirection: 'row',
     padding: 10,
-    borderBottomColor: '#eee',
+    borderBottomColor: colors.border,
     borderBottomWidth: 1,
     alignItems: 'center'
   },
   tableCell: {
     flex: 1,
     fontSize: 12,
-    textAlign: 'center'
+    textAlign: 'center',
+    color: colors.text,
   },
   pagination: {
     flexDirection: 'row',
@@ -1093,11 +1095,11 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   paginationText: {
-    color: '#6366F1',
+    color: colors.primary,
     fontSize: 14,
   },
   paginationTextDisabled: {
-    color: '#999',
+    color: colors.textSubtle,
   },
   pageNumbers: {
     flexDirection: 'row',
@@ -1111,27 +1113,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   pageNumberButtonActive: {
-    backgroundColor: '#6366F1',
+    backgroundColor: colors.primary,
   },
   pageNumberText: {
-    color: '#333',
+    color: colors.text,
     fontSize: 14,
   },
   pageNumberTextActive: {
-    color: '#fff',
+    color: colors.onPrimary,
     fontWeight: 'bold',
   },
   fabSave: {
-    position: 'absolute', bottom: 160, right: 20, backgroundColor: '#4CAF50',
+    position: 'absolute', bottom: 160, right: 20, backgroundColor: colors.success,
   },
   fabAdd: {
-    position: 'absolute', bottom: 80, right: 20, backgroundColor: '#6366F1',
+    position: 'absolute', bottom: 80, right: 20, backgroundColor: colors.primary,
   },
   fabPlus: {
     position: 'absolute',
     bottom: 80, // Positioned above the Bottom Navbar
     right: 20,
-    backgroundColor: '#6366F1',
+    backgroundColor: colors.primary,
   },
   dropdownContainer: {
     position: 'absolute',
@@ -1141,43 +1143,43 @@ const styles = StyleSheet.create({
   },
   dropdownButton: {
     marginBottom: 10, // Space between dropdown buttons
-    backgroundColor: '#4CAF50',
+    backgroundColor: colors.success,
   },
   bottomNavbar: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderTopWidth: 1,
-    borderTopColor: '#ccc',
+    borderTopColor: colors.border,
     elevation: 5, // Add shadow for better visibility
   },
   modalOverlay: {
-    flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.4)',
+    flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.overlay,
   },
   modalContent: {
-    width: '85%', backgroundColor: 'white', padding: 20, borderRadius: 10,
+    width: '85%', backgroundColor: colors.surface, padding: 20, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border,
   },
   modalTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 12 },
   input: {
-    borderBottomWidth: 1, borderBottomColor: '#ccc', marginBottom: 10, paddingVertical: 4,
+    borderBottomWidth: 1, borderBottomColor: colors.border, marginBottom: 10, paddingVertical: 4, color: colors.text,
   },
   modalButtons: {
     flexDirection: 'row', justifyContent: 'space-between', marginTop: 16,
   },
   cancelBtn: {
-    padding: 10, backgroundColor: '#eee', borderRadius: 5,
+    padding: 10, backgroundColor: colors.surfaceAlt, borderRadius: radii.sm,
   },
-    saveBtn: {
-    padding: 10, backgroundColor: '#6366F1', borderRadius: 5,
+  saveBtn: {
+    padding: 10, backgroundColor: colors.primary, borderRadius: radii.md,
   },
   inputContainer: {
     marginBottom: 15,
   },
   inputLabel: {
     fontSize: 12,
-    color: '#666',
+    color: colors.textMuted,
     marginBottom: 5,
   },
   timeInputContainer: {
@@ -1188,31 +1190,31 @@ const styles = StyleSheet.create({
   amPmContainer: {
     flexDirection: 'row',
     borderWidth: 1,
-    borderColor: '#ccc',
+    borderColor: colors.border,
     borderRadius: 6,
     overflow: 'hidden',
   },
   amPmButton: {
     paddingVertical: 8,
     paddingHorizontal: 12,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: colors.surfaceAlt,
   },
   amPmButtonActive: {
-    backgroundColor: '#6366F1',
+    backgroundColor: colors.primary,
   },
   amPmText: {
     fontSize: 14,
-    color: '#333',
+    color: colors.text,
   },
   amPmTextActive: {
-    color: '#fff',
+    color: colors.onPrimary,
     fontWeight: 'bold',
   },
   hoursInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#ccc',
+    borderColor: colors.border,
     borderRadius: 6,
     paddingHorizontal: 10,
   },
@@ -1225,19 +1227,19 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   hoursLabel: {
-    color: '#666',
+    color: colors.textMuted,
     marginLeft: 8,
     fontSize: 14,
   },
   hoursHelperText: {
     fontSize: 12,
-    color: '#666',
+    color: colors.textMuted,
     marginTop: 4,
     fontStyle: 'italic',
   },
   helperText: {
     fontSize: 12,
-    color: '#666',
+    color: colors.textMuted,
     marginTop: 4,
     fontStyle: 'italic',
   },
@@ -1246,11 +1248,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     borderWidth: 1,
-    borderColor: '#ccc',
+    borderColor: colors.border,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
   },
   dateInputContent: {
     flexDirection: 'row',
@@ -1261,28 +1263,24 @@ const styles = StyleSheet.create({
   },
   dateInputText: {
     fontSize: 16,
-    color: '#333',
+    color: colors.text,
   },
   dateInputPlaceholder: {
-    color: '#999',
+    color: colors.textSubtle,
   },
   datePickerOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: colors.overlay,
     justifyContent: 'center',
     alignItems: 'center',
   },
   datePickerContainer: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: 16,
     width: '90%',
     maxWidth: 400,
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
+    ...shadows.card,
   },
   datePickerHeader: {
     flexDirection: 'row',
@@ -1293,11 +1291,11 @@ const styles = StyleSheet.create({
   datePickerTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#333',
+    color: colors.text,
   },
   datePickerSubtitle: {
     fontSize: 14,
-    color: '#666',
+    color: colors.textMuted,
     textAlign: 'center',
     marginTop: 4,
   },
@@ -1310,7 +1308,7 @@ const styles = StyleSheet.create({
     width: '14.28%',
     textAlign: 'center',
     paddingVertical: 8,
-    color: '#666',
+    color: colors.textMuted,
     fontWeight: 'bold',
   },
   datePickerDay: {
@@ -1322,39 +1320,39 @@ const styles = StyleSheet.create({
   },
   datePickerDayText: {
     fontSize: 16,
-    color: '#333',
+    color: colors.text,
   },
   datePickerToday: {
-    backgroundColor: '#e6f3ff',
+    backgroundColor: colors.infoSoft,
     borderRadius: 20,
   },
   datePickerTodayText: {
-    color: '#6366F1',
+    color: colors.primary,
     fontWeight: 'bold',
   },
   datePickerSelected: {
-    backgroundColor: '#6366F1',
+    backgroundColor: colors.primary,
     borderRadius: 20,
   },
   datePickerSelectedText: {
-    color: '#fff',
+    color: colors.onPrimary,
     fontWeight: 'bold',
   },
   datePickerCloseButton: {
     marginTop: 16,
     padding: 12,
-    backgroundColor: '#6366F1',
+    backgroundColor: colors.primary,
     borderRadius: 8,
     alignItems: 'center',
   },
   datePickerCloseButtonText: {
-    color: '#fff',
+    color: colors.onPrimary,
     fontSize: 16,
     fontWeight: 'bold',
   },
   readOnlyInput: {
-    backgroundColor: '#f5f5f5',
-    color: '#666',
+    backgroundColor: colors.surfaceAlt,
+    color: colors.textMuted,
   },
   monthButton: {
     padding: 8,
@@ -1366,25 +1364,21 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   datePickerPastDayText: {
-    color: '#999',
+    color: colors.textSubtle,
   },
   weeklyReportButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#6366F1',
+    backgroundColor: colors.primary,
     paddingVertical: 12,
     paddingHorizontal: 20,
     borderRadius: 8,
     marginBottom: 16,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
+    ...shadows.card,
   },
   weeklyReportButtonText: {
-    color: '#fff',
+    color: colors.onPrimary,
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 8,

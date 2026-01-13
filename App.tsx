@@ -3,10 +3,14 @@ import { StatusBar, ActivityIndicator, View, Text, StyleSheet } from 'react-nati
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { Host } from 'react-native-portalize';
+import { Provider as PaperProvider } from 'react-native-paper';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from './firebase/config';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, getDocs, query, collection, where, setDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
 import { firestore } from './firebase/config';
+import { useAutoLogout } from './hooks/useAutoLogout';
+import { colors, navigationTheme, paperTheme } from './ui/theme';
+import { initNotifications, syncExpoPushTokenForCurrentUser } from './services/notifications';
 
 // Context
 import { SavedInternshipsProvider } from './context/SavedInternshipsContext';
@@ -39,6 +43,8 @@ export type Post = {
   tags: string[];
   website?: string;
   email?: string;
+  contactPersonName?: string;
+  contactPersonPhone?: string;
   skills?: string[];
   modeOfWork?: string;
   moa?: string;
@@ -71,6 +77,17 @@ const App: React.FC = () => {
   const [currentScreen, setCurrentScreen] = useState<string>('Home');
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
 
+  const { registerActivity } = useAutoLogout({
+    enabled: isLoggedIn,
+    inactivityMs: 30 * 60 * 1000,
+    backgroundMs: 5 * 60 * 1000,
+  });
+
+  useEffect(() => {
+    // Best-effort initialization for device notifications (local + foreground display).
+    void initNotifications();
+  }, []);
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
@@ -81,13 +98,109 @@ const App: React.FC = () => {
         setCurrentUserEmail(user.email || null);
         setIsLoggedIn(true);
 
+        // Best-effort: register this device for push notifications and store token.
+        // (If permission is denied / emulator / missing projectId, it just no-ops.)
+        void syncExpoPushTokenForCurrentUser();
+
         // Fetch user profile from Firestore
         try {
-          const userDoc = await getDoc(doc(firestore, 'users', user.uid));
-          if (userDoc.exists()) {
-            const data = userDoc.data();
-            setIsProfileComplete(!!data.isProfileComplete);
-            console.log('📋 Profile complete:', !!data.isProfileComplete);
+          const userRef = doc(firestore, 'users', user.uid);
+          const userDoc = await getDoc(userRef);
+
+          // If an admin created a legacy Firestore user doc under a non-UID document id,
+          // migrate it on login (not only during SetupAccountScreen) to prevent duplicates.
+          // This specifically covers the common pattern where the legacy doc stores a field like { uid: <authUid> }.
+          try {
+            const potentialLegacyDocs: any[] = [];
+
+            // 1) Match by email (most common)
+            if (user.email) {
+              const byEmail = await getDocs(query(collection(firestore, 'users'), where('email', '==', user.email)));
+              potentialLegacyDocs.push(...byEmail.docs);
+            }
+
+            // 2) Match legacy docs that have a uid field pointing to auth.uid
+            // (this is exactly what your screenshot shows)
+            const byUidField = await getDocs(query(collection(firestore, 'users'), where('uid', '==', user.uid)));
+            potentialLegacyDocs.push(...byUidField.docs);
+
+            // Deduplicate by doc id, and ignore the correct UID doc
+            const seen = new Set<string>();
+            const legacyDocs = potentialLegacyDocs
+              .filter((d: any) => d && d.id && d.id !== user.uid)
+              .filter((d: any) => {
+                if (seen.has(d.id)) return false;
+                seen.add(d.id);
+                return true;
+              });
+
+            if (legacyDocs.length > 0) {
+              const uidData: any = userDoc.exists() ? userDoc.data() : {};
+
+              for (const legacy of legacyDocs) {
+                const legacyData: any = legacy.data();
+                if (legacyData?.archived === true) continue;
+
+                // UID doc wins on conflicts; legacy doc fills missing fields.
+                const merged = {
+                  ...legacyData,
+                  ...uidData,
+                  migratedFromUserDocId: legacy.id,
+                  migratedToAuthUidAt: serverTimestamp(),
+                };
+
+                await setDoc(doc(firestore, 'users', user.uid), merged, { merge: true });
+
+                // Mark legacy as archived (best-effort), then delete it (best-effort).
+                try {
+                  await setDoc(doc(firestore, 'users', legacy.id), {
+                    archived: true,
+                    archivedReason: 'migrated_to_uid_doc',
+                    migratedToUserId: user.uid,
+                    migratedAt: serverTimestamp(),
+                  }, { merge: true });
+                } catch (e) {
+                  // best-effort
+                }
+
+                try {
+                  await deleteDoc(doc(firestore, 'users', legacy.id));
+                  console.log('🧹 Deleted legacy user doc:', legacy.id);
+                } catch (e) {
+                  console.warn('Legacy user doc migration: delete failed (left archived):', e);
+                }
+              }
+            }
+          } catch (e) {
+            console.warn('Legacy user doc migration skipped/failed:', e);
+          }
+
+          // IMPORTANT: migration may have created/updated the UID doc.
+          // Re-fetch so we don't rely on a stale snapshot.
+          const userDocAfter = await getDoc(userRef);
+          if (userDocAfter.exists()) {
+            const data: any = userDocAfter.data();
+
+            const flagComplete = !!data?.isProfileComplete || !!data?.profileStatus?.isComplete;
+            const hasBasics =
+              !!(data?.firstName || data?.lastName || data?.name) &&
+              !!(data?.program || data?.course) &&
+              !!data?.field &&
+              Array.isArray(data?.skills) &&
+              data.skills.length > 0;
+
+            const computedComplete = flagComplete || hasBasics;
+            setIsProfileComplete(computedComplete);
+            console.log('📋 Profile complete:', computedComplete);
+
+            // Self-heal: if the profile looks complete but the legacy flag is missing, set it.
+            if (computedComplete && !data?.isProfileComplete) {
+              try {
+                await setDoc(userRef, { isProfileComplete: true }, { merge: true });
+              } catch (e) {
+                // best-effort
+              }
+            }
           } else {
             setIsProfileComplete(false);
             console.log('📋 Profile not found in Firestore');
@@ -153,11 +266,13 @@ const App: React.FC = () => {
             <SetupAccountScreen
               {...props}
               onSetupComplete={async () => {
-                // Update Firestore and local state
+                // Update Firestore (best-effort) and local state
+                setIsProfileComplete(true);
                 if (auth.currentUser) {
-                  const userDoc = await getDoc(doc(firestore, 'users', auth.currentUser.uid));
-                  if (userDoc.exists()) {
-                    setIsProfileComplete(true);
+                  try {
+                    await setDoc(doc(firestore, 'users', auth.currentUser.uid), { isProfileComplete: true }, { merge: true });
+                  } catch (e) {
+                    // best-effort
                   }
                 }
               }}
@@ -221,12 +336,19 @@ const App: React.FC = () => {
   };
 
   return (
-    <Host>
-      <SavedInternshipsProvider>
-        <NavigationContainer>
+    <PaperProvider theme={paperTheme}>
+      <Host>
+        <SavedInternshipsProvider>
+          <NavigationContainer theme={navigationTheme}>
           {/* Global StatusBar configuration */}
           <StatusBar translucent backgroundColor="transparent" barStyle="dark-content" />
-          <View style={{ flex: 1 }}>
+          <View
+            style={{ flex: 1 }}
+            onStartShouldSetResponderCapture={() => {
+              registerActivity();
+              return false;
+            }}
+          >
             <Stack.Navigator screenOptions={{ headerShown: false }}>
               {renderMainContent()}
             </Stack.Navigator>
@@ -238,9 +360,10 @@ const App: React.FC = () => {
               </View>
             )}
           </View>
-        </NavigationContainer>
-      </SavedInternshipsProvider>
-    </Host>
+          </NavigationContainer>
+        </SavedInternshipsProvider>
+      </Host>
+    </PaperProvider>
   );
 };
 
@@ -250,9 +373,9 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderTopWidth: 1,
-    borderTopColor: '#ddd',
+    borderTopColor: colors.border,
     zIndex: 100,
   },
 });

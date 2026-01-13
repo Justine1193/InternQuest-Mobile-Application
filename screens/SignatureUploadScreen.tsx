@@ -16,6 +16,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import * as DocumentPicker from 'expo-document-picker';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { SecurityUtils } from '../services/security';
+import { colors, radii, shadows } from '../ui/theme';
 
 const SignatureUploadScreen: React.FC = () => {
     const [signatureUrl, setSignatureUrl] = useState<string | null>(null);
@@ -170,7 +171,7 @@ const SignatureUploadScreen: React.FC = () => {
     if (loading) {
         return (
             <View style={styles.container}>
-                <ActivityIndicator size="large" color="#007aff" />
+                <ActivityIndicator size="large" color={colors.primary} />
             </View>
         );
     }
@@ -181,13 +182,13 @@ const SignatureUploadScreen: React.FC = () => {
                 <Card style={styles.card}>
                     <Card.Content>
                         <View style={styles.header}>
-                            <Ionicons name="pencil" size={32} color="#007aff" />
+                            <Ionicons name="pencil" size={32} color={colors.primary} />
                             <Text style={styles.title}>Digital Signature</Text>
                         </View>
 
                         {!isAdmin && (
                             <View style={styles.warningBox}>
-                                <Ionicons name="warning" size={24} color="#FF9800" />
+                                <Ionicons name="warning" size={24} color={colors.warning} />
                                 <Text style={styles.warningText}>
                                     Only coordinators and advisers can upload signatures.
                                 </Text>
@@ -230,7 +231,7 @@ const SignatureUploadScreen: React.FC = () => {
                                 ) : (
                                     <View style={styles.uploadSection}>
                                         <View style={styles.uploadPlaceholder}>
-                                            <Ionicons name="cloud-upload" size={48} color="#ddd" />
+                                            <Ionicons name="cloud-upload" size={48} color={colors.textSubtle} />
                                             <Text style={styles.placeholderText}>No signature uploaded</Text>
                                         </View>
 
@@ -246,7 +247,7 @@ const SignatureUploadScreen: React.FC = () => {
                                 )}
 
                                 <View style={styles.infoBox}>
-                                    <Ionicons name="information-circle" size={20} color="#007aff" />
+                                    <Ionicons name="information-circle" size={20} color={colors.info} />
                                     <Text style={styles.infoText}>
                                         Recommended: Upload a PNG or JPG image (max 5MB) with transparent background for best results.
                                     </Text>
@@ -263,7 +264,7 @@ const SignatureUploadScreen: React.FC = () => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#f5f5f5',
+        backgroundColor: colors.bg,
     },
     content: {
         padding: 16,
@@ -271,7 +272,11 @@ const styles = StyleSheet.create({
     },
     card: {
         marginTop: 8,
-        elevation: 2,
+        borderRadius: radii.lg,
+        backgroundColor: colors.surface,
+        borderWidth: 1,
+        borderColor: colors.border,
+        ...shadows.card,
     },
     header: {
         flexDirection: 'row',
@@ -282,27 +287,27 @@ const styles = StyleSheet.create({
         fontSize: 24,
         fontWeight: 'bold',
         marginLeft: 12,
-        color: '#333',
+        color: colors.text,
     },
     description: {
         fontSize: 14,
-        color: '#666',
+        color: colors.textMuted,
         lineHeight: 20,
         marginBottom: 20,
     },
     warningBox: {
         flexDirection: 'row',
-        backgroundColor: '#FFF3E0',
+        backgroundColor: colors.warningSoft,
         borderRadius: 8,
         padding: 12,
         marginBottom: 16,
         borderLeftWidth: 4,
-        borderLeftColor: '#FF9800',
+        borderLeftColor: colors.warning,
     },
     warningText: {
         flex: 1,
         marginLeft: 12,
-        color: '#F57C00',
+        color: colors.text,
         fontSize: 14,
         fontWeight: '500',
     },
@@ -315,16 +320,16 @@ const styles = StyleSheet.create({
     label: {
         fontSize: 14,
         fontWeight: '600',
-        color: '#333',
+        color: colors.text,
         marginBottom: 12,
     },
     signaturePreview: {
-        backgroundColor: '#f9f9f9',
-        borderRadius: 8,
+        backgroundColor: colors.surfaceAlt,
+        borderRadius: radii.md,
         padding: 12,
         marginBottom: 12,
         borderWidth: 1,
-        borderColor: '#e0e0e0',
+        borderColor: colors.border,
         alignItems: 'center',
     },
     signatureImage: {
@@ -333,23 +338,23 @@ const styles = StyleSheet.create({
         resizeMode: 'contain',
     },
     uploadPlaceholder: {
-        backgroundColor: '#f9f9f9',
-        borderRadius: 8,
+        backgroundColor: colors.surfaceAlt,
+        borderRadius: radii.md,
         padding: 32,
         marginBottom: 16,
         alignItems: 'center',
         borderWidth: 2,
         borderStyle: 'dashed',
-        borderColor: '#ddd',
+        borderColor: colors.border,
     },
     placeholderText: {
         fontSize: 14,
-        color: '#999',
+        color: colors.textSubtle,
         marginTop: 12,
     },
     uploadedText: {
         fontSize: 12,
-        color: '#4CAF50',
+        color: colors.success,
         fontWeight: '500',
         marginBottom: 16,
     },
@@ -361,17 +366,17 @@ const styles = StyleSheet.create({
     },
     infoBox: {
         flexDirection: 'row',
-        backgroundColor: '#E3F2FD',
+        backgroundColor: colors.infoSoft,
         borderRadius: 8,
         padding: 12,
         marginTop: 20,
         borderLeftWidth: 4,
-        borderLeftColor: '#007aff',
+        borderLeftColor: colors.info,
     },
     infoText: {
         flex: 1,
         marginLeft: 12,
-        color: '#0D47A1',
+        color: colors.text,
         fontSize: 12,
         lineHeight: 18,
     },

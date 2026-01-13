@@ -18,6 +18,7 @@ import { RootStackParamList, Post } from '../App';
 import { auth, firestore } from '../firebase/config';
 import { doc, getDoc, setDoc, collection, addDoc } from 'firebase/firestore';
 import * as FileSystem from 'expo-file-system';
+import { colors, radii, shadows } from '../ui/theme';
 
 type CompanyProfileRouteProp = RouteProp<RootStackParamList, 'CompanyProfile'>;
 type CompanyProfileNavigationProp = StackNavigationProp<RootStackParamList, 'CompanyProfile'>;
@@ -50,6 +51,8 @@ const CompanyProfileScreen: React.FC = () => {
                         tags: Array.isArray(data.skillsREq) ? data.skillsREq : (Array.isArray(data.tags) ? data.tags : []),
                         website: data.companyWeb || data.website || '',
                         email: data.companyEmail || data.email || '',
+                        contactPersonName: data.contactPersonName || data.companyContactPerson || data.contactPerson || '',
+                        contactPersonPhone: data.contactPersonPhone || data.companyContactPhone || data.contactPhone || data.phone || '',
                         moa: data.moa || '',
                         modeOfWork: Array.isArray(data.modeOfWork) ? data.modeOfWork[0] : (data.modeOfWork || ''),
                         latitude: data.latitude || 0,
@@ -224,7 +227,13 @@ const CompanyProfileScreen: React.FC = () => {
                 }
                 break;
             case 'phone':
-                // Add phone number if available
+                if (company?.contactPersonPhone) {
+                    const normalized = String(company.contactPersonPhone)
+                        .trim()
+                        .replace(/\s+/g, '')
+                        .replace(/(?!^)\+/g, '');
+                    Linking.openURL(`tel:${normalized}`).catch((err) => console.warn('Failed to open phone dialer', err));
+                }
                 break;
         }
     };
@@ -240,10 +249,10 @@ const CompanyProfileScreen: React.FC = () => {
 
     const getStatusColor = (status: ApplicationStatus) => {
         switch (status) {
-            case 'approved': return '#2ab0b4ff';
-            case 'rejected': return '#F44336';
-            case 'pending': return '#FF9800';
-            default: return '#757575';
+            case 'approved': return colors.success;
+            case 'rejected': return colors.danger;
+            case 'pending': return colors.warning;
+            default: return colors.textSubtle;
         }
     };
 
@@ -259,7 +268,7 @@ const CompanyProfileScreen: React.FC = () => {
     if (!company) {
         return (
             <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-                <ActivityIndicator size="large" color="#6366F1" />
+                <ActivityIndicator size="large" color={colors.primary} />
             </View>
         );
     }
@@ -271,7 +280,7 @@ const CompanyProfileScreen: React.FC = () => {
             {/* Header */}
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                    <Ionicons name="arrow-back" size={24} color="#fff" />
+                    <Ionicons name="arrow-back" size={24} color={colors.onPrimary} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Company Profile</Text>
                 <View style={{ width: 24 }} />
@@ -283,15 +292,15 @@ const CompanyProfileScreen: React.FC = () => {
                     <Card.Content>
                                     <View style={styles.companyHeader}>
                                         {/* removed large logo for a cleaner profile — replaced with slim accent */}
-                                        <View style={[styles.cardAccent, { backgroundColor: '#6366F1' }]} />
+                                        <View style={[styles.cardAccent, { backgroundColor: colors.primary }]} />
                                         <View style={styles.companyInfoEnhanced}>
                                 <Text style={styles.companyName}>{company.company}</Text>
                                 <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center' }} onPress={() => openMaps(company.location)} accessibilityRole="link">
-                                    <Ionicons name="location" size={16} color="#1e88e5" />
-                                    <Text style={[styles.companyLocation, { color: '#1e88e5', marginLeft: 6 }]}>{company.location}</Text>
+                                    <Ionicons name="location" size={16} color={colors.info} />
+                                    <Text style={[styles.companyLocation, { color: colors.info, marginLeft: 6 }]}>{company.location}</Text>
                                 </TouchableOpacity>
                                 <Text style={styles.companyIndustry}>
-                                    <Ionicons name="briefcase" size={16} color="#666" />
+                                    <Ionicons name="briefcase" size={16} color={colors.textMuted} />
                                     {' '}{company.industry}
                                 </Text>
                             </View>
@@ -332,10 +341,10 @@ const CompanyProfileScreen: React.FC = () => {
                         <View style={styles.detailRow}>
                             <Ionicons name="time" size={20} color={(() => {
                                 const m = (company.modeOfWork || '').toString().toLowerCase();
-                                if (m.includes('remote')) return '#10B981';
-                                if (m.includes('hybrid')) return '#F59E0B';
-                                if (m.includes('site') || m.includes('on-site') || m.includes('onsite') || m.includes('on site')) return '#6366F1';
-                                return '#6b7280';
+                                if (m.includes('remote')) return colors.success;
+                                if (m.includes('hybrid')) return colors.warning;
+                                if (m.includes('site') || m.includes('on-site') || m.includes('onsite') || m.includes('on site')) return colors.primary;
+                                return colors.textMuted;
                             })()} />
                             <Text style={styles.detailText}>Mode: {company.modeOfWork || 'Not specified'}</Text>
                         </View>
@@ -344,19 +353,19 @@ const CompanyProfileScreen: React.FC = () => {
 
                 {/* MOA Download Section */}
                 {company.moa && (
-                    <Card style={[styles.sectionCard, { borderLeftWidth: 4, borderLeftColor: requirementsComplete ? '#4CAF50' : '#F44336' }]}>
+                    <Card style={[styles.sectionCard, { borderLeftWidth: 4, borderLeftColor: requirementsComplete ? colors.success : colors.danger }]}>
                         <Card.Content>
                             <Text style={styles.sectionTitle}>Memorandum of Agreement (MOA)</Text>
                             {loadingRequirements ? (
-                                <ActivityIndicator size="small" color="#6366F1" style={{ marginVertical: 8 }} />
+                                <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: 8 }} />
                             ) : requirementsComplete ? (
                                 <>
                                     <Text style={styles.description}>✓ Requirements approved! You can now download the MOA.</Text>
                                     <TouchableOpacity
-                                        style={[styles.moaButton, { backgroundColor: '#4CAF50' }]}
+                                        style={[styles.moaButton, { backgroundColor: colors.success }]}
                                         onPress={handleDownloadMOA}
                                     >
-                                        <Ionicons name="download" size={18} color="#fff" style={{ marginRight: 8 }} />
+                                        <Ionicons name="download" size={18} color={colors.onPrimary} style={{ marginRight: 8 }} />
                                         <Text style={styles.moaButtonText}>Download MOA</Text>
                                     </TouchableOpacity>
                                 </>
@@ -364,10 +373,10 @@ const CompanyProfileScreen: React.FC = () => {
                                 <>
                                     <Text style={styles.description}>⚠ Submit all requirements and wait for adviser approval to unlock the MOA.</Text>
                                     <TouchableOpacity
-                                        style={[styles.moaButton, { backgroundColor: '#6366F1' }]}
+                                        style={[styles.moaButton, { backgroundColor: colors.primary }]}
                                         onPress={() => navigation.navigate('RequirementsChecklist')}
                                     >
-                                        <Ionicons name="documents" size={18} color="#fff" style={{ marginRight: 8 }} />
+                                        <Ionicons name="documents" size={18} color={colors.onPrimary} style={{ marginRight: 8 }} />
                                         <Text style={styles.moaButtonText}>Submit Requirements to Unlock</Text>
                                     </TouchableOpacity>
                                 </>
@@ -394,19 +403,60 @@ const CompanyProfileScreen: React.FC = () => {
                 <Card style={styles.sectionCard}>
                     <Card.Content>
                         <Text style={styles.sectionTitle}>Contact Information</Text>
+                        <Text style={styles.sectionSubtitle}>Company's primary contact details</Text>
+                        {company.location ? (
+                            <TouchableOpacity style={styles.contactRow} onPress={() => openMaps(company.location)} accessibilityRole="link">
+                                <Ionicons name="location" size={20} color={colors.info} />
+                                <Text style={[styles.infoText, { flex: 1, marginLeft: 8 }]}>{company.location}</Text>
+                                <Ionicons name="open-outline" size={16} color={colors.textMuted} />
+                            </TouchableOpacity>
+                        ) : null}
                         {company.email && (
                             <TouchableOpacity style={styles.contactRow} onPress={() => handleContact('email')}>
-                                <Ionicons name="mail" size={20} color="#2196F3" />
+                                <Ionicons name="mail" size={20} color={colors.info} />
                                 <Text style={styles.contactText}>{company.email}</Text>
-                                <Ionicons name="open-outline" size={16} color="#666" />
+                                <Ionicons name="open-outline" size={16} color={colors.textMuted} />
                             </TouchableOpacity>
                         )}
                         {company.website && (
                             <TouchableOpacity style={styles.contactRow} onPress={() => handleContact('website')}>
-                                <Ionicons name="globe" size={20} color="#2196F3" />
+                                <Ionicons name="globe" size={20} color={colors.info} />
                                 <Text style={styles.contactText}>{company.website}</Text>
-                                <Ionicons name="open-outline" size={16} color="#666" />
+                                <Ionicons name="open-outline" size={16} color={colors.textMuted} />
                             </TouchableOpacity>
+                        )}
+                    </Card.Content>
+                </Card>
+
+                {/* Contact Person Information */}
+                <Card style={styles.sectionCard}>
+                    <Card.Content>
+                        <Text style={styles.sectionTitle}>Contact Person Information</Text>
+                        <Text style={styles.sectionSubtitle}>Optional contact details for the company representative</Text>
+
+                        {company.contactPersonName ? (
+                            <View style={styles.contactRow}>
+                                <Ionicons name="person" size={20} color={colors.textMuted} />
+                                <Text style={[styles.infoText, { marginLeft: 8, flex: 1 }]}>{company.contactPersonName}</Text>
+                            </View>
+                        ) : (
+                            <View style={styles.contactRow}>
+                                <Ionicons name="person" size={20} color={colors.textMuted} />
+                                <Text style={[styles.mutedText, { marginLeft: 8, flex: 1 }]}>Not provided</Text>
+                            </View>
+                        )}
+
+                        {company.contactPersonPhone ? (
+                            <TouchableOpacity style={styles.contactRow} onPress={() => handleContact('phone')} accessibilityRole="link">
+                                <Ionicons name="call" size={20} color={colors.info} />
+                                <Text style={styles.contactText}>{company.contactPersonPhone}</Text>
+                                <Ionicons name="open-outline" size={16} color={colors.textMuted} />
+                            </TouchableOpacity>
+                        ) : (
+                            <View style={styles.contactRow}>
+                                <Ionicons name="call" size={20} color={colors.textMuted} />
+                                <Text style={[styles.mutedText, { marginLeft: 8, flex: 1 }]}>Not provided</Text>
+                            </View>
                         )}
                     </Card.Content>
                 </Card>
@@ -437,7 +487,7 @@ const CompanyProfileScreen: React.FC = () => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#f5f5f5',
+        backgroundColor: colors.bg,
     },
     header: {
         flexDirection: 'row',
@@ -446,7 +496,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
         paddingTop: 50,
         paddingBottom: 16,
-        backgroundColor: '#6366F1',
+        backgroundColor: colors.primary,
         borderBottomWidth: 0,
     },
     backButton: {
@@ -455,7 +505,7 @@ const styles = StyleSheet.create({
     headerTitle: {
         fontSize: 18,
         fontWeight: '700',
-        color: '#fff',
+        color: colors.onPrimary,
     },
     scrollView: {
         flex: 1,
@@ -491,17 +541,17 @@ const styles = StyleSheet.create({
     companyName: {
         fontSize: 20,
         fontWeight: '800',
-        color: '#111827',
+        color: colors.text,
         marginBottom: 6,
     },
     companyLocation: {
         fontSize: 13,
-        color: '#6b7280',
+        color: colors.textMuted,
         marginBottom: 2,
     },
     companyIndustry: {
         fontSize: 13,
-        color: '#6b7280',
+        color: colors.textMuted,
     },
     statusCard: {
         marginBottom: 16,
@@ -516,7 +566,7 @@ const styles = StyleSheet.create({
     statusLabel: {
         fontSize: 16,
         fontWeight: '600',
-        color: '#333',
+        color: colors.text,
     },
     statusChip: {
         height: 28,
@@ -529,12 +579,19 @@ const styles = StyleSheet.create({
     sectionTitle: {
         fontSize: 18,
         fontWeight: 'bold',
-        color: '#333',
+        color: colors.text,
         marginBottom: 12,
+    },
+    sectionSubtitle: {
+        marginTop: -6,
+        marginBottom: 10,
+        color: colors.textMuted,
+        fontSize: 13,
+        lineHeight: 18,
     },
     description: {
         fontSize: 16,
-        color: '#666',
+        color: colors.textMuted,
         lineHeight: 24,
     },
     detailRow: {
@@ -544,7 +601,7 @@ const styles = StyleSheet.create({
     },
     detailText: {
         fontSize: 16,
-        color: '#666',
+        color: colors.textMuted,
         marginLeft: 8,
     },
     
@@ -566,7 +623,7 @@ const styles = StyleSheet.create({
         marginTop: 12,
     },
     moaButtonText: {
-        color: '#fff',
+        color: colors.onPrimary,
         fontSize: 16,
         fontWeight: '600',
     },
@@ -577,9 +634,17 @@ const styles = StyleSheet.create({
     },
     contactText: {
         fontSize: 16,
-        color: '#2196F3',
+        color: colors.primary,
         marginLeft: 8,
         flex: 1,
+    },
+    infoText: {
+        fontSize: 16,
+        color: colors.text,
+    },
+    mutedText: {
+        fontSize: 16,
+        color: colors.textMuted,
     },
     applyContainer: {
         marginTop: 24,

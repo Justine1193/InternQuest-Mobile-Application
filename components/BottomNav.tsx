@@ -4,6 +4,7 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../App';
 import { useNavigation } from '@react-navigation/native';
+import { colors, spacing } from '../ui/theme';
 
 type Props = {
   navigation?: StackNavigationProp<RootStackParamList>;
@@ -33,7 +34,7 @@ const BottomNavbar: React.FC<Props> = ({ currentRoute }) => {
         <Icon
           name={isActive('Home') ? "home" : "home-outline"}
           size={24}
-          color={isActive('Home') ? "#6366F1" : "#444"}
+          color={isActive('Home') ? colors.primary : colors.textMuted}
         />
         <Text style={[styles.label, isActive('Home') && styles.activeLabel]}>Home</Text>
       </TouchableOpacity>
@@ -42,25 +43,25 @@ const BottomNavbar: React.FC<Props> = ({ currentRoute }) => {
         <Icon
           name={isActive('Notifications') ? "bell" : "bell-outline"}
           size={24}
-          color={isActive('Notifications') ? "#6366F1" : "#444"}
+          color={isActive('Notifications') ? colors.primary : colors.textMuted}
         />
         <Text style={[styles.label, isActive('Notifications') && styles.activeLabel]}>Notifications</Text>
       </TouchableOpacity>
 
       <TouchableOpacity onPress={() => handleNavigation('HelpDesk')} style={styles.tab}>
         <Icon
-          name={isActive('HelpDesk') ? "help-circle" : "help-circle-outline"}
+          name={isActive('HelpDesk') ? "folder" : "folder-outline"}
           size={24}
-          color={isActive('HelpDesk') ? "#6366F1" : "#444"}
+          color={isActive('HelpDesk') ? colors.primary : colors.textMuted}
         />
-        <Text style={[styles.label, isActive('HelpDesk') && styles.activeLabel]}>Help Desk</Text>
+        <Text style={[styles.label, isActive('HelpDesk') && styles.activeLabel]}>Resources</Text>
       </TouchableOpacity>
 
       <TouchableOpacity onPress={() => handleNavigation('Settings')} style={styles.tab}>
         <Icon
           name={isActive('Settings') ? "cog" : "cog-outline"}
           size={24}
-          color={isActive('Settings') ? "#6366F1" : "#444"}
+          color={isActive('Settings') ? colors.primary : colors.textMuted}
         />
         <Text style={[styles.label, isActive('Settings') && styles.activeLabel]}>Settings</Text>
       </TouchableOpacity>
@@ -69,7 +70,7 @@ const BottomNavbar: React.FC<Props> = ({ currentRoute }) => {
         <Icon
           name={isActive('Profile') ? "account" : "account-outline"}
           size={24}
-          color={isActive('Profile') ? "#6366F1" : "#444"}
+          color={isActive('Profile') ? colors.primary : colors.textMuted}
         />
         <Text style={[styles.label, isActive('Profile') && styles.activeLabel]}>Profile</Text>
       </TouchableOpacity>
@@ -81,21 +82,21 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    paddingVertical: 10,
+    paddingVertical: spacing.sm,
     borderTopWidth: 1,
-    borderColor: '#ddd',
-    backgroundColor: '#fff',
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
   },
   tab: {
     alignItems: 'center',
   },
   label: {
     fontSize: 12,
-    color: '#444',
+    color: colors.textMuted,
     marginTop: 2,
   },
   activeLabel: {
-    color: '#6366F1',
+    color: colors.primary,
   },
 });
 

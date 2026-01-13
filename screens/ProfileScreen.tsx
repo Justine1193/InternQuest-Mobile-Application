@@ -24,6 +24,7 @@ import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "fire
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
+import { colors, radii, shadows } from '../ui/theme';
 
 // Add type for userData
 type UserData = {
@@ -410,7 +411,7 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#6366F1" />
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
     );
   }
@@ -439,16 +440,16 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
               {avatarUri ? (
                 <Image source={{ uri: avatarUri }} style={styles.avatar} />
               ) : (
-                <View style={[styles.avatar, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#eee' }]}>
-                  <Ionicons name="person-circle" size={100} color="#bbb" />
+                <View style={[styles.avatar, { justifyContent: 'center', alignItems: 'center', backgroundColor: colors.surfaceAlt }]}>
+                  <Ionicons name="person-circle" size={100} color={colors.textSubtle} />
                 </View>
               )}
               {/* Edit Icon Overlay */}
               <View style={styles.editIconOverlay}>
                 {avatarUploading ? (
-                  <ActivityIndicator size="small" color="#6366F1" />
+                  <ActivityIndicator size="small" color={colors.primary} />
                 ) : (
-                  <Ionicons name="camera" size={28} color="#fff" style={styles.editIcon} />
+                  <Ionicons name="camera" size={28} color={colors.onPrimary} style={styles.editIcon} />
                 )}
               </View>
             </TouchableOpacity>
@@ -466,12 +467,12 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
         {/* Stats Section */}
         <View style={styles.statsRow}>
           <View style={styles.statCard}>
-            <Ionicons name="time-outline" size={24} color="#6366F1" style={{ marginBottom: 4 }} />
+            <Ionicons name="time-outline" size={24} color={colors.primary} style={{ marginBottom: 4 }} />
             <Text style={styles.statLabel}>Remaining Hours</Text>
             <Text style={styles.statValue}>{Math.max(0, requiredHours - totalHours)} hrs</Text>
           </View>
           <View style={styles.statCard}>
-            <Ionicons name="business-outline" size={24} color="#6366F1" style={{ marginBottom: 4 }} />
+            <Ionicons name="business-outline" size={24} color={colors.primary} style={{ marginBottom: 4 }} />
             <Text style={styles.statLabel}>Company</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <TouchableOpacity onPress={handleCompanyPress} accessibilityRole="button" style={{ flexShrink: 1 }}>
@@ -479,7 +480,7 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
               </TouchableOpacity>
               {userData.appliedCompanyName && !userData.company && userData.status !== 'hired' ? (
                 <TouchableOpacity onPress={handleClearAppliedCompanyProfile} style={styles.removeButton} accessibilityLabel="Remove applied company">
-                  <Ionicons name="trash" size={18} color="#ff5252" />
+                  <Ionicons name="trash" size={18} color={colors.danger} />
                 </TouchableOpacity>
               ) : null}
             </View>
@@ -503,15 +504,15 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
         <View style={styles.sectionCard}>
           <Text style={styles.sectionHeader}>Contact & Details</Text>
           <TouchableOpacity style={styles.detailRow} onPress={handleEmailPress} activeOpacity={0.7}>
-            <Ionicons name="mail-outline" size={20} color="#6366F1" style={styles.detailIcon} />
+            <Ionicons name="mail-outline" size={20} color={colors.primary} style={styles.detailIcon} />
             <Text style={styles.detailValue}>{userData.email}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.detailRow} onPress={handlePhonePress} activeOpacity={0.7}>
-            <Ionicons name="call-outline" size={20} color="#6366F1" style={styles.detailIcon} />
+            <Ionicons name="call-outline" size={20} color={colors.primary} style={styles.detailIcon} />
             <Text style={styles.detailValue}>{userData.contact}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.detailRow} onPress={handleLinkedInPress} activeOpacity={0.7}>
-            <Ionicons name="logo-linkedin" size={20} color="#6366F1" style={styles.detailIcon} />
+            <Ionicons name="logo-linkedin" size={20} color={colors.primary} style={styles.detailIcon} />
             <Text style={styles.detailValue}>{userData.linkedin}</Text>
           </TouchableOpacity>
         </View>
@@ -519,24 +520,24 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
         {/* Action Buttons */}
         <View style={styles.buttonGroup}>
           <TouchableOpacity
-            style={[styles.actionButton, { backgroundColor: '#6366F1' }]}
+            style={[styles.actionButton, { backgroundColor: colors.primary }]}
             onPress={() => setModalVisible(true)}
           >
-            <Ionicons name="pencil" size={20} color="#fff" />
+            <Ionicons name="pencil" size={20} color={colors.onPrimary} />
             <Text style={styles.buttonText}>Edit Profile</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.actionButton, { backgroundColor: '#ff9800' }]}
+            style={[styles.actionButton, { backgroundColor: colors.warning }]}
             onPress={() => setChangePasswordModalVisible(true)}
           >
-            <Ionicons name="key-outline" size={20} color="#fff" />
+            <Ionicons name="key-outline" size={20} color={colors.onPrimary} />
             <Text style={styles.buttonText}>Change Password</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.actionButton, { backgroundColor: '#4CAF50' }]}
+            style={[styles.actionButton, { backgroundColor: colors.success }]}
             onPress={() => navigation.navigate('RequirementsChecklist')}
           >
-            <Ionicons name="checkmark-circle-outline" size={20} color="#fff" />
+            <Ionicons name="checkmark-circle-outline" size={20} color={colors.onPrimary} />
             <Text style={styles.buttonText}>Requirements Checklist</Text>
           </TouchableOpacity>
         </View>
@@ -691,7 +692,7 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
             />
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 20 }}>
               <TouchableOpacity
-                style={[styles.button, { backgroundColor: '#bbb', flex: 1, marginRight: 8 }]}
+                style={[styles.button, { backgroundColor: colors.border, flex: 1, marginRight: 8 }]}
                 onPress={() => {
                   setChangePasswordModalVisible(false);
                   setCurrentPassword('');
@@ -702,10 +703,10 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
                 }}
                 disabled={changePasswordLoading}
               >
-                <Text style={styles.buttonText}>Cancel</Text>
+                <Text style={[styles.buttonText, { color: colors.text }]}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.button, { backgroundColor: '#6366F1', flex: 1, marginLeft: 8 }]}
+                style={[styles.button, { backgroundColor: colors.primary, flex: 1, marginLeft: 8 }]}
                 onPress={async () => {
                   setChangePasswordError('');
                   setChangePasswordSuccess('');
@@ -768,7 +769,7 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f2f6ff',
+    backgroundColor: colors.bg,
     paddingTop: 30,
   },
   scrollContent: {
@@ -797,18 +798,18 @@ const styles = StyleSheet.create({
     height: 120,
     borderRadius: 60,
     borderWidth: 2,
-    borderColor: '#6366F1',
-    backgroundColor: '#fff',
+    borderColor: colors.primary,
+    backgroundColor: colors.surface,
   },
   editIconOverlay: {
     position: 'absolute',
     right: 0,
     bottom: 0,
-    backgroundColor: '#6366F1',
+    backgroundColor: colors.primary,
     borderRadius: 20,
     padding: 4,
     borderWidth: 2,
-    borderColor: '#fff',
+    borderColor: colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -816,14 +817,14 @@ const styles = StyleSheet.create({
   name: {
     fontSize: 22,
     fontWeight: 'bold',
-    color: '#222',
+    color: colors.text,
     marginTop: 12,
     marginBottom: 2,
     textAlign: 'center',
   },
   subtext: {
     fontSize: 15,
-    color: '#666',
+    color: colors.textMuted,
     textAlign: 'center',
     marginBottom: 2,
   },
@@ -835,25 +836,23 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    backgroundColor: '#f5f8ff',
-    borderRadius: 16,
+    backgroundColor: colors.surface,
+    borderRadius: radii.xl,
     alignItems: 'center',
     padding: 16,
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.card,
   },
   statLabel: {
     fontSize: 13,
-    color: '#666',
+    color: colors.textMuted,
     marginBottom: 2,
   },
   statValue: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#333',
+    color: colors.text,
   },
   workDetails: {
     marginTop: 20,
@@ -862,17 +861,17 @@ const styles = StyleSheet.create({
   sectionHeader: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#6366F1',
+    color: colors.primary,
     marginBottom: 12,
   },
   detailLabel: {
     fontSize: 14,
-    color: '#444',
+    color: colors.textMuted,
     marginTop: 10,
   },
   detailValue: {
     fontSize: 15,
-    color: '#333',
+    color: colors.text,
   },
   progressContainer: {
     marginTop: 20,
@@ -886,18 +885,18 @@ const styles = StyleSheet.create({
   progressBackground: {
     width: '100%',
     height: 12,
-    backgroundColor: '#e0e0e0',
+    backgroundColor: colors.border,
     borderRadius: 10,
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#6366F1',
+    backgroundColor: colors.primary,
     borderRadius: 10,
   },
   progressText: {
     fontSize: 14,
-    color: '#666',
+    color: colors.textMuted,
     marginTop: 8,
     textAlign: 'center',
   },
@@ -905,13 +904,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#6366F1',
+    backgroundColor: colors.primary,
     paddingVertical: 12,
-    borderRadius: 5,
+    borderRadius: radii.sm,
     marginTop: 10,
   },
   buttonText: {
-    color: '#fff',
+    color: colors.onPrimary,
     fontSize: 16,
     fontWeight: 'bold',
     marginLeft: 8,
@@ -920,17 +919,16 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: colors.overlay,
   },
   modalContent: {
     width: '90%',
-    backgroundColor: '#fff',
-    borderRadius: 10,
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
     padding: 20,
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 10,
-    elevation: 5,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.card,
   },
   modalHeader: {
     fontSize: 20,
@@ -943,10 +941,11 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 10,
     borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 5,
-    backgroundColor: '#f9f9f9',
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    backgroundColor: colors.surfaceAlt,
     marginBottom: 15,
+    color: colors.text,
   },
   modalButtons: {
     flexDirection: 'row',
@@ -961,19 +960,19 @@ const styles = StyleSheet.create({
     marginHorizontal: 5,
   },
   saveButton: {
-    backgroundColor: '#6366F1',
+    backgroundColor: colors.primary,
   },
   cancelButton: {
-    backgroundColor: '#d9534f',
+    backgroundColor: colors.danger,
   },
   modalButtonText: {
-    color: '#fff',
+    color: colors.onPrimary,
     fontSize: 14,
     fontWeight: 'bold',
   },
   label: {
     fontSize: 14,
-    color: '#444',
+    color: colors.text,
     marginBottom: 5,
     marginTop: 10,
   },
@@ -981,10 +980,10 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: colors.bg,
   },
   link: {
-    color: '#6366F1',
+    color: colors.primary,
     textDecorationLine: 'underline',
   },
   undoButton: {
@@ -994,14 +993,14 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingVertical: 6,
     paddingHorizontal: 14,
-    backgroundColor: '#e6f0ff',
+    backgroundColor: colors.infoSoft,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#6366F1',
+    borderColor: colors.primary,
     alignSelf: 'flex-start',
   },
   undoButtonText: {
-    color: '#6366F1',
+    color: colors.primary,
     fontWeight: 'bold',
     fontSize: 13,
     marginLeft: 6,
@@ -1011,7 +1010,7 @@ const styles = StyleSheet.create({
     bottom: 80,
     left: 20,
     right: 20,
-    backgroundColor: '#333',
+    backgroundColor: colors.black,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -1020,47 +1019,45 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   undoSnackbarText: {
-    color: '#fff',
+    color: colors.onPrimary,
   },
   undoSnackbarButton: {
-    color: '#fff',
+    color: colors.onPrimary,
     fontWeight: 'bold',
   },
   companyText: {
-    color: '#6366F1',
+    color: colors.primary,
     textDecorationLine: 'underline',
   },
   successText: {
-    color: '#4CAF50',
+    color: colors.success,
     fontSize: 14,
     textAlign: 'center',
     marginBottom: 8,
   },
   errorText: {
-    color: '#f44336',
+    color: colors.danger,
     fontSize: 14,
     textAlign: 'center',
     marginBottom: 8,
   },
   headerCardShadow: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    elevation: 4,
+    ...shadows.card,
     marginBottom: 16,
     marginTop: 16,
     borderRadius: 20,
     alignSelf: 'center',
   },
   headerCard: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderRadius: 20,
     alignItems: 'center',
     paddingVertical: 24,
     paddingHorizontal: 16,
     width: 320,
     alignSelf: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   statsRow: {
     flexDirection: 'row',
@@ -1085,23 +1082,21 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   sectionCard: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     padding: 20,
     marginBottom: 16,
     marginHorizontal: 16,
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 1,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.card,
   },
   detailRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: colors.border,
   },
   detailIcon: {
     marginRight: 12,

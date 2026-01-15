@@ -5,12 +5,18 @@
   "build": {
     "preview": {
       "android": {
-        "buildType": "apk"
+        "buildType": "apk",
+        "env": {
+          "EAS_BUILD_DISABLE_MAVEN_CACHE": "1"
+        }
       }
     },
     "production": {
       "android": {
-        "buildType": "app-bundle"
+        "buildType": "app-bundle",
+        "env": {
+          "EAS_BUILD_DISABLE_MAVEN_CACHE": "1"
+        }
       }
     }
   },

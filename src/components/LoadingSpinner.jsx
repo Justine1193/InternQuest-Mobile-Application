@@ -1,9 +1,10 @@
 import React from "react";
 import PropTypes from "prop-types";
 import "./LoadingSpinner.css";
+import logo from "../assets/InternQuest_Logo.png";
 
 /**
- * A reusable loading spinner component that can be used as an overlay
+ * A modern loading spinner component with logo and animated elements
  * @param {Object} props - Component props
  * @param {boolean} props.isLoading - Whether the spinner should be shown
  * @param {string} props.message - Optional message to display below the spinner
@@ -24,8 +25,26 @@ const LoadingSpinner = ({
       aria-busy="true"
     >
       <div className="loading-spinner-container">
-        <div className="loading-spinner"></div>
+        {/* Logo with pulse animation */}
+        <div className="loading-logo-wrapper">
+          <img src={logo} alt="InternQuest" className="loading-logo" />
+          <div className="loading-logo-ring"></div>
+        </div>
+
+        {/* Animated dots loader */}
+        <div className="loading-dots">
+          <span className="loading-dot"></span>
+          <span className="loading-dot"></span>
+          <span className="loading-dot"></span>
+        </div>
+
+        {/* Message */}
         {message && <p className="loading-message">{message}</p>}
+
+        {/* Progress bar */}
+        <div className="loading-progress-bar">
+          <div className="loading-progress-fill"></div>
+        </div>
       </div>
     </div>
   );

@@ -16,9 +16,11 @@ const FilterDropdown = ({
   onApply,
   onReset,
   fieldSuggestions = [],
+  sectionSuggestions = [],
   type = "company",
 }) => {
   const [showFieldDropdown, setShowFieldDropdown] = useState(false);
+  const [showSectionDropdown, setShowSectionDropdown] = useState(false);
 
   // Filter field suggestions based on input
   const filteredFields = fieldSuggestions.filter(
@@ -27,6 +29,15 @@ const FilterDropdown = ({
         .toLowerCase()
         .includes((pendingFilterValues.field || "").toLowerCase()) &&
       field !== pendingFilterValues.field
+  );
+
+  // Filter section suggestions based on input
+  const filteredSections = sectionSuggestions.filter(
+    (section) =>
+      section
+        .toLowerCase()
+        .includes((pendingFilterValues.section || "").toLowerCase()) &&
+      section !== pendingFilterValues.section
   );
 
   // Handle field input change
@@ -43,6 +54,24 @@ const FilterDropdown = ({
     (field) => {
       setPendingFilterValues((f) => ({ ...f, field }));
       setShowFieldDropdown(false);
+    },
+    [setPendingFilterValues]
+  );
+
+  // Handle section input change
+  const handleSectionChange = useCallback(
+    (e) => {
+      setPendingFilterValues((f) => ({ ...f, section: e.target.value }));
+      setShowSectionDropdown(true);
+    },
+    [setPendingFilterValues]
+  );
+
+  // Handle section selection
+  const handleSectionSelect = useCallback(
+    (section) => {
+      setPendingFilterValues((f) => ({ ...f, section }));
+      setShowSectionDropdown(false);
     },
     [setPendingFilterValues]
   );
@@ -125,6 +154,43 @@ const FilterDropdown = ({
               aria-label="Filter by program"
             />
           </div>
+          <div style={{ position: "relative" }}>
+            <label className="new-filter-label" htmlFor="section-input">
+              Section:
+            </label>
+            <input
+              id="section-input"
+              type="text"
+              className="new-filter-input"
+              value={pendingFilterValues.section || ""}
+              onChange={handleSectionChange}
+              onFocus={() => setShowSectionDropdown(true)}
+              onBlur={() =>
+                setTimeout(() => setShowSectionDropdown(false), DROPDOWN_CLOSE_DELAY)
+              }
+              placeholder="Section"
+              aria-label="Filter by section"
+            />
+            {showSectionDropdown && filteredSections.length > 0 && (
+              <div
+                className="skills-dropdown"
+                role="listbox"
+                aria-label="Section suggestions"
+              >
+                {filteredSections.map((section, idx) => (
+                  <div
+                    key={section + idx}
+                    className="skills-dropdown-item"
+                    onClick={() => handleSectionSelect(section)}
+                    role="option"
+                    aria-selected={pendingFilterValues.section === section}
+                  >
+                    {section}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
           <div>
             <label className="new-filter-label" htmlFor="hired-dropdown">
               Hired:
@@ -146,19 +212,6 @@ const FilterDropdown = ({
               value={pendingFilterValues.locationPreference || "All"}
               onChange={(val) =>
                 handleDropdownChange("locationPreference", val)
-              }
-            />
-          </div>
-          <div>
-            <label className="new-filter-label" htmlFor="approved-requirement-dropdown">
-              Approved Requirement:
-            </label>
-            <CustomDropdown
-              id="approved-requirement-dropdown"
-              options={["All", "Yes", "No"]}
-              value={pendingFilterValues.approvedRequirement || "All"}
-              onChange={(val) =>
-                handleDropdownChange("approvedRequirement", val)
               }
             />
           </div>
@@ -185,7 +238,7 @@ const FilterDropdown = ({
             </label>
             <CustomDropdown
               id="moa-expiration-dropdown"
-              options={["All", "Valid", "Expiring Soon", "Expired", "No MOA"]}
+              options={["All", "Valid", "Expiring Soon", "Expired"]}
               value={pendingFilterValues.moaExpirationStatus || "All"}
               onChange={(val) => handleDropdownChange("moaExpirationStatus", val)}
             />
@@ -230,6 +283,7 @@ FilterDropdown.propTypes = {
   pendingFilterValues: PropTypes.shape({
     field: PropTypes.string,
     program: PropTypes.string,
+    section: PropTypes.string,
     hired: PropTypes.string,
     locationPreference: PropTypes.string,
     approvedRequirement: PropTypes.string,
@@ -244,12 +298,15 @@ FilterDropdown.propTypes = {
   onReset: PropTypes.func.isRequired,
   /** List of field suggestions */
   fieldSuggestions: PropTypes.arrayOf(PropTypes.string),
+  /** List of section suggestions */
+  sectionSuggestions: PropTypes.arrayOf(PropTypes.string),
   /** Type of filter (company or student) */
   type: PropTypes.oneOf(["company", "student"]),
 };
 
 FilterDropdown.defaultProps = {
   fieldSuggestions: [],
+  sectionSuggestions: [],
   type: "company",
 };
 

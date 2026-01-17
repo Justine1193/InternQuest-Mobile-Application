@@ -108,19 +108,34 @@
 .dashboard-container {
   min-height: 100vh;
   width: 100%;
+  max-width: 100%;
   display: flex;
   flex-direction: column;
-  background: radial-gradient(circle at top left, #f0f5ff 0, var(--iq-bg) 40%, #eef2ff 100%);
+  background: #fff;
   color: var(--iq-text-main);
+  margin-left: 260px;
+  transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow-x: hidden;
+  box-sizing: border-box;
+}
+
+/* Adjust for collapsed sidebar - applied via body class */
+body.sidebar-collapsed .dashboard-container {
+  margin-left: 80px;
 }
 
 .dashboard-content {
   flex: 1;
   width: 100%;
+  max-width: 100%;
   padding: 2rem 0;
+  background: #fff;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow-x: hidden;
 }
 
-/* Shared top navigation styling (Student + HelpDesk) */
+/* Shared top navigation styling (Student + Resource Management) */
 .top-nav {
   position: sticky;
   top: 0;
@@ -157,7 +172,7 @@
 /* Shared card look for dashboard sections */
 .overview-section,
 .internships-section,
-.helpdesk-section,
+.resource-management-section,
 .student-table-container,
 .table-container {
   background: var(--iq-surface);
@@ -166,7 +181,7 @@
 }
 
 .overview-section h1,
-.helpdesk-section h1,
+.resource-management-section h1,
 .table-container h2,
 .student-table-container h2 {
   color: var(--iq-text-main);
@@ -472,7 +487,18 @@ textarea.input-standard.success {
   border-radius: var(--iq-radius-md);
 }
 
-/* Responsive Design */
+/* Responsive Design - Sidebar becomes top bar on mobile */
+@media (max-width: 768px) {
+  .dashboard-container {
+    margin-left: 0;
+    padding-top: 70px; /* Space for mobile top nav */
+  }
+  
+  body.sidebar-collapsed .dashboard-container {
+    margin-left: 0;
+  }
+}
+
 @media (max-width: 900px) {
   .dashboard-content {
     padding: 1.25rem 0.5rem 1.5rem 0.5rem;

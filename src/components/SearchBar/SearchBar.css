@@ -1,33 +1,29 @@
-/* SearchBar Component Styles */
+/* SearchBar Component Styles - Minimal Modern Design */
 
 /* Container Styles */
 .new-searchbar-wrapper {
   display: flex;
   justify-content: center;
   width: 100%;
-  margin-bottom: 2rem;
 }
 
 /* Search Form Styles */
 .new-searchbar {
   display: flex;
   align-items: center;
-  background: #fcfcfc;
-  border-radius: 32px;
-  box-shadow: 0 4px 24px rgba(30, 136, 229, 0.08),
-    0 1.5px 6px rgba(30, 136, 229, 0.04);
-  border: 1.5px solid #e3f2fd;
-  padding: 0.25rem 1.25rem 0.25rem 0.75rem;
-  min-width: 340px;
-  max-width: 780px;
+  background: #fff;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  padding: 0.25rem 0.75rem;
+  min-width: 280px;
+  max-width: 500px;
   width: 100%;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
 }
 
 .new-searchbar:focus-within {
-  box-shadow: 0 6px 32px rgba(30, 136, 229, 0.16),
-    0 2px 8px rgba(30, 136, 229, 0.08);
-  border: 1.5px solid #1976d2;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
 }
 
 /* Input Styles */
@@ -35,17 +31,16 @@
   border: none;
   outline: none;
   background: transparent;
-  font-size: 1.1rem;
-  padding: 0.7rem 0.5rem;
+  font-size: 0.875rem;
+  padding: 0.5rem 0.5rem;
   flex: 1;
-  color: #222;
+  color: #111827;
   width: 100%;
 }
 
 .new-searchbar-input::placeholder {
-  color: #aaa;
+  color: #9ca3af;
   font-weight: 400;
-  letter-spacing: 0.01em;
 }
 
 /* Button Styles */
@@ -54,21 +49,18 @@
   border: none;
   outline: none;
   cursor: pointer;
-  padding: 0 0.3rem;
+  padding: 0.25rem;
   display: flex;
   align-items: center;
-  color: #1976d2;
-  font-size: 1.2rem;
-  transition: all 0.2s ease;
+  color: #6b7280;
+  font-size: 1rem;
+  transition: all 0.15s ease;
+  border-radius: 4px;
 }
 
 .new-searchbar-btn:hover {
-  color: #1565c0;
-  transform: scale(1.05);
-}
-
-.new-searchbar-btn:active {
-  transform: scale(0.95);
+  color: #2563eb;
+  background: #eff6ff;
 }
 
 /* Filter Dropdown Container */
@@ -78,30 +70,19 @@
   position: relative;
 }
 
-/* Focus and Hover States */
-.new-searchbar-input:focus {
-  outline: none;
-}
-
-.new-searchbar-btn:focus-visible {
-  outline: 2px solid #1976d2;
-  outline-offset: 2px;
-  border-radius: 4px;
-}
-
 /* Clear Search Button */
 .clear-search-btn {
   pointer-events: auto !important;
   cursor: pointer !important;
-  color: #999;
+  color: #9ca3af;
   padding: 0.25rem;
   margin-right: 0.25rem;
+  border-radius: 4px;
 }
 
 .clear-search-btn:hover {
-  color: #666;
-  background: rgba(0, 0, 0, 0.05);
-  border-radius: 50%;
+  color: #374151;
+  background: #f3f4f6;
 }
 
 /* Filter Button with Badge */
@@ -110,21 +91,21 @@
 }
 
 .filter-btn.has-filters {
-  color: #1976d2;
+  color: #2563eb;
 }
 
 .filter-badge {
   position: absolute;
   top: -4px;
   right: -4px;
-  background: #f44336;
+  background: #ef4444;
   color: white;
   border-radius: 10px;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 600;
-  padding: 2px 5px;
-  min-width: 16px;
-  height: 16px;
+  padding: 1px 4px;
+  min-width: 14px;
+  height: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -137,20 +118,20 @@
   flex-wrap: wrap;
   gap: 0.5rem;
   margin-top: 0.75rem;
-  justify-content: center;
+  justify-content: flex-start;
 }
 
 .filter-chip {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  background: #e3f2fd;
-  color: #1976d2;
-  padding: 0.4rem 0.75rem;
-  border-radius: 16px;
-  font-size: 0.85rem;
+  gap: 0.375rem;
+  background: #eff6ff;
+  color: #1d4ed8;
+  padding: 0.25rem 0.625rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
   font-weight: 500;
-  border: 1px solid #90caf9;
+  border: 1px solid #bfdbfe;
 }
 
 .filter-chip-label {
@@ -161,36 +142,31 @@
 .filter-chip-remove {
   background: none;
   border: none;
-  color: #1976d2;
+  color: #1d4ed8;
   cursor: pointer;
   padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s;
+  transition: all 0.15s;
   border-radius: 50%;
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
+  font-size: 0.75rem;
 }
 
 .filter-chip-remove:hover {
-  background: rgba(25, 118, 210, 0.2);
-  color: #1565c0;
+  background: #dbeafe;
+  color: #1e40af;
 }
 
 /* Responsive Adjustments */
 @media (max-width: 480px) {
   .new-searchbar {
-    min-width: 280px;
-    padding: 0.25rem 0.75rem 0.25rem 0.5rem;
+    min-width: 100%;
   }
 
   .new-searchbar-input {
-    font-size: 1rem;
-    padding: 0.5rem 0.3rem;
-  }
-
-  .filter-chips {
-    justify-content: flex-start;
+    font-size: 0.875rem;
   }
 }

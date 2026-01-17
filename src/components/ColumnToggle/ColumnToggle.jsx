@@ -7,13 +7,17 @@ import React, { useState, useRef, useEffect } from "react";
 import PropTypes from "prop-types";
 import {
   IoEyeOutline,
-  IoEyeOffOutline,
   IoChevronDownOutline,
 } from "react-icons/io5";
 import Tooltip from "../Tooltip/Tooltip";
 import "./ColumnToggle.css";
 
-const ColumnToggle = ({ columns, visibleColumns, onToggleColumn }) => {
+const ColumnToggle = ({ 
+  columns, 
+  visibleColumns, 
+  onToggleColumn,
+  essentialColumnKeys = [] // Allow customizing which columns are essential/required
+}) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
 
@@ -35,18 +39,8 @@ const ColumnToggle = ({ columns, visibleColumns, onToggleColumn }) => {
     onToggleColumn(columnKey);
   };
 
-  // Essential columns are always visible, so count them separately
-  const essentialColumns = [
-    "profilePicture",
-    "studentNumber",
-    "firstName",
-    "lastName",
-  ];
-  const essentialCount = essentialColumns.length;
-  const nonEssentialVisible = visibleColumns.filter(
-    (key) => !essentialColumns.includes(key)
-  ).length;
-  const visibleCount = essentialCount + nonEssentialVisible;
+  // Calculate visible count
+  const visibleCount = visibleColumns.length;
   const totalCount = columns.length;
 
   return (
@@ -76,17 +70,11 @@ const ColumnToggle = ({ columns, visibleColumns, onToggleColumn }) => {
               className="column-toggle-select-all"
               onClick={() => {
                 // Get non-essential columns
-                const essentialColumns = [
-                  "profilePicture",
-                  "studentNumber",
-                  "firstName",
-                  "lastName",
-                ];
                 const nonEssentialColumns = columns.filter(
-                  (col) => !essentialColumns.includes(col.key)
+                  (col) => !essentialColumnKeys.includes(col.key)
                 );
                 const nonEssentialVisible = visibleColumns.filter(
-                  (key) => !essentialColumns.includes(key)
+                  (key) => !essentialColumnKeys.includes(key)
                 );
 
                 // Toggle all non-essential columns
@@ -107,17 +95,11 @@ const ColumnToggle = ({ columns, visibleColumns, onToggleColumn }) => {
               }}
             >
               {(() => {
-                const essentialColumns = [
-                  "profilePicture",
-                  "studentNumber",
-                  "firstName",
-                  "lastName",
-                ];
                 const nonEssentialColumns = columns.filter(
-                  (col) => !essentialColumns.includes(col.key)
+                  (col) => !essentialColumnKeys.includes(col.key)
                 );
                 const nonEssentialVisible = visibleColumns.filter(
-                  (key) => !essentialColumns.includes(key)
+                  (key) => !essentialColumnKeys.includes(key)
                 );
                 return nonEssentialVisible.length === nonEssentialColumns.length
                   ? "Hide All"
@@ -127,12 +109,7 @@ const ColumnToggle = ({ columns, visibleColumns, onToggleColumn }) => {
           </div>
           <div className="column-toggle-list">
             {columns.map((column) => {
-              const isEssential = [
-                "profilePicture",
-                "studentNumber",
-                "firstName",
-                "lastName",
-              ].includes(column.key);
+              const isEssential = essentialColumnKeys.includes(column.key);
               // Essential columns are always visible, so always show as checked
               const isVisible = isEssential
                 ? true
@@ -177,6 +154,7 @@ ColumnToggle.propTypes = {
   ).isRequired,
   visibleColumns: PropTypes.arrayOf(PropTypes.string).isRequired,
   onToggleColumn: PropTypes.func.isRequired,
+  essentialColumnKeys: PropTypes.arrayOf(PropTypes.string),
 };
 
 export default ColumnToggle;

@@ -13,8 +13,10 @@ import { useToast } from "../../hooks/useToast.js";
 import { activityLoggers } from "../../utils/activityLogger.js";
 import logger from "../../utils/logger.js";
 import Footer from "../Footer/Footer.jsx";
-import { IoRefreshOutline, IoArchiveOutline, IoSearchOutline, IoPeopleOutline, IoBusinessOutline } from "react-icons/io5";
+import { IoRefreshOutline, IoArchiveOutline, IoSearchOutline, IoPeopleOutline, IoBusinessOutline, IoShieldOutline, IoDocumentTextOutline } from "react-icons/io5";
 import EmptyState from "../EmptyState/EmptyState.jsx";
+import StudentDetailModal from "./StudentDetailModal.jsx";
+import CompanyDetailModal from "../CompanyManageComponents/CompanyDetailModal/CompanyDetailModal.jsx";
 import "./DeletedRecords.css";
 
 const DeletedRecords = () => {
@@ -22,18 +24,28 @@ const DeletedRecords = () => {
   const [error, setError] = useState("");
   const [deletedStudents, setDeletedStudents] = useState([]);
   const [deletedCompanies, setDeletedCompanies] = useState([]);
+  const [deletedAdmins, setDeletedAdmins] = useState([]);
+  const [rejectedRequirements, setRejectedRequirements] = useState([]);
   const [showConfirm, setShowConfirm] = useState(false);
   const [restoreItem, setRestoreItem] = useState(null);
-  const [restoreType, setRestoreType] = useState(null); // 'student' or 'company'
+  const [restoreType, setRestoreType] = useState(null); // 'student', 'company', 'admin', or 'requirement'
   const [isRestoring, setIsRestoring] = useState(false);
+  const [selectedStudent, setSelectedStudent] = useState(null);
+  const [showStudentModal, setShowStudentModal] = useState(false);
+  const [selectedCompany, setSelectedCompany] = useState(null);
+  const [showCompanyModal, setShowCompanyModal] = useState(false);
   const { toasts, removeToast, success, error: showError } = useToast();
   const navigate = useNavigate();
   
   // Search and filter state
   const [studentSearchQuery, setStudentSearchQuery] = useState("");
   const [companySearchQuery, setCompanySearchQuery] = useState("");
+  const [adminSearchQuery, setAdminSearchQuery] = useState("");
+  const [requirementSearchQuery, setRequirementSearchQuery] = useState("");
   const [currentStudentPage, setCurrentStudentPage] = useState(1);
   const [currentCompanyPage, setCurrentCompanyPage] = useState(1);
+  const [currentAdminPage, setCurrentAdminPage] = useState(1);
+  const [currentRequirementPage, setCurrentRequirementPage] = useState(1);
   const [itemsPerPage] = useState(10);
 
   useEffect(() => {
@@ -54,6 +66,8 @@ const DeletedRecords = () => {
     try {
       const studentsSnap = await getDocs(collection(db, "deleted_students"));
       const companiesSnap = await getDocs(collection(db, "deleted_companies"));
+      const adminsSnap = await getDocs(collection(db, "admin_deletions"));
+      const requirementsSnap = await getDocs(collection(db, "rejected_requirements"));
 
       const students = studentsSnap.docs.map((doc) => ({
         id: doc.id,
@@ -63,15 +77,25 @@ const DeletedRecords = () => {
         id: doc.id,
         ...doc.data(),
       }));
+      const admins = adminsSnap.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      const requirements = requirementsSnap.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
 
-      // Sort by deletedAt desc if present
+      // Sort by deletedAt/rejectedAt desc if present
       const sortByDeletedAt = (arr) =>
         [...arr].sort((a, b) =>
-          new Date(b.deletedAt || 0) - new Date(a.deletedAt || 0)
+          new Date(b.deletedAt || b.rejectedAt || 0) - new Date(a.deletedAt || a.rejectedAt || 0)
         );
 
       setDeletedStudents(sortByDeletedAt(students));
       setDeletedCompanies(sortByDeletedAt(companies));
+      setDeletedAdmins(sortByDeletedAt(admins));
+      setRejectedRequirements(sortByDeletedAt(requirements));
     } catch (err) {
       logger.error("Error fetching deleted records:", err);
       setError("Failed to load deleted records. Please try again.");
@@ -228,7 +252,8 @@ const DeletedRecords = () => {
     const fullName = `${student.firstName || ''} ${student.lastName || ''}`.toLowerCase();
     const email = (student.email || '').toLowerCase();
     const program = (student.program || '').toLowerCase();
-    return fullName.includes(query) || email.includes(query) || program.includes(query);
+    const studentId = ((student.studentNumber || student.studentId) || '').toLowerCase();
+    return fullName.includes(query) || email.includes(query) || program.includes(query) || studentId.includes(query);
   });
 
   const studentTotalPages = Math.ceil(filteredStudents.length / itemsPerPage);
@@ -251,6 +276,36 @@ const DeletedRecords = () => {
   const companyIndexOfFirst = companyIndexOfLast - itemsPerPage;
   const paginatedCompanies = filteredCompanies.slice(companyIndexOfFirst, companyIndexOfLast);
 
+  // Filter and paginate admins
+  const filteredAdmins = deletedAdmins.filter((admin) => {
+    if (!adminSearchQuery) return true;
+    const query = adminSearchQuery.toLowerCase();
+    const username = (admin.deletedUsername || '').toLowerCase();
+    const email = (admin.deletedEmail || '').toLowerCase();
+    const role = (admin.deletedRole || '').toLowerCase();
+    return username.includes(query) || email.includes(query) || role.includes(query);
+  });
+
+  const adminTotalPages = Math.ceil(filteredAdmins.length / itemsPerPage);
+  const adminIndexOfLast = currentAdminPage * itemsPerPage;
+  const adminIndexOfFirst = adminIndexOfLast - itemsPerPage;
+  const paginatedAdmins = filteredAdmins.slice(adminIndexOfFirst, adminIndexOfLast);
+
+  // Filter and paginate rejected requirements
+  const filteredRequirements = rejectedRequirements.filter((req) => {
+    if (!requirementSearchQuery) return true;
+    const query = requirementSearchQuery.toLowerCase();
+    const studentName = (req.studentName || '').toLowerCase();
+    const requirementType = (req.requirementType || '').toLowerCase();
+    const fileName = (req.fileName || '').toLowerCase();
+    return studentName.includes(query) || requirementType.includes(query) || fileName.includes(query);
+  });
+
+  const requirementTotalPages = Math.ceil(filteredRequirements.length / itemsPerPage);
+  const requirementIndexOfLast = currentRequirementPage * itemsPerPage;
+  const requirementIndexOfFirst = requirementIndexOfLast - itemsPerPage;
+  const paginatedRequirements = filteredRequirements.slice(requirementIndexOfFirst, requirementIndexOfLast);
+
   return (
     <div className="deleted-records-page">
       <LoadingSpinner isLoading={isLoading || isRestoring} message={isRestoring ? "Restoring..." : "Loading archive..."} />
@@ -263,7 +318,7 @@ const DeletedRecords = () => {
             </div>
             <div>
               <h1>Archive Management</h1>
-              <p>View and restore archived students and companies</p>
+              <p>View and restore archived records, students, companies, and rejected requirements</p>
             </div>
           </div>
           <div className="header-stats">
@@ -279,6 +334,20 @@ const DeletedRecords = () => {
               <div>
                 <span className="stat-value">{deletedCompanies.length}</span>
                 <span className="stat-label">Archived Companies</span>
+              </div>
+            </div>
+            <div className="stat-card">
+              <IoShieldOutline className="stat-icon" />
+              <div>
+                <span className="stat-value">{deletedAdmins.length}</span>
+                <span className="stat-label">Archived Admins</span>
+              </div>
+            </div>
+            <div className="stat-card">
+              <IoDocumentTextOutline className="stat-icon" />
+              <div>
+                <span className="stat-value">{rejectedRequirements.length}</span>
+                <span className="stat-label">Rejected Requirements</span>
               </div>
             </div>
           </div>
@@ -329,6 +398,7 @@ const DeletedRecords = () => {
                 <thead>
                   <tr>
                     <th>Name</th>
+                    <th>Student ID</th>
                     <th>Email</th>
                     <th>Program</th>
                     <th>Archived At</th>
@@ -339,7 +409,7 @@ const DeletedRecords = () => {
                 <tbody>
                   {deletedStudents.length === 0 ? (
                     <tr>
-                      <td colSpan="6" style={{ padding: 0, border: "none" }}>
+                      <td colSpan="7" style={{ padding: 0, border: "none" }}>
                         <EmptyState
                           type="document"
                           title="No archived students"
@@ -350,7 +420,7 @@ const DeletedRecords = () => {
                     </tr>
                   ) : filteredStudents.length === 0 ? (
                     <tr>
-                      <td colSpan="6" style={{ padding: 0, border: "none" }}>
+                      <td colSpan="7" style={{ padding: 0, border: "none" }}>
                         <EmptyState
                           type="search"
                           title="No students found"
@@ -361,10 +431,19 @@ const DeletedRecords = () => {
                     </tr>
                   ) : (
                     paginatedStudents.map((s) => (
-                      <tr key={s.id}>
+                      <tr 
+                        key={s.id}
+                        className="clickable-row"
+                        onClick={() => {
+                          setSelectedStudent(s);
+                          setShowStudentModal(true);
+                        }}
+                        style={{ cursor: 'pointer' }}
+                      >
                         <td>
                           {s.firstName || ""} {s.lastName || ""}
                         </td>
+                        <td>{s.studentNumber || s.studentId || "N/A"}</td>
                         <td>{s.email || "N/A"}</td>
                         <td>{s.program || "N/A"}</td>
                         <td>
@@ -376,7 +455,10 @@ const DeletedRecords = () => {
                         <td>
                           <button
                             className="restore-btn"
-                            onClick={() => handleRestoreClick(s, "student")}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRestoreClick(s, "student");
+                            }}
                             disabled={isRestoring}
                             title="Restore student"
                           >
@@ -512,7 +594,15 @@ const DeletedRecords = () => {
                     </tr>
                   ) : (
                     paginatedCompanies.map((c) => (
-                      <tr key={c.id}>
+                      <tr 
+                        key={c.id}
+                        className="clickable-row"
+                        onClick={() => {
+                          setSelectedCompany(c);
+                          setShowCompanyModal(true);
+                        }}
+                        style={{ cursor: 'pointer' }}
+                      >
                         <td>{c.companyName || c.companyDescription || "N/A"}</td>
                         <td>{c.companyEmail || "N/A"}</td>
                         <td>
@@ -526,7 +616,10 @@ const DeletedRecords = () => {
                         <td>
                           <button
                             className="restore-btn"
-                            onClick={() => handleRestoreClick(c, "company")}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRestoreClick(c, "company");
+                            }}
                             disabled={isRestoring}
                             title="Restore company"
                           >
@@ -592,8 +685,350 @@ const DeletedRecords = () => {
               </div>
             )}
           </section>
+
+          <section className="deleted-section">
+            <div className="section-header">
+              <div className="section-title-wrapper">
+                <IoShieldOutline className="section-icon" />
+                <h2>Archived Admins</h2>
+                <span className="section-count">({deletedAdmins.length})</span>
+              </div>
+              <div className="search-wrapper">
+                <IoSearchOutline className="search-icon" />
+                <input
+                  type="text"
+                  className="search-input"
+                  placeholder="Search admins..."
+                  value={adminSearchQuery}
+                  onChange={(e) => {
+                    setAdminSearchQuery(e.target.value);
+                    setCurrentAdminPage(1);
+                  }}
+                />
+                {adminSearchQuery && (
+                  <button
+                    className="search-clear"
+                    onClick={() => {
+                      setAdminSearchQuery("");
+                      setCurrentAdminPage(1);
+                    }}
+                    aria-label="Clear search"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            </div>
+            <div className="deleted-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Username</th>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Program</th>
+                    <th>Archived At</th>
+                    <th>Archived By</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {deletedAdmins.length === 0 ? (
+                    <tr>
+                      <td colSpan="6" style={{ padding: 0, border: "none" }}>
+                        <EmptyState
+                          type="document"
+                          title="No archived admins"
+                          message="There are no archived admin records at this time."
+                          icon={IoShieldOutline}
+                        />
+                      </td>
+                    </tr>
+                  ) : filteredAdmins.length === 0 ? (
+                    <tr>
+                      <td colSpan="6" style={{ padding: 0, border: "none" }}>
+                        <EmptyState
+                          type="search"
+                          title="No admins found"
+                          message="No archived admins match your search criteria."
+                          icon={IoShieldOutline}
+                        />
+                      </td>
+                    </tr>
+                  ) : (
+                    paginatedAdmins.map((admin) => (
+                      <tr key={admin.id}>
+                        <td>{admin.deletedUsername || "N/A"}</td>
+                        <td>{admin.deletedEmail || "N/A"}</td>
+                        <td>{admin.deletedRole || "N/A"}</td>
+                        <td>{admin.deletedProgram || "N/A"}</td>
+                        <td>
+                          {admin.deletedAt
+                            ? new Date(admin.deletedAt).toLocaleString()
+                            : "N/A"}
+                        </td>
+                        <td>{admin.deletedByRole || "N/A"}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+            {adminTotalPages > 1 && (
+              <div className="pagination">
+                <div className="pagination-info">
+                  Showing {adminIndexOfFirst + 1} to {Math.min(adminIndexOfLast, filteredAdmins.length)} of {filteredAdmins.length}
+                </div>
+                <div className="pagination-controls">
+                  <button
+                    className="pagination-btn"
+                    onClick={() => setCurrentAdminPage((prev) => Math.max(1, prev - 1))}
+                    disabled={currentAdminPage === 1}
+                    aria-label="Previous page"
+                  >
+                    ‹
+                  </button>
+                  {[...Array(adminTotalPages)].map((_, index) => {
+                    const page = index + 1;
+                    if (
+                      page === 1 ||
+                      page === adminTotalPages ||
+                      (page >= currentAdminPage - 1 && page <= currentAdminPage + 1)
+                    ) {
+                      return (
+                        <button
+                          key={page}
+                          className={`pagination-btn ${currentAdminPage === page ? "active" : ""}`}
+                          onClick={() => setCurrentAdminPage(page)}
+                          aria-label={`Go to page ${page}`}
+                        >
+                          {page}
+                        </button>
+                      );
+                    } else if (page === currentAdminPage - 2 || page === currentAdminPage + 2) {
+                      return (
+                        <span key={page} className="pagination-ellipsis">
+                          ...
+                        </span>
+                      );
+                    }
+                    return null;
+                  })}
+                  <button
+                    className="pagination-btn"
+                    onClick={() => setCurrentAdminPage((prev) => Math.min(adminTotalPages, prev + 1))}
+                    disabled={currentAdminPage === adminTotalPages}
+                    aria-label="Next page"
+                  >
+                    ›
+                  </button>
+                </div>
+              </div>
+            )}
+          </section>
+
+          <section className="deleted-section">
+            <div className="section-header">
+              <div className="section-title-wrapper">
+                <IoDocumentTextOutline className="section-icon" />
+                <h2>Rejected Requirements</h2>
+                <span className="section-count">({rejectedRequirements.length})</span>
+              </div>
+              <div className="search-wrapper">
+                <IoSearchOutline className="search-icon" />
+                <input
+                  type="text"
+                  className="search-input"
+                  placeholder="Search rejected requirements..."
+                  value={requirementSearchQuery}
+                  onChange={(e) => {
+                    setRequirementSearchQuery(e.target.value);
+                    setCurrentRequirementPage(1);
+                  }}
+                />
+                {requirementSearchQuery && (
+                  <button
+                    className="search-clear"
+                    onClick={() => {
+                      setRequirementSearchQuery("");
+                      setCurrentRequirementPage(1);
+                    }}
+                    aria-label="Clear search"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            </div>
+            <div className="deleted-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Student</th>
+                    <th>Requirement Type</th>
+                    <th>File Name</th>
+                    <th>Rejected At</th>
+                    <th>Rejected By</th>
+                    <th>Reason</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rejectedRequirements.length === 0 ? (
+                    <tr>
+                      <td colSpan="7" style={{ padding: 0, border: "none" }}>
+                        <EmptyState
+                          type="document"
+                          title="No rejected requirements"
+                          message="There are no rejected requirement files at this time."
+                          icon={IoDocumentTextOutline}
+                        />
+                      </td>
+                    </tr>
+                  ) : filteredRequirements.length === 0 ? (
+                    <tr>
+                      <td colSpan="7" style={{ padding: 0, border: "none" }}>
+                        <EmptyState
+                          type="search"
+                          title="No requirements found"
+                          message="No rejected requirements match your search criteria."
+                          icon={IoDocumentTextOutline}
+                        />
+                      </td>
+                    </tr>
+                  ) : (
+                    paginatedRequirements.map((req) => (
+                      <tr key={req.id}>
+                        <td>{req.studentName || "Unknown"}</td>
+                        <td>{req.requirementType || "N/A"}</td>
+                        <td>
+                          {req.archiveURL ? (
+                            <a
+                              href={req.archiveURL}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="file-link"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {req.fileName || "N/A"}
+                            </a>
+                          ) : (
+                            req.fileName || "N/A"
+                          )}
+                        </td>
+                        <td>
+                          {req.rejectedAt
+                            ? new Date(req.rejectedAt).toLocaleString()
+                            : "N/A"}
+                        </td>
+                        <td>{req.rejectedBy || "N/A"}</td>
+                        <td>
+                          <span className="rejection-reason-text" title={req.rejectionReason || "No reason provided"}>
+                            {req.rejectionReason || "No reason provided"}
+                          </span>
+                        </td>
+                        <td>
+                          {req.archiveURL && (
+                            <a
+                              href={req.archiveURL}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="view-file-btn"
+                              onClick={(e) => e.stopPropagation()}
+                              title="View archived file"
+                            >
+                              <IoDocumentTextOutline />
+                              View
+                            </a>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+            {requirementTotalPages > 1 && (
+              <div className="pagination">
+                <div className="pagination-info">
+                  Showing {requirementIndexOfFirst + 1} to {Math.min(requirementIndexOfLast, filteredRequirements.length)} of {filteredRequirements.length}
+                </div>
+                <div className="pagination-controls">
+                  <button
+                    className="pagination-btn"
+                    onClick={() => setCurrentRequirementPage((prev) => Math.max(1, prev - 1))}
+                    disabled={currentRequirementPage === 1}
+                    aria-label="Previous page"
+                  >
+                    ‹
+                  </button>
+                  {[...Array(requirementTotalPages)].map((_, index) => {
+                    const page = index + 1;
+                    if (
+                      page === 1 ||
+                      page === requirementTotalPages ||
+                      (page >= currentRequirementPage - 1 && page <= currentRequirementPage + 1)
+                    ) {
+                      return (
+                        <button
+                          key={page}
+                          className={`pagination-btn ${currentRequirementPage === page ? "active" : ""}`}
+                          onClick={() => setCurrentRequirementPage(page)}
+                          aria-label={`Go to page ${page}`}
+                        >
+                          {page}
+                        </button>
+                      );
+                    } else if (page === currentRequirementPage - 2 || page === currentRequirementPage + 2) {
+                      return (
+                        <span key={page} className="pagination-ellipsis">
+                          ...
+                        </span>
+                      );
+                    }
+                    return null;
+                  })}
+                  <button
+                    className="pagination-btn"
+                    onClick={() => setCurrentRequirementPage((prev) => Math.min(requirementTotalPages, prev + 1))}
+                    disabled={currentRequirementPage === requirementTotalPages}
+                    aria-label="Next page"
+                  >
+                    ›
+                  </button>
+                </div>
+              </div>
+            )}
+          </section>
         </div>
       </div>
+      <StudentDetailModal
+        open={showStudentModal}
+        student={selectedStudent}
+        onClose={() => {
+          setShowStudentModal(false);
+          setSelectedStudent(null);
+        }}
+        onRestore={() => {
+          if (selectedStudent) {
+            handleRestoreClick(selectedStudent, "student");
+            setShowStudentModal(false);
+          }
+        }}
+      />
+      <CompanyDetailModal
+        open={showCompanyModal}
+        company={selectedCompany}
+        onClose={() => {
+          setShowCompanyModal(false);
+          setSelectedCompany(null);
+        }}
+        onRestore={() => {
+          if (selectedCompany) {
+            handleRestoreClick(selectedCompany, "company");
+            setShowCompanyModal(false);
+          }
+        }}
+      />
       <ConfirmModal
         open={showConfirm}
         message={getRestoreMessage()}

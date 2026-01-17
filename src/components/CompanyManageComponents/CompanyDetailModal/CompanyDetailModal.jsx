@@ -1,9 +1,9 @@
 import React from "react";
-import { IoCloseOutline, IoBusinessOutline, IoLocationOutline, IoMailOutline, IoGlobeOutline, IoDocumentTextOutline, IoCalendarOutline, IoRefreshOutline, IoPersonOutline, IoCallOutline, IoAlertCircle, IoWarning } from "react-icons/io5";
+import { IoCloseOutline, IoBusinessOutline, IoLocationOutline, IoMailOutline, IoGlobeOutline, IoDocumentTextOutline, IoCalendarOutline, IoRefreshOutline, IoPersonOutline, IoCallOutline, IoAlertCircle, IoWarning, IoDownloadOutline, IoOpenOutline } from "react-icons/io5";
 import { checkMoaExpiration } from "../../../utils/moaUtils";
 import "./CompanyDetailModal.css";
 
-const CompanyDetailModal = ({ open, company, onClose, onRenewMoa, onEdit }) => {
+const CompanyDetailModal = ({ open, company, onClose, onRenewMoa, onEdit, onRestore }) => {
   if (!open || !company) return null;
 
   const formatDate = (dateString) => {
@@ -83,6 +83,19 @@ const CompanyDetailModal = ({ open, company, onClose, onRenewMoa, onEdit }) => {
             <h2>{company.companyName}</h2>
           </div>
           <div className="company-detail-actions">
+            {onRestore && (
+              <button 
+                className="company-detail-action-btn restore-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRestore();
+                }}
+                title="Restore company"
+              >
+                <IoRefreshOutline />
+                Restore
+              </button>
+            )}
             {onRenewMoa && company.moa === "Yes" && expirationStatus.status !== "valid" && (
               <button 
                 className="company-detail-action-btn renew-moa-btn"
@@ -177,16 +190,16 @@ const CompanyDetailModal = ({ open, company, onClose, onRenewMoa, onEdit }) => {
                     </div>
                   </div>
                 )}
-                {company.contactPersonEmail && (
+                {(company.contactPersonEmail || company.companyEmail) && (
                   <div className="detail-item">
                     <IoMailOutline className="detail-item-icon" />
                     <div className="detail-item-content">
                       <span className="detail-item-label">Email</span>
                       <a 
-                        href={`mailto:${company.contactPersonEmail}`}
+                        href={`mailto:${company.contactPersonEmail || company.companyEmail}`}
                         className="detail-item-value link"
                       >
-                        {company.contactPersonEmail}
+                        {company.contactPersonEmail || company.companyEmail}
                       </a>
                     </div>
                   </div>
@@ -301,6 +314,59 @@ const CompanyDetailModal = ({ open, company, onClose, onRenewMoa, onEdit }) => {
                 </div>
               )}
             </div>
+
+            {/* MOA File Section */}
+            {company.moaFileUrl && (
+              <div className="moa-file-section">
+                <h4 className="moa-file-title">
+                  <IoDocumentTextOutline className="moa-file-title-icon" />
+                  MOA Document
+                </h4>
+                <div className="moa-file-card">
+                  <div className="moa-file-info">
+                    <IoDocumentTextOutline className="moa-file-icon" />
+                    <div className="moa-file-details">
+                      <span className="moa-file-name">{company.moaFileName || "MOA Document"}</span>
+                      <span className="moa-file-type">PDF Document</span>
+                    </div>
+                  </div>
+                  <div className="moa-file-actions">
+                    <a
+                      href={company.moaFileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="moa-file-btn view-btn"
+                      title="View MOA Document"
+                    >
+                      <IoOpenOutline />
+                      View
+                    </a>
+                    <a
+                      href={company.moaFileUrl}
+                      download={company.moaFileName || "MOA_Document.pdf"}
+                      className="moa-file-btn download-btn"
+                      title="Download MOA Document"
+                    >
+                      <IoDownloadOutline />
+                      Download
+                    </a>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {!company.moaFileUrl && company.moa === "Yes" && (
+              <div className="moa-file-section">
+                <h4 className="moa-file-title">
+                  <IoDocumentTextOutline className="moa-file-title-icon" />
+                  MOA Document
+                </h4>
+                <div className="moa-file-empty">
+                  <IoDocumentTextOutline className="moa-file-empty-icon" />
+                  <span>No MOA document uploaded</span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

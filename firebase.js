@@ -3,7 +3,7 @@ import { getFirestore } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { getDatabase } from 'firebase/database';
 import { getStorage } from 'firebase/storage';
-import { getFunctions } from 'firebase/functions';
+import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
 
 // Firebase config (from your Firebase console)
 const firebaseConfig = {
@@ -26,6 +26,7 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const realtimeDb = getDatabase(app);
 const storage = getStorage(app);
-const functions = getFunctions(app);
+// Initialize Functions with us-central1 region to match deployed functions
+const functions = getFunctions(app, 'us-central1');
 
 export { auth, db, realtimeDb, storage, functions };

@@ -1,337 +1,328 @@
-/* StudentTable Component Styles */
+/* Student Table - Clean & Compact Design (Matching Company Table) */
+
+/* Table Section Wrapper */
+.student-table-section {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+  width: 80%;
+  margin-left: auto;
+  margin-right: auto;
+  margin-top: 1.5rem;
+}
 
 /* Table Container */
 .student-table-container {
-  background: #fff;
-  border-radius: 16px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-  padding: 1.5rem 1.5rem 0.5rem 1.5rem;
-  margin-top: 2rem;
+  background: white;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
+  margin-top: 0;
   overflow-x: auto;
   width: 100%;
-  border: 1px solid #e3f2fd;
+  max-width: 100%;
+  border: none;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
-/* Table Styles */
 .student-table-container table {
   width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-  font-size: 1rem;
-  background: #fff;
+  max-width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  min-width: 1200px;
 }
 
+/* Table Header - Clean */
 .student-table-container table th {
-  background: #f5faff;
-  color: #111;
+  background: #f9fafb;
+  color: #6b7280;
   font-weight: 600;
-  font-size: 15px;
-  border-top: none;
-  border-bottom: 2px solid #e3f2fd;
-  padding: 18px 16px;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid #e5e7eb;
+  padding: 0.65rem 0.5rem;
   text-align: left;
+  white-space: nowrap;
   position: sticky;
   top: 0;
   z-index: 10;
-  user-select: none;
-  transition: background-color 0.2s ease;
 }
 
-.student-table-container table th {
-  transition: background-color var(--iq-transition-fast, 0.15s);
+.student-table-container table th:first-child {
+  padding-left: 1rem;
 }
 
-.student-table-container table th:hover {
-  background: #e8f4fd;
+.student-table-container table th:last-child {
+  padding-right: 1rem;
 }
 
-.student-table-container table th:focus-visible {
-  outline: 2px solid var(--iq-primary, #1976d2);
-  outline-offset: -2px;
-  background: #e8f4fd;
-}
-
-/* Sortable header indicator */
+/* Sortable Headers */
 .student-table-container table th.sortable {
   cursor: pointer;
-  position: relative;
-  padding-right: 24px;
+  transition: color 0.15s ease;
+  user-select: none;
+}
+
+.student-table-container table th.sortable:hover {
+  color: #374151;
 }
 
 .student-table-container table th.sortable::after {
-  content: "↕";
-  position: absolute;
-  right: 8px;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 12px;
-  color: #999;
+  content: '';
+  display: inline-block;
+  width: 0;
+  height: 0;
+  margin-left: 4px;
+  vertical-align: middle;
+  border-left: 3px solid transparent;
+  border-right: 3px solid transparent;
+  border-top: 3px solid #d1d5db;
   opacity: 0.5;
 }
 
 .student-table-container table th.sortable:hover::after {
   opacity: 1;
-  color: #1976d2;
 }
 
-.student-table-container table th.sortable.sorted-asc::after {
-  content: "↑";
+.student-table-container table th.sortable.sorted-asc::after,
+.student-table-container table th.sortable.sorted-desc::after {
   opacity: 1;
-  color: #1976d2;
+  border-top-color: #2563eb;
 }
 
 .student-table-container table th.sortable.sorted-desc::after {
-  content: "↓";
-  opacity: 1;
-  color: #1976d2;
+  border-top: none;
+  border-bottom: 3px solid #2563eb;
 }
 
-.student-table-container table th.sortable:focus-visible {
-  outline: 2px solid #1976d2;
-  outline-offset: -2px;
-  background: #e8f4fd;
-}
-
-.student-table-container table th.sortable:focus-visible::after {
-  opacity: 1;
-  color: #1976d2;
-}
-
+/* Table Body - Clean */
 .student-table-container table td {
-  color: #333;
-  font-size: 14px;
-  padding: 18px 16px;
-  text-align: left;
-  border-bottom: 1px solid #f0f0f0;
-  background: transparent;
-  transition: background-color 0.2s ease;
+  padding: 0.5rem;
+  border-bottom: 1px solid #f3f4f6;
+  color: #374151;
+  font-size: 0.8rem;
+  vertical-align: middle;
+  line-height: 1.4;
 }
 
-/* Zebra striping for better readability */
-.student-table-container table tbody tr:nth-child(even) {
-  background-color: #fafbfc;
+.student-table-container table td:first-child {
+  padding-left: 1rem;
 }
 
-.student-table-container table tbody tr:nth-child(odd) {
-  background-color: #fff;
+.student-table-container table td:last-child {
+  padding-right: 1rem;
 }
 
-/* Row hover effect */
 .student-table-container table tbody tr {
-  transition: background-color var(--iq-transition-fast, 0.15s),
-    box-shadow var(--iq-transition-fast, 0.15s);
+  transition: background-color 0.15s ease;
 }
 
 .student-table-container table tbody tr:hover {
-  background-color: #f0f7ff !important;
-  box-shadow: inset 3px 0 0 var(--iq-primary, #1976d2);
+  background-color: #f9fafb;
 }
 
-.student-table-container table tbody tr:focus-within {
-  background-color: #e8f4fd !important;
-  box-shadow: inset 3px 0 0 var(--iq-primary, #1976d2),
-    0 0 0 2px rgba(25, 118, 210, 0.2);
-  outline: none;
+.student-table-container table tbody tr:last-child td {
+  border-bottom: none;
 }
 
-.student-table-container table tbody tr:hover td {
-  border-bottom-color: #e3f2fd;
-}
-
-/* Checkbox and Kebab Columns */
-.student-checkbox-cell,
-.student-kebab-cell {
-  width: 40px;
-  min-width: 40px;
-  max-width: 40px;
-  padding-left: 0;
-  padding-right: 0;
-  text-align: center;
-  vertical-align: middle;
-}
-
-.student-select-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.student-select-header input[type="checkbox"] {
-  width: 24px;
-  height: 24px;
-  cursor: pointer;
-  margin: 0;
-  display: inline-block;
-  vertical-align: middle;
-  accent-color: #1976d2;
-}
-
-.student-select-header span {
-  font-size: 14px;
-  font-weight: 500;
-  color: #333;
-}
-
+/* Selected Row */
 .student-selected-row {
-  background-color: #e3f2fd !important;
+  background-color: #eff6ff !important;
 }
 
-/* Column Widths and Truncation */
-.student-table-container table th:nth-child(8),
-.student-table-container table td:nth-child(8) {
-  min-width: 200px;
-  max-width: 300px;
+/* ===== COLUMN WIDTHS (Fixed Layout) ===== */
+/* Columns: Checkbox | Student ID | First Name | Last Name | Email | Contact | Section | Program | Field | Company | Hired | Skills | Status | Actions */
+
+/* Checkbox */
+.student-checkbox-cell {
+  width: 32px !important;
+  text-align: center;
+  padding: 0.5rem 0.25rem !important;
 }
 
-.student-table-container table th:nth-child(9),
-.student-table-container table td:nth-child(9) {
-  min-width: 40px;
-  max-width: 80px;
-  padding-left: 4px;
-  padding-right: 4px;
-  padding-top: 8px;
-  padding-bottom: 8px;
+/* Student ID - 9% */
+.student-table-container table th:nth-child(1),
+.student-table-container table td:nth-child(1) {
+  width: 9%;
 }
 
-.student-table-container table th:nth-child(7),
-.student-table-container table td:nth-child(7) {
-  min-width: 40px;
-  max-width: 80px;
-  padding-left: 4px;
-  padding-right: 4px;
-  padding-top: 8px;
-  padding-bottom: 8px;
-}
-
+/* First Name - 8% */
 .student-table-container table th:nth-child(2),
 .student-table-container table td:nth-child(2) {
-  max-width: 200px;
-  min-width: 100px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  width: 8%;
 }
 
-/* Responsive Scrollbars */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+/* Last Name - 8% */
+.student-table-container table th:nth-child(3),
+.student-table-container table td:nth-child(3) {
+  width: 8%;
 }
 
-::-webkit-scrollbar-track {
-  background: #f1f1f1;
+/* Email - 12% */
+.student-table-container table th:nth-child(4),
+.student-table-container table td:nth-child(4) {
+  width: 12%;
 }
 
-::-webkit-scrollbar-thumb {
-  background: #888;
-  border-radius: 4px;
+/* Contact - 8% */
+.student-table-container table th:nth-child(5),
+.student-table-container table td:nth-child(5) {
+  width: 8%;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: #555;
-}
-
-/* Skills Tags */
-.student-table-skills-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.student-table-skill-tag {
-  background: #1976d2;
-  color: #fff;
-  border-radius: 12px;
-  padding: 2px 10px;
-  font-size: 13px;
-  font-weight: 500;
-}
-
-/* Checkbox Header Cell */
-.student-checkbox-cell {
-  min-width: 48px;
-  width: 48px;
+/* Section - 5% */
+.student-table-container table th:nth-child(6),
+.student-table-container table td:nth-child(6) {
+  width: 5%;
   text-align: center;
 }
 
-/* Kebab Column Padding */
+/* Program - 10% */
+.student-table-container table th:nth-child(7),
+.student-table-container table td:nth-child(7) {
+  width: 10%;
+}
+
+/* Field - 8% */
+.student-table-container table th:nth-child(8),
+.student-table-container table td:nth-child(8) {
+  width: 8%;
+}
+
+/* Company - 10% */
+.student-table-container table th:nth-child(9),
+.student-table-container table td:nth-child(9) {
+  width: 10%;
+}
+
+/* Hired - 5% */
+.student-table-container table th:nth-child(10),
 .student-table-container table td:nth-child(10) {
-  /* Kebab column is now 10th after removing Location Preference */
-  padding-right: 10px;
-  padding-left: 50px;
+  width: 5%;
+  text-align: center;
 }
 
-.student-selected-row td:nth-child(10) {
-  padding-right: 25px !important;
+/* Skills - 9% */
+.student-table-container table th:nth-child(11),
+.student-table-container table td:nth-child(11) {
+  width: 9%;
 }
 
-.student-table-container table th:nth-child(4),
-.student-table-container table td:nth-child(4) {
-  padding-right: 00px;
+/* Status - 6% */
+.student-table-container table th:nth-child(12),
+.student-table-container table td:nth-child(12) {
+  width: 6%;
+  text-align: center;
 }
 
-.student-table-container table th:nth-child(5),
-.student-table-container table td:nth-child(5) {
-  padding-left: 5px;
+/* Actions/Kebab - Fixed 40px */
+.student-kebab-cell,
+.student-table-container table th:nth-child(13),
+.student-table-container table td:nth-child(13) {
+  width: 40px;
+  text-align: center;
 }
 
-/* Mobile Responsiveness */
+/* ===== CHECKBOX - Compact ===== */
+.student-table-checkbox {
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid #d1d5db;
+  border-radius: 3px;
+  background: white;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  margin: 0;
+}
+
+.student-table-checkbox:checked {
+  background: #2563eb;
+  border-color: #2563eb;
+}
+
+.student-table-checkbox:checked::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 3px;
+  height: 6px;
+  border: solid white;
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
+}
+
+.student-table-checkbox:hover {
+  border-color: #2563eb;
+}
+
+/* ===== SCROLLBAR ===== */
+.student-table-container::-webkit-scrollbar {
+  height: 5px;
+}
+
+.student-table-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.student-table-container::-webkit-scrollbar-thumb {
+  background: #e5e7eb;
+  border-radius: 3px;
+}
+
+.student-table-container::-webkit-scrollbar-thumb:hover {
+  background: #d1d5db;
+}
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 1400px) {
+  .student-table-section {
+    width: 90%;
+  }
+}
+
+@media (max-width: 1200px) {
+  .student-table-section {
+    width: 95%;
+  }
+}
+
 @media (max-width: 768px) {
+  .student-table-section {
+    width: 100%;
+    border-radius: 0;
+    margin: 0;
+  }
+
   .student-table-container {
-    padding: 1rem 0.5rem;
     overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    border-radius: 12px;
   }
 
   .student-table-container table {
-    font-size: 0.875rem;
-    min-width: 800px;
+    min-width: 1100px;
   }
 
   .student-table-container table th,
   .student-table-container table td {
-    padding: 12px 8px;
-    font-size: 0.8rem;
-  }
-
-  .student-table-container table th {
-    font-size: 0.8rem;
-    padding: 14px 8px;
-    position: sticky;
-    top: 0;
-    z-index: 10;
-  }
-
-  /* Improve touch targets on mobile */
-  .student-table-container table td {
-    min-height: 44px;
-    display: flex;
-    align-items: center;
-  }
-}
-
-@media (max-width: 480px) {
-  .student-table-container {
-    padding: 0.75rem 0.25rem;
-    border-radius: 8px;
-    margin-top: 1rem;
-  }
-
-  .student-table-container table {
-    min-width: 700px;
+    padding: 0.4rem;
     font-size: 0.75rem;
   }
 
-  .student-table-container table th,
-  .student-table-container table td {
-    padding: 10px 6px;
-    font-size: 0.75rem;
+  .student-table-container table th:first-child,
+  .student-table-container table td:first-child {
+    padding-left: 0.75rem;
   }
 
-  /* Stack action buttons on very small screens */
-  .student-table-container .bulk-action-btn {
-    font-size: 0.75rem;
-    padding: 0.5rem 0.75rem;
+  .student-table-container table th:last-child,
+  .student-table-container table td:last-child {
+    padding-right: 0.75rem;
   }
 }

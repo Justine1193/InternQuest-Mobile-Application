@@ -24,10 +24,31 @@ export function useSuggestionSkills() {
       try {
         const docSnap = await getDoc(doc(db, 'meta', 'suggestionSkills'));
         if (docSnap.exists()) {
-          setSkills((docSnap.data().list || []).map(skill => skill.trim()));
+          const data = docSnap.data();
+          // Handle both 'list' array and direct array structure
+          if (Array.isArray(data.list)) {
+            setSkills(data.list.map(skill => skill.trim()).filter(skill => skill.length > 0));
+          } else if (Array.isArray(data)) {
+            setSkills(data.map(skill => skill.trim()).filter(skill => skill.length > 0));
+          } else {
+            // Try to extract skills from object values
+            const skillValues = Object.values(data).filter(val => typeof val === 'string' && val.trim().length > 0);
+            if (skillValues.length > 0) {
+              setSkills(skillValues.map(skill => skill.trim()));
+            } else {
+              logger.warn('Meta suggestionSkills document exists but has no valid skill data structure');
+              console.warn('Meta suggestionSkills document data:', data);
+            }
+          }
+        } else {
+          logger.warn('Meta suggestionSkills document does not exist at meta/suggestionSkills');
+          console.warn('Document meta/suggestionSkills not found. Please create it in Firestore with structure: { list: ["Skill1", "Skill2", ...] }');
         }
       } catch (error) {
         logger.error('Error fetching skills:', error);
+        console.error('Error fetching skill suggestions:', error);
+        console.error('Error code:', error.code);
+        console.error('Error message:', error.message);
       }
     }
     fetchSkills();
@@ -44,17 +65,50 @@ export function useSuggestionFields() {
   const [fields, setFields] = useState([]);
   
   useEffect(() => {
+    let isMounted = true;
+    
     async function fetchFields() {
       try {
-        const docSnap = await getDoc(doc(db, 'meta', 'field'));
+        // Read from meta/field document with list array
+        const fieldRef = doc(db, 'meta', 'field');
+        const docSnap = await getDoc(fieldRef);
+        
+        if (!isMounted) return;
+        
         if (docSnap.exists()) {
-          setFields((docSnap.data().list || []).map(field => field.trim()));
+          const data = docSnap.data();
+          
+          // The document structure is: { list: ["Field1", "Field2", ...] }
+          if (data.list && Array.isArray(data.list)) {
+            const processedFields = data.list
+              .map(field => String(field).trim())
+              .filter(field => field.length > 0);
+            
+            console.log('✅ useSuggestionFields: Loaded', processedFields.length, 'fields from meta/field');
+            setFields(processedFields);
+          } else {
+            console.warn('⚠️ useSuggestionFields: Document exists but list field is missing or not an array');
+            console.warn('Document data:', data);
+            setFields([]);
+          }
+        } else {
+          console.warn('⚠️ useSuggestionFields: Document meta/field does not exist');
+          setFields([]);
         }
       } catch (error) {
-        logger.error('Error fetching fields:', error);
+        console.error('❌ useSuggestionFields: Error fetching fields:', error);
+        console.error('Error code:', error.code);
+        console.error('Error message:', error.message);
+        if (!isMounted) return;
+        setFields([]);
       }
     }
+    
     fetchFields();
+    
+    return () => {
+      isMounted = false;
+    };
   }, []);
   
   return fields;
@@ -68,28 +122,22 @@ const syncMoaValidityToRealtime = async (companyId, payload) => {
     // Check if user is authenticated
     if (!auth.currentUser) {
       logger.warn("No authenticated user found. Skipping RTDB sync.");
-      logger.warn("This usually means:");
-      logger.warn("1. Firebase Auth credentials (firebaseEmail/firebasePassword) are missing from your Firestore admin document");
-      logger.warn("2. The Firebase Auth user doesn't exist");
-      logger.warn("3. The sign-in failed during login");
-      logger.warn("Check the browser console during login for more details.");
       return;
     }
     logger.debug("Syncing to RTDB with user:", auth.currentUser.uid, auth.currentUser.email);
     await updateRealtime(ref(realtimeDb, `companies/${companyId}`), payload);
     logger.debug("Successfully synced MOA validity to RTDB");
   } catch (error) {
-    logger.error("Failed to sync MOA validity to Realtime Database:", error);
-    logger.error("Auth state:", {
-      isAuthenticated: !!auth.currentUser,
-      uid: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-    });
+    // Log error but don't throw - this is a non-critical operation
+    // The company is already saved in Firestore, RTDB sync is optional
     if (error.code === 'PERMISSION_DENIED') {
-      logger.error("Permission denied. Make sure:");
-      logger.error("1. You're signed into Firebase Auth (check login console logs)");
-      logger.error("2. Your UID exists in Realtime Database at: userRoles/<your-uid> with value 'admin'");
+      logger.warn("Realtime Database sync failed (permission denied). This is non-critical.");
+      logger.warn("To fix: Add your UID to Realtime Database at: userRoles/" + auth.currentUser?.uid + " with value 'admin'");
+      logger.warn("Or update Realtime Database rules to allow authenticated users to write to companies/");
+    } else {
+      logger.warn("Realtime Database sync failed (non-critical):", error.message);
     }
+    // Don't throw error - allow the main operation to succeed
   }
 };
 
@@ -140,15 +188,13 @@ export const dashboardHandlers = {
   },
 
   /**
-   * Handles changes to mode of work checkboxes
+   * Handles changes to mode of work radio buttons (single selection)
    */
   handleModeOfWorkChange: (formData, setFormData) => (e) => {
-    const { value, checked } = e.target;
+    const { value } = e.target;
     setFormData(prev => ({
       ...prev,
-      modeOfWork: checked 
-        ? [...prev.modeOfWork, value]
-        : prev.modeOfWork.filter(mode => mode !== value)
+      modeOfWork: value
     }));
   },
 
@@ -173,7 +219,7 @@ export const dashboardHandlers = {
 
       if (fields.length === 0) throw new Error("At least one field is required");
       if (skills.length === 0) throw new Error("At least one skill is required");
-      if (formData.modeOfWork.length === 0) throw new Error("At least one mode of work is required");
+      if (!formData.modeOfWork || formData.modeOfWork.trim() === "") throw new Error("Mode of work is required");
       // MOA is now always required
       if (
         !formData.moaValidityYears ||
@@ -184,6 +230,9 @@ export const dashboardHandlers = {
       }
       if (!formData.moaStartDate) {
         throw new Error("MOA start date is required. MOA is mandatory for all companies.");
+      }
+      if (!formData.moaFileUrl) {
+        throw new Error("MOA document file is required. Please upload the signed MOA document.");
       }
 
       setIsLoading(true);
@@ -204,11 +253,14 @@ export const dashboardHandlers = {
         moaValidityYears: Number(formData.moaValidityYears),
         moaStartDate: formData.moaStartDate,
         moaExpirationDate: expirationDate.toISOString(),
+        moaFileUrl: formData.moaFileUrl || "",
+        moaFileName: formData.moaFileName || "",
+        moaStoragePath: formData.moaStoragePath || "",
         modeOfWork: formData.modeOfWork,
         createdAt: new Date().toISOString(),
         fields: fields,
         contactPersonName: formData.contactPersonName || "",
-        contactPersonEmail: formData.contactPersonEmail || "",
+        contactPersonEmail: formData.email || "",
         contactPersonPhone: formData.contactPersonPhone || "",
         isVisibleToMobile: true, // Visible to mobile app by default
         moaStatus: 'valid', // Initial status
@@ -230,6 +282,21 @@ export const dashboardHandlers = {
         : [{ id: docRef.id, ...newCompany }]
       );
 
+      // Notify all students that a new company is available
+      try {
+        const notifierId = auth.currentUser?.uid || null;
+        await addDoc(collection(db, 'notifications'), {
+          message: `New company added: ${newCompany.companyName}`,
+          timestamp: new Date().toISOString(),
+          read: false,
+          userId: notifierId,
+          targetType: 'all',
+        });
+      } catch (notifyErr) {
+        logger.error("Failed to send notification for new company:", notifyErr);
+        // Do not block the main flow if notification fails
+      }
+
       // Reset form and close modal
       setIsModalOpen(false);
       setFormData({
@@ -240,8 +307,12 @@ export const dashboardHandlers = {
         email: '',
         skills: '',
         moa: false,
-        modeOfWork: [],
+        modeOfWork: "",
         moaValidityYears: "",
+        moaStartDate: "",
+        moaFileUrl: "",
+        moaFileName: "",
+        moaStoragePath: "",
       });
       setSkills([]);
       setFields([]);
@@ -273,7 +344,7 @@ export const dashboardHandlers = {
 
       if (fields.length === 0) throw new Error("At least one field is required");
       if (skills.length === 0) throw new Error("At least one skill is required");
-      if (formData.modeOfWork.length === 0) throw new Error("At least one mode of work is required");
+      if (!formData.modeOfWork || formData.modeOfWork.trim() === "") throw new Error("Mode of work is required");
       // MOA is now always required
       if (
         !formData.moaValidityYears ||
@@ -284,6 +355,9 @@ export const dashboardHandlers = {
       }
       if (!formData.moaStartDate) {
         throw new Error("MOA start date is required. MOA is mandatory for all companies.");
+      }
+      if (!formData.moaFileUrl) {
+        throw new Error("MOA document file is required. Please upload the signed MOA document.");
       }
 
       setIsLoading(true);
@@ -297,10 +371,13 @@ export const dashboardHandlers = {
         skillsREq: skills,
         moa: "Yes", // MOA is now always required
         moaValidityYears: Number(formData.moaValidityYears),
+        moaFileUrl: formData.moaFileUrl || "",
+        moaFileName: formData.moaFileName || "",
+        moaStoragePath: formData.moaStoragePath || "",
         modeOfWork: formData.modeOfWork,
         fields: fields,
         contactPersonName: formData.contactPersonName || "",
-        contactPersonEmail: formData.contactPersonEmail || "",
+        contactPersonEmail: formData.email || "",
         contactPersonPhone: formData.contactPersonPhone || "",
       };
 
@@ -360,8 +437,12 @@ export const dashboardHandlers = {
         email: '',
         skills: '',
         moa: false,
-        modeOfWork: [],
+        modeOfWork: "",
         moaValidityYears: "",
+        moaStartDate: "",
+        moaFileUrl: "",
+        moaFileName: "",
+        moaStoragePath: "",
       });
       setSkills([]);
       setFields([]);
@@ -426,7 +507,7 @@ export const dashboardHandlers = {
       moaStartDate: company.moaStartDate || "",
       modeOfWork: Array.isArray(company.modeOfWork) ? company.modeOfWork : [],
       contactPersonName: company.contactPersonName || "",
-      contactPersonEmail: company.contactPersonEmail || "",
+      contactPersonEmail: company.contactPersonEmail || company.companyEmail || "",
       contactPersonPhone: company.contactPersonPhone || "",
     });
     setSkills(Array.isArray(company.skillsREq) ? company.skillsREq : []);

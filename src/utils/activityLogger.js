@@ -86,11 +86,11 @@ export const activityLoggers = {
   exportData: (dataType, recordCount) =>
     logActivity("export_data", dataType, null, { recordCount }),
 
-  uploadHelpDeskFile: (fileName, category) =>
-    logActivity("upload_helpdesk_file", "helpdesk", null, { fileName, category }),
+  uploadResourceFile: (fileName, category) =>
+    logActivity("upload_resource_file", "resource_management", null, { fileName, category }),
 
-  deleteHelpDeskFile: (fileName) =>
-    logActivity("delete_helpdesk_file", "helpdesk", null, { fileName }),
+  deleteResourceFile: (fileName) =>
+    logActivity("delete_resource_file", "resource_management", null, { fileName }),
 
   restoreCompany: (companyId, companyName) =>
     logActivity("restore_company", "company", companyId, { companyName }),

@@ -297,8 +297,26 @@ body,
   animation: button-loading-spinner 0.7s linear infinite;
   position: absolute;
   right: 18px;
-  top: 50%;
-  transform: translateY(-50%);
+}
+
+/* Forgot Password Link */
+.forgot-password-link {
+  margin-top: 1rem;
+  text-align: center;
+}
+
+.forgot-password-text {
+  color: #2196f3;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  transition: color 0.3s ease;
+  display: inline-block;
+}
+
+.forgot-password-text:hover {
+  color: #1976d2;
+  text-decoration: underline;
 }
 @keyframes button-loading-spinner {
   0% {
@@ -314,6 +332,19 @@ body,
   color: #d32f2f;
   background: #fff0f0;
   border: 1.5px solid #ffcdd2;
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 18px;
+  font-size: 15px;
+  text-align: center;
+  animation: fadeIn 0.3s;
+}
+
+/* Success Message Styles */
+.success-message {
+  color: #2e7d32;
+  background: #e8f5e9;
+  border: 1.5px solid #c8e6c9;
   border-radius: 8px;
   padding: 10px 14px;
   margin-bottom: 18px;

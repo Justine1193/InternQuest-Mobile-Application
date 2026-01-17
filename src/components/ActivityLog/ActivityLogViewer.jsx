@@ -30,6 +30,9 @@ import {
   IoCheckmarkCircle,
   IoCloseCircle,
   IoInformationCircle,
+  IoSearchOutline,
+  IoStatsChartOutline,
+  IoCalendarOutline,
 } from "react-icons/io5";
 
 const ActivityLogViewer = () => {
@@ -38,6 +41,7 @@ const ActivityLogViewer = () => {
   const [lastDoc, setLastDoc] = useState(null);
   const [hasMore, setHasMore] = useState(true);
   const [filter, setFilter] = useState("all"); // all, success, error
+  const [searchQuery, setSearchQuery] = useState("");
   const { toasts, removeToast, error: showError } = useToast();
   const navigate = useNavigate();
 
@@ -148,41 +152,183 @@ const ActivityLogViewer = () => {
       .join(" ");
   };
 
-  const filteredActivities =
-    filter === "all"
-      ? activities
-      : activities.filter((activity) => activity.status === filter);
+  const formatRelativeTime = (timestamp) => {
+    if (!timestamp) return "Unknown time";
+    try {
+      let date;
+      if (timestamp.toDate) {
+        date = timestamp.toDate();
+      } else if (timestamp instanceof Date) {
+        date = timestamp;
+      } else if (typeof timestamp === 'string' || typeof timestamp === 'number') {
+        date = new Date(timestamp);
+      } else {
+        return "Unknown time";
+      }
+      
+      if (isNaN(date.getTime())) return "Unknown time";
+      
+      const now = new Date();
+      const diffInSeconds = Math.floor((now - date) / 1000);
+      
+      if (diffInSeconds < 60) return "Just now";
+      if (diffInSeconds < 3600) {
+        const minutes = Math.floor(diffInSeconds / 60);
+        return `${minutes} minute${minutes !== 1 ? 's' : ''} ago`;
+      }
+      if (diffInSeconds < 86400) {
+        const hours = Math.floor(diffInSeconds / 3600);
+        return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
+      }
+      if (diffInSeconds < 604800) {
+        const days = Math.floor(diffInSeconds / 86400);
+        return `${days} day${days !== 1 ? 's' : ''} ago`;
+      }
+      return date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (e) {
+      return "Unknown time";
+    }
+  };
+
+  const getStats = () => {
+    const total = activities.length;
+    const success = activities.filter(a => a.status === "success").length;
+    const errors = activities.filter(a => a.status === "error").length;
+    return { total, success, errors };
+  };
+
+  const filteredActivities = activities.filter((activity) => {
+    // Filter by status
+    if (filter !== "all" && activity.status !== filter) return false;
+    
+    // Filter by search query
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      const action = formatAction(activity.action || "").toLowerCase();
+      const entityType = (activity.entityType || "").toLowerCase();
+      const adminUsername = (activity.adminUsername || "").toLowerCase();
+      const adminRole = (activity.adminRole || "").toLowerCase();
+      const entityId = (activity.entityId || "").toLowerCase();
+      
+      return (
+        action.includes(query) ||
+        entityType.includes(query) ||
+        adminUsername.includes(query) ||
+        adminRole.includes(query) ||
+        entityId.includes(query) ||
+        (activity.details && JSON.stringify(activity.details).toLowerCase().includes(query))
+      );
+    }
+    
+    return true;
+  });
 
   return (
     <div className="activity-log-container">
       <Navbar onLogout={handleLogout} />
       <div className="activity-log-content">
-        <div className="activity-log-header">
-          <h1>Activity Log</h1>
-          <p className="activity-log-subtitle">
-            View all admin actions and system events
-          </p>
+        {/* Header Section */}
+        <div className="activity-log-header-section">
+          <div className="activity-header-content">
+            <div className="activity-header-icon-wrapper">
+              <IoStatsChartOutline className="activity-header-icon" />
+            </div>
+            <div>
+              <h1>Activity Log</h1>
+              <p className="activity-log-subtitle">
+                Track all admin actions and system events
+              </p>
+            </div>
+          </div>
         </div>
 
-        <div className="activity-log-filters">
-          <button
-            className={`filter-btn ${filter === "all" ? "active" : ""}`}
-            onClick={() => setFilter("all")}
-          >
-            All
-          </button>
-          <button
-            className={`filter-btn ${filter === "success" ? "active" : ""}`}
-            onClick={() => setFilter("success")}
-          >
-            Success
-          </button>
-          <button
-            className={`filter-btn ${filter === "error" ? "active" : ""}`}
-            onClick={() => setFilter("error")}
-          >
-            Errors
-          </button>
+        {/* Statistics Cards */}
+        {(() => {
+          const stats = getStats();
+          return (
+            <div className="activity-stats-wrapper">
+              <div className="activity-stats">
+                <div className="activity-stat-card stat-total">
+                  <div className="stat-icon-wrapper">
+                    <IoInformationCircle className="stat-icon" />
+                  </div>
+                  <div className="stat-content">
+                    <div className="stat-value">{stats.total}</div>
+                    <div className="stat-label">Total Activities</div>
+                  </div>
+                </div>
+                <div className="activity-stat-card stat-success">
+                  <div className="stat-icon-wrapper">
+                    <IoCheckmarkCircle className="stat-icon" />
+                  </div>
+                  <div className="stat-content">
+                    <div className="stat-value">{stats.success}</div>
+                    <div className="stat-label">Successful</div>
+                  </div>
+                </div>
+                <div className="activity-stat-card stat-error">
+                  <div className="stat-icon-wrapper">
+                    <IoCloseCircle className="stat-icon" />
+                  </div>
+                  <div className="stat-content">
+                    <div className="stat-value">{stats.errors}</div>
+                    <div className="stat-label">Errors</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Search and Filters */}
+        <div className="activity-controls-section">
+          <div className="activity-search-wrapper">
+            <IoSearchOutline className="search-icon" />
+            <input
+              type="text"
+              placeholder="Search activities..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="activity-search-input"
+            />
+            {searchQuery && (
+              <button
+                className="search-clear-btn"
+                onClick={() => setSearchQuery("")}
+                aria-label="Clear search"
+              >
+                ×
+              </button>
+            )}
+          </div>
+          <div className="activity-log-filters">
+            <button
+              className={`filter-btn ${filter === "all" ? "active" : ""}`}
+              onClick={() => setFilter("all")}
+            >
+              All
+            </button>
+            <button
+              className={`filter-btn ${filter === "success" ? "active" : ""}`}
+              onClick={() => setFilter("success")}
+            >
+              <IoCheckmarkCircle />
+              Success
+            </button>
+            <button
+              className={`filter-btn ${filter === "error" ? "active" : ""}`}
+              onClick={() => setFilter("error")}
+            >
+              <IoCloseCircle />
+              Errors
+            </button>
+          </div>
         </div>
 
         <div className="activity-log-list">
@@ -193,62 +339,94 @@ const ActivityLogViewer = () => {
             />
           ) : filteredActivities.length === 0 ? (
             <div className="no-activities">
-              <p>No activity logs found.</p>
+              <div className="empty-state-icon">
+                <IoStatsChartOutline />
+              </div>
+              <h3 className="empty-state-title">
+                {searchQuery || filter !== "all"
+                  ? "No activities found"
+                  : "No activity logs yet"}
+              </h3>
+              <p className="empty-state-description">
+                {searchQuery || filter !== "all"
+                  ? "Try adjusting your search or filter criteria."
+                  : "Activity logs will appear here as admins perform actions."}
+              </p>
             </div>
           ) : (
-            filteredActivities.map((activity) => (
-              <div key={activity.id} className="activity-item">
-                <div className="activity-icon-wrapper">
-                  {getActionIcon(activity.status)}
-                </div>
-                <div className="activity-content">
-                  <div className="activity-header">
-                    <span className="activity-action">
-                      {formatAction(activity.action)}
-                    </span>
-                    <span className="activity-entity">
-                      {activity.entityType}
-                    </span>
+            filteredActivities.map((activity) => {
+              const timestamp = activity.createdAt
+                ? new Date(activity.createdAt)
+                : activity.timestamp
+                ? activity.timestamp.toDate()
+                : null;
+              
+              return (
+                <div key={activity.id} className={`activity-item activity-${activity.status || 'info'}`}>
+                  <div className="activity-icon-wrapper">
+                    {getActionIcon(activity.status)}
                   </div>
-                  <div className="activity-details">
-                    <div className="activity-meta">
-                      <span className="activity-admin">
-                        <IoPersonOutline />
-                        {activity.adminUsername || "Unknown"} (
-                        {activity.adminRole || "unknown"})
-                      </span>
-                      {activity.entityId && (
-                        <span className="activity-entity-id">
-                          ID: {activity.entityId}
+                  <div className="activity-content">
+                    <div className="activity-header">
+                      <div className="activity-title-group">
+                        <span className="activity-action">
+                          {formatAction(activity.action)}
                         </span>
-                      )}
+                        {activity.entityType && (
+                          <span className="activity-entity">
+                            {activity.entityType}
+                          </span>
+                        )}
+                      </div>
+                      <span className="activity-time">
+                        <IoTimeOutline />
+                        {formatRelativeTime(timestamp || activity.timestamp)}
+                      </span>
                     </div>
-                    {activity.details &&
-                      Object.keys(activity.details).length > 0 && (
-                        <div className="activity-details-content">
-                          {Object.entries(activity.details).map(
-                            ([key, value]) => (
-                              <span key={key} className="activity-detail-item">
-                                <strong>{key}:</strong> {String(value)}
-                              </span>
-                            )
-                          )}
-                        </div>
-                      )}
-                  </div>
-                  <div className="activity-footer">
-                    <span className="activity-time">
-                      <IoTimeOutline />
-                      {activity.createdAt
-                        ? new Date(activity.createdAt).toLocaleString()
-                        : activity.timestamp
-                        ? new Date(activity.timestamp.toDate()).toLocaleString()
-                        : "Unknown time"}
-                    </span>
+                    <div className="activity-details">
+                      <div className="activity-meta">
+                        <span className="activity-admin">
+                          <IoPersonOutline />
+                          <span className="admin-name">{activity.adminUsername || "Unknown"}</span>
+                          <span className="admin-role">({activity.adminRole || "unknown"})</span>
+                        </span>
+                        {activity.entityId && (
+                          <span className="activity-entity-id">
+                            ID: {activity.entityId}
+                          </span>
+                        )}
+                      </div>
+                      {activity.details &&
+                        Object.keys(activity.details).length > 0 && (
+                          <div className="activity-details-content">
+                            {Object.entries(activity.details).map(
+                              ([key, value]) => (
+                                <span key={key} className="activity-detail-item">
+                                  <strong>{key}:</strong> {String(value)}
+                                </span>
+                              )
+                            )}
+                          </div>
+                        )}
+                    </div>
+                    {timestamp && (
+                      <div className="activity-footer">
+                        <span className="activity-full-time">
+                          <IoCalendarOutline />
+                          {timestamp.toLocaleString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
 
@@ -259,7 +437,14 @@ const ActivityLogViewer = () => {
               onClick={() => fetchActivities(true)}
               disabled={isLoading}
             >
-              {isLoading ? "Loading..." : "Load More"}
+              {isLoading ? (
+                <>
+                  <span className="spinner-small"></span>
+                  Loading...
+                </>
+              ) : (
+                "Load More Activities"
+              )}
             </button>
           </div>
         )}

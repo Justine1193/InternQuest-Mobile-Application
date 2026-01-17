@@ -9,17 +9,19 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import PropTypes from "prop-types";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation, Link } from "react-router-dom";
 import "./AdminLogin.css";
 import { FaRegEye, FaRegEyeSlash } from "react-icons/fa";
-import { collection, query, where, getDocs, addDoc } from "firebase/firestore";
+import { collection, query, where, getDocs, addDoc, doc, updateDoc } from "firebase/firestore";
 import { db, auth } from "../../../firebase";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import InternQuestLogo from "../../assets/InternQuest_with_text_white.png";
 import { createAdminSession, isAdminAuthenticated, getAdminRole, ROLES } from "../../utils/auth";
+import { attemptUpdateAuthPassword } from "../../utils/authPasswordUpdate";
 
 const AdminLogin = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const usernameInputRef = useRef(null);
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -28,6 +30,7 @@ const AdminLogin = () => {
     password: "",
   });
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [fieldErrors, setFieldErrors] = useState({
     username: "",
     password: "",
@@ -52,15 +55,11 @@ const AdminLogin = () => {
     return emailRegex.test(email);
   };
 
-  // Validate username/email field
+  // Validate username field
   const validateUsername = (value) => {
     const trimmed = value.trim();
     if (!trimmed) {
-      return "Username or email is required";
-    }
-    // If it looks like an email, validate format
-    if (trimmed.includes("@") && !isValidEmail(trimmed)) {
-      return "Please enter a valid email address";
+      return "Username is required";
     }
     return "";
   };
@@ -126,6 +125,15 @@ const AdminLogin = () => {
   };
 
   useEffect(() => {
+    // Check for password change success message
+    const state = location.state;
+    if (state?.passwordChanged) {
+      setError(""); // Clear any existing error
+      setSuccess(state.message || "Password changed successfully. Please log in with your new password.");
+    }
+  }, [location]);
+
+  useEffect(() => {
     if (isAdminAuthenticated()) {
       // Redirect based on role if already logged in
       const role = getAdminRole();
@@ -175,7 +183,7 @@ const AdminLogin = () => {
     try {
       const adminsRef = collection(db, "adminusers");
 
-      // Try username first, then email
+      // Try username
       let adminDoc = null;
       let adminData = null;
 
@@ -188,20 +196,13 @@ const AdminLogin = () => {
       if (!usernameSnapshot.empty) {
         adminDoc = usernameSnapshot.docs[0];
         adminData = adminDoc.data();
-      } else {
-        const emailQuery = query(adminsRef, where("email", "==", trimmedUsername));
-        const emailSnapshot = await getDocs(emailQuery);
-        if (!emailSnapshot.empty) {
-          adminDoc = emailSnapshot.docs[0];
-          adminData = emailSnapshot.docs[0].data();
-        }
       }
 
       if (!adminDoc || !adminData) {
-        setError("Invalid username/email or password");
+        setError("Invalid username or password");
         setFieldErrors({
-          username: "Invalid username/email or password",
-          password: "Invalid username/email or password",
+          username: "Invalid username or password",
+          password: "Invalid username or password",
         });
         return;
       }
@@ -209,31 +210,176 @@ const AdminLogin = () => {
       // Check if password matches
       if (adminData.password === trimmedPassword) {
 
-        // Sign into Firebase Auth so RTDB rules can verify admin role
-        if (adminData.firebaseEmail && adminData.firebasePassword) {
+        // Sign into Firebase Auth - REQUIRED for Firestore security rules
+        // Firestore rules require request.auth != null to read/write data
+        if (adminData.firebaseEmail) {
+          // Validate email format before attempting sign-in
+          const firebaseEmail = adminData.firebaseEmail.trim();
+          if (!firebaseEmail || !isValidEmail(firebaseEmail)) {
+            console.error("Invalid Firebase email format:", firebaseEmail);
+            setError("Admin account has invalid Firebase email configuration. Please contact administrator.");
+            setIsLoading(false);
+            return;
+          }
+
+          // Validate password is not empty
+          if (!trimmedPassword || trimmedPassword.length === 0) {
+            console.error("Password is empty");
+            setError("Password cannot be empty.");
+            setIsLoading(false);
+            return;
+          }
+
+          // Try to sign in with Firebase Auth
+          // First try with the password the user entered
+          let authSuccess = false;
+          let lastAuthError = null;
+          
+          console.log("Attempting Firebase Auth sign-in with:", {
+            email: firebaseEmail,
+            emailLength: firebaseEmail.length,
+            passwordLength: trimmedPassword.length,
+            hasFirebasePassword: !!adminData.firebasePassword
+          });
+          
           try {
             await signInWithEmailAndPassword(
               auth,
-              adminData.firebaseEmail,
-              adminData.firebasePassword
+              firebaseEmail,
+              trimmedPassword
             );
-          } catch (authError) {
-            // Provide user-friendly error messages
-            let errorMessage = "Authentication failed. Please contact administrator.";
-            if (authError.code === "auth/user-disabled") {
-              errorMessage = "This account has been disabled. Please contact administrator.";
-            } else if (authError.code === "auth/invalid-credential" || authError.code === "auth/wrong-password") {
-              errorMessage = "Invalid credentials. Please check your username and password.";
-            } else if (authError.code === "auth/network-request-failed") {
-              errorMessage = "Network error. Please check your connection and try again.";
+            authSuccess = true;
+            console.log("Firebase Auth sign-in successful with user password");
+          } catch (authError1) {
+            lastAuthError = authError1;
+            console.error("Firebase Auth sign-in error (first attempt):", {
+              code: authError1.code,
+              message: authError1.message,
+              email: firebaseEmail
+            });
+            
+            // If that fails, try with the stored firebasePassword (might be different)
+            if (adminData.firebasePassword && adminData.firebasePassword !== trimmedPassword) {
+              try {
+                console.log("Attempting Firebase Auth sign-in with stored firebasePassword");
+                await signInWithEmailAndPassword(
+                  auth,
+                  firebaseEmail,
+                  adminData.firebasePassword
+                );
+                authSuccess = true;
+                console.log("Firebase Auth sign-in successful with stored firebasePassword");
+              } catch (authError2) {
+                lastAuthError = authError2;
+                console.error("Firebase Auth sign-in failed with both passwords:", {
+                  code: authError2.code,
+                  message: authError2.message,
+                  email: firebaseEmail
+                });
+              }
             }
-            setError(errorMessage);
-            return;
+            
+            if (!authSuccess) {
+              // Firebase Auth authentication failed
+              // Since Firestore password matches, the user is legitimate but Firebase Auth is out of sync
+              // Try to sync the password to Firebase Auth automatically
+              if (lastAuthError.code === "auth/invalid-credential" || lastAuthError.code === "auth/wrong-password") {
+                console.log("Password mismatch detected. Attempting to sync password to Firebase Auth...", {
+                  hasUid: !!adminData.uid,
+                  hasEmail: !!adminData.email,
+                  hasFirebaseEmail: !!firebaseEmail,
+                  passwordLength: trimmedPassword.length
+                });
+                
+                // Ensure we have the necessary data for password sync
+                if (!firebaseEmail) {
+                  console.error("Cannot sync password: firebaseEmail is missing");
+                } else if (!trimmedPassword || trimmedPassword.trim() === '') {
+                  console.error("Cannot sync password: password is empty");
+                } else {
+                  try {
+                    const syncSuccess = await attemptUpdateAuthPassword(
+                      {
+                        uid: adminData.uid || null,
+                        email: adminData.email || null,
+                        firebaseEmail: firebaseEmail,
+                      },
+                      trimmedPassword
+                    );
+                    
+                    if (syncSuccess) {
+                      console.log("Password synced successfully. Retrying login...");
+                      // Wait a moment for the password to propagate
+                      await new Promise(resolve => setTimeout(resolve, 1000));
+                      
+                      // Retry login after sync
+                      try {
+                        await signInWithEmailAndPassword(
+                          auth,
+                          firebaseEmail,
+                          trimmedPassword
+                        );
+                        authSuccess = true;
+                        console.log("Login successful after password sync");
+                      } catch (retryError) {
+                        console.error("Login failed after password sync:", retryError);
+                        setError("Password synced but login still failed. Please try again.");
+                        setIsLoading(false);
+                        return;
+                      }
+                    } else {
+                      console.warn("Password sync failed. User will need admin to reset password.", {
+                        uid: adminData.uid,
+                        email: adminData.email,
+                        firebaseEmail: firebaseEmail
+                      });
+                    }
+                  } catch (syncError) {
+                    console.error("Error attempting password sync:", syncError);
+                  }
+                }
+              }
+              
+              if (!authSuccess) {
+                // If sync didn't work or other error, show appropriate message
+                let errorMessage = "";
+                
+                if (lastAuthError.code === "auth/user-disabled") {
+                  errorMessage = "This account has been disabled. Please contact administrator.";
+                } else if (lastAuthError.code === "auth/invalid-credential" || lastAuthError.code === "auth/wrong-password") {
+                  // Password sync was attempted but failed
+                  errorMessage = "Password sync issue detected. Automatic sync failed. Please contact the system administrator to reset your password (this will sync it with Firebase Auth).";
+                } else if (lastAuthError.code === "auth/invalid-email") {
+                  errorMessage = "Invalid email format in Firebase Auth. Please contact administrator.";
+                } else if (lastAuthError.code === "auth/user-not-found") {
+                  errorMessage = "Firebase Auth account not found. Please contact administrator to create your Firebase authentication account.";
+                } else if (lastAuthError.code === "auth/network-request-failed") {
+                  errorMessage = "Network error. Please check your connection and try again.";
+                } else if (lastAuthError.code === "auth/invalid-password") {
+                  errorMessage = "Invalid password format. Please contact administrator.";
+                } else if (lastAuthError.code === "auth/missing-password") {
+                  errorMessage = "Password is required for authentication.";
+                } else {
+                  // Log the full error for debugging
+                  console.error("Firebase Auth sign-in error (unhandled):", {
+                    code: lastAuthError.code,
+                    message: lastAuthError.message,
+                    email: firebaseEmail,
+                    fullError: lastAuthError
+                  });
+                  errorMessage = `Firebase authentication failed. Error: ${lastAuthError.message || lastAuthError.code || "Unknown error"}. Please contact administrator.`;
+                }
+                
+                setError(errorMessage);
+                setIsLoading(false);
+                return;
+              }
+            }
           }
         } else {
-          setError(
-            "Admin account not properly configured. Please contact administrator."
-          );
+          // No Firebase Auth email - cannot access Firestore
+          setError("Admin account not properly configured with Firebase authentication. Please contact administrator.");
+          setIsLoading(false);
           return;
         }
 
@@ -249,9 +395,24 @@ const AdminLogin = () => {
           role: adminRole,
           adminId: adminDoc.id,
           college_code: adminData.college_code || null,
-          sections: adminData.sections || (adminData.section ? [adminData.section] : [])
+          sections: adminData.sections || (adminData.section ? [adminData.section] : []),
+          mustChangePassword: adminData.mustChangePassword || false
         });
         
+        // Check if password change is required
+        if (adminData.mustChangePassword) {
+          // Store flag in session and navigate to password change page
+          // For now, we'll redirect to a password change route
+          // You can create a separate component for this
+          navigate("/change-password", { 
+            replace: true,
+            state: { 
+              adminId: adminDoc.id,
+              username: trimmedUsername,
+              fromLogin: true 
+            }
+          });
+        } else {
         // Navigate based on role - check both string and constant
         if (adminRole === 'adviser' || adminRole === ROLES.ADVISER) {
           // Adviser (Admin 3) goes to Student Dashboard
@@ -259,13 +420,97 @@ const AdminLogin = () => {
         } else {
           // Super Admin, Coordinator, or any other role goes to Dashboard
           navigate("/dashboard", { replace: true });
+          }
         }
       } else {
-        setError("Invalid username/email or password");
-        setFieldErrors({
-          username: "Invalid username/email or password",
-          password: "Invalid username/email or password",
-        });
+        // Firestore password does NOT match what the user typed.
+        // This can happen if the user changed their password via email (sendPasswordResetEmail),
+        // which updates Firebase Auth but not our Firestore copy yet.
+        if (adminData.firebaseEmail) {
+          const firebaseEmail = adminData.firebaseEmail.trim();
+
+          if (!firebaseEmail || !isValidEmail(firebaseEmail)) {
+            console.error("Invalid Firebase email format when password mismatch:", firebaseEmail);
+            setError("Account email configuration is invalid. Please contact the administrator.");
+            setIsLoading(false);
+            return;
+          }
+
+          try {
+            // Try signing in directly with Firebase Auth using the entered password.
+            await signInWithEmailAndPassword(auth, firebaseEmail, trimmedPassword);
+            console.log("Firebase Auth sign-in successful with new password (password was changed outside the system).");
+
+            // If that works, update Firestore to store the new password so everything stays in sync.
+            try {
+              const adminRef = doc(db, "adminusers", adminDoc.id);
+              await updateDoc(adminRef, {
+                password: trimmedPassword,
+                firebasePassword: trimmedPassword,
+                mustChangePassword: false,
+                passwordChangedAt: new Date().toISOString(),
+              });
+              console.log("Updated Firestore password after successful Firebase Auth login with new password.");
+              // Also update local adminData so session & redirects use latest state
+              adminData = {
+                ...adminData,
+                password: trimmedPassword,
+                firebasePassword: trimmedPassword,
+                mustChangePassword: false,
+              };
+            } catch (syncErr) {
+              console.error("Failed to sync new password back to Firestore:", syncErr);
+            }
+
+            // Proceed to create session and redirect just like the normal success path
+            let adminRole = adminData.role || "adviser";
+            if (adminRole === "admin") {
+              adminRole = "super_admin";
+            }
+
+            createAdminSession({
+              username: trimmedUsername,
+              role: adminRole,
+              adminId: adminDoc.id,
+              college_code: adminData.college_code || null,
+              sections:
+                adminData.sections || (adminData.section ? [adminData.section] : []),
+              mustChangePassword: adminData.mustChangePassword || false,
+            });
+
+            if (adminData.mustChangePassword) {
+              navigate("/change-password", {
+                replace: true,
+                state: {
+                  adminId: adminDoc.id,
+                  username: trimmedUsername,
+                  fromLogin: true,
+                },
+              });
+            } else {
+              if (adminRole === "adviser" || adminRole === ROLES.ADVISER) {
+                navigate("/StudentDashboard", { replace: true });
+              } else {
+                navigate("/dashboard", { replace: true });
+              }
+            }
+          } catch (authError) {
+            console.error("Firebase Auth sign-in failed when Firestore password did not match:", authError);
+            // If Firebase also rejects the password, treat it as invalid credentials.
+            setError("Invalid username or password");
+            setFieldErrors({
+              username: "Invalid username or password",
+              password: "Invalid username or password",
+            });
+          }
+        } else {
+          // No firebaseEmail configured; fall back to invalid-credential message.
+          setError("Invalid username or password");
+          setFieldErrors({
+            username: "Invalid username or password",
+            password: "Invalid username or password",
+          });
+        }
       }
     } catch (err) {
       setError(`Login failed: ${err.message || "An unexpected error occurred. Please try again."}`);
@@ -314,14 +559,19 @@ const AdminLogin = () => {
                   {error}
                 </div>
               )}
+              {success && (
+                <div className="success-message" role="alert">
+                  {success}
+                </div>
+              )}
               <div className="form-group">
-                <label htmlFor="username-input">Username or Email</label>
+                <label htmlFor="username-input">Username</label>
                 <input
                   ref={usernameInputRef}
                   id="username-input"
                   type="text"
                   name="username"
-                  placeholder="Enter your username or email"
+                  placeholder="Enter your username"
                   className={`form-input ${
                     touched.username && fieldErrors.username ? "error" : ""
                   } ${touched.username && !fieldErrors.username && formData.username ? "success" : ""}`}
@@ -384,8 +634,13 @@ const AdminLogin = () => {
                 disabled={isLoading}
                 aria-busy={isLoading}
               >
-                {isLoading ? "Signing in..." : "Sign in as Admin"}
+                {isLoading ? "Signing in..." : "Sign in"}
               </button>
+              <div className="forgot-password-link">
+                <Link to="/forgot-password" className="forgot-password-text">
+                  Forgot password?
+                </Link>
+              </div>
             </form>
           </div>
         </div>

@@ -7,7 +7,13 @@
  * <StudentDashboard />
  */
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+} from "react";
 import { db } from "../../../firebase.js";
 import {
   collection,
@@ -30,6 +36,7 @@ import {
   IoTrashOutline,
   IoDownloadOutline,
   IoPersonAddOutline,
+  IoAddOutline,
   IoCloudUploadOutline,
   IoBusinessOutline,
   IoPeopleOutline,
@@ -43,6 +50,9 @@ import {
   IoCloseOutline,
   IoNotificationsOutline,
   IoPaperPlaneOutline,
+  IoPersonOutline,
+  IoSchoolOutline,
+  IoCalendarOutline,
 } from "react-icons/io5";
 import logo from "../../assets/InternQuest_Logo.png";
 import { signOut, createUserWithEmailAndPassword } from "firebase/auth";
@@ -73,7 +83,6 @@ import ToastContainer from "../Toast/ToastContainer.jsx";
 import { useToast } from "../../hooks/useToast.js";
 import useKeyboardShortcuts from "../../hooks/useKeyboardShortcuts.js";
 import Tooltip from "../Tooltip/Tooltip.jsx";
-import ColumnToggle from "../ColumnToggle/ColumnToggle.jsx";
 import {
   downloadCSV,
   prepareStudentsForExport,
@@ -183,9 +192,20 @@ const StudentDashboard = () => {
           // Check if student number/ID already exists
           const importStudentIdValue =
             student.studentNumber || student.studentId || "";
+          let trimmedId = "";
+
           if (importStudentIdValue) {
+            // Validate Student ID format: XX-XXXXX-XXX
+            trimmedId = importStudentIdValue.trim();
+            const perfectFormatRegex = /^\d{2}-\d{5}-\d{3}$/;
+            if (!perfectFormatRegex.test(trimmedId)) {
+              throw new Error(
+                `Invalid Student ID format: "${trimmedId}". Must be in format XX-XXXXX-XXX (e.g., 12-12345-678)`
+              );
+            }
+
             // First check if this ID was already imported in this CSV batch
-            if (importedInBatch.has(importStudentIdValue.trim())) {
+            if (importedInBatch.has(trimmedId)) {
               throw new Error(
                 `Duplicate Student ID in CSV file - already imported earlier in this batch`
               );
@@ -194,41 +214,94 @@ const StudentDashboard = () => {
             // Then check if it exists in Firestore database
             const studentNumberQuery = query(
               collection(db, "users"),
-              where("studentNumber", "==", importStudentIdValue.trim())
+              where("studentNumber", "==", trimmedId)
             );
             const studentNumberSnapshot = await getDocs(studentNumberQuery);
 
             // Check studentId field
             const studentIdQuery = query(
               collection(db, "users"),
-              where("studentId", "==", importStudentIdValue.trim())
+              where("studentId", "==", trimmedId)
             );
             const studentIdSnapshot = await getDocs(studentIdQuery);
 
             if (!studentNumberSnapshot.empty || !studentIdSnapshot.empty) {
               throw new Error(
-                `Student ID/Number ${importStudentIdValue} already exists in database`
+                `Student ID/Number ${trimmedId} already exists in database`
               );
             }
           }
 
-          // Create auth email from Student ID for login
-          const authEmail = importStudentIdValue 
-            ? `${importStudentIdValue}@student.internquest.local`
-            : "";
-          
           // Validate email is provided
           if (!student.email) {
-            throw new Error('Email is required');
+            throw new Error("Email is required");
           }
-          
+
+          // Validate email format with stricter Firebase-compatible regex
+          const emailRegex =
+            /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+          const trimmedEmail = student.email.trim();
+          if (!emailRegex.test(trimmedEmail)) {
+            throw new Error("Invalid email format");
+          }
+
+          // Validate email length
+          if (trimmedEmail.length > 256) {
+            throw new Error("Email address is too long");
+          }
+
+          // Validate password
+          const password = student.password || "DefaultPassword123!";
+          if (!password || password.length < 6) {
+            throw new Error("Password must be at least 6 characters long");
+          }
+
+          // Create Firebase Auth account with actual student email
+          let firebaseUser;
+          try {
+            // Normalize email (lowercase, trimmed)
+            const normalizedEmail = trimmedEmail.toLowerCase();
+
+            const userCredential = await createUserWithEmailAndPassword(
+              auth,
+              normalizedEmail, // Use normalized email for Firebase Auth
+              password
+            );
+            firebaseUser = userCredential.user;
+          } catch (authError) {
+            if (authError.code === "auth/email-already-in-use") {
+              throw new Error(`Email ${trimmedEmail} is already in use`);
+            }
+            if (authError.code === "auth/invalid-email") {
+              throw new Error(`Invalid email format: ${trimmedEmail}`);
+            }
+            if (authError.code === "auth/weak-password") {
+              throw new Error(
+                "Password is too weak. Password must be at least 6 characters long."
+              );
+            }
+            // Log full error for debugging
+            console.error("Firebase Auth error during CSV import:", {
+              code: authError.code,
+              message: authError.message,
+              email: trimmedEmail,
+            });
+            throw new Error(
+              `Failed to create Firebase Auth account: ${authError.message}`
+            );
+          }
+
+          // Normalize email (lowercase, trimmed) - same format used for Firebase Auth
+          const normalizedEmail = trimmedEmail.toLowerCase();
+
           const newStudent = {
-            studentNumber: importStudentIdValue,
-            studentId: importStudentIdValue, // Save to both fields for compatibility
+            studentNumber: trimmedId || importStudentIdValue?.trim() || "",
+            studentId: trimmedId || importStudentIdValue?.trim() || "", // Save to both fields for compatibility
             firstName: student.firstName,
             lastName: student.lastName,
-            email: student.email, // Store provided email (required)
-            authEmail: authEmail, // Store the auth email used for login
+            email: normalizedEmail, // Store institutional email (same as authEmail - both use normalized email)
+            authEmail: normalizedEmail, // Store email used for Firebase Auth (same as email - both use institutional email)
+            uid: firebaseUser.uid, // Link to Firebase Auth UID
             program: student.program,
             yearLevel: student.yearLevel || "",
             contact: student.contact || "",
@@ -236,13 +309,24 @@ const StudentDashboard = () => {
             status: student.status || false,
             createdAt: student.createdAt || new Date().toISOString(),
             updatedAt: student.updatedAt || new Date().toISOString(),
+            // Track who created this student
+            createdBy: (() => {
+              const session = getAdminSession();
+              return session
+                ? {
+                    username: session.username || "Unknown",
+                    role: session.role || "Unknown",
+                    adminId: session.adminId || null,
+                  }
+                : null;
+            })(),
           };
 
           const docRef = await addDoc(collection(db, "users"), newStudent);
 
           // Mark this student ID as imported in this batch
           if (importStudentIdValue) {
-            importedInBatch.add(importStudentIdValue.trim());
+            importedInBatch.add(trimmedId);
           }
 
           // Log activity
@@ -481,15 +565,36 @@ const StudentDashboard = () => {
   const [showBulkToolbar, setShowBulkToolbar] = useState(false);
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [notificationText, setNotificationText] = useState("");
   const [notificationType, setNotificationType] = useState("all"); // "all", "student", "section"
-  const [selectedNotificationStudents, setSelectedNotificationStudents] = useState([]); // Array of student IDs
-  const [selectedNotificationSection, setSelectedNotificationSection] = useState("");
+  const [selectedNotificationStudents, setSelectedNotificationStudents] =
+    useState([]); // Array of student IDs
+  const [selectedNotificationSection, setSelectedNotificationSection] =
+    useState("");
+
+  // Set default notification type for advisers when adminSection is loaded
+  useEffect(() => {
+    if (isAdviser && adminSection) {
+      // If adviser has a section, default to "section" and auto-select their section
+      const adminSectionsArray = Array.isArray(adminSection) ? adminSection : [adminSection];
+      if (notificationType === "all") {
+        setNotificationType("section");
+      }
+      if (adminSectionsArray.length === 1 && !selectedNotificationSection) {
+        setSelectedNotificationSection(adminSectionsArray[0]);
+      }
+    } else if (!isAdviser && notificationType === "section") {
+      // Reset to "all" for non-advisers if they somehow have "section" selected
+      setNotificationType("all");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdviser, adminSection]);
   const [studentSearchQuery, setStudentSearchQuery] = useState("");
   const [showStudentDropdown, setShowStudentDropdown] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(8);
+  const [itemsPerPage, setItemsPerPage] = useState(8);
   // Kebab/Selection
   const [openMenuId, setOpenMenuId] = useState(null);
   const [selectedRowId, setSelectedRowId] = useState(null);
@@ -497,8 +602,17 @@ const StudentDashboard = () => {
   const [selectedItems, setSelectedItems] = useState([]);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
-  const [showDeleteNotificationConfirm, setShowDeleteNotificationConfirm] = useState(false);
+  const [showDeleteNotificationConfirm, setShowDeleteNotificationConfirm] =
+    useState(false);
   const [notificationToDelete, setNotificationToDelete] = useState(null);
+  const [isDeletingNotifications, setIsDeletingNotifications] = useState(false);
+  const [messageHistorySearchQuery, setMessageHistorySearchQuery] =
+    useState("");
+  const [messageHistoryFilterSection, setMessageHistoryFilterSection] =
+    useState("");
+  const [messageHistoryFilterStudent, setMessageHistoryFilterStudent] =
+    useState("");
+  const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
   // Requirement Modal
   const [showRequirementModal, setShowRequirementModal] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState(null);
@@ -512,6 +626,7 @@ const StudentDashboard = () => {
     hired: "",
     locationPreference: "",
     approvedRequirement: "",
+    section: "",
   });
   const [pendingFilterValues, setPendingFilterValues] = useState({
     program: "",
@@ -521,8 +636,9 @@ const StudentDashboard = () => {
     hired: "",
     locationPreference: "",
     approvedRequirement: "",
+    section: "",
   });
-  // View mode: 'all' or 'pending'
+  // View mode: 'all', 'pending', or 'notifications'
   const [viewMode, setViewMode] = useState("all");
   const [pendingStudentsWithRequirements, setPendingStudentsWithRequirements] =
     useState([]);
@@ -542,72 +658,6 @@ const StudentDashboard = () => {
   const [isCreatingStudent, setIsCreatingStudent] = useState(false);
   const { toasts, removeToast, success, error: showError } = useToast();
   const searchInputRef = useRef(null);
-
-  // Essential columns that cannot be hidden
-  const essentialColumns = [
-    "profilePicture",
-    "studentNumber",
-    "firstName",
-    "lastName",
-  ];
-
-  // Column definitions
-  const columnDefinitions = [
-    { key: "profilePicture", label: "Profile Picture" },
-    { key: "studentNumber", label: "Student ID" },
-    { key: "firstName", label: "First Name" },
-    { key: "lastName", label: "Last Name" },
-    { key: "email", label: "Email" },
-    { key: "contact", label: "Contact" },
-    { key: "program", label: "Program" },
-    { key: "section", label: "Section" },
-    { key: "field", label: "Field" },
-    { key: "company", label: "Company" },
-    { key: "skills", label: "Skills" },
-    { key: "hired", label: "Hired" },
-    { key: "requirements", label: "Requirements" },
-    { key: "actions", label: "Actions" },
-  ];
-
-  // Column visibility state (all columns visible by default, essential columns always included)
-  const [visibleColumns, setVisibleColumns] = useState(() => {
-    const allColumns = columnDefinitions.map((col) => col.key);
-    // Ensure essential columns are always included
-    const essentialSet = new Set(essentialColumns);
-    const result = [
-      ...essentialSet,
-      ...allColumns.filter((key) => !essentialSet.has(key)),
-    ];
-    return result;
-  });
-
-  // Handle column toggle
-  const handleToggleColumn = (columnKey) => {
-    // Prevent hiding essential columns
-    if (essentialColumns.includes(columnKey)) {
-      return;
-    }
-
-    setVisibleColumns((prev) => {
-      // Create a new array without essential columns for manipulation
-      const nonEssentialPrev = prev.filter(
-        (key) => !essentialColumns.includes(key)
-      );
-      const newSet = new Set(nonEssentialPrev);
-
-      if (newSet.has(columnKey)) {
-        // Remove the column
-        newSet.delete(columnKey);
-      } else {
-        // Add the column
-        newSet.add(columnKey);
-      }
-
-      // Always include essential columns + the new set of non-essential columns
-      const result = [...essentialColumns, ...Array.from(newSet)];
-      return result;
-    });
-  };
 
   // Auto-migrate avatars from Firestore to Storage
   const migrateAvatarToStorage = async (userId, base64Data) => {
@@ -802,7 +852,7 @@ const StudentDashboard = () => {
 
         if (usersWithAvatars.length > 0) {
           logger.debug(
-            `🔄 Auto-migrating ${usersWithAvatars.length} avatar(s) to Storage...`
+            `ðŸ”„ Auto-migrating ${usersWithAvatars.length} avatar(s) to Storage...`
           );
           // Run migration in background (don't block UI)
           Promise.all(
@@ -817,7 +867,7 @@ const StudentDashboard = () => {
               const successful = results.filter((r) => r.success).length;
               const failed = results.filter((r) => !r.success).length;
               logger.debug(
-                `✅ Avatar migration complete: ${successful} successful, ${failed} failed`
+                `âœ… Avatar migration complete: ${successful} successful, ${failed} failed`
               );
 
               // Refresh students data after migration
@@ -851,16 +901,15 @@ const StudentDashboard = () => {
     }
   }, [viewMode, students.length, fetchPendingStudentsWithRequirements]);
 
-  // List of all required documents
+  // List of all required documents (sorted in display order)
   const REQUIRED_DOCUMENTS = [
-    "MOA (Memorandum of Agreement)",
-    "Parent/Guardian Consent Form",
+    "Proof of Enrollment (COM)",
+    "Notarized Parental Consent",
     "Medical Certificate",
-    "Resume",
-    "Clearance",
-    "Academic Records",
-    "Cover Letter",
-    "Insurance Certificate",
+    "Psychological Test Certification",
+    "Proof of Insurance",
+    "Memorandum of Agreement (MOA)",
+    "Curriculum Vitae",
   ];
 
   // Check which requirements a student has submitted
@@ -871,14 +920,20 @@ const StudentDashboard = () => {
       const folderList = await listAll(requirementsRef);
 
       const folderMapping = {
-        "moa-memorandum-of-agreement": "MOA (Memorandum of Agreement)",
-        "parent-guardian-consent-form": "Parent/Guardian Consent Form",
+        "proof-of-enrollment-com": "Proof of Enrollment (COM)",
+        "parent-guardian-consent-form": "Notarized Parental Consent",
         "medical-certificate": "Medical Certificate",
-        "resume-cv": "Resume",
-        "police-clearance": "Clearance",
-        "academic-records": "Academic Records",
-        "cover-letter": "Cover Letter",
-        "insurance-certificate": "Insurance Certificate",
+        "psychological-test-certification": "Psychological Test Certification",
+        "proof-of-insurance": "Proof of Insurance",
+        "ojt-orientation": "OJT Orientation",
+        "moa-memorandum-of-agreement": "Memorandum of Agreement (MOA)",
+        "resume-cv": "Curriculum Vitae",
+        "curriculum-vitae": "Curriculum Vitae",
+        "resume": "Curriculum Vitae",
+        "cv": "Curriculum Vitae",
+        // Legacy mappings for backward compatibility
+        "insurance-certificate": "Proof of Insurance",
+        com: "Proof of Enrollment (COM)",
       };
 
       const submittedRequirements = [];
@@ -888,8 +943,30 @@ const StudentDashboard = () => {
         const folderFiles = await listAll(folderPrefix);
 
         if (folderFiles.items.length > 0) {
-          const requirementType = folderMapping[folderName] || folderName;
-          submittedRequirements.push(requirementType);
+          // First try exact mapping
+          let requirementType = folderMapping[folderName];
+          
+          // If no exact match, try keyword matching for CV/Resume
+          if (!requirementType) {
+            const folderNameLower = folderName.toLowerCase();
+            if (folderNameLower.includes("resume") || 
+                folderNameLower.includes("cv") || 
+                folderNameLower.includes("curriculum") || 
+                folderNameLower.includes("vitae")) {
+              requirementType = "Curriculum Vitae";
+            } else if (folderNameLower.includes("moa") || 
+                       folderNameLower.includes("memorandum") || 
+                       folderNameLower.includes("agreement")) {
+              requirementType = "Memorandum of Agreement (MOA)";
+            } else {
+              requirementType = folderName; // Fallback to folder name
+            }
+          }
+          
+          // Only add if not already in the array
+          if (!submittedRequirements.includes(requirementType)) {
+            submittedRequirements.push(requirementType);
+          }
         }
       }
 
@@ -906,6 +983,15 @@ const StudentDashboard = () => {
     }
   };
 
+  // Debounce search query to reduce filtering computations
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 300); // 300ms debounce delay
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
   // Real-time listeners for requirement approvals and submitted requirements
   useEffect(() => {
     if (students.length === 0) {
@@ -915,54 +1001,94 @@ const StudentDashboard = () => {
     }
 
     const unsubscribes = [];
-    const approvals = {};
-    const submittedReqs = {};
+    const studentIds = students.map((s) => s.id);
 
-    // Set up real-time listeners for each student's requirement approvals
-    students.forEach((student) => {
-      try {
-        // Real-time listener for approvals
-        const approvalRef = doc(db, "requirement_approvals", student.id);
-        const unsubscribeApproval = onSnapshot(
-          approvalRef,
-          (snap) => {
-            if (snap.exists()) {
-              setRequirementApprovals((prev) => ({
-                ...prev,
-                [student.id]: snap.data(),
-              }));
-            } else {
-              setRequirementApprovals((prev) => {
-                const updated = { ...prev };
-                delete updated[student.id];
-                return updated;
-              });
+    // OPTIMIZATION: Use a single collection query instead of individual document listeners
+    // This is more efficient for large numbers of students
+    try {
+      // Listen to the entire requirement_approvals collection
+      // Filter by student IDs in memory (Firestore doesn't support 'in' queries with >10 items efficiently)
+      const approvalsCollectionRef = collection(db, "requirement_approvals");
+      const unsubscribeAllApprovals = onSnapshot(
+        approvalsCollectionRef,
+        (snapshot) => {
+          const approvalsMap = {};
+          snapshot.docs.forEach((docSnap) => {
+            const studentId = docSnap.id;
+            // Only process approvals for students we're currently viewing
+            if (studentIds.includes(studentId)) {
+              approvalsMap[studentId] = docSnap.data();
             }
-          },
-          (error) => {
-            logger.warn(`Error listening to approvals for ${student.id}:`, error);
-          }
-        );
-        unsubscribes.push(unsubscribeApproval);
-
-        // Fetch submitted requirements (one-time, as they're from Storage)
-        checkStudentSubmittedRequirements(student.id)
-          .then((submitted) => {
-            setStudentSubmittedRequirements((prev) => ({
-              ...prev,
-              [student.id]: submitted,
-            }));
-          })
-          .catch((error) => {
-            logger.warn(
-              `Error fetching submitted requirements for ${student.id}:`,
-              error
-            );
           });
-      } catch (error) {
-        logger.warn(`Error setting up listeners for ${student.id}:`, error);
+          setRequirementApprovals(approvalsMap);
+        },
+        (error) => {
+          logger.warn(
+            "Error listening to requirement approvals collection:",
+            error
+          );
+        }
+      );
+      unsubscribes.push(unsubscribeAllApprovals);
+    } catch (error) {
+      logger.warn("Error setting up approvals listener:", error);
+    }
+
+    // OPTIMIZATION: Batch requirement checks with a delay to avoid overwhelming Storage API
+    // Process in batches of 5 with 100ms delay between batches
+    const batchSize = 5;
+    const batchDelay = 100;
+    let currentBatch = 0;
+
+    const processBatch = async (batchIndex) => {
+      const start = batchIndex * batchSize;
+      const end = Math.min(start + batchSize, students.length);
+      const batch = students.slice(start, end);
+
+      const batchPromises = batch.map(async (student) => {
+        try {
+          const submitted = await checkStudentSubmittedRequirements(student.id);
+          return { studentId: student.id, submitted };
+        } catch (error) {
+          logger.warn(
+            `Error fetching submitted requirements for ${student.id}:`,
+            error
+          );
+          return { studentId: student.id, submitted: [] };
+        }
+      });
+
+      const results = await Promise.all(batchPromises);
+
+      // Update state with batch results
+      setStudentSubmittedRequirements((prev) => {
+        const updated = { ...prev };
+        let hasChanges = false;
+
+        results.forEach(({ studentId, submitted }) => {
+          // Only update if value actually changed to avoid unnecessary re-renders
+          if (
+            prev[studentId]?.length !== submitted.length ||
+            JSON.stringify(prev[studentId]) !== JSON.stringify(submitted)
+          ) {
+            updated[studentId] = submitted;
+            hasChanges = true;
+          }
+        });
+
+        return hasChanges ? updated : prev;
+      });
+
+      // Process next batch if there are more students
+      if (end < students.length) {
+        setTimeout(() => processBatch(batchIndex + 1), batchDelay);
       }
-    });
+    };
+
+    // Start processing batches
+    if (students.length > 0) {
+      processBatch(0);
+    }
 
     // Cleanup listeners on unmount or when students change
     return () => {
@@ -980,9 +1106,16 @@ const StudentDashboard = () => {
     }
   }, [selectedItems, selectionMode]);
 
-  // Calculate enhanced statistics
-  useEffect(() => {
-    if (students.length === 0) return;
+  // Calculate enhanced statistics - OPTIMIZED with useMemo
+  const enhancedStats = useMemo(() => {
+    if (students.length === 0) {
+      return {
+        hiredCount: 0,
+        pendingCount: 0,
+        approvedCount: 0,
+        totalReqs: 0,
+      };
+    }
 
     const hiredCount = students.filter((s) => s.status === true).length;
     let pendingCount = 0;
@@ -992,48 +1125,78 @@ const StudentDashboard = () => {
     students.forEach((student) => {
       const submitted = studentSubmittedRequirements[student.id] || [];
       const approvals = requirementApprovals[student.id] || {};
-      
+
       submitted.forEach((reqType) => {
         totalReqs++;
-        const approval = approvals[reqType];
-        if (approval?.status === "accepted") {
+        // Handle migration: check both old and new name for Parent/Guardian Consent
+        const normalizedReqType =
+          reqType === "Parent/Guardian Consent Form"
+            ? "Notarized Parental Consent"
+            : reqType;
+        const approval = approvals[normalizedReqType] || approvals[reqType];
+        if (
+          approval?.status === "approved" ||
+          approval?.status === "accepted"
+        ) {
           approvedCount++;
-        } else if (approval?.status !== "denied") {
+        } else if (
+          approval?.status !== "rejected" &&
+          approval?.status !== "denied"
+        ) {
           pendingCount++;
         }
       });
     });
 
+    return {
+      hiredCount,
+      pendingCount,
+      approvedCount,
+      totalReqs,
+    };
+  }, [students, studentSubmittedRequirements, requirementApprovals]);
+
+  // Update overview stats when enhanced stats change
+  useEffect(() => {
     setOverviewStats((prev) => ({
       ...prev,
-      pendingRequirements: pendingCount,
-      approvedRequirements: approvedCount,
-      totalRequirements: totalReqs,
-      hiredStudents: hiredCount,
+      pendingRequirements: enhancedStats.pendingCount,
+      approvedRequirements: enhancedStats.approvedCount,
+      totalRequirements: enhancedStats.totalReqs,
+      hiredStudents: enhancedStats.hiredCount,
     }));
-  }, [students, studentSubmittedRequirements, requirementApprovals]);
+  }, [enhancedStats]);
 
   // Update active filter chips
   useEffect(() => {
-    const currentFilters = viewMode === "pending" ? pendingFilterValues : filterValues;
+    const currentFilters =
+      viewMode === "pending" ? pendingFilterValues : filterValues;
     const chips = [];
-    
+
     Object.entries(currentFilters).forEach(([key, value]) => {
       if (value && value.trim() !== "") {
-        chips.push({ key, label: key.charAt(0).toUpperCase() + key.slice(1), value });
+        chips.push({
+          key,
+          label: key.charAt(0).toUpperCase() + key.slice(1),
+          value,
+        });
       }
     });
-    
-    if (searchQuery.trim() !== "") {
-      chips.push({ key: "search", label: "Search", value: searchQuery });
+
+    if (debouncedSearchQuery.trim() !== "") {
+      chips.push({
+        key: "search",
+        label: "Search",
+        value: debouncedSearchQuery,
+      });
     }
-    
+
     setActiveFilterChips(chips);
     setOverviewStats((prev) => ({
       ...prev,
       activeFilters: chips.length,
     }));
-  }, [filterValues, pendingFilterValues, searchQuery, viewMode]);
+  }, [filterValues, pendingFilterValues, debouncedSearchQuery, viewMode]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -1186,6 +1349,7 @@ const StudentDashboard = () => {
 
   const confirmDeleteNotification = async () => {
     if (!notificationToDelete) return;
+    setIsDeletingNotifications(true);
     try {
       await deleteDoc(doc(db, "notifications", notificationToDelete));
       // Remove from local state
@@ -1200,6 +1364,8 @@ const StudentDashboard = () => {
       showError("Failed to delete notification. Please try again.");
       setShowDeleteNotificationConfirm(false);
       setNotificationToDelete(null);
+    } finally {
+      setIsDeletingNotifications(false);
     }
   };
 
@@ -1208,11 +1374,171 @@ const StudentDashboard = () => {
     setNotificationToDelete(null);
   };
 
+  // Handle delete all notifications
+  const handleDeleteAllNotifications = () => {
+    if (sentNotifications.length === 0) return;
+    setShowDeleteAllConfirm(true);
+  };
+
+  const confirmDeleteAllNotifications = async () => {
+    setIsDeletingNotifications(true);
+    try {
+      // Delete all notifications from Firestore
+      const deletePromises = sentNotifications.map((notif) =>
+        deleteDoc(doc(db, "notifications", notif.id))
+      );
+      await Promise.all(deletePromises);
+
+      // Clear local state
+      setSentNotifications([]);
+      setMessageHistorySearchQuery("");
+      setCurrentNotificationPage(1);
+      success("All messages deleted successfully");
+      setShowDeleteAllConfirm(false);
+    } catch (error) {
+      logger.error("Error deleting all notifications:", error);
+      showError("Failed to delete all messages. Please try again.");
+      setShowDeleteAllConfirm(false);
+    } finally {
+      setIsDeletingNotifications(false);
+    }
+  };
+
+  const cancelDeleteAllNotifications = () => {
+    setShowDeleteAllConfirm(false);
+  };
+
+  // Get unique sections and students from notifications for filter options
+  const notificationSections = useMemo(() => {
+    const sections = new Set();
+    sentNotifications.forEach((notif) => {
+      if (notif.targetSection) {
+        sections.add(notif.targetSection);
+      }
+    });
+    return Array.from(sections).sort();
+  }, [sentNotifications]);
+
+  const notificationStudents = useMemo(() => {
+    const students = new Map();
+    sentNotifications.forEach((notif) => {
+      if (
+        notif.targetType === "student" &&
+        notif.targetStudentId &&
+        notif.targetStudentName
+      ) {
+        if (!students.has(notif.targetStudentId)) {
+          students.set(notif.targetStudentId, notif.targetStudentName);
+        }
+      }
+    });
+    return Array.from(students.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [sentNotifications]);
+
+  // Filter notifications based on search query, section, and student
+  const filteredNotifications = useMemo(() => {
+    let filtered = sentNotifications;
+
+    // Filter by search query
+    if (messageHistorySearchQuery.trim()) {
+      const query = messageHistorySearchQuery.toLowerCase();
+      filtered = filtered.filter((notif) => {
+        const message = (notif.message || "").toLowerCase();
+        const targetName = (notif.targetStudentName || "").toLowerCase();
+        const targetSection = (notif.targetSection || "").toLowerCase();
+        return (
+          message.includes(query) ||
+          targetName.includes(query) ||
+          targetSection.includes(query)
+        );
+      });
+    }
+
+    // Filter by section
+    if (messageHistoryFilterSection) {
+      filtered = filtered.filter((notif) => {
+        return notif.targetSection === messageHistoryFilterSection;
+      });
+    }
+
+    // Filter by student
+    if (messageHistoryFilterStudent) {
+      filtered = filtered.filter((notif) => {
+        return notif.targetStudentId === messageHistoryFilterStudent;
+      });
+    }
+
+    return filtered;
+  }, [
+    sentNotifications,
+    messageHistorySearchQuery,
+    messageHistoryFilterSection,
+    messageHistoryFilterStudent,
+  ]);
+
+  // Calculate total pages for notification pagination
+  const notificationTotalPages = useMemo(() => {
+    return Math.ceil(filteredNotifications.length / notificationsPerPage);
+  }, [filteredNotifications.length, notificationsPerPage]);
+
+  // Reset pagination when filters change
+  useEffect(() => {
+    setCurrentNotificationPage(1);
+  }, [
+    messageHistorySearchQuery,
+    messageHistoryFilterSection,
+    messageHistoryFilterStudent,
+  ]);
+
   const handleSendNotification = async () => {
     if (!notificationText.trim() || isSendingNotification) return;
 
+    // For advisers, validate they can only notify their section/students
+    if (isAdviser) {
+      if (!adminSection) {
+        showError("You must be assigned to a section to send notifications");
+        return;
+      }
+      
+      const adminSectionsArray = Array.isArray(adminSection) ? adminSection : [adminSection];
+      
+      if (notificationType === "all") {
+        showError("Advisers can only notify their assigned section or students in their section");
+        return;
+      }
+      
+      if (notificationType === "section") {
+        if (!selectedNotificationSection || !adminSectionsArray.includes(selectedNotificationSection)) {
+          showError("You can only notify your assigned section");
+          return;
+        }
+      }
+      
+      if (notificationType === "student") {
+        if (selectedNotificationStudents.length === 0) {
+          return; // Will be caught by validation below
+        }
+        
+        // Validate all selected students are in the adviser's section
+        const invalidStudents = selectedNotificationStudents.filter((studentId) => {
+          const student = baseStudents.find((s) => s.id === studentId);
+          return !student || !adminSectionsArray.includes(student.section);
+        });
+        
+        if (invalidStudents.length > 0) {
+          showError("You can only notify students in your assigned section");
+          return;
+        }
+      }
+    }
+
     // Validate private notification targets
-    if (notificationType === "student" && selectedNotificationStudents.length === 0) {
+    if (
+      notificationType === "student" &&
+      selectedNotificationStudents.length === 0
+    ) {
       return;
     }
     if (notificationType === "section" && !selectedNotificationSection) {
@@ -1234,14 +1560,19 @@ const StudentDashboard = () => {
       };
 
       // Add target information for private notifications
-      if (notificationType === "student" && selectedNotificationStudents.length > 0) {
+      if (
+        notificationType === "student" &&
+        selectedNotificationStudents.length > 0
+      ) {
         notificationData.targetStudentIds = selectedNotificationStudents;
-        const targetStudentNames = selectedNotificationStudents.map((studentId) => {
-          const student = baseStudents.find((s) => s.id === studentId);
-          return student
-            ? `${student.firstName} ${student.lastName}`
-            : "Unknown";
-        });
+        const targetStudentNames = selectedNotificationStudents.map(
+          (studentId) => {
+            const student = baseStudents.find((s) => s.id === studentId);
+            return student
+              ? `${student.firstName} ${student.lastName}`
+              : "Unknown";
+          }
+        );
         notificationData.targetStudentNames = targetStudentNames;
         // For backward compatibility, also include first student
         notificationData.targetStudentId = selectedNotificationStudents[0];
@@ -1262,7 +1593,7 @@ const StudentDashboard = () => {
       );
       const allNotificationsSnapshot = await getDocs(allNotificationsQuery);
       const allNotifications = allNotificationsSnapshot.docs;
-      
+
       // If we have more than MAX_NOTIFICATIONS, delete the oldest ones
       if (allNotifications.length > MAX_NOTIFICATIONS) {
         const notificationsToDelete = allNotifications.slice(MAX_NOTIFICATIONS);
@@ -1274,9 +1605,15 @@ const StudentDashboard = () => {
 
       // Log activity - count target students
       let targetCount = students.length;
-      if (notificationType === "student" && selectedNotificationStudents.length > 0) {
+      if (
+        notificationType === "student" &&
+        selectedNotificationStudents.length > 0
+      ) {
         targetCount = selectedNotificationStudents.length;
-      } else if (notificationType === "section" && selectedNotificationSection) {
+      } else if (
+        notificationType === "section" &&
+        selectedNotificationSection
+      ) {
         targetCount = baseStudents.filter(
           (s) => s.section === selectedNotificationSection
         ).length;
@@ -1285,9 +1622,20 @@ const StudentDashboard = () => {
 
       // Reset form
       setNotificationText("");
-      setNotificationType("all");
+      // For advisers, reset to "section", for others reset to "all"
+      setNotificationType(isAdviser && adminSection ? "section" : "all");
       setSelectedNotificationStudents([]);
-      setSelectedNotificationSection("");
+      // For advisers, auto-select their section if they have one
+      if (isAdviser && adminSection) {
+        const adminSectionsArray = Array.isArray(adminSection) ? adminSection : [adminSection];
+        if (adminSectionsArray.length === 1) {
+          setSelectedNotificationSection(adminSectionsArray[0]);
+        } else {
+          setSelectedNotificationSection("");
+        }
+      } else {
+        setSelectedNotificationSection("");
+      }
       setStudentSearchQuery("");
 
       // Show success message and play sound
@@ -1307,7 +1655,8 @@ const StudentDashboard = () => {
   };
 
   // --- Filtering logic for students table ---
-  const baseStudents = (() => {
+  // Memoize baseStudents to avoid recalculating on every render
+  const baseStudents = useMemo(() => {
     // For advisers: filter by sections only
     if (isAdviser) {
       if (!adminSection) {
@@ -1333,7 +1682,52 @@ const StudentDashboard = () => {
 
     // For coordinators: filter by college (if assigned) and optionally by sections
     if (currentRole === ROLES.COORDINATOR) {
-      // If coordinator has a college assigned, filter by college
+      // Prepare admin sections array
+      const adminSections = adminSection
+        ? Array.isArray(adminSection)
+          ? adminSection
+          : [adminSection]
+        : [];
+
+      // If coordinator has sections assigned, prioritize section matching
+      if (adminSections.length > 0) {
+        return students.filter((student) => {
+          // First check if student's section matches any of the coordinator's sections
+          const matchesSection =
+            typeof student.section === "string" &&
+            adminSections.some(
+              (section) =>
+                typeof section === "string" &&
+                student.section.toLowerCase() === section.toLowerCase()
+            );
+
+          // If section doesn't match, exclude the student
+          if (!matchesSection) {
+            return false;
+          }
+
+          // If coordinator also has a college assigned, optionally verify college match
+          // But don't exclude if college mapping is missing (sections take priority)
+          if (adminCollegeCode) {
+            const studentProgram = student.program;
+            if (studentProgram && typeof studentProgram === "string") {
+              const studentCollegeCode = programToCollegeMap[studentProgram];
+              // If we can find the college mapping, verify it matches
+              // If mapping is missing, still show the student since section matches
+              if (studentCollegeCode) {
+                return studentCollegeCode === adminCollegeCode;
+              }
+            }
+            // If no program or mapping missing, still show if section matches
+            return true;
+          }
+
+          // No college assigned, just match by section (already verified above)
+          return true;
+        });
+      }
+
+      // If coordinator has a college assigned but no sections, filter by college only
       if (adminCollegeCode) {
         return students.filter((student) => {
           // Get the college code for this student's program
@@ -1350,50 +1744,8 @@ const StudentDashboard = () => {
             return false;
           }
 
-          const matchesCollege = studentCollegeCode === adminCollegeCode;
-
-          // If coordinator also has sections assigned, filter by both college AND section
-          if (adminSection) {
-            const adminSections = Array.isArray(adminSection)
-              ? adminSection
-              : adminSection
-              ? [adminSection]
-              : [];
-            if (adminSections.length > 0) {
-              const matchesSection =
-                typeof student.section === "string" &&
-                adminSections.some(
-                  (section) =>
-                    typeof section === "string" &&
-                    student.section.toLowerCase() === section.toLowerCase()
-                );
-              return matchesCollege && matchesSection;
-            }
-          }
-
-          return matchesCollege;
+          return studentCollegeCode === adminCollegeCode;
         });
-      }
-
-      // If coordinator has sections but no college, filter by sections only
-      if (adminSection) {
-        const adminSections = Array.isArray(adminSection)
-          ? adminSection
-          : adminSection
-          ? [adminSection]
-          : [];
-        if (adminSections.length > 0) {
-          return students.filter((student) => {
-            return (
-              typeof student.section === "string" &&
-              adminSections.some(
-                (section) =>
-                  typeof section === "string" &&
-                  student.section.toLowerCase() === section.toLowerCase()
-              )
-            );
-          });
-        }
       }
 
       // Coordinator without college or sections: show all (for backward compatibility)
@@ -1402,118 +1754,188 @@ const StudentDashboard = () => {
 
     // Super admin: show all students
     return students;
-  })();
+  }, [
+    students,
+    isAdviser,
+    adminSection,
+    currentRole,
+    adminCollegeCode,
+    programToCollegeMap,
+  ]);
 
-  // Get unique sections from students
-  const getUniqueSections = () => {
+  // Get unique sections from students - memoized
+  // For advisers, only show their assigned sections
+  const sectionSuggestions = useMemo(() => {
     const sections = new Set();
-    baseStudents.forEach((student) => {
-      if (student.section) {
-        sections.add(student.section);
-      }
-    });
+    if (isAdviser && adminSection) {
+      // For advisers, only show their assigned sections
+      const adminSectionsArray = Array.isArray(adminSection) ? adminSection : [adminSection];
+      adminSectionsArray.forEach((section) => {
+        if (section) sections.add(section);
+      });
+    } else {
+      // For non-advisers, show all sections
+      baseStudents.forEach((student) => {
+        if (student.section) {
+          sections.add(student.section);
+        }
+      });
+    }
     return Array.from(sections).sort();
-  };
+  }, [baseStudents, isAdviser, adminSection]);
 
   // Determine which data source to use based on view mode
-  const dataSource =
-    viewMode === "pending" ? pendingStudentsWithRequirements : baseStudents;
+  const dataSource = useMemo(
+    () =>
+      viewMode === "pending" ? pendingStudentsWithRequirements : baseStudents,
+    [viewMode, pendingStudentsWithRequirements, baseStudents]
+  );
 
   // Use appropriate filter values based on view mode
-  const activeFilterValues =
-    viewMode === "pending" ? pendingFilterValues : filterValues;
+  const activeFilterValues = useMemo(
+    () => (viewMode === "pending" ? pendingFilterValues : filterValues),
+    [viewMode, pendingFilterValues, filterValues]
+  );
 
-  const filteredData = dataSource.filter((student) => {
-    const matchesSearch =
-      (typeof student.firstName === "string" &&
-        student.firstName.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (typeof student.lastName === "string" &&
-        student.lastName.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (typeof student.program === "string" &&
-        student.program.toLowerCase().includes(searchQuery.toLowerCase()));
-    const matchesProgram = activeFilterValues.program
-      ? typeof student.program === "string" &&
-        student.program
-          .toLowerCase()
-          .includes(activeFilterValues.program.toLowerCase())
-      : true;
-    const matchesField = activeFilterValues.field
-      ? typeof student.field === "string" &&
-        student.field
-          .toLowerCase()
-          .includes(activeFilterValues.field.toLowerCase())
-      : true;
-    const matchesEmail = activeFilterValues.email
-      ? typeof student.email === "string" &&
-        student.email
-          .toLowerCase()
-          .includes(activeFilterValues.email.toLowerCase())
-      : true;
-    const matchesContact = activeFilterValues.contact
-      ? typeof student.contact === "string" &&
-        student.contact
-          .toLowerCase()
-          .includes(activeFilterValues.contact.toLowerCase())
-      : true;
-    const matchesHired = activeFilterValues.hired
-      ? activeFilterValues.hired === "Yes"
-        ? student.status === true
-        : student.status !== true
-      : true;
-    const matchesLocation = activeFilterValues.locationPreference
-      ? student.locationPreference &&
-        student.locationPreference[
-          activeFilterValues.locationPreference.toLowerCase()
-        ]
-      : true;
-    const matchesApprovedRequirement = activeFilterValues.approvedRequirement
-      ? (() => {
-          const REQUIRED_DOCUMENTS = [
-            "MOA (Memorandum of Agreement)",
-            "Parent/Guardian Consent Form",
-            "Medical Certificate",
-            "Resume",
-            "Clearance",
-            "Academic Records",
-            "Cover Letter",
-            "Insurance Certificate",
-          ];
-
-          const submittedRequirements =
-            studentSubmittedRequirements[student.id] || [];
-          const studentApprovals = requirementApprovals[student.id] || {};
-
-          // Check if student has submitted ALL required documents
-          const hasAllSubmitted = REQUIRED_DOCUMENTS.every((req) =>
-            submittedRequirements.includes(req)
+  // Memoize filteredData to avoid recalculating on every render
+  // Use debouncedSearchQuery instead of searchQuery for better performance
+  const filteredData = useMemo(() => {
+    return dataSource.filter((student) => {
+      const matchesSearch =
+        (typeof student.firstName === "string" &&
+          student.firstName
+            .toLowerCase()
+            .includes(debouncedSearchQuery.toLowerCase())) ||
+        (typeof student.lastName === "string" &&
+          student.lastName
+            .toLowerCase()
+            .includes(debouncedSearchQuery.toLowerCase())) ||
+        (typeof student.program === "string" &&
+          student.program
+            .toLowerCase()
+            .includes(debouncedSearchQuery.toLowerCase()));
+      const matchesProgram = activeFilterValues.program
+        ? typeof student.program === "string" &&
+          student.program
+            .toLowerCase()
+            .includes(activeFilterValues.program.toLowerCase())
+        : true;
+      const matchesField = activeFilterValues.field
+        ? typeof student.field === "string" &&
+          student.field
+            .toLowerCase()
+            .includes(activeFilterValues.field.toLowerCase())
+        : true;
+      const matchesEmail = activeFilterValues.email
+        ? typeof student.email === "string" &&
+          student.email
+            .toLowerCase()
+            .includes(activeFilterValues.email.toLowerCase())
+        : true;
+      const matchesContact = activeFilterValues.contact
+        ? typeof student.contact === "string" &&
+          student.contact
+            .toLowerCase()
+            .includes(activeFilterValues.contact.toLowerCase())
+        : true;
+      const matchesHired = (() => {
+        if (!activeFilterValues.hired || activeFilterValues.hired === "") {
+          return true; // Show all if no filter or "All" selected
+        }
+        if (activeFilterValues.hired === "Yes") {
+          return student.status === true;
+        }
+        if (activeFilterValues.hired === "No") {
+          return (
+            student.status === false ||
+            student.status === undefined ||
+            student.status === null
           );
+        }
+        return true; // Default: show all
+      })();
+      const matchesLocation = activeFilterValues.locationPreference
+        ? student.locationPreference &&
+          student.locationPreference[
+            activeFilterValues.locationPreference.toLowerCase()
+          ]
+        : true;
+      const matchesApprovedRequirement = activeFilterValues.approvedRequirement
+        ? (() => {
+            const REQUIRED_DOCUMENTS = [
+              "Proof of Enrollment (COM)",
+              "Notarized Parental Consent",
+              "Medical Certificate",
+              "Psychological Test Certification",
+              "Proof of Insurance",
+              "Memorandum of Agreement (MOA)",
+              "Curriculum Vitae",
+            ];
 
-          if (!hasAllSubmitted) {
-            return activeFilterValues.approvedRequirement === "No";
-          }
+            let submittedRequirements =
+              studentSubmittedRequirements[student.id] || [];
+            const studentApprovals = requirementApprovals[student.id] || {};
 
-          // Check if ALL submitted requirements are approved (accepted)
-          const allApproved = submittedRequirements.every((reqType) => {
-            const approval = studentApprovals[reqType];
-            return approval?.status === "accepted";
-          });
+            // Migrate old "Parent/Guardian Consent Form" to "Notarized Parental Consent"
+            submittedRequirements = submittedRequirements.map((req) =>
+              req === "Parent/Guardian Consent Form"
+                ? "Notarized Parental Consent"
+                : req
+            );
 
-          return activeFilterValues.approvedRequirement === "Yes"
-            ? allApproved
-            : !allApproved;
-        })()
-      : true;
-    return (
-      matchesSearch &&
-      matchesProgram &&
-      matchesField &&
-      matchesEmail &&
-      matchesContact &&
-      matchesHired &&
-      matchesLocation &&
-      matchesApprovedRequirement
-    );
-  });
+            // Check if student has submitted ALL required documents
+            const hasAllSubmitted = REQUIRED_DOCUMENTS.every((req) =>
+              submittedRequirements.includes(req)
+            );
+
+            if (!hasAllSubmitted) {
+              return activeFilterValues.approvedRequirement === "No";
+            }
+
+            // Check if ALL submitted requirements are approved
+            const allApproved = submittedRequirements.every((reqType) => {
+              // Handle migration: check both old and new name for approvals
+              const approval =
+                studentApprovals[reqType] ||
+                (reqType === "Notarized Parental Consent"
+                  ? studentApprovals["Parent/Guardian Consent Form"]
+                  : null);
+              return (
+                approval?.status === "approved" ||
+                approval?.status === "accepted"
+              );
+            });
+
+            return activeFilterValues.approvedRequirement === "Yes"
+              ? allApproved
+              : !allApproved;
+          })()
+        : true;
+      const matchesSection = activeFilterValues.section
+        ? typeof student.section === "string" &&
+          student.section
+            .toLowerCase()
+            .includes(activeFilterValues.section.toLowerCase())
+        : true;
+      return (
+        matchesSearch &&
+        matchesProgram &&
+        matchesField &&
+        matchesEmail &&
+        matchesContact &&
+        matchesHired &&
+        matchesLocation &&
+        matchesApprovedRequirement &&
+        matchesSection
+      );
+    });
+  }, [
+    dataSource,
+    debouncedSearchQuery,
+    activeFilterValues,
+    studentSubmittedRequirements,
+    requirementApprovals,
+  ]);
 
   // Keyboard shortcuts (moved here to access filteredData)
   useKeyboardShortcuts({
@@ -1557,41 +1979,43 @@ const StudentDashboard = () => {
     setSortConfig({ key, direction });
   };
 
-  // Apply sorting
-  const sortedData = [...filteredData].sort((a, b) => {
-    if (!sortConfig.key) return 0;
+  // Apply sorting - memoized
+  const sortedData = useMemo(() => {
+    return [...filteredData].sort((a, b) => {
+      if (!sortConfig.key) return 0;
 
-    let aValue = a[sortConfig.key];
-    let bValue = b[sortConfig.key];
+      let aValue = a[sortConfig.key];
+      let bValue = b[sortConfig.key];
 
-    // Handle array fields
-    if (Array.isArray(aValue)) {
-      aValue = aValue.join(", ");
-    }
-    if (Array.isArray(bValue)) {
-      bValue = bValue.join(", ");
-    }
+      // Handle array fields
+      if (Array.isArray(aValue)) {
+        aValue = aValue.join(", ");
+      }
+      if (Array.isArray(bValue)) {
+        bValue = bValue.join(", ");
+      }
 
-    // Handle string comparison
-    if (typeof aValue === "string") {
-      aValue = aValue.toLowerCase();
-    }
-    if (typeof bValue === "string") {
-      bValue = bValue.toLowerCase();
-    }
+      // Handle string comparison
+      if (typeof aValue === "string") {
+        aValue = aValue.toLowerCase();
+      }
+      if (typeof bValue === "string") {
+        bValue = bValue.toLowerCase();
+      }
 
-    // Handle null/undefined
-    if (aValue == null) aValue = "";
-    if (bValue == null) bValue = "";
+      // Handle null/undefined
+      if (aValue == null) aValue = "";
+      if (bValue == null) bValue = "";
 
-    if (aValue < bValue) {
-      return sortConfig.direction === "asc" ? -1 : 1;
-    }
-    if (aValue > bValue) {
-      return sortConfig.direction === "asc" ? 1 : -1;
-    }
-    return 0;
-  });
+      if (aValue < bValue) {
+        return sortConfig.direction === "asc" ? -1 : 1;
+      }
+      if (aValue > bValue) {
+        return sortConfig.direction === "asc" ? 1 : -1;
+      }
+      return 0;
+    });
+  }, [filteredData, sortConfig]);
 
   const totalPages = Math.ceil(sortedData.length / itemsPerPage);
   const indexOfLastItem = currentPage * itemsPerPage;
@@ -1655,14 +2079,27 @@ const StudentDashboard = () => {
         const data = studentSnap.data();
 
         // Attempt to delete Firebase Auth user
-        try {
-          await attemptDeleteAuthUser({
-            uid: data.uid,
-            email: data.email,
-          });
-        } catch (authError) {
-          // Log but don't fail - Firestore deletion should still proceed
-          logger.warn("Could not delete Firebase Auth user:", authError);
+        // Students now use their actual email for Firebase Auth
+        let authDeleted = false;
+        if (data.uid || data.email) {
+          try {
+            authDeleted = await attemptDeleteAuthUser({
+              uid: data.uid,
+              email: data.email, // Use actual student email (same as Firebase Auth email)
+            });
+            if (authDeleted) {
+              logger.log("Firebase Auth user deleted successfully");
+            } else {
+              logger.warn(
+                "Firebase Auth user deletion failed or Cloud Function not available"
+              );
+            }
+          } catch (authError) {
+            logger.error("Error deleting Firebase Auth user:", authError);
+            // Continue with Firestore deletion even if Auth deletion fails
+          }
+        } else {
+          logger.warn("No UID or email found for Firebase Auth deletion");
         }
 
         await setDoc(doc(db, "deleted_students", id), {
@@ -1684,7 +2121,12 @@ const StudentDashboard = () => {
       setStudents((prev) => prev.filter((student) => student.id !== id));
       setSelectedRowId(null);
       setOpenMenuId(null);
-      success(`Student ${studentName} deleted successfully`);
+
+      // Show success message with Auth deletion status
+      const authStatus = authDeleted
+        ? " (Firebase Auth account also deleted)"
+        : " (Note: Firebase Auth account may still exist if Cloud Function is not deployed)";
+      success(`Student ${studentName} deleted successfully${authStatus}`);
     } catch (error) {
       logger.error("Delete single student error:", error);
       setError("Failed to delete student. Please try again.");
@@ -1697,8 +2139,8 @@ const StudentDashboard = () => {
   // Get preview of selected students for confirmation
   const getSelectedStudentsPreview = () => {
     return selectedItems
-      .map(id => {
-        const student = students.find(s => s.id === id);
+      .map((id) => {
+        const student = students.find((s) => s.id === id);
         return student ? `${student.firstName} ${student.lastName}` : null;
       })
       .filter(Boolean)
@@ -1718,6 +2160,9 @@ const StudentDashboard = () => {
     setShowConfirm(false);
     try {
       setIsDeleting(true);
+      let authDeletedCount = 0; // Track successful Auth deletions
+      const totalDeleted = selectedItems.length; // Total number of students to delete
+
       for (const id of selectedItems) {
         const studentRef = doc(db, "users", id);
         const studentSnap = await getDoc(studentRef);
@@ -1725,14 +2170,35 @@ const StudentDashboard = () => {
           const data = studentSnap.data();
 
           // Attempt to delete Firebase Auth user
-          try {
-            await attemptDeleteAuthUser({
-              uid: data.uid,
-              email: data.email,
-            });
-          } catch (authError) {
-            // Log but don't fail - Firestore deletion should still proceed
-            logger.warn("Could not delete Firebase Auth user:", authError);
+          // Students now use their actual email for Firebase Auth
+          let authDeleted = false;
+          if (data.uid || data.email) {
+            try {
+              authDeleted = await attemptDeleteAuthUser({
+                uid: data.uid,
+                email: data.email, // Use actual student email (same as Firebase Auth email)
+              });
+              if (authDeleted) {
+                authDeletedCount++;
+                logger.log(
+                  `Firebase Auth user deleted successfully for student ${id}`
+                );
+              } else {
+                logger.warn(
+                  `Firebase Auth user deletion failed for student ${id} or Cloud Function not available`
+                );
+              }
+            } catch (authError) {
+              logger.error(
+                `Error deleting Firebase Auth user for student ${id}:`,
+                authError
+              );
+              // Continue with Firestore deletion even if Auth deletion fails
+            }
+          } else {
+            logger.warn(
+              `No UID or email found for Firebase Auth deletion for student ${id}`
+            );
           }
 
           await setDoc(doc(db, "deleted_students", id), {
@@ -1754,7 +2220,21 @@ const StudentDashboard = () => {
       );
 
       setSelectedItems([]);
-      success(`Successfully deleted ${selectedItems.length} student(s)`);
+
+      // Show success message with Auth deletion status
+      if (authDeletedCount === totalDeleted && totalDeleted > 0) {
+        success(
+          `Successfully deleted ${totalDeleted} student(s). All Firebase Auth accounts deleted.`
+        );
+      } else if (authDeletedCount > 0) {
+        success(
+          `Successfully deleted ${totalDeleted} student(s). ${authDeletedCount} Firebase Auth account(s) deleted.`
+        );
+      } else {
+        success(
+          `Successfully deleted ${totalDeleted} student(s). Note: Firebase Auth account deletion may have failed - check if Cloud Function is deployed.`
+        );
+      }
     } catch (error) {
       logger.error("Bulk delete error:", error);
       setError("Failed to delete items. Please try again.");
@@ -1780,6 +2260,7 @@ const StudentDashboard = () => {
         hired: "",
         locationPreference: "",
         approvedRequirement: "",
+        section: "",
       });
     } else {
       setFilterValues({
@@ -1790,6 +2271,7 @@ const StudentDashboard = () => {
         hired: "",
         locationPreference: "",
         approvedRequirement: "",
+        section: "",
       });
     }
     success("All filters cleared");
@@ -1819,6 +2301,40 @@ const StudentDashboard = () => {
     setSelectedStudent(null);
   };
 
+  // Handle requirement update callback - force refresh of approvals
+  const handleRequirementUpdated = async (studentId, requirementType, status) => {
+    // Force a refresh by re-fetching the approval document immediately
+    try {
+      const approvalRef = doc(db, "requirement_approvals", studentId);
+      const approvalDoc = await getDoc(approvalRef);
+      
+      if (approvalDoc.exists()) {
+        const approvalData = approvalDoc.data();
+        // Update the requirementApprovals state directly for immediate UI update
+        setRequirementApprovals((prev) => ({
+          ...prev,
+          [studentId]: approvalData,
+        }));
+        
+        // Log for debugging
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`[Requirement Updated] Student: ${studentId}, Type: ${requirementType}, Status: ${status}`);
+          console.log('Approval data:', approvalData);
+        }
+      } else {
+        // If document doesn't exist, remove it from state
+        setRequirementApprovals((prev) => {
+          const updated = { ...prev };
+          delete updated[studentId];
+          return updated;
+        });
+      }
+    } catch (error) {
+      console.error("Error refreshing requirement approval:", error);
+      // The real-time listener should still pick it up, so this is just a fallback
+    }
+  };
+
   // Handle creating a new student account with fixed password
   const handleCreateStudentAccount = async (studentData) => {
     try {
@@ -1830,6 +2346,16 @@ const StudentDashboard = () => {
         studentData.studentNumber?.trim() || studentData.studentId?.trim();
 
       if (newStudentIdValue) {
+        // Validate Student ID format: XX-XXXXX-XXX
+        const perfectFormatRegex = /^\d{2}-\d{5}-\d{3}$/;
+        if (!perfectFormatRegex.test(newStudentIdValue)) {
+          showError(
+            "Invalid Student ID format. Must be in format: XX-XXXXX-XXX (e.g., 12-12345-678)"
+          );
+          setIsCreatingStudent(false);
+          return;
+        }
+
         // Check studentNumber field
         const studentNumberQuery = query(
           usersRef,
@@ -1853,72 +2379,169 @@ const StudentDashboard = () => {
         }
       }
 
-      // Use Student ID as the email for Firebase Auth login
-      // Format: studentId@student.internquest.local
-      const studentIdForAuth = newStudentIdValue || studentData.studentId?.trim() || studentData.studentNumber?.trim();
-      if (!studentIdForAuth) {
-        showError("Student ID is required to create an account.");
-        setIsCreatingStudent(false);
-        return;
-      }
-      
-      // Create email format for Firebase Auth (Student ID + domain)
-      const authEmail = `${studentIdForAuth}@student.internquest.local`;
-      
-      // Use provided email for contact purposes (required)
+      // Use provided email for Firebase Auth (actual student email)
       const providedEmail = studentData.email?.trim();
       if (!providedEmail) {
         showError("Email is required. Please provide a valid email address.");
         setIsCreatingStudent(false);
         return;
       }
-      
-      // Validate institutional email
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(providedEmail)) {
+
+      // Basic email validation - Firebase will do stricter validation
+      // Simple check: must contain @ and basic format
+      if (
+        !providedEmail.includes("@") ||
+        providedEmail.split("@").length !== 2
+      ) {
         showError("Please enter a valid email address.");
         setIsCreatingStudent(false);
         return;
       }
-      
+
       // Check if email is from .edu.ph domain only
-      const emailDomain = providedEmail.split('@')[1]?.toLowerCase();
-      
-      if (!emailDomain?.endsWith('.edu.ph')) {
-        showError("Please enter an institutional email address ending with .edu.ph (e.g., student@university.edu.ph)");
+      const emailDomain = providedEmail.split("@")[1]?.toLowerCase();
+      if (!emailDomain?.endsWith(".edu.ph")) {
+        showError(
+          "Please enter an institutional email address ending with .edu.ph (e.g., student@university.edu.ph)"
+        );
         setIsCreatingStudent(false);
         return;
       }
 
-      // Check if auth email already exists in Firebase Auth
+      // Additional validation: ensure email is not too long (Firebase limit is 256 chars)
+      if (providedEmail.length > 256) {
+        showError(
+          "Email address is too long. Maximum length is 256 characters."
+        );
+        setIsCreatingStudent(false);
+        return;
+      }
+
+      // Validate password
+      const providedPassword = studentData.password?.trim();
+      if (!providedPassword) {
+        showError("Password is required. Please provide a valid password.");
+        setIsCreatingStudent(false);
+        return;
+      }
+
+      if (providedPassword.length < 6) {
+        showError("Password must be at least 6 characters long.");
+        setIsCreatingStudent(false);
+        return;
+      }
+
+      // Check if email already exists in Firebase Auth
       // Note: We'll let Firebase Auth handle this check during account creation
 
-      // Create Firebase Auth account with Student ID as email and fixed password
+      // Create Firebase Auth account with actual student email
+      // Normalize email (lowercase, trimmed) - this is what will be used for authentication
+      // IMPORTANT: This normalized email will be used for BOTH email and authEmail fields
+      const normalizedEmail = providedEmail.toLowerCase().trim();
+
+      // Ensure we're using the institutional email, not generating any old format
+      if (normalizedEmail.includes("@student.internquest.local")) {
+        showError(
+          "Invalid email format. Please use your institutional email (e.g., name@neu.edu.ph)"
+        );
+        setIsCreatingStudent(false);
+        return;
+      }
+
       let firebaseUser;
       try {
+        // Log the values being sent (for debugging - remove sensitive data in production)
+        console.log("Creating Firebase Auth account with:", {
+          email: normalizedEmail,
+          emailLength: normalizedEmail.length,
+          passwordLength: providedPassword.length,
+          hasPassword: !!providedPassword,
+        });
+
         const userCredential = await createUserWithEmailAndPassword(
           auth,
-          authEmail, // Use Student ID formatted as email
-          studentData.password
+          normalizedEmail, // Use normalized institutional email for Firebase Auth
+          providedPassword
         );
         firebaseUser = userCredential.user;
+        console.log("Firebase Auth user created successfully:", {
+          uid: firebaseUser.uid,
+          email: firebaseUser.email,
+          expectedEmail: normalizedEmail,
+        });
       } catch (authError) {
+        // Log comprehensive error details for debugging
+        console.error("=== Firebase Auth Error Details ===");
+        console.error("Full error object:", authError);
+        console.error("Error code:", authError.code);
+        console.error("Error message:", authError.message);
+        console.error("Error name:", authError.name);
+        console.error("Stack trace:", authError.stack);
+        console.error("Request details:", {
+          email: providedEmail,
+          normalizedEmail: providedEmail.toLowerCase().trim(),
+          emailLength: providedEmail.length,
+          passwordLength: providedPassword?.length,
+          passwordType: typeof providedPassword,
+          hasPassword: !!providedPassword,
+        });
+
+        // Try to extract more details from the error
+        if (authError.customData) {
+          console.error("Custom error data:", authError.customData);
+        }
+        if (authError.response) {
+          console.error("Error response:", authError.response);
+        }
+        console.error("===================================");
+
         let errorMessage = "Failed to create student account. ";
 
-        switch (authError.code) {
-          case "auth/email-already-in-use":
-            errorMessage =
-              "A student account with this Student ID already exists. Please use a different Student ID.";
-            break;
-          case "auth/invalid-email":
-            errorMessage =
-              "Invalid Student ID format. Student ID must be alphanumeric and not contain special characters.";
-            break;
-          case "auth/weak-password":
-            errorMessage = "Password is too weak.";
-            break;
-          default:
-            errorMessage += authError.message || "Unknown error occurred.";
+        // Handle known error codes
+        if (authError.code) {
+          switch (authError.code) {
+            case "auth/email-already-in-use":
+              errorMessage =
+                "A student account with this email already exists. Please use a different email address.";
+              break;
+            case "auth/invalid-email":
+              errorMessage =
+                "Invalid email format. Please enter a valid email address.";
+              break;
+            case "auth/weak-password":
+              errorMessage =
+                "Password is too weak. Password must be at least 6 characters long.";
+              break;
+            case "auth/operation-not-allowed":
+              errorMessage =
+                "Email/password accounts are not enabled. Please contact the administrator.";
+              break;
+            case "auth/network-request-failed":
+              errorMessage =
+                "Network error. Please check your internet connection and try again.";
+              break;
+            case "auth/missing-password":
+              errorMessage =
+                "Password is required to create a Firebase Auth account.";
+              break;
+            case "auth/invalid-password":
+              errorMessage = "Invalid password format.";
+              break;
+            case "auth/internal-error":
+              errorMessage =
+                "Internal Firebase error. Please try again or contact support.";
+              break;
+            default:
+              errorMessage += `Error: ${authError.code} - ${
+                authError.message || "Unknown error occurred."
+              }`;
+          }
+        } else {
+          // No error code - this might be a 400 Bad Request
+          errorMessage += authError.message || "Bad Request (400). ";
+          errorMessage +=
+            "Please check: 1) Email format is correct, 2) Email ends with .edu.ph, 3) Password is at least 6 characters. ";
+          errorMessage += "Check the browser console for more details.";
         }
 
         showError(errorMessage);
@@ -1931,6 +2554,7 @@ const StudentDashboard = () => {
         studentData.studentNumber?.trim() ||
         studentData.studentId?.trim() ||
         "";
+
       const newStudent = {
         studentNumber: createdStudentIdValue,
         studentId: createdStudentIdValue, // Save to both fields for compatibility
@@ -1938,16 +2562,37 @@ const StudentDashboard = () => {
         lastName: studentData.lastName.trim(),
         section: studentData.section?.trim() || "",
         college: studentData.college?.trim() || "",
-        email: providedEmail, // Store provided email (required)
-        authEmail: authEmail, // Store the auth email used for login
+        email: normalizedEmail, // Store institutional email (same as authEmail - both use normalized email)
+        authEmail: normalizedEmail, // Store email used for Firebase Auth (same as email - both use institutional email)
         status: false, // Default to not hired
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         // Link to Firebase Auth UID
         uid: firebaseUser.uid,
+        // Track who created this student
+        createdBy: (() => {
+          const session = getAdminSession();
+          return session
+            ? {
+                username: session.username || "Unknown",
+                role: session.role || "Unknown",
+                adminId: session.adminId || null,
+              }
+            : null;
+        })(),
       };
 
+      // Log what we're saving to verify it's correct
+      console.log("Saving student document with:", {
+        email: newStudent.email,
+        authEmail: newStudent.authEmail,
+        areEqual: newStudent.email === newStudent.authEmail,
+        firebaseAuthEmail: firebaseUser.email,
+      });
+
       const docRef = await addDoc(collection(db, "users"), newStudent);
+
+      console.log("Student document created with ID:", docRef.id);
 
       // Log activity
       await activityLoggers.createStudent(
@@ -1956,7 +2601,7 @@ const StudentDashboard = () => {
       );
 
       success(
-        `Student account created successfully! Login with Student ID: ${createdStudentIdValue}, Password: ${studentData.password}`
+        `Student account created successfully! Login: Student ID: ${createdStudentIdValue} (used as both username and password)`
       );
 
       // Close modal
@@ -1982,533 +2627,55 @@ const StudentDashboard = () => {
         onClose={() => setShowLogoutConfirm(false)}
         onConfirm={handleLogout}
         title="Confirm Logout"
-        message="Are you sure you want to logout? Any unsaved changes will be lost."
+        message="Are you sure you want to logout?"
         confirmText="Logout"
         cancelText="Cancel"
         type="warning"
       />
       <Navbar onLogout={handleLogoutClick} />
       <div className="dashboard-content">
-        {!isAdviser && (
-          <div className="overview-section">
-            <h1>Dashboard Overview</h1>
-            <div className="overview-cards">
-              <div className="card company-card">
-                <div className="card-icon-wrapper company-icon">
-                  <IoBusinessOutline />
-                </div>
-                <h3>Company</h3>
-                <p>Total active company</p>
-                <div className="count">{overviewStats.totalCompanies}</div>
-              </div>
-              <div className="card student-card">
-                <div className="card-icon-wrapper student-icon">
-                  <IoPeopleOutline />
-                </div>
-                <h3>Students</h3>
-                <p>Total Registered students</p>
-                <div className="count">{overviewStats.totalStudents}</div>
-              </div>
-              <div className="card requirements-card">
-                <div className="card-icon-wrapper requirements-icon">
-                  <IoDocumentTextOutline />
-                </div>
-                <h3>Requirements</h3>
-                <p>Total files submitted</p>
-                <div className="count" title={`${overviewStats.totalRequirements} requirement files submitted across all students`}>
-                  {overviewStats.totalRequirements}
-                </div>
-                <div className="card-stats">
-                  <span className="stat-item approved" title={`${overviewStats.approvedRequirements} files approved`}>
-                    <IoCheckmarkCircle /> {overviewStats.approvedRequirements}
-                  </span>
-                  <span className="stat-item pending" title={`${overviewStats.pendingRequirements} files pending approval`}>
-                    <IoTimeOutline /> {overviewStats.pendingRequirements}
-                  </span>
-                </div>
-                <div className="card-footer-note">
-                  <span className="footer-note-text" title="Each student needs to submit 8 different document types">
-                    8 document types required per student
-                  </span>
-                </div>
-              </div>
-              <div className="card hired-card">
-                <div className="card-icon-wrapper hired-icon">
-                  <IoCheckmarkCircle />
-                </div>
-                <h3>Hired</h3>
-                <p>Students with status</p>
-                <div className="count">{overviewStats.hiredStudents}</div>
-                <div className="card-percentage">
-                  {overviewStats.totalStudents > 0
-                    ? Math.round(
-                        (overviewStats.hiredStudents / overviewStats.totalStudents) * 100
-                      )
-                    : 0}
-                  %
-                </div>
-              </div>
+        {/* Page Header */}
+        <div className="student-page-header">
+          <h1>Manage Students</h1>
+          <p>Track student progress and manage internship requirements</p>
+        </div>
+
+        {/* Stats Cards Row */}
+        <div className="student-stats-row">
+          <div className="student-stat-card">
+            <div className="student-stat-icon students">
+              <IoPeopleOutline />
+            </div>
+            <div className="student-stat-content">
+              <h3>{overviewStats.totalStudents || 0}</h3>
+              <p>TOTAL STUDENTS</p>
             </div>
           </div>
-        )}
-        
-        {/* Separate Notification Section */}
-        {!isAdviser && (
-          <div className="notification-section">
-            <div className="notification-section-header">
-              <div className="notification-header-content">
-                <div className="notification-header-icon">
-                  <IoNotificationsOutline />
-                </div>
-                <div>
-                  <h2>Student Notifications</h2>
-                  <p>Send messages and alerts to students</p>
-                </div>
-              </div>
-              <button
-                className="toggle-notifications-btn"
-                onClick={() => setShowNotificationsList(!showNotificationsList)}
-                aria-label={showNotificationsList ? "Hide messages" : "View messages"}
-              >
-                <IoNotificationsOutline />
-                {showNotificationsList ? "Hide" : "View"} Messages
-                {sentNotifications.length > 0 && (
-                  <span className="notification-count-badge">
-                    {sentNotifications.length}
-                  </span>
-                )}
-              </button>
+          <div className="student-stat-card">
+            <div className="student-stat-icon requirements">
+              <IoTimeOutline />
             </div>
-
-            <div className="notification-section-content">
-              <div className="notification-form-container">
-                {/* Notification Type Selector */}
-                <div className="notification-type-selector">
-                  <label htmlFor="notification-type">
-                    <IoPeopleOutline className="label-icon" />
-                    Send to:
-                  </label>
-                  <select
-                    id="notification-type"
-                    value={notificationType}
-                    onChange={(e) => {
-                      setNotificationType(e.target.value);
-                      setSelectedNotificationStudents([]);
-                      setSelectedNotificationSection("");
-                    }}
-                    className="notification-type-select"
-                    disabled={isSendingNotification}
-                  >
-                    <option value="all">All Students</option>
-                    <option value="student">Specific Student</option>
-                    <option value="section">Specific Section</option>
-                  </select>
-                </div>
-
-                {/* Student Selector (for private student notification) */}
-                {notificationType === "student" && (
-                  <div className="notification-target-selector">
-                    <label htmlFor="notification-student">
-                      <IoPersonAddOutline className="label-icon" />
-                      Select Students:
-                      {selectedNotificationStudents.length > 0 && (
-                        <span className="selected-count">
-                          ({selectedNotificationStudents.length} selected)
-                        </span>
-                      )}
-                    </label>
-                    
-                    {/* Selected Students Chips */}
-                    {selectedNotificationStudents.length > 0 && (
-                      <div className="selected-students-chips">
-                        {selectedNotificationStudents.map((studentId) => {
-                          const student = baseStudents.find((s) => s.id === studentId);
-                          if (!student) return null;
-                          return (
-                            <div key={studentId} className="student-chip">
-                              <span className="chip-name">
-                                {student.firstName} {student.lastName}
-                              </span>
-                              <button
-                                type="button"
-                                className="chip-remove"
-                                onClick={() => {
-                                  setSelectedNotificationStudents(
-                                    selectedNotificationStudents.filter((id) => id !== studentId)
-                                  );
-                                }}
-                                disabled={isSendingNotification}
-                                aria-label={`Remove ${student.firstName} ${student.lastName}`}
-                              >
-                                <IoCloseOutline />
-                              </button>
-                            </div>
-                          );
-                        })}
-                        <button
-                          type="button"
-                          className="clear-all-students"
-                          onClick={() => setSelectedNotificationStudents([])}
-                          disabled={isSendingNotification}
-                        >
-                          Clear All
-                        </button>
-                      </div>
-                    )}
-
-                    <div className="searchable-dropdown">
-                      <div className="searchable-dropdown-input-wrapper">
-                        <IoSearchOutline className="searchable-dropdown-icon" />
-                        <input
-                          type="text"
-                          id="notification-student"
-                          placeholder={
-                            selectedNotificationStudents.length > 0
-                              ? "Search to add more students..."
-                              : "Search student by name or ID..."
-                          }
-                          value={studentSearchQuery}
-                          onChange={(e) => {
-                            setStudentSearchQuery(e.target.value);
-                            setShowStudentDropdown(true);
-                          }}
-                          onFocus={() => setShowStudentDropdown(true)}
-                          className="searchable-dropdown-input"
-                          disabled={isSendingNotification}
-                          autoComplete="off"
-                        />
-                        {studentSearchQuery && (
-                          <button
-                            type="button"
-                            className="searchable-dropdown-clear"
-                            onClick={() => {
-                              setStudentSearchQuery("");
-                            }}
-                            disabled={isSendingNotification}
-                          >
-                            <IoCloseOutline />
-                          </button>
-                        )}
-                      </div>
-                      {showStudentDropdown && (
-                        <div className="searchable-dropdown-list">
-                          {baseStudents
-                            .filter((student) => {
-                              if (!studentSearchQuery.trim()) return true;
-                              const query = studentSearchQuery.toLowerCase();
-                              const fullName = `${student.firstName} ${student.lastName}`.toLowerCase();
-                              const studentId = (
-                                student.studentNumber ||
-                                student.studentId ||
-                                ""
-                              ).toLowerCase();
-                              const section = (student.section || "").toLowerCase();
-                              return (
-                                fullName.includes(query) ||
-                                studentId.includes(query) ||
-                                section.includes(query)
-                              );
-                            })
-                            .slice(0, 10)
-                            .map((student) => {
-                              const isSelected = selectedNotificationStudents.includes(student.id);
-                              return (
-                                <div
-                                  key={student.id}
-                                  className={`searchable-dropdown-item ${
-                                    isSelected ? "selected" : ""
-                                  }`}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (isSelected) {
-                                      setSelectedNotificationStudents(
-                                        selectedNotificationStudents.filter((id) => id !== student.id)
-                                      );
-                                    } else {
-                                      setSelectedNotificationStudents([
-                                        ...selectedNotificationStudents,
-                                        student.id,
-                                      ]);
-                                    }
-                                    setStudentSearchQuery("");
-                                  }}
-                                >
-                                  <div className="dropdown-item-checkbox">
-                                    <input
-                                      type="checkbox"
-                                      checked={isSelected}
-                                      onChange={() => {}} // Handled by parent onClick
-                                      onClick={(e) => e.stopPropagation()}
-                                    />
-                                  </div>
-                                  <div className="dropdown-item-content">
-                                    <div className="dropdown-item-name">
-                                      {student.firstName} {student.lastName}
-                                    </div>
-                                    <div className="dropdown-item-details">
-                                      {student.studentNumber || student.studentId} -{" "}
-                                      {student.section}
-                                    </div>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          {baseStudents.filter((student) => {
-                            if (!studentSearchQuery.trim()) return false;
-                            const query = studentSearchQuery.toLowerCase();
-                            const fullName = `${student.firstName} ${student.lastName}`.toLowerCase();
-                            const studentId = (
-                              student.studentNumber ||
-                              student.studentId ||
-                              ""
-                            ).toLowerCase();
-                            const section = (student.section || "").toLowerCase();
-                            return (
-                              fullName.includes(query) ||
-                              studentId.includes(query) ||
-                              section.includes(query)
-                            );
-                          }).length === 0 &&
-                            studentSearchQuery.trim() && (
-                              <div className="searchable-dropdown-no-results">
-                                No students found
-                              </div>
-                            )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Section Selector (for private section notification) */}
-                {notificationType === "section" && (
-                  <div className="notification-target-selector">
-                    <label htmlFor="notification-section">
-                      <IoPeopleOutline className="label-icon" />
-                      Select Section:
-                    </label>
-                    <select
-                      id="notification-section"
-                      value={selectedNotificationSection}
-                      onChange={(e) =>
-                        setSelectedNotificationSection(e.target.value)
-                      }
-                      className="notification-target-select"
-                      disabled={isSendingNotification}
-                    >
-                      <option value="">Choose a section...</option>
-                      {getUniqueSections().map((section) => (
-                        <option key={section} value={section}>
-                          {section}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                <div className="notification-input-wrapper">
-                  <label htmlFor="notification-message-input" className="notification-input-label">
-                    <IoDocumentTextOutline className="label-icon" />
-                    Message:
-                  </label>
-                  <input
-                    type="text"
-                    id="notification-message-input"
-                    placeholder="Type your notification message here..."
-                    value={notificationText}
-                    onChange={(e) => setNotificationText(e.target.value)}
-                    onKeyPress={(e) => {
-                      if (e.key === "Enter" && !isSendingNotification) {
-                        handleSendNotification();
-                      }
-                    }}
-                    className="notification-input"
-                    disabled={isSendingNotification}
-                  />
-                  <button
-                    className={`send-notification-btn ${
-                      isSendingNotification ? "sending" : ""
-                    }`}
-                    onClick={handleSendNotification}
-                    disabled={
-                      isSendingNotification ||
-                      !notificationText.trim() ||
-                      (notificationType === "student" &&
-                        selectedNotificationStudents.length === 0) ||
-                      (notificationType === "section" &&
-                        !selectedNotificationSection)
-                    }
-                  >
-                    {isSendingNotification ? (
-                      <>
-                        <span className="spinner-small"></span>
-                        Sending...
-                      </>
-                    ) : (
-                      <>
-                        <IoPaperPlaneOutline />
-                        Send Message
-                      </>
-                    )}
-                  </button>
-                </div>
-                {showNotificationSuccess && (
-                  <div className="notification-success">
-                    <span className="success-icon">✓</span>
-                    Message sent successfully!
-                  </div>
-                )}
-              </div>
-
-              {/* Notifications History */}
-              {showNotificationsList && (
-                <div className="notifications-history">
-                  <div className="notifications-history-header">
-                    <h3>
-                      <IoNotificationsOutline />
-                      Message History
-                    </h3>
-                    <span className="notifications-total">
-                      {sentNotifications.length} message
-                      {sentNotifications.length !== 1 ? "s" : ""}
-                    </span>
-                  </div>
-                  {sentNotifications.length === 0 ? (
-                    <div className="notifications-empty-state">
-                      <IoNotificationsOutline className="empty-icon" />
-                      <p>No messages sent yet</p>
-                      <span>Your sent notifications will appear here</span>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="notifications-scroll">
-                        {(() => {
-                          const totalNotificationPages = Math.ceil(
-                            sentNotifications.length / notificationsPerPage
-                          );
-                          const notificationIndexOfLast =
-                            currentNotificationPage * notificationsPerPage;
-                          const notificationIndexOfFirst =
-                            notificationIndexOfLast - notificationsPerPage;
-                          const paginatedNotifications = sentNotifications.slice(
-                            notificationIndexOfFirst,
-                            notificationIndexOfLast
-                          );
-
-                          return paginatedNotifications.map((notif) => (
-                            <div key={notif.id} className="notification-item">
-                              <div className="notification-item-content">
-                                <p className="notification-message">
-                                  {notif.message}
-                                </p>
-                                <div className="notification-meta">
-                                  <span className="notification-time">
-                                    {new Date(
-                                      notif.timestamp
-                                    ).toLocaleString()}
-                                  </span>
-                                  {notif.targetType && notif.targetType !== "all" && (
-                                    <span className="notification-target">
-                                      {notif.targetType === "student"
-                                        ? `To: ${notif.targetStudentName || "Student"}`
-                                        : `To: Section ${notif.targetSection}`}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                              <button
-                                className="delete-notification-btn"
-                                onClick={() =>
-                                  handleDeleteNotification(notif.id)
-                                }
-                                title="Delete message"
-                                aria-label="Delete notification"
-                              >
-                                <IoTrashOutline />
-                              </button>
-                            </div>
-                          ));
-                        })()}
-                      </div>
-                      {sentNotifications.length > 0 && (() => {
-                        const totalNotificationPages = Math.ceil(
-                          sentNotifications.length / notificationsPerPage
-                        );
-                        const notificationIndexOfLast =
-                          currentNotificationPage * notificationsPerPage;
-                        const notificationIndexOfFirst =
-                          notificationIndexOfLast - notificationsPerPage;
-                        return (
-                          <div className="notifications-pagination">
-                            <div className="notifications-pagination-info">
-                              Showing {notificationIndexOfFirst + 1}-{Math.min(
-                                notificationIndexOfLast,
-                                sentNotifications.length
-                              )} of {sentNotifications.length}
-                            </div>
-                            {totalNotificationPages > 1 && (
-                              <div className="notifications-pagination-controls">
-                                <button
-                                  className="notification-pagination-btn"
-                                  onClick={() =>
-                                    setCurrentNotificationPage((prev) =>
-                                      Math.max(1, prev - 1)
-                                    )
-                                  }
-                                  disabled={currentNotificationPage === 1}
-                                  aria-label="Previous page"
-                                >
-                                  &lt;
-                                </button>
-                                {[...Array(totalNotificationPages)].map(
-                                  (_, index) => (
-                                    <button
-                                      key={index + 1}
-                                      className={`notification-pagination-btn ${
-                                        currentNotificationPage === index + 1
-                                          ? "active"
-                                          : ""
-                                      }`}
-                                      onClick={() =>
-                                        setCurrentNotificationPage(index + 1)
-                                      }
-                                      aria-label={`Page ${index + 1}`}
-                                    >
-                                      {index + 1}
-                                    </button>
-                                  )
-                                )}
-                                <button
-                                  className="notification-pagination-btn"
-                                  onClick={() =>
-                                    setCurrentNotificationPage((prev) =>
-                                      Math.min(totalNotificationPages, prev + 1)
-                                    )
-                                  }
-                                  disabled={
-                                    currentNotificationPage >= totalNotificationPages
-                                  }
-                                  aria-label="Next page"
-                                >
-                                  &gt;
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })()}
-                    </>
-                  )}
-                </div>
-              )}
+            <div className="student-stat-content">
+              <h3>{overviewStats.pendingRequirements || 0}</h3>
+              <p>PENDING REVIEW</p>
             </div>
           </div>
-        )}
+          <div className="student-stat-card">
+            <div className="student-stat-icon hired">
+              <IoCheckmarkCircle />
+            </div>
+            <div className="student-stat-content">
+              <h3>{overviewStats.hiredStudents || 0}</h3>
+              <p>HIRED STUDENTS</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Notification section is now integrated into view mode tabs */}
 
         <div className="table-section">
-          <div className="student-table-container">
+          <div className="student-table-wrapper">
             <div className="table-header-with-tabs">
-              <h2>Manage Students</h2>
               <div className="view-mode-tabs">
                 <button
                   className={`view-mode-tab ${
@@ -2531,8 +2698,616 @@ const StudentDashboard = () => {
                     </span>
                   )}
                 </button>
+                <button
+                  className={`view-mode-tab ${
+                    viewMode === "notifications" ? "active" : ""
+                  }`}
+                  onClick={() => setViewMode("notifications")}
+                >
+                  <IoNotificationsOutline style={{ marginRight: "0.5rem" }} />
+                  Student Notifications
+                  {sentNotifications.length > 0 && (
+                    <span className="pending-badge">
+                      {sentNotifications.length}
+                    </span>
+                  )}
+                </button>
               </div>
             </div>
+            {viewMode === "notifications" && (
+              <div className="notification-section">
+                <div className="notification-section-header">
+                  <div className="notification-header-content">
+                    <div className="notification-header-icon">
+                      <IoNotificationsOutline />
+                    </div>
+                    <div>
+                      <h2>Student Notifications</h2>
+                      <p>Send messages and alerts to students</p>
+                    </div>
+                  </div>
+                  <button
+                    className="toggle-notifications-btn"
+                    onClick={() => setShowNotificationsList(!showNotificationsList)}
+                    aria-label={
+                      showNotificationsList ? "Hide messages" : "View messages"
+                    }
+                  >
+                    <IoNotificationsOutline />
+                    {showNotificationsList ? "Hide" : "View"} Messages
+                    {sentNotifications.length > 0 && (
+                      <span className="notification-count-badge">
+                        {sentNotifications.length}
+                      </span>
+                    )}
+                  </button>
+                </div>
+
+                <div className="notification-section-content">
+                  <div className="notification-form-container">
+                    {/* Notification Type Selector */}
+                    <div className="notification-type-selector">
+                      <label htmlFor="notification-type">
+                        <IoPeopleOutline className="label-icon" />
+                        Send to:
+                      </label>
+                      <select
+                        id="notification-type"
+                        value={notificationType}
+                        onChange={(e) => {
+                          setNotificationType(e.target.value);
+                          setSelectedNotificationStudents([]);
+                          setSelectedNotificationSection("");
+                        }}
+                        className="notification-type-select"
+                        disabled={isSendingNotification}
+                      >
+                        {!isAdviser && <option value="all">All Students</option>}
+                        <option value="student">Specific Student</option>
+                        <option value="section">Specific Section</option>
+                      </select>
+                    </div>
+
+                    {/* Student Selector (for private student notification) */}
+                    {notificationType === "student" && (
+                      <div className="notification-target-selector">
+                        <label htmlFor="notification-student">
+                          <IoPersonAddOutline className="label-icon" />
+                          Select Students:
+                          {selectedNotificationStudents.length > 0 && (
+                            <span className="selected-count">
+                              ({selectedNotificationStudents.length} selected)
+                            </span>
+                          )}
+                        </label>
+
+                        {/* Selected Students Chips */}
+                        {selectedNotificationStudents.length > 0 && (
+                          <div className="selected-students-chips">
+                            {selectedNotificationStudents.map((studentId) => {
+                              const student = baseStudents.find(
+                                (s) => s.id === studentId
+                              );
+                              if (!student) return null;
+                              return (
+                                <div key={studentId} className="student-chip">
+                                  <span className="chip-name">
+                                    {student.firstName} {student.lastName}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    className="chip-remove"
+                                    onClick={() => {
+                                      setSelectedNotificationStudents(
+                                        selectedNotificationStudents.filter(
+                                          (id) => id !== studentId
+                                        )
+                                      );
+                                    }}
+                                    disabled={isSendingNotification}
+                                    aria-label={`Remove ${student.firstName} ${student.lastName}`}
+                                  >
+                                    <IoCloseOutline />
+                                  </button>
+                                </div>
+                              );
+                            })}
+                            <button
+                              type="button"
+                              className="clear-all-students"
+                              onClick={() => setSelectedNotificationStudents([])}
+                              disabled={isSendingNotification}
+                            >
+                              Clear All
+                            </button>
+                          </div>
+                        )}
+
+                        <div className="searchable-dropdown">
+                          <div className="searchable-dropdown-input-wrapper">
+                            <IoSearchOutline className="searchable-dropdown-icon" />
+                            <input
+                              type="text"
+                              id="notification-student"
+                              placeholder={
+                                selectedNotificationStudents.length > 0
+                                  ? "Search to add more students..."
+                                  : "Search student by name or ID..."
+                              }
+                              value={studentSearchQuery}
+                              onChange={(e) => {
+                                setStudentSearchQuery(e.target.value);
+                                setShowStudentDropdown(true);
+                              }}
+                              onFocus={() => setShowStudentDropdown(true)}
+                              className="searchable-dropdown-input"
+                              disabled={isSendingNotification}
+                              autoComplete="off"
+                            />
+                            {studentSearchQuery && (
+                              <button
+                                type="button"
+                                className="searchable-dropdown-clear"
+                                onClick={() => {
+                                  setStudentSearchQuery("");
+                                }}
+                                disabled={isSendingNotification}
+                              >
+                                <IoCloseOutline />
+                              </button>
+                            )}
+                          </div>
+                          {showStudentDropdown && (
+                            <div className="searchable-dropdown-list">
+                              {baseStudents
+                                .filter((student) => {
+                                  // For advisers, only show students in their section
+                                  if (isAdviser && adminSection) {
+                                    const adminSectionsArray = Array.isArray(adminSection) ? adminSection : [adminSection];
+                                    if (!adminSectionsArray.includes(student.section)) {
+                                      return false;
+                                    }
+                                  }
+                                  if (!studentSearchQuery.trim()) return true;
+                                  const query = studentSearchQuery.toLowerCase();
+                                  const fullName =
+                                    `${student.firstName} ${student.lastName}`.toLowerCase();
+                                  const studentId = (
+                                    student.studentNumber ||
+                                    student.studentId ||
+                                    ""
+                                  ).toLowerCase();
+                                  const section = (
+                                    student.section || ""
+                                  ).toLowerCase();
+                                  return (
+                                    fullName.includes(query) ||
+                                    studentId.includes(query) ||
+                                    section.includes(query)
+                                  );
+                                })
+                                .slice(0, 10)
+                                .map((student) => {
+                                  const isSelected =
+                                    selectedNotificationStudents.includes(
+                                      student.id
+                                    );
+                                  return (
+                                    <div
+                                      key={student.id}
+                                      className={`searchable-dropdown-item ${
+                                        isSelected ? "selected" : ""
+                                      }`}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (isSelected) {
+                                          setSelectedNotificationStudents(
+                                            selectedNotificationStudents.filter(
+                                              (id) => id !== student.id
+                                            )
+                                          );
+                                        } else {
+                                          setSelectedNotificationStudents([
+                                            ...selectedNotificationStudents,
+                                            student.id,
+                                          ]);
+                                        }
+                                        setStudentSearchQuery("");
+                                      }}
+                                    >
+                                      <div className="dropdown-item-checkbox">
+                                        <input
+                                          type="checkbox"
+                                          checked={isSelected}
+                                          onChange={() => {}} // Handled by parent onClick
+                                          onClick={(e) => e.stopPropagation()}
+                                        />
+                                      </div>
+                                      <div className="dropdown-item-content">
+                                        <div className="dropdown-item-name">
+                                          {student.firstName} {student.lastName}
+                                        </div>
+                                        <div className="dropdown-item-details">
+                                          {student.studentNumber ||
+                                            student.studentId}{" "}
+                                          - {student.section}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              {baseStudents.filter((student) => {
+                                if (!studentSearchQuery.trim()) return false;
+                                const query = studentSearchQuery.toLowerCase();
+                                const fullName =
+                                  `${student.firstName} ${student.lastName}`.toLowerCase();
+                                const studentId = (
+                                  student.studentNumber ||
+                                  student.studentId ||
+                                  ""
+                                ).toLowerCase();
+                                const section = (
+                                  student.section || ""
+                                ).toLowerCase();
+                                return (
+                                  fullName.includes(query) ||
+                                  studentId.includes(query) ||
+                                  section.includes(query)
+                                );
+                              }).length === 0 &&
+                                studentSearchQuery.trim() && (
+                                  <div className="searchable-dropdown-no-results">
+                                    No students found
+                                  </div>
+                                )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Section Selector (for private section notification) */}
+                    {notificationType === "section" && (
+                      <div className="notification-target-selector">
+                        <label htmlFor="notification-section">
+                          <IoPeopleOutline className="label-icon" />
+                          Select Section:
+                        </label>
+                        <select
+                          id="notification-section"
+                          value={selectedNotificationSection}
+                          onChange={(e) =>
+                            setSelectedNotificationSection(e.target.value)
+                          }
+                          className="notification-target-select"
+                          disabled={isSendingNotification}
+                        >
+                          <option value="">Choose a section...</option>
+                          {sectionSuggestions.map((section) => (
+                            <option key={section} value={section}>
+                              {section}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    <div className="notification-input-wrapper">
+                      <label
+                        htmlFor="notification-message-input"
+                        className="notification-input-label"
+                      >
+                        <IoDocumentTextOutline className="label-icon" />
+                        Message:
+                      </label>
+                      <input
+                        type="text"
+                        id="notification-message-input"
+                        placeholder="Type your notification message here..."
+                        value={notificationText}
+                        onChange={(e) => setNotificationText(e.target.value)}
+                        onKeyPress={(e) => {
+                          if (e.key === "Enter" && !isSendingNotification) {
+                            handleSendNotification();
+                          }
+                        }}
+                        className="notification-input"
+                        disabled={isSendingNotification}
+                      />
+                      <button
+                        className={`send-notification-btn ${
+                          isSendingNotification ? "sending" : ""
+                        }`}
+                        onClick={handleSendNotification}
+                        disabled={
+                          isSendingNotification ||
+                          !notificationText.trim() ||
+                          (notificationType === "student" &&
+                            selectedNotificationStudents.length === 0) ||
+                          (notificationType === "section" &&
+                            !selectedNotificationSection)
+                        }
+                      >
+                        {isSendingNotification ? (
+                          <>
+                            <span className="spinner-small"></span>
+                            Sending...
+                          </>
+                        ) : (
+                          <>
+                            <IoPaperPlaneOutline />
+                            Send Message
+                          </>
+                        )}
+                      </button>
+                    </div>
+                    {showNotificationSuccess && (
+                      <div className="notification-success">
+                        <span className="success-icon">✓</span>
+                        Message sent successfully!
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Notifications History */}
+                  {showNotificationsList && (
+                    <div className="notifications-history">
+                      <div className="notifications-history-header">
+                        <h3>
+                          <IoNotificationsOutline />
+                          Message History
+                        </h3>
+                        <span className="notifications-total">
+                          {filteredNotifications.length} message
+                          {filteredNotifications.length !== 1 ? "s" : ""}
+                        </span>
+                      </div>
+
+                      {/* Search Bar, Filters, and Delete All Button */}
+                      {sentNotifications.length > 0 && (
+                        <div
+                          className="message-history-controls"
+                          style={{
+                            display: "flex",
+                            gap: "1rem",
+                            alignItems: "center",
+                            marginBottom: "1rem",
+                            flexWrap: "wrap",
+                          }}
+                        >
+                          <div
+                            style={{
+                              position: "relative",
+                              flex: "1",
+                              minWidth: "200px",
+                            }}
+                          >
+                            <IoSearchOutline
+                              style={{
+                                position: "absolute",
+                                left: "0.75rem",
+                                top: "50%",
+                                transform: "translateY(-50%)",
+                                color: "#9ca3af",
+                                fontSize: "1.1rem",
+                              }}
+                            />
+                            <input
+                              type="text"
+                              placeholder="Search messages..."
+                              value={messageHistorySearchQuery}
+                              onChange={(e) =>
+                                setMessageHistorySearchQuery(e.target.value)
+                              }
+                              style={{
+                                width: "100%",
+                                padding: "0.625rem 0.75rem 0.625rem 2.5rem",
+                                border: "1px solid #d1d5db",
+                                borderRadius: "8px",
+                                fontSize: "0.9rem",
+                              }}
+                            />
+                          </div>
+                          <select
+                            value={messageHistoryFilterStudent}
+                            onChange={(e) =>
+                              setMessageHistoryFilterStudent(e.target.value)
+                            }
+                            style={{
+                              padding: "0.625rem 0.75rem",
+                              border: "1px solid #d1d5db",
+                              borderRadius: "8px",
+                              fontSize: "0.9rem",
+                              minWidth: "150px",
+                            }}
+                          >
+                            <option value="">All Students</option>
+                            {notificationStudents.map((student) => (
+                              <option key={student.id} value={student.id}>
+                                {student.name}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            onClick={handleDeleteAllNotifications}
+                            disabled={isDeletingNotifications}
+                            style={{
+                              padding: "0.625rem 1rem",
+                              background: "#dc2626",
+                              color: "white",
+                              border: "none",
+                              borderRadius: "8px",
+                              cursor: "pointer",
+                              fontSize: "0.9rem",
+                              fontWeight: "500",
+                            }}
+                          >
+                            {isDeletingNotifications
+                              ? "Deleting..."
+                              : "Delete All"}
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Notifications List */}
+                      <div className="notifications-list">
+                        {filteredNotifications.length === 0 ? (
+                          <div className="notifications-empty-state">
+                            <div className="empty-state-icon">
+                              <IoNotificationsOutline />
+                            </div>
+                            <h3 className="empty-state-title">
+                              {sentNotifications.length === 0
+                                ? "No messages sent yet"
+                                : "No messages found"}
+                            </h3>
+                            <p className="empty-state-description">
+                              {sentNotifications.length === 0
+                                ? "Start sending notifications to students to see them here."
+                                : "Try adjusting your search or filter criteria."}
+                            </p>
+                          </div>
+                        ) : (
+                          filteredNotifications
+                            .slice(
+                              (currentNotificationPage - 1) * notificationsPerPage,
+                              currentNotificationPage * notificationsPerPage
+                            )
+                            .map((notification) => {
+                              const notificationDate = new Date(notification.timestamp);
+                              const formattedDate = notificationDate.toLocaleDateString('en-US', {
+                                month: 'short',
+                                day: 'numeric',
+                                year: 'numeric'
+                              });
+                              const formattedTime = notificationDate.toLocaleTimeString('en-US', {
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              });
+
+                              return (
+                                <div
+                                  key={notification.id}
+                                  className="notification-item"
+                                >
+                                  <div className="notification-item-left-border"></div>
+                                  <div className="notification-item-content">
+                                    <div className="notification-item-header">
+                                      <div className="notification-item-meta">
+                                        <span className="notification-item-recipient">
+                                          {notification.targetType === "all" ? (
+                                            <span className="recipient-badge recipient-all">
+                                              <IoPeopleOutline />
+                                              All Students
+                                            </span>
+                                          ) : notification.targetType === "student" ? (
+                                            <span className="recipient-badge recipient-student">
+                                              <IoPersonOutline />
+                                              {notification.targetStudentName || "Specific Student"}
+                                            </span>
+                                          ) : (
+                                            <span className="recipient-badge recipient-section">
+                                              <IoSchoolOutline />
+                                              Section: {notification.targetSection}
+                                            </span>
+                                          )}
+                                        </span>
+                                        <span className="notification-item-date">
+                                          <IoCalendarOutline />
+                                          {formattedDate} • {formattedTime}
+                                        </span>
+                                      </div>
+                                    </div>
+                                    <div className="notification-item-message">
+                                      {notification.message}
+                                    </div>
+                                  </div>
+                                  <button
+                                    className="notification-delete-btn"
+                                    onClick={() =>
+                                      handleDeleteNotification(notification.id)
+                                    }
+                                    disabled={isDeletingNotifications}
+                                    aria-label="Delete notification"
+                                    title="Delete message"
+                                  >
+                                    <IoTrashOutline />
+                                  </button>
+                                </div>
+                              );
+                            })
+                        )}
+                      </div>
+
+                      {/* Pagination */}
+                      {notificationTotalPages > 1 && (
+                        <div className="notification-pagination">
+                          <button
+                            onClick={() =>
+                              setCurrentNotificationPage((prev) =>
+                                Math.max(1, prev - 1)
+                              )
+                            }
+                            disabled={currentNotificationPage === 1}
+                            className="pagination-btn"
+                          >
+                            ‹
+                          </button>
+                          {[...Array(notificationTotalPages)].map((_, index) => {
+                            const page = index + 1;
+                            if (
+                              page === 1 ||
+                              page === notificationTotalPages ||
+                              (page >= currentNotificationPage - 1 &&
+                                page <= currentNotificationPage + 1)
+                            ) {
+                              return (
+                                <button
+                                  key={page}
+                                  className={`pagination-btn ${
+                                    currentNotificationPage === page
+                                      ? "active"
+                                      : ""
+                                  }`}
+                                  onClick={() =>
+                                    setCurrentNotificationPage(page)
+                                  }
+                                >
+                                  {page}
+                                </button>
+                              );
+                            } else if (
+                              page === currentNotificationPage - 2 ||
+                              page === currentNotificationPage + 2
+                            ) {
+                              return (
+                                <span key={page} className="pagination-ellipsis">
+                                  ...
+                                </span>
+                              );
+                            }
+                            return null;
+                          })}
+                          <button
+                            onClick={() =>
+                              setCurrentNotificationPage((prev) =>
+                                Math.min(notificationTotalPages, prev + 1)
+                              )
+                            }
+                            disabled={
+                              currentNotificationPage === notificationTotalPages
+                            }
+                            className="pagination-btn"
+                          >
+                            ›
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
             {viewMode === "pending" && (
               <div className="pending-requirements-info">
                 <div className="pending-info-header">
@@ -2540,26 +3315,38 @@ const StudentDashboard = () => {
                     <IoTimeOutline />
                   </div>
                   <div className="pending-info-content">
-                    <h3 className="pending-info-title">Pending Requirements Review</h3>
+                    <h3 className="pending-info-title">
+                      Pending Requirements Review
+                    </h3>
                     <p className="pending-info-description">
-                      Students who have submitted requirements are waiting for approval. 
-                      Review and approve their documents to help them proceed.
+                      Students who have submitted requirements are waiting for
+                      approval. Review and approve their documents to help them
+                      proceed.
                     </p>
                   </div>
                 </div>
                 {pendingStudentsWithRequirements.length > 0 && (
                   <div className="pending-stats">
                     <div className="pending-stat-item">
-                      <span className="stat-number">{pendingStudentsWithRequirements.length}</span>
+                      <span className="stat-number">
+                        {pendingStudentsWithRequirements.length}
+                      </span>
                       <span className="stat-label">Students Pending</span>
                     </div>
                     <div className="pending-stat-divider"></div>
-                    <div className="pending-stat-item" title="Total number of requirement files submitted by pending students">
+                    <div
+                      className="pending-stat-item"
+                      title="Total number of requirement files submitted by pending students"
+                    >
                       <span className="stat-number">
-                        {pendingStudentsWithRequirements.reduce((total, student) => {
-                          const submitted = studentSubmittedRequirements[student.id] || [];
-                          return total + submitted.length;
-                        }, 0)}
+                        {pendingStudentsWithRequirements.reduce(
+                          (total, student) => {
+                            const submitted =
+                              studentSubmittedRequirements[student.id] || [];
+                            return total + submitted.length;
+                          },
+                          0
+                        )}
                       </span>
                       <span className="stat-label">Files Submitted</span>
                     </div>
@@ -2567,30 +3354,36 @@ const StudentDashboard = () => {
                     <div className="pending-stat-item">
                       <span className="stat-number">
                         {Math.round(
-                          (pendingStudentsWithRequirements.length / 
-                           (students.length || 1)) * 100
-                        )}%
+                          (pendingStudentsWithRequirements.length /
+                            (students.length || 1)) *
+                            100
+                        )}
+                        %
                       </span>
                       <span className="stat-label">Of All Students</span>
                     </div>
                   </div>
                 )}
-                {pendingStudentsWithRequirements.length === 0 && !isLoadingPendingStudents && (
-                  <div className="pending-empty-state">
-                    <IoCheckmarkCircle className="pending-empty-icon" />
-                    <p className="pending-empty-message">
-                      Great! All submitted requirements have been reviewed.
-                    </p>
-                    <p className="pending-empty-hint">
-                      New submissions will appear here for review.
-                    </p>
-                  </div>
-                )}
+                {pendingStudentsWithRequirements.length === 0 &&
+                  !isLoadingPendingStudents && (
+                    <div className="pending-empty-state">
+                      <IoCheckmarkCircle className="pending-empty-icon" />
+                      <p className="pending-empty-message">
+                        Great! All submitted requirements have been reviewed.
+                      </p>
+                      <p className="pending-empty-hint">
+                        New submissions will appear here for review.
+                      </p>
+                    </div>
+                  )}
                 {pendingStudentsWithRequirements.length > 0 && (
                   <div className="pending-actions">
                     <div className="pending-action-hint">
                       <IoDocumentTextOutline className="hint-icon" />
-                      <span>Click on a student row to view and review their requirements</span>
+                      <span>
+                        Click on a student row to view and review their
+                        requirements
+                      </span>
                     </div>
                   </div>
                 )}
@@ -2646,6 +3439,7 @@ const StudentDashboard = () => {
                           hired: "",
                           locationPreference: "",
                           approvedRequirement: "",
+                          section: "",
                         });
                       } else {
                         setFilterValues({
@@ -2656,6 +3450,7 @@ const StudentDashboard = () => {
                           hired: "",
                           locationPreference: "",
                           approvedRequirement: "",
+                          section: "",
                         });
                       }
                     }}
@@ -2671,7 +3466,8 @@ const StudentDashboard = () => {
               <div className="bulk-operations-toolbar">
                 <div className="bulk-toolbar-left">
                   <span className="bulk-selection-count">
-                    {selectedItems.length} item{selectedItems.length !== 1 ? "s" : ""} selected
+                    {selectedItems.length} item
+                    {selectedItems.length !== 1 ? "s" : ""} selected
                   </span>
                 </div>
                 <div className="bulk-toolbar-actions">
@@ -2681,8 +3477,14 @@ const StudentDashboard = () => {
                       const selectedStudents = students.filter((s) =>
                         selectedItems.includes(s.id)
                       );
-                      const exportData = prepareStudentsForExport(selectedStudents);
-                      downloadCSV(exportData, `selected-students-${new Date().toISOString().split("T")[0]}.csv`);
+                      const exportData =
+                        prepareStudentsForExport(selectedStudents);
+                      downloadCSV(
+                        exportData,
+                        `selected-students-${
+                          new Date().toISOString().split("T")[0]
+                        }.csv`
+                      );
                       success(`Exported ${selectedItems.length} student(s)`);
                     }}
                     title="Export selected students"
@@ -2696,7 +3498,11 @@ const StudentDashboard = () => {
                       onClick={handleDelete}
                       disabled={isDeleting}
                       title="Delete selected students"
-                      aria-label={`Delete ${selectedItems.length} selected student${selectedItems.length !== 1 ? 's' : ''}`}
+                      aria-label={`Delete ${
+                        selectedItems.length
+                      } selected student${
+                        selectedItems.length !== 1 ? "s" : ""
+                      }`}
                     >
                       <IoTrashOutline />
                       {isDeleting ? "Deleting..." : "Delete"}
@@ -2718,41 +3524,41 @@ const StudentDashboard = () => {
               </div>
             )}
 
-            <div
-              style={{
-                display: "flex",
-                gap: "1rem",
-                alignItems: "center",
-                marginBottom: "1rem",
-              }}
-            >
-              <div style={{ flex: 1 }}>
-                <SearchBar
-                  onSearch={setSearchQuery}
-                  onFilter={
-                    viewMode === "pending"
-                      ? setPendingFilterValues
-                      : setFilterValues
-                  }
-                  filterValues={
-                    viewMode === "pending" ? pendingFilterValues : filterValues
-                  }
-                  type="student"
-                  searchInputRef={searchInputRef}
-                />
+            {viewMode !== "notifications" && (
+              <div
+                style={{
+                  display: "flex",
+                  gap: "1rem",
+                  alignItems: "center",
+                  marginBottom: "1rem",
+                }}
+              >
+                <div style={{ flex: 1 }}>
+                  <SearchBar
+                    onSearch={setSearchQuery}
+                    onFilter={
+                      viewMode === "pending"
+                        ? setPendingFilterValues
+                        : setFilterValues
+                    }
+                    filterValues={
+                      viewMode === "pending" ? pendingFilterValues : filterValues
+                    }
+                    type="student"
+                    searchInputRef={searchInputRef}
+                    sectionSuggestions={sectionSuggestions}
+                  />
+                </div>
               </div>
-              <ColumnToggle
-                columns={columnDefinitions}
-                visibleColumns={visibleColumns}
-                onToggleColumn={handleToggleColumn}
-              />
-            </div>
-            {viewMode === "pending" && isLoadingPendingStudents ? (
-              <SkeletonLoader type="table" rows={8} columns={13} />
-            ) : isLoading && students.length === 0 ? (
-              <SkeletonLoader type="table" rows={8} columns={13} />
-            ) : (
-              <StudentTable
+            )}
+            {viewMode !== "notifications" && (
+              <>
+                {viewMode === "pending" && isLoadingPendingStudents ? (
+                  <SkeletonLoader type="table" rows={8} columns={13} />
+                ) : isLoading && students.length === 0 ? (
+                  <SkeletonLoader type="table" rows={8} columns={13} />
+                ) : (
+                  <StudentTable
                 data={currentItems.map((item) => ({
                   ...item,
                   submittedRequirements:
@@ -2773,7 +3579,6 @@ const StudentDashboard = () => {
                 requirementApprovals={requirementApprovals}
                 sortConfig={sortConfig}
                 onSort={handleSort}
-                visibleColumns={visibleColumns}
                 onSelectAll={(e) => {
                   if (e.target.checked) {
                     setSelectedItems(currentItems.map((item) => item.id));
@@ -2788,51 +3593,63 @@ const StudentDashboard = () => {
                 onAddStudent={() => setShowAddStudentModal(true)}
               />
             )}
-          <div className="pagination">
-            <button
-              onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-              disabled={currentPage === 1}
-              className="pagination-arrow"
-            >
-              &lt;
-            </button>
-            {[...Array(totalPages)].map((_, index) => (
+            <div className="pagination">
               <button
-                key={index + 1}
-                onClick={() => setCurrentPage(index + 1)}
-                className={`pagination-number ${
-                  currentPage === index + 1 ? "active" : ""
-                }`}
+                onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+                className="pagination-arrow"
               >
-                {index + 1}
+                &lt;
               </button>
-            ))}
-            <button
-              onClick={() =>
-                setCurrentPage((prev) => Math.min(prev + 1, totalPages))
-              }
-              disabled={currentPage === totalPages}
-              className="pagination-arrow"
-            >
-              &gt;
-            </button>
-          </div>
-          <div className="pagination-info">
-            Showing {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, sortedData.length)} of {sortedData.length}
-          </div>
+              {[...Array(totalPages)].map((_, index) => (
+                <button
+                  key={index + 1}
+                  onClick={() => setCurrentPage(index + 1)}
+                  className={`pagination-number ${
+                    currentPage === index + 1 ? "active" : ""
+                  }`}
+                >
+                  {index + 1}
+                </button>
+              ))}
+              <button
+                onClick={() =>
+                  setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+                }
+                disabled={currentPage === totalPages}
+                className="pagination-arrow"
+              >
+                &gt;
+              </button>
+            </div>
+            <div className="pagination-info-wrapper">
+              <div className="pagination-info">
+                Showing {indexOfFirstItem + 1}-
+                {Math.min(indexOfLastItem, sortedData.length)} students
+              </div>
+              <div className="pagination-items-per-page">
+                <label htmlFor="items-per-page">Show:</label>
+                <select
+                  id="items-per-page"
+                  value={itemsPerPage}
+                  onChange={(e) => {
+                    setItemsPerPage(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="items-per-page-select"
+                  aria-label="Items per page"
+                >
+                  <option value="5">5</option>
+                  <option value="8">8</option>
+                  <option value="10">10</option>
+                  <option value="20">20</option>
+                  <option value="50">50</option>
+                </select>
+                <span className="items-per-page-label">per page</span>
+              </div>
+            </div>
+            {/* Action Buttons */}
             <div className="table-actions">
-              {!isAdviser && (
-                <Tooltip content="Add a new student account manually">
-                  <button
-                    className="add-student-btn table-action-btn"
-                    onClick={() => setShowAddStudentModal(true)}
-                    title="Add new student account"
-                  >
-                    <IoPersonAddOutline style={{ marginRight: "0.5rem" }} />
-                    Add Student Account
-                  </button>
-                </Tooltip>
-              )}
               <input
                 type="file"
                 accept=".csv"
@@ -2841,46 +3658,50 @@ const StudentDashboard = () => {
                 style={{ display: "none" }}
                 disabled={isImporting}
               />
-              <Tooltip content="Import multiple students from CSV file (Ctrl+I)">
-                <button
-                  className="import-btn table-action-btn"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isImporting}
-                  title="Import students from CSV"
-                >
-                  <IoCloudUploadOutline style={{ marginRight: "0.5rem" }} />
-                  {isImporting
-                    ? `Importing... (${importProgress.current}/${importProgress.total})`
-                    : "Import CSV"}
-                </button>
-              </Tooltip>
-              <Tooltip content="Export current student list to CSV file (Ctrl+E)">
-                <button
-                  className="export-btn table-action-btn"
-                  onClick={() => {
-                    try {
-                      const exportData = prepareStudentsForExport(filteredData);
-                      downloadCSV(
-                        exportData,
-                        `students_export_${
-                          new Date().toISOString().split("T")[0]
-                        }`
-                      );
-                      activityLoggers.exportData("students", exportData.length);
-                      success(
-                        `Exported ${exportData.length} students successfully`
-                      );
-                    } catch (err) {
-                      logger.error("Export error:", err);
-                      showError("Failed to export data. Please try again.");
-                    }
-                  }}
-                  title="Export students to CSV"
-                >
-                  <IoDownloadOutline style={{ marginRight: "0.5rem" }} />
-                  Export CSV
-                </button>
-              </Tooltip>
+              <button
+                className="import-btn table-action-btn"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isImporting}
+                title="Import students from CSV"
+              >
+                <IoCloudUploadOutline />
+                {isImporting
+                  ? `${importProgress.current}/${importProgress.total}`
+                  : "Import"}
+              </button>
+              <button
+                className="export-btn table-action-btn"
+                onClick={() => {
+                  try {
+                    const exportData = prepareStudentsForExport(filteredData);
+                    downloadCSV(
+                      exportData,
+                      `students_export_${
+                        new Date().toISOString().split("T")[0]
+                      }`
+                    );
+                    activityLoggers.exportData("students", exportData.length);
+                    success(
+                      `Exported ${exportData.length} students successfully`
+                    );
+                  } catch (err) {
+                    logger.error("Export error:", err);
+                    showError("Failed to export data. Please try again.");
+                  }
+                }}
+                title="Export students to CSV"
+              >
+                <IoDownloadOutline />
+                Export
+              </button>
+              <button
+                className="add-student-btn table-action-btn"
+                onClick={() => setShowAddStudentModal(true)}
+                title="Add new student"
+              >
+                <IoAddOutline />
+                Add Student
+              </button>
             </div>
             {selectionMode && selectedItems.length > 0 && !isAdviser && (
               <div className="table-actions">
@@ -2909,6 +3730,8 @@ const StudentDashboard = () => {
                 </button>
               </div>
             )}
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -2920,7 +3743,9 @@ const StudentDashboard = () => {
         itemCount={selectedItems.length}
         itemPreview={getSelectedStudentsPreview()}
         title="Delete Students?"
-        confirmButtonText={`Yes, delete ${selectedItems.length} student${selectedItems.length !== 1 ? 's' : ''}`}
+        confirmButtonText={`Yes, delete ${selectedItems.length} student${
+          selectedItems.length !== 1 ? "s" : ""
+        }`}
       />
       <ConfirmModal
         open={showDeleteNotificationConfirm}
@@ -2930,10 +3755,23 @@ const StudentDashboard = () => {
         title="Delete Notification?"
         confirmButtonText="Yes, delete it"
       />
+      <ConfirmModal
+        open={showDeleteAllConfirm}
+        message={`Are you sure you want to delete all ${
+          filteredNotifications.length
+        } message${
+          filteredNotifications.length !== 1 ? "s" : ""
+        }? This action cannot be undone.`}
+        onConfirm={confirmDeleteAllNotifications}
+        onCancel={cancelDeleteAllNotifications}
+        title="Delete All Messages?"
+        confirmButtonText="Yes, delete all"
+      />
       <StudentRequirementModal
         open={showRequirementModal}
         student={selectedStudent}
         onClose={handleCloseRequirementModal}
+        onRequirementUpdated={handleRequirementUpdated}
       />
       <AddStudentModal
         isOpen={showAddStudentModal}

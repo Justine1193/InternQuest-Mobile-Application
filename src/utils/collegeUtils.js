@@ -99,6 +99,52 @@ export const loadProgramToCollegeMap = async () => {
       logger.error("Could not load from meta/programs:", err);
     }
 
+    // Load from meta/program_code document (college codes as keys, program codes as arrays)
+    // Structure: { "cics": ["BSCS", "BSIT", ...], "cba": ["BSA", ...], ... }
+    try {
+      const metaProgramCodeDoc = await getDoc(doc(db, "meta", "program_code"));
+      if (metaProgramCodeDoc.exists()) {
+        const codeData = metaProgramCodeDoc.data();
+
+        // Create reverse mapping: college_code -> college_name (for lookup)
+        const collegeCodeToNameReverseMap = {};
+        Object.keys(collegeNameToCodeMap).forEach((collegeName) => {
+          const collegeCode = collegeNameToCodeMap[collegeName];
+          collegeCodeToNameReverseMap[collegeCode.toLowerCase()] = collegeCode;
+          collegeCodeToNameReverseMap[collegeCode] = collegeCode;
+        });
+
+        // Check if data is organized by college (arrays as values)
+        const isCollegeOrganized = Object.keys(codeData).some((key) => {
+          const value = codeData[key];
+          return Array.isArray(value) && value.length > 0 && typeof value[0] === "string";
+        });
+
+        if (isCollegeOrganized) {
+          // Keys are college codes (like "cics", "cba"), values are program code arrays
+          Object.keys(codeData).forEach((collegeKey) => {
+            const programCodes = codeData[collegeKey];
+            if (Array.isArray(programCodes)) {
+              // Get college code - try to find it in the reverse map, or use the key itself
+              const collegeCode = collegeCodeToNameReverseMap[collegeKey.toLowerCase()] || 
+                                 collegeCodeToNameReverseMap[collegeKey] || 
+                                 collegeKey.toUpperCase(); // Fallback to uppercase key
+
+              // Map each program code to its college code
+              programCodes.forEach((programCode) => {
+                if (typeof programCode === "string" && programCode.trim()) {
+                  const normalizedCode = programCode.trim().toUpperCase();
+                  map[normalizedCode] = collegeCode;
+                }
+              });
+            }
+          });
+        }
+      }
+    } catch (err) {
+      logger.error("Could not load from meta/program_code:", err);
+    }
+
     // Cache the result
     programToCollegeCache = map;
     logger.log(`Loaded program to college map with ${Object.keys(map).length} programs`);

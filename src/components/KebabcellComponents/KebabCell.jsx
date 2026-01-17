@@ -116,6 +116,10 @@ function KebabCell({
       setIsModalOpen
   );
 
+  // Determine if edit should be shown
+  // Prioritize onEdit callback if provided, otherwise use hasEditProps
+  const showEdit = typeof onEdit === "function" || hasEditProps;
+
   return (
     <span
       ref={kebabRef}
@@ -130,11 +134,12 @@ function KebabCell({
       />
 
       <PortalDropdown
+        key={`kebab-${row.id}`}
         anchorRef={kebabRef}
         open={openMenuId === row.id}
         onClose={() => setOpenMenuId(null)}
       >
-        {hasEditProps && (
+        {showEdit && (
           <button
             className="edit-btn"
             onClick={handleEdit}
@@ -154,9 +159,9 @@ function KebabCell({
             >
               Accept Student
             </button>
-          ) : (
+          ) : !showEdit ? (
             <span className="no-action-text">No actions available</span>
-          )
+          ) : null
         ) : (
           // Coordinator/Super Admin view: Show select/delete
           selectedRowId !== row.id ? (

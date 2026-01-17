@@ -1,20 +1,28 @@
 /**
- * HelpDeskDashboard - Admin dashboard for managing help desk files and resources
+ * ResourceManagementDashboard - Admin dashboard for managing resource files
  * Allows admins to upload, view, and manage files for student support
  *
  * @component
  * @example
- * <HelpDeskDashboard />
+ * <ResourceManagementDashboard />
  */
 
 import React, { useState, useEffect } from "react";
+import { Document, Page, pdfjs } from "react-pdf";
 import { db, auth, storage } from "../../../firebase";
+
+// Configure PDF.js worker for react-pdf
+if (typeof window !== "undefined") {
+  pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.js";
+}
+
 import {
   collection,
   getDocs,
   addDoc,
   deleteDoc,
   doc,
+  getDoc,
 } from "firebase/firestore";
 import {
   ref as storageRef,
@@ -45,9 +53,10 @@ import { useToast } from "../../hooks/useToast";
 import ToastContainer from "../Toast/ToastContainer";
 import ConfirmModal from "../ConfirmModalComponents/ConfirmModal";
 import EmptyState from "../EmptyState/EmptyState";
-import "./HelpDeskDashboard.css";
+import "./ResourceManagementDashboard.css";
+import { getAdminCollegeCode } from "../../utils/auth";
 
-const HelpDeskDashboard = () => {
+const ResourceManagementDashboard = () => {
   const navigate = useNavigate();
   const { toasts, success, error: showError, removeToast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
@@ -64,27 +73,72 @@ const HelpDeskDashboard = () => {
   // Requirement files upload state
   const [selectedFileNeeded, setSelectedFileNeeded] = useState(null);
   const [fileDescriptionNeeded, setFileDescriptionNeeded] = useState("");
+  // Checklist upload state
+  const [selectedChecklistFile, setSelectedChecklistFile] = useState(null);
+  const [selectedRequirementType, setSelectedRequirementType] = useState("");
+  const [uploadingChecklist, setUploadingChecklist] = useState(false);
+  const [checklistSignatureX, setChecklistSignatureX] = useState(100);
+  const [checklistSignatureY, setChecklistSignatureY] = useState(100);
+  const [checklistSignatureWidth, setChecklistSignatureWidth] = useState(150);
+  const [checklistSignatureHeight, setChecklistSignatureHeight] = useState(50);
+  // PDF preview and signature drag state
+  const [checklistPreviewUrl, setChecklistPreviewUrl] = useState(null);
+  const [currentSignature, setCurrentSignature] = useState(null);
+  const [previewPageWidth, setPreviewPageWidth] = useState(null);
+  const [previewPageHeight, setPreviewPageHeight] = useState(null);
+  const [pdfScale, setPdfScale] = useState(1.5);
+  const [draggingSignature, setDraggingSignature] = useState(false);
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState("");
   const [filterCategory, setFilterCategory] = useState("all");
   const [sortBy, setSortBy] = useState("date"); // date, name, size
   // Delete confirmation
-  const [deleteConfirm, setDeleteConfirm] = useState({ open: false, fileId: null, fileName: "" });
+  const [deleteConfirm, setDeleteConfirm] = useState({
+    open: false,
+    fileId: null,
+    fileName: "",
+  });
   // Drag and drop state
   const [dragActiveTutorial, setDragActiveTutorial] = useState(false);
   const [dragActiveNeeded, setDragActiveNeeded] = useState(false);
   // Upload progress
-  const [uploadProgress, setUploadProgress] = useState({ tutorial: 0, needed: 0 });
+  const [uploadProgress, setUploadProgress] = useState({
+    tutorial: 0,
+    needed: 0,
+  });
+
+  const adminCollegeCode = getAdminCollegeCode();
 
   useEffect(() => {
-    document.title = "Help Desk | InternQuest Admin";
+    document.title = "Resource Management | InternQuest Admin";
     fetchFiles();
+    fetchCurrentSignature();
   }, []);
+
+  // Fetch current user's signature for preview
+  const fetchCurrentSignature = async () => {
+    if (!auth.currentUser) return;
+    
+    try {
+      const signatureRef = doc(db, "teacher_signatures", auth.currentUser.uid);
+      const signatureSnap = await getDoc(signatureRef);
+      
+      if (signatureSnap.exists()) {
+        const data = signatureSnap.data();
+        setCurrentSignature({
+          downloadUrl: data.downloadUrl,
+          uploadedAt: data.uploadedAt,
+        });
+      }
+    } catch (err) {
+      console.error("Error fetching signature:", err);
+    }
+  };
 
   // Scroll to top when error occurs
   useEffect(() => {
     if (error) {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      window.scrollTo({ top: 0, behavior: "smooth" });
     }
   }, [error]);
 
@@ -93,10 +147,13 @@ const HelpDeskDashboard = () => {
     try {
       setIsLoading(true);
       const filesSnapshot = await getDocs(collection(db, "helpDeskFiles"));
-      const filesData = filesSnapshot.docs.map((doc) => ({
+      let filesData = filesSnapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       }));
+
+      // For student/college usage we could filter by uploaderCollegeCode here if needed
+
       // Sort by upload date (newest first)
       filesData.sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
       setFiles(filesData);
@@ -123,6 +180,175 @@ const HelpDeskDashboard = () => {
     if (file) {
       setSelectedFileNeeded(file);
       setError(null);
+    }
+  };
+
+  // Handle checklist file selection
+  const handleChecklistFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (file.type !== "application/pdf") {
+        setError("Please select a PDF file for checklist template");
+        return;
+      }
+      setSelectedChecklistFile(file);
+      setError(null);
+      
+      // Create preview URL
+      const previewUrl = URL.createObjectURL(file);
+      setChecklistPreviewUrl(previewUrl);
+    } else {
+      // Clean up preview URL if file is deselected
+      if (checklistPreviewUrl) {
+        URL.revokeObjectURL(checklistPreviewUrl);
+        setChecklistPreviewUrl(null);
+      }
+    }
+  };
+
+  // Handle signature drag start
+  const handleSignatureDragStart = (e) => {
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", "signature");
+    setDraggingSignature(true);
+  };
+
+  // Handle PDF drop
+  const handlePdfDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const isSignatureDrag = e.dataTransfer.getData("text/plain") === "signature";
+    if (!isSignatureDrag || !previewPageWidth || !previewPageHeight) {
+      setDraggingSignature(false);
+      return;
+    }
+
+    // Find the PDF container
+    const pdfContainer = e.currentTarget.querySelector('[style*="position: relative"]');
+    if (!pdfContainer) {
+      setDraggingSignature(false);
+      return;
+    }
+
+    const containerRect = pdfContainer.getBoundingClientRect();
+    const scale = pdfScale;
+    
+    // Calculate drop position relative to PDF container
+    const dropX = e.clientX - containerRect.left;
+    const dropY = e.clientY - containerRect.top;
+
+    // Convert CSS coordinates to PDF coordinates
+    // PDF uses bottom-left origin, CSS uses top-left
+    const pdfX = Math.max(0, dropX / scale);
+    const pdfY = Math.max(0, (previewPageHeight * scale - dropY) / scale);
+
+    // Update signature position
+    setChecklistSignatureX(Math.round(pdfX));
+    setChecklistSignatureY(Math.round(pdfY));
+
+    setDraggingSignature(false);
+    
+    // Reset canvas styling
+    e.currentTarget.style.backgroundColor = "#f6f8fa";
+    e.currentTarget.style.borderColor = "#e1e4e8";
+  };
+
+  // Handle drag over PDF canvas
+  const handlePdfDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (draggingSignature) {
+      e.dataTransfer.dropEffect = "move";
+    }
+  };
+
+  // Handle drag enter PDF canvas
+  const handlePdfDragEnter = (e) => {
+    e.preventDefault();
+    if (draggingSignature) {
+      e.currentTarget.style.backgroundColor = "#e7f3ff";
+      e.currentTarget.style.borderColor = "#007bff";
+    }
+  };
+
+  // Handle drag leave PDF canvas
+  const handlePdfDragLeave = (e) => {
+    e.preventDefault();
+    if (!e.currentTarget.contains(e.relatedTarget)) {
+      e.currentTarget.style.backgroundColor = "#f6f8fa";
+      e.currentTarget.style.borderColor = "#e1e4e8";
+    }
+  };
+
+  // Handle checklist upload
+  const handleChecklistUpload = async () => {
+    if (!selectedChecklistFile || !selectedRequirementType) {
+      setError("Please select a PDF file and requirement type");
+      return;
+    }
+
+    if (!auth.currentUser) {
+      setError("You must be logged in to upload files.");
+      return;
+    }
+
+    try {
+      setUploadingChecklist(true);
+      setError(null);
+
+      // Create storage path
+      const timestamp = Date.now();
+      const safeFileName = selectedChecklistFile.name.replace(/[^\w.\-]/g, "_");
+      const storagePath = `checklist_templates/${timestamp}-${safeFileName}`;
+      const fileRef = storageRef(storage, storagePath);
+
+      // Upload to Storage
+      await uploadBytes(fileRef, selectedChecklistFile);
+
+      // Get download URL
+      const downloadUrl = await getDownloadURL(fileRef);
+
+      // Save metadata to Firestore
+      await addDoc(collection(db, "checklist_templates"), {
+        fileName: selectedChecklistFile.name,
+        downloadUrl,
+        storagePath,
+        requirementType: selectedRequirementType,
+        signaturePosition: {
+          x: parseInt(checklistSignatureX) || 100,
+          y: parseInt(checklistSignatureY) || 100,
+          width: parseInt(checklistSignatureWidth) || 150,
+          height: parseInt(checklistSignatureHeight) || 50,
+        },
+        active: true,
+        uploadedAt: new Date().toISOString(),
+        uploadedBy: auth.currentUser.uid,
+        uploaderCollegeCode: adminCollegeCode || null,
+        fileSize: selectedChecklistFile.size,
+      });
+
+      // Reset form
+      setSelectedChecklistFile(null);
+      setSelectedRequirementType("");
+      setChecklistSignatureX(100);
+      setChecklistSignatureY(100);
+      setChecklistSignatureWidth(150);
+      setChecklistSignatureHeight(50);
+      document.getElementById("checklist-file-input").value = "";
+
+      success(
+        `Checklist template for "${selectedRequirementType}" uploaded successfully!`
+      );
+    } catch (err) {
+      console.error("Checklist upload error:", err);
+      const errorMsg = `Failed to upload checklist: ${
+        err.message || "Unknown error"
+      }`;
+      setError(errorMsg);
+      showError(errorMsg);
+    } finally {
+      setUploadingChecklist(false);
     }
   };
 
@@ -228,6 +454,17 @@ const HelpDeskDashboard = () => {
 
       console.log("Saving metadata to Firestore...");
 
+      // Determine uploader college code if available
+      let uploaderCollegeCode = null;
+      try {
+        const codeFromSession = getAdminCollegeCode();
+        if (codeFromSession && typeof codeFromSession === "string") {
+          uploaderCollegeCode = codeFromSession;
+        }
+      } catch (e) {
+        console.warn("Could not determine uploader college code:", e);
+      }
+
       // Save file metadata (Storage-based only) to Firestore
       await addDoc(collection(db, "helpDeskFiles"), {
         fileName: selectedFile.name,
@@ -238,6 +475,7 @@ const HelpDeskDashboard = () => {
         category: category, // "tutorial" or "fileNeeded"
         uploadedAt: new Date().toISOString(),
         uploadedBy: auth.currentUser.uid,
+        uploaderCollegeCode: uploaderCollegeCode || null,
         fileSize: selectedFile.size,
         fileType: mimeType,
         fileExtension: fileExtension.toLowerCase(),
@@ -264,7 +502,9 @@ const HelpDeskDashboard = () => {
       console.error("Error code:", err.code);
       console.error("Error message:", err.message);
       console.error("Full error:", JSON.stringify(err, null, 2));
-      const errorMsg = `Failed to upload file: ${err.message || "Unknown error"}`;
+      const errorMsg = `Failed to upload file: ${
+        err.message || "Unknown error"
+      }`;
       setError(errorMsg);
       showError(errorMsg);
     } finally {
@@ -311,7 +551,9 @@ const HelpDeskDashboard = () => {
 
       // Refresh file list
       await fetchFiles();
-      success(`File "${fileToDelete?.fileName || 'File'}" deleted successfully`);
+      success(
+        `File "${fileToDelete?.fileName || "File"}" deleted successfully`
+      );
     } catch (err) {
       const errorMsg = `Failed to delete file: ${err.message}`;
       setError(errorMsg);
@@ -373,11 +615,14 @@ const HelpDeskDashboard = () => {
   // Get file type icon
   const getFileTypeIcon = (fileType, fileExtension) => {
     if (!fileType && !fileExtension) return IoDocumentOutline;
-    
+
     const type = fileType?.toLowerCase() || "";
     const ext = fileExtension?.toLowerCase() || "";
-    
-    if (type.startsWith("image/") || ["jpg", "jpeg", "png", "gif", "webp", "svg"].includes(ext)) {
+
+    if (
+      type.startsWith("image/") ||
+      ["jpg", "jpeg", "png", "gif", "webp", "svg"].includes(ext)
+    ) {
       return IoImageOutline;
     }
     if (type.includes("pdf") || ext === "pdf") {
@@ -426,7 +671,7 @@ const HelpDeskDashboard = () => {
     const tutorialFiles = files.filter((f) => f.category === "tutorial");
     const requirementFiles = files.filter((f) => f.category === "fileNeeded");
     const totalSize = files.reduce((sum, f) => sum + (f.fileSize || 0), 0);
-    
+
     return {
       total: files.length,
       tutorial: tutorialFiles.length,
@@ -459,7 +704,7 @@ const HelpDeskDashboard = () => {
   const handleDrop = (e, category) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     if (category === "tutorial") {
       setDragActiveTutorial(false);
     } else {
@@ -559,7 +804,7 @@ const HelpDeskDashboard = () => {
     <div className="dashboard-container">
       <LoadingSpinner
         isLoading={isLoading}
-        message="Loading help desk files..."
+        message="Loading resource files..."
       />
       <Navbar onLogout={handleLogout} />
       <ToastContainer toasts={toasts} removeToast={removeToast} />
@@ -572,14 +817,14 @@ const HelpDeskDashboard = () => {
       />
 
       <div className="dashboard-content">
-        <div className="helpdesk-section">
-          <h1>Help Desk - Resource Management</h1>
-          <p className="helpdesk-subtitle">
+        <div className="resource-management-section">
+          <h1>Resource Management</h1>
+          <p className="resource-management-subtitle">
             Upload and manage files for student support and resources
           </p>
 
           {/* Statistics Overview */}
-          <div className="helpdesk-stats">
+          <div className="resource-management-stats">
             <div className="stat-card">
               <div className="stat-icon">
                 <IoFolderOutline />
@@ -612,7 +857,9 @@ const HelpDeskDashboard = () => {
                 <IoStatsChartOutline />
               </div>
               <div className="stat-content">
-                <div className="stat-value">{formatFileSize(stats.totalSize)}</div>
+                <div className="stat-value">
+                  {formatFileSize(stats.totalSize)}
+                </div>
                 <div className="stat-label">Total Size</div>
               </div>
             </div>
@@ -640,8 +887,10 @@ const HelpDeskDashboard = () => {
                 Upload OJT files. You can upload multiple files.
               </p>
 
-              <div 
-                className={`upload-form ${dragActiveTutorial ? "drag-active" : ""}`}
+              <div
+                className={`upload-form ${
+                  dragActiveTutorial ? "drag-active" : ""
+                }`}
                 onDragEnter={(e) => handleDrag(e, "tutorial")}
                 onDragLeave={(e) => handleDragLeave(e, "tutorial")}
                 onDragOver={(e) => handleDrag(e, "tutorial")}
@@ -649,7 +898,8 @@ const HelpDeskDashboard = () => {
               >
                 <div className="form-group">
                   <label htmlFor="file-input-tutorial">
-                    Select File or Drag & Drop <span style={{ color: "red" }}>*</span>
+                    Select File or Drag & Drop{" "}
+                    <span style={{ color: "red" }}>*</span>
                   </label>
                   <div className="file-input-wrapper">
                     <input
@@ -675,11 +925,13 @@ const HelpDeskDashboard = () => {
                   )}
                   {uploadingTutorial && uploadProgress.tutorial > 0 && (
                     <div className="upload-progress">
-                      <div 
-                        className="upload-progress-bar" 
+                      <div
+                        className="upload-progress-bar"
                         style={{ width: `${uploadProgress.tutorial}%` }}
                       ></div>
-                      <span className="upload-progress-text">{uploadProgress.tutorial}%</span>
+                      <span className="upload-progress-text">
+                        {uploadProgress.tutorial}%
+                      </span>
                     </div>
                   )}
                 </div>
@@ -710,8 +962,10 @@ const HelpDeskDashboard = () => {
                 for their OJT. These files will appear in the mobile app under
                 requirement files.
               </p>
-              <div 
-                className={`upload-form ${dragActiveNeeded ? "drag-active" : ""}`}
+              <div
+                className={`upload-form ${
+                  dragActiveNeeded ? "drag-active" : ""
+                }`}
                 onDragEnter={(e) => handleDrag(e, "needed")}
                 onDragLeave={(e) => handleDragLeave(e, "needed")}
                 onDragOver={(e) => handleDrag(e, "needed")}
@@ -719,7 +973,8 @@ const HelpDeskDashboard = () => {
               >
                 <div className="form-group">
                   <label htmlFor="file-input-needed">
-                    Select File or Drag & Drop <span style={{ color: "red" }}>*</span>
+                    Select File or Drag & Drop{" "}
+                    <span style={{ color: "red" }}>*</span>
                   </label>
                   <div className="file-input-wrapper">
                     <input
@@ -749,11 +1004,13 @@ const HelpDeskDashboard = () => {
                   )}
                   {uploadingFileNeeded && uploadProgress.needed > 0 && (
                     <div className="upload-progress">
-                      <div 
-                        className="upload-progress-bar" 
+                      <div
+                        className="upload-progress-bar"
                         style={{ width: `${uploadProgress.needed}%` }}
                       ></div>
-                      <span className="upload-progress-text">{uploadProgress.needed}%</span>
+                      <span className="upload-progress-text">
+                        {uploadProgress.needed}%
+                      </span>
                     </div>
                   )}
                 </div>
@@ -775,13 +1032,381 @@ const HelpDeskDashboard = () => {
                 </button>
               </div>
             </div>
+
+            {/* Checklist Template Upload Section */}
+            <div className="upload-section">
+              <h2>Upload Checklist Template</h2>
+              <p className="section-note">
+                Upload PDF checklist templates that will be automatically signed
+                when teachers approve student requirements. Only admin and
+                coordinators can upload checklist templates.
+              </p>
+              <div className="upload-form">
+                <div className="form-group">
+                  <label htmlFor="checklist-requirement-type">
+                    Requirement Type <span style={{ color: "red" }}>*</span>
+                  </label>
+                  <select
+                    id="checklist-requirement-type"
+                    value={selectedRequirementType}
+                    onChange={(e) => setSelectedRequirementType(e.target.value)}
+                    className="form-select"
+                    disabled={uploadingChecklist}
+                    style={{
+                      padding: "0.75rem",
+                      fontSize: "1rem",
+                      borderRadius: "4px",
+                      border: "1px solid #ccc",
+                    }}
+                  >
+                    <option value="">Select requirement type...</option>
+                    <option value="Proof of Enrollment (COM)">
+                      Proof of Enrollment (COM)
+                    </option>
+                    <option value="Notarized Parental Consent">
+                      Notarized Parental Consent
+                    </option>
+                    <option value="Medical Certificate">
+                      Medical Certificate
+                    </option>
+                    <option value="Psychological Test Certification">
+                      Psychological Test Certification
+                    </option>
+                    <option value="Proof of Insurance">
+                      Proof of Insurance
+                    </option>
+                    <option value="OJT Orientation">OJT Orientation</option>
+                    <option value="Memorandum of Agreement (MOA)">
+                      Memorandum of Agreement (MOA)
+                    </option>
+                    <option value="Curriculum Vitae">Curriculum Vitae</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="checklist-file-input">
+                    Select PDF File <span style={{ color: "red" }}>*</span>
+                  </label>
+                  <div className="file-input-wrapper">
+                    <input
+                      id="checklist-file-input"
+                      type="file"
+                      accept="application/pdf"
+                      onChange={handleChecklistFileSelect}
+                      className="file-input"
+                      disabled={uploadingChecklist}
+                    />
+                  </div>
+                  {selectedChecklistFile && (
+                    <div className="file-info">
+                      <strong>Selected:</strong> {selectedChecklistFile.name} (
+                      {formatFileSize(selectedChecklistFile.size)})
+                    </div>
+                  )}
+                </div>
+
+                {/* Signature Preview and PDF Preview */}
+                {checklistPreviewUrl && (
+                  <div style={{ 
+                    display: "grid", 
+                    gridTemplateColumns: "250px 1fr", 
+                    gap: "1.5rem",
+                    marginTop: "1.5rem"
+                  }}>
+                    {/* Signature Preview */}
+                    <div style={{
+                      backgroundColor: "#f8f9fa",
+                      border: "1px solid #e1e4e8",
+                      borderRadius: "8px",
+                      padding: "1rem",
+                    }}>
+                      <h3 style={{ fontSize: "0.95rem", fontWeight: 600, marginBottom: "0.75rem" }}>
+                        Your Signature
+                      </h3>
+                      {currentSignature ? (
+                        <div
+                          draggable
+                          onDragStart={handleSignatureDragStart}
+                          style={{
+                            border: "2px dashed #007bff",
+                            borderRadius: "8px",
+                            padding: "1rem",
+                            textAlign: "center",
+                            cursor: "grab",
+                            backgroundColor: "#ffffff",
+                            transition: "all 0.2s ease",
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = "#e7f3ff";
+                            e.currentTarget.style.borderColor = "#0056b3";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = "#ffffff";
+                            e.currentTarget.style.borderColor = "#007bff";
+                          }}
+                          title="Drag signature to PDF"
+                        >
+                          <img
+                            src={currentSignature.downloadUrl}
+                            alt="Your signature"
+                            style={{
+                              maxWidth: "100%",
+                              maxHeight: "150px",
+                              objectFit: "contain",
+                              pointerEvents: "none",
+                            }}
+                          />
+                          <p style={{ fontSize: "0.75rem", color: "#666", marginTop: "0.5rem", margin: 0 }}>
+                            Drag to position on PDF
+                          </p>
+                        </div>
+                      ) : (
+                        <div style={{
+                          border: "2px dashed #ccc",
+                          borderRadius: "8px",
+                          padding: "1rem",
+                          textAlign: "center",
+                          color: "#999",
+                          fontSize: "0.85rem",
+                        }}>
+                          No signature uploaded
+                          <br />
+                          <span style={{ fontSize: "0.75rem" }}>
+                            Upload signature in Settings
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* PDF Preview */}
+                    <div style={{
+                      backgroundColor: "#f6f8fa",
+                      border: "1px solid #e1e4e8",
+                      borderRadius: "8px",
+                      padding: "1rem",
+                      position: "relative",
+                      overflow: "auto",
+                    }}>
+                      <h3 style={{ fontSize: "0.95rem", fontWeight: 600, marginBottom: "0.75rem" }}>
+                        PDF Preview - Drag signature here to position
+                      </h3>
+                      <Document
+                        file={checklistPreviewUrl}
+                        onLoadSuccess={() => {}}
+                        loading={<div>Loading PDF...</div>}
+                      >
+                        <Page
+                          pageNumber={1}
+                          scale={pdfScale}
+                          onLoadSuccess={(page) => {
+                            setPreviewPageWidth(page.width);
+                            setPreviewPageHeight(page.height);
+                          }}
+                          renderTextLayer={false}
+                          renderAnnotationLayer={false}
+                        >
+                          <div
+                            style={{
+                              position: "relative",
+                              display: "inline-block",
+                              border: "2px solid #007bff",
+                              borderRadius: "4px",
+                              backgroundColor: "#ffffff",
+                            }}
+                            onDrop={handlePdfDrop}
+                            onDragOver={handlePdfDragOver}
+                            onDragEnter={handlePdfDragEnter}
+                            onDragLeave={handlePdfDragLeave}
+                          >
+                            {/* Show signature position indicator */}
+                            {previewPageWidth && previewPageHeight && (
+                              <div
+                                style={{
+                                  position: "absolute",
+                                  left: `${checklistSignatureX * pdfScale}px`,
+                                  top: `${(previewPageHeight - checklistSignatureY - checklistSignatureHeight) * pdfScale}px`,
+                                  width: `${checklistSignatureWidth * pdfScale}px`,
+                                  height: `${checklistSignatureHeight * pdfScale}px`,
+                                  border: "2px dashed #007bff",
+                                  backgroundColor: "rgba(0, 123, 255, 0.1)",
+                                  borderRadius: "4px",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  pointerEvents: "none",
+                                }}
+                              >
+                                {currentSignature && (
+                                  <img
+                                    src={currentSignature.downloadUrl}
+                                    alt="Signature position"
+                                    style={{
+                                      width: "100%",
+                                      height: "100%",
+                                      objectFit: "contain",
+                                    }}
+                                  />
+                                )}
+                                {!currentSignature && (
+                                  <span style={{ fontSize: "0.75rem", color: "#007bff" }}>
+                                    Signature Position
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </Page>
+                      </Document>
+                    </div>
+                  </div>
+                )}
+
+                <div className="form-group">
+                  <label>Signature Position (PDF coordinates)</label>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(2, 1fr)",
+                      gap: "1rem",
+                      marginTop: "0.5rem",
+                    }}
+                  >
+                    <div>
+                      <label
+                        style={{
+                          display: "block",
+                          marginBottom: "0.25rem",
+                          fontSize: "0.9rem",
+                        }}
+                      >
+                        X Position:
+                      </label>
+                      <input
+                        type="number"
+                        value={checklistSignatureX}
+                        onChange={(e) => setChecklistSignatureX(e.target.value)}
+                        style={{
+                          width: "100%",
+                          padding: "0.5rem",
+                          borderRadius: "4px",
+                          border: "1px solid #ccc",
+                        }}
+                        disabled={uploadingChecklist}
+                      />
+                    </div>
+                    <div>
+                      <label
+                        style={{
+                          display: "block",
+                          marginBottom: "0.25rem",
+                          fontSize: "0.9rem",
+                        }}
+                      >
+                        Y Position:
+                      </label>
+                      <input
+                        type="number"
+                        value={checklistSignatureY}
+                        onChange={(e) => setChecklistSignatureY(e.target.value)}
+                        style={{
+                          width: "100%",
+                          padding: "0.5rem",
+                          borderRadius: "4px",
+                          border: "1px solid #ccc",
+                        }}
+                        disabled={uploadingChecklist}
+                      />
+                    </div>
+                    <div>
+                      <label
+                        style={{
+                          display: "block",
+                          marginBottom: "0.25rem",
+                          fontSize: "0.9rem",
+                        }}
+                      >
+                        Width:
+                      </label>
+                      <input
+                        type="number"
+                        value={checklistSignatureWidth}
+                        onChange={(e) =>
+                          setChecklistSignatureWidth(e.target.value)
+                        }
+                        style={{
+                          width: "100%",
+                          padding: "0.5rem",
+                          borderRadius: "4px",
+                          border: "1px solid #ccc",
+                        }}
+                        disabled={uploadingChecklist}
+                      />
+                    </div>
+                    <div>
+                      <label
+                        style={{
+                          display: "block",
+                          marginBottom: "0.25rem",
+                          fontSize: "0.9rem",
+                        }}
+                      >
+                        Height:
+                      </label>
+                      <input
+                        type="number"
+                        value={checklistSignatureHeight}
+                        onChange={(e) =>
+                          setChecklistSignatureHeight(e.target.value)
+                        }
+                        style={{
+                          width: "100%",
+                          padding: "0.5rem",
+                          borderRadius: "4px",
+                          border: "1px solid #ccc",
+                        }}
+                        disabled={uploadingChecklist}
+                      />
+                    </div>
+                  </div>
+                  <p
+                    style={{
+                      marginTop: "0.5rem",
+                      fontSize: "0.85rem",
+                      color: "#666",
+                    }}
+                  >
+                    Drag your signature from the preview above onto the PDF to position it, or manually adjust these coordinate values.
+                  </p>
+                </div>
+
+                <button
+                  onClick={handleChecklistUpload}
+                  disabled={
+                    !selectedChecklistFile ||
+                    !selectedRequirementType ||
+                    uploadingChecklist
+                  }
+                  className="upload-btn"
+                >
+                  {uploadingChecklist ? (
+                    <>
+                      <span className="spinner"></span> Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <IoCloudUploadOutline /> Upload Checklist Template
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
 
           {/* Files List Section */}
           <div className="files-section">
             <div className="files-section-header">
               <h2>Uploaded Files ({filteredFiles.length})</h2>
-              
+
               {/* Search and Filter */}
               <div className="files-controls">
                 <div className="search-box">
@@ -820,7 +1445,11 @@ const HelpDeskDashboard = () => {
             {filteredFiles.length === 0 ? (
               <EmptyState
                 type="document"
-                title={searchQuery || filterCategory !== "all" ? "No files found" : "No files uploaded yet"}
+                title={
+                  searchQuery || filterCategory !== "all"
+                    ? "No files found"
+                    : "No files uploaded yet"
+                }
                 message={
                   searchQuery || filterCategory !== "all"
                     ? "Try adjusting your search or filter criteria."
@@ -830,65 +1459,80 @@ const HelpDeskDashboard = () => {
             ) : (
               <>
                 {/* OJT How to Start */}
-                {filteredFiles.filter((f) => f.category === "tutorial").length > 0 && (
+                {filteredFiles.filter((f) => f.category === "tutorial").length >
+                  0 && (
                   <div className="files-category-section">
                     <h3 className="category-title">
                       OJT How to Start (
-                      {filteredFiles.filter((f) => f.category === "tutorial").length})
+                      {
+                        filteredFiles.filter((f) => f.category === "tutorial")
+                          .length
+                      }
+                      )
                     </h3>
                     <div className="files-grid">
                       {filteredFiles
                         .filter((f) => f.category === "tutorial")
                         .map((file) => {
-                          const FileIcon = getFileTypeIcon(file.fileType, file.fileExtension);
+                          const FileIcon = getFileTypeIcon(
+                            file.fileType,
+                            file.fileExtension
+                          );
                           return (
-                          <div key={file.id} className="file-card">
-                            <div className="file-header">
-                              <div className="file-title-wrapper">
-                                <FileIcon className="file-type-icon" />
-                                <h3>{file.fileName}</h3>
-                              </div>
-                              <button
-                                onClick={() => handleDeleteClick(file.id, file.fileName)}
-                                className="delete-btn"
-                                aria-label="Delete file"
-                                disabled={isLoading}
-                              >
-                                <IoTrashOutline />
-                              </button>
-                            </div>
-                            <div className="file-category-badge tutorial-badge">
-                              OJT Guide
-                            </div>
-                            <p className="file-description">
-                              {file.description}
-                            </p>
-                            <div className="file-meta">
-                              <span>Size: {formatFileSize(file.fileSize)}</span>
-                              <span>
-                                Uploaded: {formatDate(file.uploadedAt)}
-                              </span>
-                            </div>
-                            <div className="file-actions">
-                              {isPreviewable(file.fileType) && (
+                            <div key={file.id} className="file-card">
+                              <div className="file-header">
+                                <div className="file-title-wrapper">
+                                  <FileIcon className="file-type-icon" />
+                                  <h3>{file.fileName}</h3>
+                                </div>
                                 <button
-                                  onClick={() => handlePreview(file)}
-                                  className="preview-btn"
-                                  style={{ border: "none", cursor: "pointer" }}
-                                  title="Preview file"
+                                  onClick={() =>
+                                    handleDeleteClick(file.id, file.fileName)
+                                  }
+                                  className="delete-btn"
+                                  aria-label="Delete file"
+                                  disabled={isLoading}
                                 >
-                                  <IoEyeOutline /> Preview
+                                  <IoTrashOutline />
                                 </button>
-                              )}
-                              <button
-                                onClick={() => handleDownload(file)}
-                                className="download-btn"
-                                style={{ border: "none", cursor: "pointer" }}
-                              >
-                                <IoDownloadOutline /> Download
-                              </button>
+                              </div>
+                              <div className="file-category-badge tutorial-badge">
+                                OJT Guide
+                              </div>
+                              <p className="file-description">
+                                {file.description}
+                              </p>
+                              <div className="file-meta">
+                                <span>
+                                  Size: {formatFileSize(file.fileSize)}
+                                </span>
+                                <span>
+                                  Uploaded: {formatDate(file.uploadedAt)}
+                                </span>
+                              </div>
+                              <div className="file-actions">
+                                {isPreviewable(file.fileType) && (
+                                  <button
+                                    onClick={() => handlePreview(file)}
+                                    className="preview-btn"
+                                    style={{
+                                      border: "none",
+                                      cursor: "pointer",
+                                    }}
+                                    title="Preview file"
+                                  >
+                                    <IoEyeOutline /> Preview
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => handleDownload(file)}
+                                  className="download-btn"
+                                  style={{ border: "none", cursor: "pointer" }}
+                                >
+                                  <IoDownloadOutline /> Download
+                                </button>
+                              </div>
                             </div>
-                          </div>
                           );
                         })}
                     </div>
@@ -896,66 +1540,80 @@ const HelpDeskDashboard = () => {
                 )}
 
                 {/* Requirement Files */}
-                {filteredFiles.filter((f) => f.category === "fileNeeded").length >
-                  0 && (
+                {filteredFiles.filter((f) => f.category === "fileNeeded")
+                  .length > 0 && (
                   <div className="files-category-section">
                     <h3 className="category-title">
                       Requirement Files (
-                      {filteredFiles.filter((f) => f.category === "fileNeeded").length})
+                      {
+                        filteredFiles.filter((f) => f.category === "fileNeeded")
+                          .length
+                      }
+                      )
                     </h3>
                     <div className="files-grid">
                       {filteredFiles
                         .filter((f) => f.category === "fileNeeded")
                         .map((file) => {
-                          const FileIcon = getFileTypeIcon(file.fileType, file.fileExtension);
+                          const FileIcon = getFileTypeIcon(
+                            file.fileType,
+                            file.fileExtension
+                          );
                           return (
-                          <div key={file.id} className="file-card">
-                            <div className="file-header">
-                              <div className="file-title-wrapper">
-                                <FileIcon className="file-type-icon" />
-                                <h3>{file.fileName}</h3>
-                              </div>
-                              <button
-                                onClick={() => handleDeleteClick(file.id, file.fileName)}
-                                className="delete-btn"
-                                aria-label="Delete file"
-                                disabled={isLoading}
-                              >
-                                <IoTrashOutline />
-                              </button>
-                            </div>
-                            <div className="file-category-badge needed-badge">
-                              Requirement Files
-                            </div>
-                            <p className="file-description">
-                              {file.description}
-                            </p>
-                            <div className="file-meta">
-                              <span>Size: {formatFileSize(file.fileSize)}</span>
-                              <span>
-                                Uploaded: {formatDate(file.uploadedAt)}
-                              </span>
-                            </div>
-                            <div className="file-actions">
-                              {isPreviewable(file.fileType) && (
+                            <div key={file.id} className="file-card">
+                              <div className="file-header">
+                                <div className="file-title-wrapper">
+                                  <FileIcon className="file-type-icon" />
+                                  <h3>{file.fileName}</h3>
+                                </div>
                                 <button
-                                  onClick={() => handlePreview(file)}
-                                  className="preview-btn"
-                                  style={{ border: "none", cursor: "pointer" }}
-                                  title="Preview file"
+                                  onClick={() =>
+                                    handleDeleteClick(file.id, file.fileName)
+                                  }
+                                  className="delete-btn"
+                                  aria-label="Delete file"
+                                  disabled={isLoading}
                                 >
-                                  <IoEyeOutline /> Preview
+                                  <IoTrashOutline />
                                 </button>
-                              )}
-                              <button
-                                onClick={() => handleDownload(file)}
-                                className="download-btn"
-                                style={{ border: "none", cursor: "pointer" }}
-                              >
-                                <IoDownloadOutline /> Download
-                              </button>
+                              </div>
+                              <div className="file-category-badge needed-badge">
+                                Requirement Files
+                              </div>
+                              <p className="file-description">
+                                {file.description}
+                              </p>
+                              <div className="file-meta">
+                                <span>
+                                  Size: {formatFileSize(file.fileSize)}
+                                </span>
+                                <span>
+                                  Uploaded: {formatDate(file.uploadedAt)}
+                                </span>
+                              </div>
+                              <div className="file-actions">
+                                {isPreviewable(file.fileType) && (
+                                  <button
+                                    onClick={() => handlePreview(file)}
+                                    className="preview-btn"
+                                    style={{
+                                      border: "none",
+                                      cursor: "pointer",
+                                    }}
+                                    title="Preview file"
+                                  >
+                                    <IoEyeOutline /> Preview
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => handleDownload(file)}
+                                  className="download-btn"
+                                  style={{ border: "none", cursor: "pointer" }}
+                                >
+                                  <IoDownloadOutline /> Download
+                                </button>
+                              </div>
                             </div>
-                          </div>
                           );
                         })}
                     </div>
@@ -990,52 +1648,62 @@ const HelpDeskDashboard = () => {
                               f.category !== "fileNeeded")
                         )
                         .map((file) => {
-                          const FileIcon = getFileTypeIcon(file.fileType, file.fileExtension);
+                          const FileIcon = getFileTypeIcon(
+                            file.fileType,
+                            file.fileExtension
+                          );
                           return (
-                          <div key={file.id} className="file-card">
-                            <div className="file-header">
-                              <div className="file-title-wrapper">
-                                <FileIcon className="file-type-icon" />
-                                <h3>{file.fileName}</h3>
-                              </div>
-                              <button
-                                onClick={() => handleDeleteClick(file.id, file.fileName)}
-                                className="delete-btn"
-                                aria-label="Delete file"
-                                disabled={isLoading}
-                              >
-                                <IoTrashOutline />
-                              </button>
-                            </div>
-                            <p className="file-description">
-                              {file.description}
-                            </p>
-                            <div className="file-meta">
-                              <span>Size: {formatFileSize(file.fileSize)}</span>
-                              <span>
-                                Uploaded: {formatDate(file.uploadedAt)}
-                              </span>
-                            </div>
-                            <div className="file-actions">
-                              {isPreviewable(file.fileType) && (
+                            <div key={file.id} className="file-card">
+                              <div className="file-header">
+                                <div className="file-title-wrapper">
+                                  <FileIcon className="file-type-icon" />
+                                  <h3>{file.fileName}</h3>
+                                </div>
                                 <button
-                                  onClick={() => handlePreview(file)}
-                                  className="preview-btn"
-                                  style={{ border: "none", cursor: "pointer" }}
-                                  title="Preview file"
+                                  onClick={() =>
+                                    handleDeleteClick(file.id, file.fileName)
+                                  }
+                                  className="delete-btn"
+                                  aria-label="Delete file"
+                                  disabled={isLoading}
                                 >
-                                  Preview
+                                  <IoTrashOutline />
                                 </button>
-                              )}
-                              <button
-                                onClick={() => handleDownload(file)}
-                                className="download-btn"
-                                style={{ border: "none", cursor: "pointer" }}
-                              >
-                                Download
-                              </button>
+                              </div>
+                              <p className="file-description">
+                                {file.description}
+                              </p>
+                              <div className="file-meta">
+                                <span>
+                                  Size: {formatFileSize(file.fileSize)}
+                                </span>
+                                <span>
+                                  Uploaded: {formatDate(file.uploadedAt)}
+                                </span>
+                              </div>
+                              <div className="file-actions">
+                                {isPreviewable(file.fileType) && (
+                                  <button
+                                    onClick={() => handlePreview(file)}
+                                    className="preview-btn"
+                                    style={{
+                                      border: "none",
+                                      cursor: "pointer",
+                                    }}
+                                    title="Preview file"
+                                  >
+                                    Preview
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => handleDownload(file)}
+                                  className="download-btn"
+                                  style={{ border: "none", cursor: "pointer" }}
+                                >
+                                  Download
+                                </button>
+                              </div>
                             </div>
-                          </div>
                           );
                         })}
                     </div>
@@ -1100,4 +1768,4 @@ const HelpDeskDashboard = () => {
   );
 };
 
-export default HelpDeskDashboard;
+export default ResourceManagementDashboard;

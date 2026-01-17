@@ -4,7 +4,9 @@
  */
 
 const deleteUser = require("./deleteUser");
+const updateUserPassword = require("./updateUserPassword");
 
 // Export all functions
 exports.deleteUser = deleteUser.deleteUser;
+exports.updateUserPassword = updateUserPassword.updateUserPassword;
 

@@ -194,19 +194,6 @@ export const convertCSVToStudents = (csvData) => {
       if (!student.email) {
         throw new Error('Email is required');
       }
-      
-      // Validate institutional email
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(student.email)) {
-        throw new Error('Please enter a valid email address');
-      }
-      
-      // Check if email is from .edu.ph domain only
-      const emailDomain = student.email.split('@')[1]?.toLowerCase();
-      
-      if (!emailDomain?.endsWith('.edu.ph')) {
-        throw new Error('Please enter an institutional email address ending with .edu.ph (e.g., student@university.edu.ph)');
-      }
       if (!student.program) {
         throw new Error('Program is required');
       }

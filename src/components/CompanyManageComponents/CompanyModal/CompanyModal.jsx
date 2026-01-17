@@ -1,5 +1,7 @@
 import React, { useRef, useState, useEffect } from "react";
-import { IoCloseOutline } from "react-icons/io5";
+import { IoCloseOutline, IoDocumentTextOutline, IoCloudUploadOutline } from "react-icons/io5";
+import { storage } from "../../../../firebase";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import "./CompanyModal.css";
 
 // --- CompanyModal: Modal for adding or editing a company ---
@@ -40,6 +42,10 @@ function CompanyModal({
   const [emailValid, setEmailValid] = useState(true);
   const audioContextRef = useRef(null);
   const [errorTrigger, setErrorTrigger] = useState(0); // Track error occurrences to trigger scroll
+  const [moaFile, setMoaFile] = useState(null);
+  const [moaFileUploading, setMoaFileUploading] = useState(false);
+  const [moaFilePreview, setMoaFilePreview] = useState(formData.moaFileUrl || null);
+  const moaFileInputRef = useRef(null);
 
   // Initialize audio context (only once)
   useEffect(() => {
@@ -116,10 +122,20 @@ function CompanyModal({
   );
 
   const filteredFields = suggestionFields.filter(
-    (field) =>
-      field.toLowerCase().includes(fieldInput.toLowerCase()) &&
-      !fields.includes(field)
+    (field) => {
+      const matchesInput = fieldInput.trim() === '' || 
+        field.toLowerCase().includes(fieldInput.toLowerCase());
+      return matchesInput && !fields.includes(field);
+    }
   );
+
+  // Debug: Log suggestionFields to console
+  useEffect(() => {
+    console.log('CompanyModal - suggestionFields:', suggestionFields);
+    console.log('CompanyModal - suggestionFields length:', suggestionFields.length);
+    console.log('CompanyModal - filteredFields:', filteredFields);
+    console.log('CompanyModal - filteredFields length:', filteredFields.length);
+  }, [suggestionFields, filteredFields]);
 
   const addSkill = (skill) => {
     if (skills.length < 15 && !skills.includes(skill)) {
@@ -151,10 +167,13 @@ function CompanyModal({
       !formData.modeOfWork ||
       formData.modeOfWork.length === 0 ||
       requiresMoaValidity ||
-      requiresMoaStartDate
+      requiresMoaStartDate ||
+      !formData.moaFileUrl
     ) {
       setLocalError(
-        requiresMoaStartDate
+        !formData.moaFileUrl
+          ? "Please upload the MOA document. MOA file is required."
+          : requiresMoaStartDate
           ? "Please specify the MOA start date. MOA is required."
           : requiresMoaValidity
           ? "Please specify how many years the MOA is valid. MOA is required."
@@ -203,6 +222,7 @@ function CompanyModal({
       Number(formData.moaValidityYears) <= 0 ||
       Number.isNaN(Number(formData.moaValidityYears));
     const requiresMoaStartDate = !formData.moaStartDate;
+    const requiresMoaFile = !formData.moaFileUrl;
     if (
       !formData.companyName ||
       !formData.description ||
@@ -214,10 +234,13 @@ function CompanyModal({
       !formData.modeOfWork ||
       formData.modeOfWork.length === 0 ||
       requiresMoaValidity ||
-      requiresMoaStartDate
+      requiresMoaStartDate ||
+      requiresMoaFile
     ) {
       setLocalError(
-        requiresMoaStartDate
+        requiresMoaFile
+          ? "Please upload the MOA document. MOA file is required."
+          : requiresMoaStartDate
           ? "Please specify the MOA start date. MOA is required."
           : requiresMoaValidity
           ? "Please specify how many years the MOA is valid. MOA is required."
@@ -304,11 +327,127 @@ function CompanyModal({
     }
   }, [formData.moa, setFormData]);
 
+  // Handle MOA file upload
+  const handleMoaFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type (PDF, DOC, DOCX, or image files)
+    const validTypes = [
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'image/jpeg',
+      'image/png',
+      'image/jpg'
+    ];
+    
+    if (!validTypes.includes(file.type)) {
+      setLocalError('Please upload a valid file (PDF, DOC, DOCX, or image)');
+      setErrorTrigger((prev) => prev + 1);
+      setShakeKey((k) => k + 1);
+      if (moaFileInputRef.current) {
+        moaFileInputRef.current.value = '';
+      }
+      return;
+    }
+
+    // Validate file size (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      setLocalError('File size must be less than 10MB');
+      setErrorTrigger((prev) => prev + 1);
+      setShakeKey((k) => k + 1);
+      if (moaFileInputRef.current) {
+        moaFileInputRef.current.value = '';
+      }
+      return;
+    }
+
+    setMoaFile(file);
+    setMoaFileUploading(true);
+    setLocalError('');
+
+    try {
+      // Create storage path: moa/{companyId or 'temp'}/{timestamp}-{filename}
+      const timestamp = Date.now();
+      const safeFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const storagePath = `moa/${isEditMode && editCompanyId ? editCompanyId : 'temp'}/${timestamp}-${safeFileName}`;
+      const storageRef = ref(storage, storagePath);
+
+      // Upload file to Firebase Storage
+      await uploadBytes(storageRef, file);
+
+      // Get download URL
+      const downloadURL = await getDownloadURL(storageRef);
+
+      // Update formData with file URL
+      setFormData((prev) => ({
+        ...prev,
+        moaFileUrl: downloadURL,
+        moaFileName: file.name,
+        moaStoragePath: storagePath,
+      }));
+
+      setMoaFilePreview(downloadURL);
+      setMoaFileUploading(false);
+    } catch (error) {
+      console.error('Error uploading MOA file:', error);
+      setLocalError('Failed to upload MOA file. Please try again.');
+      setErrorTrigger((prev) => prev + 1);
+      setShakeKey((k) => k + 1);
+      setMoaFileUploading(false);
+      setMoaFile(null);
+      if (moaFileInputRef.current) {
+        moaFileInputRef.current.value = '';
+      }
+    }
+  };
+
+  // Reset MOA file when modal closes or edit mode changes
+  useEffect(() => {
+    if (!open) {
+      setMoaFile(null);
+      setMoaFilePreview(null);
+      if (moaFileInputRef.current) {
+        moaFileInputRef.current.value = '';
+      }
+    }
+  }, [open]);
+
+  // Load existing MOA file URL when editing
+  useEffect(() => {
+    if (isEditMode && formData.moaFileUrl) {
+      setMoaFilePreview(formData.moaFileUrl);
+    } else if (!isEditMode) {
+      setMoaFilePreview(null);
+    }
+  }, [isEditMode, formData.moaFileUrl]);
+
   if (!open) return null;
   return (
     <div className="modal">
       <div className="modal-content">
-        <h2>{isEditMode ? "Edit Company" : "Add New Company"}</h2>
+        <div className="modal-header">
+          <div className="modal-header-content">
+            <h2>{isEditMode ? "Edit Company" : "Add New Company"}</h2>
+            <p className="modal-subtitle">
+              {isEditMode 
+                ? "Update company information and details" 
+                : "Fill in the details below to add a new company to the system"}
+            </p>
+          </div>
+          <button
+            className="modal-close-btn"
+            onClick={() => {
+              setIsModalOpen(false);
+              setIsEditMode(false);
+              setEditCompanyId(null);
+            }}
+            aria-label="Close modal"
+          >
+            <IoCloseOutline />
+          </button>
+        </div>
         {(error || localError) && (
           <div className="modal-error-message error-popup">
             <div className="error-content">
@@ -332,10 +471,17 @@ function CompanyModal({
             </div>
           </div>
         )}
-        <form onSubmit={(e) => e.preventDefault()}>
+        <form onSubmit={(e) => e.preventDefault()} className="company-form">
+          {/* Basic Information Section */}
+          <div className="form-section-header">
+            <h3 className="form-section-title">Basic Information</h3>
+            <p className="form-section-subtitle">Essential details about the company</p>
+          </div>
+          
           <div className="form-group">
             <label htmlFor="companyName">
-              Company Name: <span style={{ color: "red" }}>*</span>
+              <span className="label-text">Company Name</span>
+              <span className="required-asterisk">*</span>
             </label>
             <input
               id="companyName"
@@ -343,48 +489,66 @@ function CompanyModal({
               name="companyName"
               value={formData.companyName}
               onChange={handleInputChange}
-              placeholder="Enter company name"
+              placeholder="e.g., Tech Solutions Inc."
+              className="form-input"
               required
             />
           </div>
+          
           <div className="form-group">
             <label htmlFor="description">
-              Description: <span style={{ color: "red" }}>*</span>
+              <span className="label-text">Description</span>
+              <span className="required-asterisk">*</span>
             </label>
             <textarea
               id="description"
               name="description"
               value={formData.description}
               onChange={handleInputChange}
-              placeholder="Enter company description"
+              placeholder="Provide a brief description of the company, its mission, and what it does..."
+              className="form-textarea"
+              rows="4"
               required
             />
           </div>
+          
           <div className="form-group">
-            <label htmlFor="website">Website (optional)</label>
+            <label htmlFor="website">
+              <span className="label-text">Website</span>
+              <span className="optional-badge">Optional</span>
+            </label>
             <input
               id="website"
               type="text"
               name="website"
               value={formData.website}
               onChange={handleInputChange}
-              placeholder="Enter company website"
+              placeholder="e.g., www.company.com"
+              className="form-input"
             />
-            {websiteChecking && (
-              <span style={{ color: "#1976d2" }}>Checking...</span>
-            )}
-            {websiteStatus === "maybe-up" && (
-              <span style={{ color: "green" }}>
-                Website is reachable (not guaranteed)
-              </span>
-            )}
-            {websiteStatus === "down" && (
-              <span style={{ color: "red" }}>Website not reachable</span>
-            )}
+            <div className="input-feedback">
+              {websiteChecking && (
+                <span className="feedback-checking">Checking website...</span>
+              )}
+              {websiteStatus === "maybe-up" && (
+                <span className="feedback-success">✓ Website appears to be reachable</span>
+              )}
+              {websiteStatus === "down" && (
+                <span className="feedback-error">⚠ Website may not be reachable</span>
+              )}
+            </div>
           </div>
+          {/* Field Section */}
+          <div className="form-section-divider"></div>
+          <div className="form-section-header">
+            <h3 className="form-section-title">Company Field</h3>
+            <p className="form-section-subtitle">Select the field(s) this company operates in</p>
+          </div>
+          
           <div className="form-group">
             <label htmlFor="field">
-              Field: <span style={{ color: "red" }}>*</span>
+              <span className="label-text">Field</span>
+              <span className="required-asterisk">*</span>
             </label>
             <div className="skills-container">
               <div className="skills-input-wrapper">
@@ -415,7 +579,7 @@ function CompanyModal({
                   }
                   disabled={fields.length >= 5}
                 />
-                {showFieldDropdown && fieldInput && (
+                {showFieldDropdown && (
                   <div className="skills-dropdown">
                     {filteredFields.length > 0 ? (
                       filteredFields.map((field, index) => (
@@ -433,14 +597,21 @@ function CompanyModal({
                           {field}
                         </div>
                       ))
-                    ) : (
+                    ) : fieldInput ? (
                       <div
                         className="skills-dropdown-item"
                         style={{ color: "#888" }}
                       >
                         Press Enter to add "{fieldInput}"
                       </div>
-                    )}
+                    ) : suggestionFields.length === 0 ? (
+                      <div
+                        className="skills-dropdown-item"
+                        style={{ color: "#888" }}
+                      >
+                        No field suggestions available. Type to add a custom field.
+                      </div>
+                    ) : null}
                   </div>
                 )}
               </div>
@@ -460,9 +631,17 @@ function CompanyModal({
               <div className="skills-limit">{fields.length}/5 fields added</div>
             </div>
           </div>
+          {/* Contact Information Section */}
+          <div className="form-section-divider"></div>
+          <div className="form-section-header">
+            <h3 className="form-section-title">Contact Information</h3>
+            <p className="form-section-subtitle">Company's primary contact details</p>
+          </div>
+          
           <div className="form-group">
             <label htmlFor="address">
-              Address: <span style={{ color: "red" }}>*</span>
+              <span className="label-text">Address</span>
+              <span className="required-asterisk">*</span>
             </label>
             <input
               id="address"
@@ -470,13 +649,16 @@ function CompanyModal({
               name="address"
               value={formData.address}
               onChange={handleInputChange}
-              placeholder="Enter company address"
+              placeholder="e.g., 123 Business St., City, Country"
+              className="form-input"
               required
             />
           </div>
+          
           <div className="form-group">
             <label htmlFor="email">
-              Email: <span style={{ color: "red" }}>*</span>
+              <span className="label-text">Email</span>
+              <span className="required-asterisk">*</span>
             </label>
             <input
               id="email"
@@ -484,60 +666,70 @@ function CompanyModal({
               name="email"
               value={formData.email}
               onChange={handleInputChange}
-              placeholder="Enter company email"
+              placeholder="e.g., contact@company.com"
+              className="form-input"
               required
             />
-            {formData.email && !emailValid && (
-              <span style={{ color: "red" }}>
-                Please enter a valid email address.
-              </span>
-            )}
-            {formData.email && emailValid && (
-              <span style={{ color: "green" }}>Valid email address.</span>
-            )}
+            <div className="input-feedback">
+              {formData.email && !emailValid && (
+                <span className="feedback-error">Please enter a valid email address</span>
+              )}
+              {formData.email && emailValid && (
+                <span className="feedback-success">✓ Valid email address</span>
+              )}
+            </div>
+            <p className="field-hint">This email will be used for both company and contact person communication</p>
           </div>
-          <div className="form-group">
-            <label htmlFor="contactPersonName">
-              Contact Person Name:
-            </label>
-            <input
-              id="contactPersonName"
-              type="text"
-              name="contactPersonName"
-              value={formData.contactPersonName || ""}
-              onChange={handleInputChange}
-              placeholder="Enter contact person name"
-            />
+          {/* Contact Person Section */}
+          <div className="form-section-divider"></div>
+          <div className="form-section-header">
+            <h3 className="form-section-title">Contact Person Information</h3>
+            <p className="form-section-subtitle">Optional contact details for the company representative</p>
           </div>
-          <div className="form-group">
-            <label htmlFor="contactPersonEmail">
-              Contact Person Email:
-            </label>
-            <input
-              id="contactPersonEmail"
-              type="email"
-              name="contactPersonEmail"
-              value={formData.contactPersonEmail || ""}
-              onChange={handleInputChange}
-              placeholder="Enter contact person email"
-            />
+          
+          <div className="contact-person-grid">
+            <div className="form-group">
+              <label htmlFor="contactPersonName">
+                <span className="label-text">Contact Person Name</span>
+              </label>
+              <input
+                id="contactPersonName"
+                type="text"
+                name="contactPersonName"
+                value={formData.contactPersonName || ""}
+                onChange={handleInputChange}
+                placeholder="e.g., John Doe"
+                className="form-input"
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="contactPersonPhone">
+                <span className="label-text">Contact Person Phone</span>
+              </label>
+              <input
+                id="contactPersonPhone"
+                type="tel"
+                name="contactPersonPhone"
+                value={formData.contactPersonPhone || ""}
+                onChange={handleInputChange}
+                placeholder="e.g., +63 912 345 6789"
+                className="form-input"
+                pattern="[0-9+\s\-()]+"
+                maxLength="20"
+              />
+            </div>
           </div>
-          <div className="form-group">
-            <label htmlFor="contactPersonPhone">
-              Contact Person Phone:
-            </label>
-            <input
-              id="contactPersonPhone"
-              type="tel"
-              name="contactPersonPhone"
-              value={formData.contactPersonPhone || ""}
-              onChange={handleInputChange}
-              placeholder="Enter contact person phone"
-            />
+          {/* Skills Section */}
+          <div className="form-section-divider"></div>
+          <div className="form-section-header">
+            <h3 className="form-section-title">Skills Required</h3>
+            <p className="form-section-subtitle">Add up to 15 skills that are required for this position</p>
           </div>
+          
           <div className="form-group">
             <label htmlFor="skills">
-              Skills Required: <span style={{ color: "red" }}>*</span>
+              <span className="label-text">Skills Required</span>
+              <span className="required-asterisk">*</span>
             </label>
             <div className="skills-container">
               <div className="skills-input-wrapper">
@@ -671,22 +863,106 @@ function CompanyModal({
                 </span>
               </div>
             )}
+            
+            {/* MOA File Upload */}
+            <div className="moa-file-upload-section">
+              <div className="moa-validity-label">
+                <span>MOA Document</span>
+                <span className="moa-required">*</span>
+              </div>
+              <div className="moa-file-upload-wrapper">
+                <input
+                  ref={moaFileInputRef}
+                  type="file"
+                  accept=".pdf,.doc,.docx,image/*"
+                  onChange={handleMoaFileChange}
+                  style={{ display: 'none' }}
+                  id="moa-file-input"
+                  disabled={moaFileUploading}
+                  required
+                />
+                <label
+                  htmlFor="moa-file-input"
+                  className={`moa-file-upload-label ${moaFileUploading ? 'uploading' : ''}`}
+                >
+                  <IoCloudUploadOutline className="upload-icon" />
+                  <span>
+                    {moaFileUploading
+                      ? 'Uploading...'
+                      : moaFilePreview
+                      ? 'Change MOA File'
+                      : 'Upload MOA Document'}
+                  </span>
+                </label>
+                {moaFile && !moaFileUploading && (
+                  <span className="moa-file-name">{moaFile.name}</span>
+                )}
+                {moaFilePreview && (
+                  <div className="moa-file-preview">
+                    <IoDocumentTextOutline className="file-icon" />
+                    <a
+                      href={moaFilePreview}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="moa-file-link"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {formData.moaFileName || 'View MOA Document'}
+                    </a>
+                    <button
+                      type="button"
+                      className="moa-file-remove"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setMoaFile(null);
+                        setMoaFilePreview(null);
+                        setFormData((prev) => ({
+                          ...prev,
+                          moaFileUrl: '',
+                          moaFileName: '',
+                          moaStoragePath: '',
+                        }));
+                        if (moaFileInputRef.current) {
+                          moaFileInputRef.current.value = '';
+                        }
+                      }}
+                    >
+                      <IoCloseOutline />
+                    </button>
+                  </div>
+                )}
+              </div>
+              <p className="moa-file-hint">
+                Upload the signed MOA document (PDF, DOC, DOCX, or image). Max size: 10MB. Required for all companies.
+              </p>
+            </div>
+            
             <p className="moa-hint">
               This value syncs to the mobile app so interns immediately see how
               long the partnership is active.
             </p>
           </div>
+          {/* Mode of Work Section */}
+          <div className="form-section-divider"></div>
+          <div className="form-section-header">
+            <h3 className="form-section-title">Work Arrangement</h3>
+            <p className="form-section-subtitle">Select the available work modes for this company</p>
+          </div>
+          
           <div className="form-group">
             <label>
-              Mode of Work: <span style={{ color: "red" }}>*</span>
+              <span className="label-text">Mode of Work</span>
+              <span className="required-asterisk">*</span>
             </label>
             <div className="mode-of-work-options">
               {["On-site", "Remote", "Hybrid"].map((mode) => (
                 <label key={mode} className="mode-checkbox">
                   <input
-                    type="checkbox"
+                    type="radio"
+                    name="modeOfWork"
                     value={mode}
-                    checked={formData.modeOfWork.includes(mode)}
+                    checked={formData.modeOfWork === mode}
                     onChange={handleModeOfWorkChange}
                     required
                   />
@@ -696,58 +972,73 @@ function CompanyModal({
             </div>
           </div>
         </form>
-        <div className="modal-actions">
-          {isEditMode ? (
+        <div className="modal-footer">
+          <div className="modal-actions">
             <button
               type="button"
-              className="modal-btn"
-              onClick={handleUpdate}
-              disabled={isLoading}
+              className="modal-btn secondary"
+              onClick={() => {
+                setIsModalOpen(false);
+                setIsEditMode(false);
+                setEditCompanyId(null);
+                setFormData({
+                  companyName: "",
+                  description: "",
+                  website: "",
+                  field: "",
+                  address: "",
+                  email: "",
+                  skills: "",
+                  moa: true,
+                  moaValidityYears: "",
+                  moaStartDate: "",
+                  modeOfWork: "",
+                  contactPersonName: "",
+                  contactPersonTitle: "",
+                  contactPersonPhone: "",
+                });
+                setSkills([]);
+                setFields([]);
+                setLocalError("");
+              }}
             >
-              {isLoading ? "Updating..." : "Update"}
+              Cancel
             </button>
-          ) : (
-            <button
-              key={localError ? shakeKey : undefined}
-              type="button"
-              className={`modal-btn${localError ? " error" : ""}`}
-              onClick={handleValidatedAdd}
-              disabled={isLoading}
-            >
-              {isLoading ? <span className="spinner"></span> : null}
-              {isLoading ? "Adding..." : "Add"}
-            </button>
-          )}
-          <button
-            type="button"
-            className="modal-btn secondary"
-            onClick={() => {
-              setIsModalOpen(false);
-              setIsEditMode(false);
-              setEditCompanyId(null);
-              setFormData({
-                companyName: "",
-                description: "",
-                website: "",
-                field: "",
-                address: "",
-                email: "",
-                skills: "",
-                moa: true, // MOA is now required
-                moaValidityYears: "",
-                moaStartDate: "",
-                modeOfWork: [],
-                contactPersonName: "",
-                contactPersonTitle: "",
-                contactPersonPhone: "",
-              });
-              setSkills([]);
-              setFields([]);
-              setLocalError("");
-            }}
-          >
-            Cancel
-          </button>
+            {isEditMode ? (
+              <button
+                type="button"
+                className="modal-btn primary"
+                onClick={handleUpdate}
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <>
+                    <span className="spinner"></span>
+                    Updating...
+                  </>
+                ) : (
+                  "Update Company"
+                )}
+              </button>
+            ) : (
+              <button
+                key={localError ? shakeKey : undefined}
+                type="button"
+                className={`modal-btn primary${localError ? " error" : ""}`}
+                onClick={handleValidatedAdd}
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <>
+                    <span className="spinner"></span>
+                    Adding...
+                  </>
+                ) : (
+                  "Add Company"
+                )}
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>

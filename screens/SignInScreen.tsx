@@ -12,7 +12,7 @@ import {
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useNavigation } from '@react-navigation/native';
 import { auth } from '../firebase/config';
-import { LOOKUP_EMAIL_FUNCTION_BASE_URL, STUDENT_ID_EMAIL_DOMAIN } from '../firebase/config';
+import { LOOKUP_EMAIL_FUNCTION_BASE_URL } from '../firebase/config';
 import { signInWithEmailAndPassword, sendPasswordResetEmail, onAuthStateChanged } from 'firebase/auth';
 import { SecurityUtils } from '../services/security';
 import { colors, radii, shadows, spacing } from '../ui/theme';
@@ -26,6 +26,7 @@ const SignInScreen: React.FC<SignInProps> = ({ setIsLoggedIn }) => {
   const [studentId, setStudentId] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
 
   const formatStudentId = (text: string) => {
@@ -158,10 +159,85 @@ const SignInScreen: React.FC<SignInProps> = ({ setIsLoggedIn }) => {
   };
 
   const handleResetPassword = async () => {
-    Alert.alert(
-      'Password help',
-      'Please contact your adviser or coordinator to reset your password.'
-    );
+    const identifier = SecurityUtils.sanitizeInput(studentId);
+    if (!identifier) {
+      Alert.alert('Missing field', 'Please enter your Student ID or admin email first.');
+      return;
+    }
+
+    const isStudentId = SecurityUtils.validateStudentId(identifier);
+    const isEmail = SecurityUtils.validateEmail(identifier);
+    if (!(isStudentId || isEmail)) {
+      Alert.alert('Invalid input', 'Enter a valid Student ID (XX-XXXXX-XXX) or an admin email (@neu.edu.ph).');
+      return;
+    }
+
+    setResetLoading(true);
+    try {
+      let emailToUse: string | null = null;
+
+      if (isEmail) {
+        emailToUse = identifier.trim();
+      } else {
+        // Student reset: resolve their email via your existing lookup function
+        if (!LOOKUP_EMAIL_FUNCTION_BASE_URL) {
+          Alert.alert(
+            'Configuration Error',
+            'LOOKUP_EMAIL_FUNCTION_BASE_URL is not configured. Please set this in your Expo app.json or environment variables.'
+          );
+          return;
+        }
+
+        try {
+          const res = await fetch(LOOKUP_EMAIL_FUNCTION_BASE_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ studentId: identifier }),
+          });
+          if (!res.ok) {
+            Alert.alert('Lookup Error', 'Email lookup service is unavailable. Please try again later.');
+            return;
+          }
+          const data = await res.json();
+          if (data?.email && typeof data.email === 'string') {
+            emailToUse = data.email;
+          }
+        } catch (fetchErr) {
+          console.error('❌ Password reset lookup failed:', fetchErr);
+          Alert.alert('Lookup Error', 'Could not reach email lookup service. Check your internet connection.');
+          return;
+        }
+      }
+
+      if (!emailToUse) {
+        Alert.alert(
+          'Account Not Found',
+          isStudentId
+            ? `No account found for Student ID: ${identifier}. Please contact your adviser.`
+            : 'No email found. Please check your input.'
+        );
+        return;
+      }
+
+      await sendPasswordResetEmail(auth, emailToUse);
+      Alert.alert(
+        'Reset email sent',
+        `If an account exists for ${emailToUse}, a password reset link has been sent.`
+      );
+    } catch (e: any) {
+      const code = e?.code ?? '';
+      console.error('❌ Password reset error:', code, e);
+      let message = 'Failed to send password reset email. Please try again.';
+      if (code === 'auth/invalid-email') message = 'Invalid email address.';
+      else if (code === 'auth/too-many-requests') message = 'Too many requests. Please try again later.';
+      else if (code === 'auth/user-not-found') {
+        // Keep message generic, but your app already surfaces user-not-found elsewhere.
+        message = 'No account found for this email/Student ID. Please contact your adviser.';
+      }
+      Alert.alert('Password Reset Failed', message);
+    } finally {
+      setResetLoading(false);
+    }
   };
 
   if (checkingSession) {
@@ -203,12 +279,12 @@ const SignInScreen: React.FC<SignInProps> = ({ setIsLoggedIn }) => {
         />
       </View>
 
-      <TouchableOpacity style={styles.button} onPress={handleSignIn} disabled={loading}>
+      <TouchableOpacity style={styles.button} onPress={handleSignIn} disabled={loading || resetLoading}>
         {loading ? <ActivityIndicator color={colors.onPrimary} /> : <Text style={styles.buttonText}>Sign In</Text>}
       </TouchableOpacity>
 
-      <TouchableOpacity onPress={handleResetPassword}>
-        <Text style={styles.loginLink}>Forgot password?</Text>
+      <TouchableOpacity onPress={handleResetPassword} disabled={resetLoading || loading}>
+        <Text style={styles.loginLink}>{resetLoading ? 'Sending reset email…' : 'Forgot password?'}</Text>
       </TouchableOpacity>
 
       <Text style={styles.helperNote}>No account? Please contact your adviser/coordinator.</Text>

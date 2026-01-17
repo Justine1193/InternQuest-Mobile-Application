@@ -23,7 +23,6 @@ import * as FileSystem from 'expo-file-system';
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
-import { updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
 import { colors, radii, shadows } from '../ui/theme';
 
 // Add type for userData
@@ -36,29 +35,14 @@ type UserData = {
 const ProfileScreen = ({ navigation }: { navigation: any }) => {
   const [userData, setUserData] = useState<UserData>({});
   const [loading, setLoading] = useState(false);
-  const [modalVisible, setModalVisible] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [showUndoCompany, setShowUndoCompany] = useState(false);
   const [companyModalVisible, setCompanyModalVisible] = useState(false);
   const [companyName, setCompanyName] = useState('');
-
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [linkedin, setLinkedIn] = useState('');
-  const [skills, setSkills] = useState([]);
   const [avatarChanged, setAvatarChanged] = useState(false);
   const [totalHours, setTotalHours] = useState(0);
   const [progress, setProgress] = useState(0);
   const [requiredHours, setRequiredHours] = useState(300);
-
-  const [changePasswordModalVisible, setChangePasswordModalVisible] = useState(false);
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmNewPassword, setConfirmNewPassword] = useState('');
-  const [changePasswordLoading, setChangePasswordLoading] = useState(false);
-  const [changePasswordError, setChangePasswordError] = useState('');
-  const [changePasswordSuccess, setChangePasswordSuccess] = useState('');
 
   const [avatarUploading, setAvatarUploading] = useState(false);
   const FIRESTORE_MAX_BYTES = 700 * 1024; // only store small base64 previews in Firestore
@@ -129,44 +113,6 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
     if ((userData as any).company) {
       Alert.alert('Company', `You are currenty associated with ${ (userData as any).company }`);
     }
-  };
-
-  const handleSaveProfile = async () => {
-    if (!auth.currentUser) return;
-    setLoading(true);
-    try {
-      const userDocRef = doc(firestore, "users", auth.currentUser.uid);
-      let displayName = name;
-      if (!displayName && userData.firstName && userData.lastName) {
-        displayName = userData.firstName + ' ' + userData.lastName;
-      }
-      const updatedData = {
-        ...userData,
-        name: displayName,
-        email,
-        phone,
-        contact: phone,
-        linkedin,
-        skills,
-        avatar: userData.avatar || "",
-      };
-      await setDoc(userDocRef, updatedData, { merge: true });
-      setUserData(updatedData);
-      Alert.alert('Success', 'Profile updated successfully!');
-      setModalVisible(false);
-    } catch (error) {
-      Alert.alert('Error', 'Failed to update profile.');
-      console.error('handleSaveProfile failed:', error);
-      try {
-        if (auth.currentUser) {
-          await setDoc(doc(firestore, 'users', auth.currentUser.uid), { lastProfileUpdateError: { time: new Date().toISOString(), message: String(error) } }, { merge: true });
-          console.log('ProfileScreen: wrote lastProfileUpdateError to user doc');
-        }
-      } catch (diagErr) {
-        console.warn('ProfileScreen: failed to write lastProfileUpdateError for user:', diagErr);
-      }
-    }
-    setLoading(false);
   };
 
   const handleEmailPress = () => {
@@ -265,15 +211,6 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
       if (userSnap.exists()) {
         const data = userSnap.data();
         setUserData(data);
-        // Prefer firstName + lastName if available, else fallback to name
-        const displayName = (data.firstName && data.lastName)
-          ? `${data.firstName} ${data.lastName}`
-          : (data.name || "");
-        setName(displayName);
-        setEmail(data.email || "");
-        setPhone(data.contact || data.phone || "");
-        setLinkedIn(data.linkedin || "");
-        setSkills(data.skills || []);
       }
     } catch (error) {
       console.error('Failed to fetch user data:', error);
@@ -520,20 +457,6 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
         {/* Action Buttons */}
         <View style={styles.buttonGroup}>
           <TouchableOpacity
-            style={[styles.actionButton, { backgroundColor: colors.primary }]}
-            onPress={() => setModalVisible(true)}
-          >
-            <Ionicons name="pencil" size={20} color={colors.onPrimary} />
-            <Text style={styles.buttonText}>Edit Profile</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.actionButton, { backgroundColor: colors.warning }]}
-            onPress={() => setChangePasswordModalVisible(true)}
-          >
-            <Ionicons name="key-outline" size={20} color={colors.onPrimary} />
-            <Text style={styles.buttonText}>Change Password</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
             style={[styles.actionButton, { backgroundColor: colors.success }]}
             onPress={() => navigation.navigate('RequirementsChecklist')}
           >
@@ -542,64 +465,6 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
           </TouchableOpacity>
         </View>
       </ScrollView>
-
-      {/* Edit Profile Modal */}
-      <Modal
-        animationType="fade"
-        transparent={true}
-        visible={modalVisible}
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalHeader}>Edit Profile</Text>
-
-            <Text style={styles.label}>Name</Text>
-            <TextInput
-              style={styles.input}
-              value={name}
-              onChangeText={setName}
-            />
-
-            <Text style={styles.label}>Email</Text>
-            <TextInput
-              style={styles.input}
-              value={email}
-              onChangeText={setEmail}
-            />
-
-            <Text style={styles.label}>Phone</Text>
-            <TextInput
-              style={styles.input}
-              value={phone}
-              onChangeText={setPhone}
-            />
-
-            <Text style={styles.label}>LinkedIn</Text>
-            <TextInput
-              style={styles.input}
-              value={linkedin}
-              onChangeText={setLinkedIn}
-            />
-
-            {/* Save and Cancel Buttons */}
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.saveButton]}
-                onPress={handleSaveProfile}
-              >
-                <Text style={styles.modalButtonText}>Save</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => setModalVisible(false)}
-              >
-                <Text style={styles.modalButtonText}>Cancel</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
 
       {/* Company Details Modal */}
       <Modal
@@ -649,116 +514,6 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
           </TouchableOpacity>
         </View>
       )}
-
-      {/* Change Password Modal */}
-      <Modal
-        animationType="fade"
-        transparent={true}
-        visible={changePasswordModalVisible}
-        onRequestClose={() => setChangePasswordModalVisible(false)}
-      >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalHeader}>Change Password</Text>
-            {changePasswordSuccess ? (
-              <Text style={styles.successText}>{changePasswordSuccess}</Text>
-            ) : null}
-            {changePasswordError ? (
-              <Text style={styles.errorText}>{changePasswordError}</Text>
-            ) : null}
-            <Text style={styles.label}>Current Password</Text>
-            <TextInput
-              style={styles.input}
-              value={currentPassword}
-              onChangeText={setCurrentPassword}
-              secureTextEntry
-              placeholder="Enter current password"
-            />
-            <Text style={styles.label}>New Password</Text>
-            <TextInput
-              style={styles.input}
-              value={newPassword}
-              onChangeText={setNewPassword}
-              secureTextEntry
-              placeholder="Enter new password"
-            />
-            <Text style={styles.label}>Confirm New Password</Text>
-            <TextInput
-              style={styles.input}
-              value={confirmNewPassword}
-              onChangeText={setConfirmNewPassword}
-              secureTextEntry
-              placeholder="Confirm new password"
-            />
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 20 }}>
-              <TouchableOpacity
-                style={[styles.button, { backgroundColor: colors.border, flex: 1, marginRight: 8 }]}
-                onPress={() => {
-                  setChangePasswordModalVisible(false);
-                  setCurrentPassword('');
-                  setNewPassword('');
-                  setConfirmNewPassword('');
-                  setChangePasswordError('');
-                  setChangePasswordSuccess('');
-                }}
-                disabled={changePasswordLoading}
-              >
-                <Text style={[styles.buttonText, { color: colors.text }]}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.button, { backgroundColor: colors.primary, flex: 1, marginLeft: 8 }]}
-                onPress={async () => {
-                  setChangePasswordError('');
-                  setChangePasswordSuccess('');
-                  if (!currentPassword || !newPassword || !confirmNewPassword) {
-                    setChangePasswordError('All fields are required.');
-                    return;
-                  }
-                  if (newPassword.length < 8) {
-                    setChangePasswordError('New password must be at least 8 characters.');
-                    return;
-                  }
-                  if (newPassword !== confirmNewPassword) {
-                    setChangePasswordError('New passwords do not match.');
-                    return;
-                  }
-                  if (!auth.currentUser || !auth.currentUser.email) {
-                    setChangePasswordError('User not authenticated.');
-                    return;
-                  }
-                  setChangePasswordLoading(true);
-                  try {
-                    const credential = EmailAuthProvider.credential(auth.currentUser.email, currentPassword);
-                    await reauthenticateWithCredential(auth.currentUser, credential);
-                    await updatePassword(auth.currentUser, newPassword);
-                    setChangePasswordSuccess('Password changed successfully!');
-                    setCurrentPassword('');
-                    setNewPassword('');
-                    setConfirmNewPassword('');
-                  } catch (error: any) {
-                    let msg = 'Failed to change password.';
-                    if (error.code === 'auth/wrong-password') {
-                      msg = 'Current password is incorrect.';
-                    } else if (error.code === 'auth/weak-password') {
-                      msg = 'New password is too weak.';
-                    } else if (error.code === 'auth/too-many-requests') {
-                      msg = 'Too many attempts. Please try again later.';
-                    } else if (error.message) {
-                      msg = error.message;
-                    }
-                    setChangePasswordError(msg);
-                  } finally {
-                    setChangePasswordLoading(false);
-                  }
-                }}
-                disabled={changePasswordLoading}
-              >
-                <Text style={styles.buttonText}>{changePasswordLoading ? 'Saving...' : 'Save'}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
 
       {/* Bottom Navbar */}
       <BottomNavbar navigation={navigation} currentRoute="Profile" />

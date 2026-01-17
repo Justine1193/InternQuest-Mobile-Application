@@ -8,6 +8,8 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
+    "build:apk": "npx eas build -p android --profile preview",
+    "build:aab": "npx eas build -p android --profile production",
     "provision:user": "node tools/provisioning/provision_user.js"
   },
   "dependencies": {

@@ -38,6 +38,38 @@ In the output, you'll find options to open the app in a
 - [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
 - [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
 
+## Export / Build Android APK
+
+This repo is configured to generate an **APK** via EAS Build using the `preview` profile in `eas.json` (it sets `android.buildType` to `apk`).
+
+1. Install deps:
+
+   ```bash
+   npm install
+   ```
+
+2. Log in to Expo/EAS (one-time per machine):
+
+   ```bash
+   npx eas login
+   ```
+
+3. Build the APK (cloud build):
+
+   ```bash
+   npm run build:apk
+   ```
+
+After the build finishes, EAS will print a URL where you can download the `.apk`.
+
+Optional:
+
+- Production Play Store bundle (AAB):
+
+  ```bash
+  npm run build:aab
+  ```
+
 You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
 
 ## Get a fresh project

@@ -23,6 +23,7 @@ import HomeScreen from './screens/HomeScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import NotificationsScreen from './screens/NotificationsScreen';
 import SettingsScreen from './screens/SettingsScreen';
+import ForceChangePasswordScreen from './screens/ForceChangePasswordScreen';
 import InternshipDetailsScreen from './screens/InternshipDetailsScreen';
 import OJTTrackerScreen from './screens/OJTTrackerScreen';
 import WeeklyReportScreen from './screens/WeeklyReportScreen';
@@ -57,6 +58,7 @@ export type RootStackParamList = {
   Home: undefined;
   SignIn: undefined;
   SetupAccount: undefined;
+  ForceChangePassword: undefined;
   InternshipDetails: { post: Post };
   CompanyProfile: { companyId: string };
   RequirementsChecklist: undefined;
@@ -74,6 +76,7 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isProfileComplete, setIsProfileComplete] = useState<boolean | null>(null);
+  const [mustChangePassword, setMustChangePassword] = useState<boolean | null>(null);
   const [currentScreen, setCurrentScreen] = useState<string>('Home');
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
 
@@ -181,6 +184,9 @@ const App: React.FC = () => {
           if (userDocAfter.exists()) {
             const data: any = userDocAfter.data();
 
+            // One-time password change gate (set after SetupAccountScreen)
+            setMustChangePassword(!!data?.mustChangePassword);
+
             const flagComplete = !!data?.isProfileComplete || !!data?.profileStatus?.isComplete;
             const hasBasics =
               !!(data?.firstName || data?.lastName || data?.name) &&
@@ -203,6 +209,7 @@ const App: React.FC = () => {
             }
           } else {
             setIsProfileComplete(false);
+            setMustChangePassword(false);
             console.log('📋 Profile not found in Firestore');
           }
         } catch (e: any) {
@@ -222,6 +229,7 @@ const App: React.FC = () => {
             }
           }
           setIsProfileComplete(false);
+          setMustChangePassword(false);
         }
       } else {
         // No user found - need to sign in
@@ -229,6 +237,7 @@ const App: React.FC = () => {
         setCurrentUserEmail(null);
         setIsLoggedIn(false);
         setIsProfileComplete(null);
+        setMustChangePassword(null);
       }
       setIsLoading(false);
     });
@@ -268,14 +277,32 @@ const App: React.FC = () => {
               onSetupComplete={async () => {
                 // Update Firestore (best-effort) and local state
                 setIsProfileComplete(true);
+                setMustChangePassword(true);
                 if (auth.currentUser) {
                   try {
-                    await setDoc(doc(firestore, 'users', auth.currentUser.uid), { isProfileComplete: true }, { merge: true });
+                    await setDoc(
+                      doc(firestore, 'users', auth.currentUser.uid),
+                      { isProfileComplete: true, mustChangePassword: true },
+                      { merge: true }
+                    );
                   } catch (e) {
                     // best-effort
                   }
                 }
               }}
+            />
+          )}
+        </Stack.Screen>
+      );
+    }
+
+    if (mustChangePassword === true) {
+      return (
+        <Stack.Screen name="ForceChangePassword" options={{ gestureEnabled: false }}>
+          {props => (
+            <ForceChangePasswordScreen
+              {...props}
+              onPasswordChangeComplete={() => setMustChangePassword(false)}
             />
           )}
         </Stack.Screen>
@@ -354,7 +381,7 @@ const App: React.FC = () => {
             </Stack.Navigator>
 
             {/* Only show bottom navbar when logged in and profile is complete */}
-            {isLoggedIn && isProfileComplete && (
+            {isLoggedIn && isProfileComplete && mustChangePassword !== true && (
               <View style={styles.bottomNavWrapper}>
                 <BottomNavbar currentRoute={currentScreen} />
               </View>

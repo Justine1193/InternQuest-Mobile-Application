@@ -478,6 +478,10 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
         status: 'active',
         accountType: 'student',
 
+        // Security
+        // Require users to change the admin-provided default password once.
+        mustChangePassword: true,
+
         // OJT Status
         ojtStatus: {
           isHired: false,

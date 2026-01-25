@@ -109,7 +109,7 @@ const StudentDashboard = () => {
   const [adminSection, setAdminSection] = useState(null);
   const adminCollegeCode = getAdminCollegeCode();
   const [programToCollegeMap, setProgramToCollegeMap] = useState({});
-  const [adminProgram, setAdminProgram] = useState(null);
+  const [adminPrograms, setAdminPrograms] = useState([]); // coordinator scope (programs)
   const [adminCollegeName, setAdminCollegeName] = useState(null);
 
   // Set document title on mount
@@ -402,6 +402,30 @@ const StudentDashboard = () => {
             data.sections || (data.section ? [data.section] : []);
           if (isMounted) {
             setAdminSection(sections.length > 0 ? sections : null);
+          }
+
+          // Coordinator program scope (preferred): program/programs fields
+          // Fallback: derive from assigned section format (e.g., 4BSIT-2 -> BSIT)
+          if (isMounted && currentRole === ROLES.COORDINATOR) {
+            const rawPrograms =
+              data.programs || (data.program ? [data.program] : []);
+            let normalized = Array.isArray(rawPrograms)
+              ? rawPrograms
+                  .filter((p) => typeof p === "string" && p.trim())
+                  .map((p) => p.trim().toUpperCase())
+              : [];
+
+            if (normalized.length === 0 && sections.length > 0) {
+              const derived = new Set();
+              sections.forEach((s) => {
+                if (typeof s !== "string") return;
+                const match = s.match(/^\d+([A-Z]+)-/i);
+                if (match?.[1]) derived.add(match[1].toUpperCase());
+              });
+              normalized = Array.from(derived);
+            }
+
+            setAdminPrograms(normalized);
           }
 
           // Get college for adviser or coordinator
@@ -741,10 +765,70 @@ const StudentDashboard = () => {
     try {
       const pendingStudents = [];
 
-      // Filter students who are not approved (status !== true)
-      const unapprovedStudents = students.filter(
-        (student) => student.status !== true
-      );
+      // Filter students who are not approved (status !== true) within role scope
+      const scopedStudents = (() => {
+        // Adviser: scope by section(s)
+        if (currentRole === ROLES.ADVISER) {
+          if (!adminSection) return [];
+          const sections = Array.isArray(adminSection) ? adminSection : [adminSection];
+          const sectionSet = new Set(
+            sections
+              .filter((s) => typeof s === "string" && s.trim())
+              .map((s) => s.trim().toLowerCase())
+          );
+          if (sectionSet.size === 0) return [];
+          return students.filter(
+            (s) =>
+              typeof s.section === "string" &&
+              sectionSet.has(s.section.trim().toLowerCase())
+          );
+        }
+
+        // Coordinator: if has assigned sections, use them; else use programs/college mapping
+        if (currentRole === ROLES.COORDINATOR) {
+          const coordinatorSections = adminSection
+            ? Array.isArray(adminSection)
+              ? adminSection
+              : [adminSection]
+            : [];
+          const sectionSet = new Set(
+            coordinatorSections
+              .filter((s) => typeof s === "string" && s.trim())
+              .map((s) => s.trim().toLowerCase())
+          );
+          if (sectionSet.size > 0) {
+            return students.filter(
+              (s) =>
+                typeof s.section === "string" &&
+                sectionSet.has(s.section.trim().toLowerCase())
+            );
+          }
+
+          let allowedPrograms = Array.isArray(adminPrograms) ? adminPrograms : [];
+          if (allowedPrograms.length === 0 && adminCollegeCode) {
+            allowedPrograms = Object.entries(programToCollegeMap)
+              .filter(([, code]) => code === adminCollegeCode)
+              .map(([program]) =>
+                typeof program === "string" ? program.trim().toUpperCase() : ""
+              )
+              .filter(Boolean);
+          }
+          if (allowedPrograms.length === 0) return [];
+          const allowedSet = new Set(
+            allowedPrograms.map((p) => (p || "").toString().toUpperCase())
+          );
+          return students.filter((s) => {
+            const p = s.program;
+            if (typeof p !== "string" || !p.trim()) return false;
+            return allowedSet.has(p.trim().toUpperCase());
+          });
+        }
+
+        // Super admin / others: all students
+        return students;
+      })();
+
+      const unapprovedStudents = scopedStudents.filter((student) => student.status !== true);
 
       // Check each unapproved student for requirements
       for (const student of unapprovedStudents) {
@@ -761,7 +845,14 @@ const StudentDashboard = () => {
     } finally {
       setIsLoadingPendingStudents(false);
     }
-  }, [students]);
+  }, [
+    students,
+    currentRole,
+    adminSection,
+    adminPrograms,
+    adminCollegeCode,
+    programToCollegeMap,
+  ]);
 
   // Real-time listeners for companies and students
   useEffect(() => {
@@ -802,10 +893,6 @@ const StudentDashboard = () => {
           ...doc.data(),
         }));
         setStudents(studentsData);
-        setOverviewStats((prev) => ({
-          ...prev,
-          totalStudents: studentsData.length,
-        }));
         setIsLoading(false);
         logger.debug("Students updated:", studentsData.length);
       },
@@ -839,10 +926,11 @@ const StudentDashboard = () => {
           ...doc.data(),
         }));
         setStudents(studentsData);
-        setOverviewStats({
+        setOverviewStats((prev) => ({
+          ...prev,
           totalCompanies: companiesData.length,
           totalStudents: studentsData.length,
-        });
+        }));
 
         // Auto-migrate avatars in background (silently)
         const usersWithAvatars = studentsData.filter(
@@ -1108,7 +1196,69 @@ const StudentDashboard = () => {
 
   // Calculate enhanced statistics - OPTIMIZED with useMemo
   const enhancedStats = useMemo(() => {
-    if (students.length === 0) {
+    const statsStudents = (() => {
+      // Adviser: scope by section(s)
+      if (currentRole === ROLES.ADVISER) {
+        if (!adminSection) return [];
+        const sections = Array.isArray(adminSection) ? adminSection : [adminSection];
+        const sectionSet = new Set(
+          sections
+            .filter((s) => typeof s === "string" && s.trim())
+            .map((s) => s.trim().toLowerCase())
+        );
+        if (sectionSet.size === 0) return [];
+        return students.filter(
+          (s) =>
+            typeof s.section === "string" &&
+            sectionSet.has(s.section.trim().toLowerCase())
+        );
+      }
+
+      // Coordinator: if has assigned sections, use them; else use programs/college mapping
+      if (currentRole === ROLES.COORDINATOR) {
+        const coordinatorSections = adminSection
+          ? Array.isArray(adminSection)
+            ? adminSection
+            : [adminSection]
+          : [];
+        const sectionSet = new Set(
+          coordinatorSections
+            .filter((s) => typeof s === "string" && s.trim())
+            .map((s) => s.trim().toLowerCase())
+        );
+        if (sectionSet.size > 0) {
+          return students.filter(
+            (s) =>
+              typeof s.section === "string" &&
+              sectionSet.has(s.section.trim().toLowerCase())
+          );
+        }
+
+        let allowedPrograms = Array.isArray(adminPrograms) ? adminPrograms : [];
+        if (allowedPrograms.length === 0 && adminCollegeCode) {
+          allowedPrograms = Object.entries(programToCollegeMap)
+            .filter(([, code]) => code === adminCollegeCode)
+            .map(([program]) =>
+              typeof program === "string" ? program.trim().toUpperCase() : ""
+            )
+            .filter(Boolean);
+        }
+        if (allowedPrograms.length === 0) return [];
+        const allowedSet = new Set(
+          allowedPrograms.map((p) => (p || "").toString().toUpperCase())
+        );
+        return students.filter((s) => {
+          const p = s.program;
+          if (typeof p !== "string" || !p.trim()) return false;
+          return allowedSet.has(p.trim().toUpperCase());
+        });
+      }
+
+      // Super admin / others: all students
+      return students;
+    })();
+
+    if (statsStudents.length === 0) {
       return {
         hiredCount: 0,
         pendingCount: 0,
@@ -1117,12 +1267,12 @@ const StudentDashboard = () => {
       };
     }
 
-    const hiredCount = students.filter((s) => s.status === true).length;
+    const hiredCount = statsStudents.filter((s) => s.status === true).length;
     let pendingCount = 0;
     let approvedCount = 0;
     let totalReqs = 0;
 
-    students.forEach((student) => {
+    statsStudents.forEach((student) => {
       const submitted = studentSubmittedRequirements[student.id] || [];
       const approvals = requirementApprovals[student.id] || {};
 
@@ -1154,7 +1304,16 @@ const StudentDashboard = () => {
       approvedCount,
       totalReqs,
     };
-  }, [students, studentSubmittedRequirements, requirementApprovals]);
+  }, [
+    students,
+    currentRole,
+    adminSection,
+    adminPrograms,
+    adminCollegeCode,
+    programToCollegeMap,
+    studentSubmittedRequirements,
+    requirementApprovals,
+  ]);
 
   // Update overview stats when enhanced stats change
   useEffect(() => {
@@ -1682,74 +1841,26 @@ const StudentDashboard = () => {
 
     // For coordinators: filter by college (if assigned) and optionally by sections
     if (currentRole === ROLES.COORDINATOR) {
-      // Prepare admin sections array
-      const adminSections = adminSection
-        ? Array.isArray(adminSection)
-          ? adminSection
-          : [adminSection]
-        : [];
+      // Coordinator scope = programs (preferred), else derive programs from college mapping
+      let allowedPrograms = Array.isArray(adminPrograms) ? adminPrograms : [];
 
-      // If coordinator has sections assigned, prioritize section matching
-      if (adminSections.length > 0) {
-        return students.filter((student) => {
-          // First check if student's section matches any of the coordinator's sections
-          const matchesSection =
-            typeof student.section === "string" &&
-            adminSections.some(
-              (section) =>
-                typeof section === "string" &&
-                student.section.toLowerCase() === section.toLowerCase()
-            );
-
-          // If section doesn't match, exclude the student
-          if (!matchesSection) {
-            return false;
-          }
-
-          // If coordinator also has a college assigned, optionally verify college match
-          // But don't exclude if college mapping is missing (sections take priority)
-          if (adminCollegeCode) {
-            const studentProgram = student.program;
-            if (studentProgram && typeof studentProgram === "string") {
-              const studentCollegeCode = programToCollegeMap[studentProgram];
-              // If we can find the college mapping, verify it matches
-              // If mapping is missing, still show the student since section matches
-              if (studentCollegeCode) {
-                return studentCollegeCode === adminCollegeCode;
-              }
-            }
-            // If no program or mapping missing, still show if section matches
-            return true;
-          }
-
-          // No college assigned, just match by section (already verified above)
-          return true;
-        });
+      if (allowedPrograms.length === 0 && adminCollegeCode) {
+        allowedPrograms = Object.entries(programToCollegeMap)
+          .filter(([, collegeCode]) => collegeCode === adminCollegeCode)
+          .map(([program]) =>
+            typeof program === "string" ? program.trim().toUpperCase() : ""
+          )
+          .filter(Boolean);
       }
 
-      // If coordinator has a college assigned but no sections, filter by college only
-      if (adminCollegeCode) {
-        return students.filter((student) => {
-          // Get the college code for this student's program
-          const studentProgram = student.program;
-          if (!studentProgram || typeof studentProgram !== "string") {
-            return false; // No program, can't determine college
-          }
+      if (allowedPrograms.length === 0) return [];
 
-          // Check if student's program belongs to coordinator's college
-          const studentCollegeCode = programToCollegeMap[studentProgram];
-          if (!studentCollegeCode) {
-            // If we can't find the college for this program, don't show it
-            // (safer to exclude than include)
-            return false;
-          }
-
-          return studentCollegeCode === adminCollegeCode;
-        });
-      }
-
-      // Coordinator without college or sections: show all (for backward compatibility)
-      return students;
+      const allowedSet = new Set(allowedPrograms.map((p) => p.toUpperCase()));
+      return students.filter((student) => {
+        const p = student.program;
+        if (typeof p !== "string" || !p.trim()) return false;
+        return allowedSet.has(p.trim().toUpperCase());
+      });
     }
 
     // Super admin: show all students
@@ -1761,7 +1872,21 @@ const StudentDashboard = () => {
     currentRole,
     adminCollegeCode,
     programToCollegeMap,
+    adminPrograms,
   ]);
+
+  // Keep "Total Students" stat scoped by role:
+  // - adviser/coordinator: only students they can access (usually their section/college)
+  // - super_admin: overall total
+  useEffect(() => {
+    const isScopedRole =
+      currentRole === ROLES.ADVISER || currentRole === ROLES.COORDINATOR;
+    const totalStudents = isScopedRole ? baseStudents.length : students.length;
+    setOverviewStats((prev) => ({
+      ...prev,
+      totalStudents,
+    }));
+  }, [baseStudents.length, students.length, currentRole]);
 
   // Get unique sections from students - memoized
   // For advisers, only show their assigned sections
@@ -2106,6 +2231,8 @@ const StudentDashboard = () => {
           ...data,
           deletedAt: new Date().toISOString(),
           deletedByRole: currentRole,
+          // Snapshot submitted requirements at deletion time for Archive UI
+          submittedRequirements: studentSubmittedRequirements[id] || [],
         });
       }
       await deleteDoc(studentRef);
@@ -2205,6 +2332,8 @@ const StudentDashboard = () => {
             ...data,
             deletedAt: new Date().toISOString(),
             deletedByRole: currentRole,
+            // Snapshot submitted requirements at deletion time for Archive UI
+            submittedRequirements: studentSubmittedRequirements[id] || [],
           });
         }
         await deleteDoc(studentRef);
@@ -2641,32 +2770,46 @@ const StudentDashboard = () => {
         </div>
 
         {/* Stats Cards Row */}
-        <div className="student-stats-row">
-          <div className="student-stat-card">
-            <div className="student-stat-icon students">
-              <IoPeopleOutline />
+        <div className="iq-stats-wrapper">
+          <div className="iq-stats-grid">
+            <div className="iq-stat-card iq-stat--purple">
+              <div className="iq-stat-icon-wrapper" aria-hidden="true">
+                <IoPeopleOutline className="iq-stat-icon" />
+              </div>
+              <div className="iq-stat-content">
+                <div className="iq-stat-value">{overviewStats.totalStudents || 0}</div>
+                <div className="iq-stat-label">
+                  {currentRole === ROLES.SUPER_ADMIN
+                    ? "Total Students"
+                    : currentRole === ROLES.COORDINATOR
+                    ? adminSection && (Array.isArray(adminSection) ? adminSection.length > 0 : true)
+                      ? "Students (Your Sections)"
+                      : adminCollegeCode
+                      ? "Students (Your College)"
+                      : "Students (Not Assigned)"
+                    : currentRole === ROLES.ADVISER
+                    ? "Students (Your Section)"
+                    : "Total Students"}
+                </div>
+              </div>
             </div>
-            <div className="student-stat-content">
-              <h3>{overviewStats.totalStudents || 0}</h3>
-              <p>TOTAL STUDENTS</p>
+            <div className="iq-stat-card iq-stat--warning">
+              <div className="iq-stat-icon-wrapper" aria-hidden="true">
+                <IoTimeOutline className="iq-stat-icon" />
+              </div>
+              <div className="iq-stat-content">
+                <div className="iq-stat-value">{overviewStats.pendingRequirements || 0}</div>
+                <div className="iq-stat-label">Pending Review</div>
+              </div>
             </div>
-          </div>
-          <div className="student-stat-card">
-            <div className="student-stat-icon requirements">
-              <IoTimeOutline />
-            </div>
-            <div className="student-stat-content">
-              <h3>{overviewStats.pendingRequirements || 0}</h3>
-              <p>PENDING REVIEW</p>
-            </div>
-          </div>
-          <div className="student-stat-card">
-            <div className="student-stat-icon hired">
-              <IoCheckmarkCircle />
-            </div>
-            <div className="student-stat-content">
-              <h3>{overviewStats.hiredStudents || 0}</h3>
-              <p>HIRED STUDENTS</p>
+            <div className="iq-stat-card iq-stat--success">
+              <div className="iq-stat-icon-wrapper" aria-hidden="true">
+                <IoCheckmarkCircle className="iq-stat-icon" />
+              </div>
+              <div className="iq-stat-content">
+                <div className="iq-stat-value">{overviewStats.hiredStudents || 0}</div>
+                <div className="iq-stat-label">Hired Students</div>
+              </div>
             </div>
           </div>
         </div>

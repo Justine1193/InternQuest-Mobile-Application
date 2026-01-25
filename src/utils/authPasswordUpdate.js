@@ -4,7 +4,7 @@
  */
 
 import { httpsCallable } from "firebase/functions";
-import { functions } from "../../firebase.js";
+import { functions, auth } from "../../firebase.js";
 import logger from "./logger";
 
 // Ensure functions are initialized with the correct region
@@ -26,6 +26,40 @@ export const updateAuthUserPassword = async (uid = null, email = null, newPasswo
       return false;
     }
 
+    // Check if user is authenticated - use currentUser directly
+    if (!auth.currentUser) {
+      logger.error("User is not authenticated. Cannot update password without authentication.", {
+        authState: "no currentUser"
+      });
+      return false;
+    }
+
+    const currentUser = auth.currentUser;
+    
+    // Refresh the auth token to ensure it's valid and up-to-date
+    let authToken;
+    try {
+      authToken = await currentUser.getIdToken(true); // Force refresh
+      console.log("Auth token refreshed successfully before calling Cloud Function", {
+        uid: currentUser.uid,
+        email: currentUser.email,
+        hasToken: !!authToken,
+        tokenLength: authToken ? authToken.length : 0
+      });
+    } catch (tokenError) {
+      logger.error("Failed to refresh auth token:", tokenError);
+      return false;
+    }
+
+    // Verify auth state is still valid after token refresh
+    if (!auth.currentUser || auth.currentUser.uid !== currentUser.uid) {
+      logger.error("Auth currentUser changed after token refresh", {
+        expectedUid: currentUser.uid,
+        actualUid: auth.currentUser?.uid
+      });
+      return false;
+    }
+
     // Validate password is provided and not empty
     if (!newPassword || typeof newPassword !== 'string' || newPassword.trim() === '') {
       logger.error("New password is required and must be a non-empty string", {
@@ -36,8 +70,20 @@ export const updateAuthUserPassword = async (uid = null, email = null, newPasswo
       return false;
     }
 
+    // Wait a brief moment to ensure auth state is fully propagated
+    await new Promise(resolve => setTimeout(resolve, 200));
+
+    // Verify auth state one more time before calling
+    if (!auth.currentUser) {
+      logger.error("Auth currentUser became null before calling Cloud Function");
+      return false;
+    }
+
     // Call the Cloud Function to update the password
-    const updatePasswordFunction = httpsCallable(functions, "updateUserPassword");
+    // httpsCallable should automatically include the auth token from auth.currentUser
+    const updatePasswordFunction = httpsCallable(functions, "updateUserPassword", {
+      timeout: 60000 // 60 second timeout
+    });
     
     // Prepare the data object, ensuring newPassword is always included
     const callData = {
@@ -45,16 +91,16 @@ export const updateAuthUserPassword = async (uid = null, email = null, newPasswo
     };
     
     // Only add uid or email if they are provided (not null/undefined/empty)
-    if (uid && uid.trim && uid.trim() !== '') {
+    if (uid && typeof uid === 'string' && uid.trim() !== '') {
       callData.uid = uid.trim();
-    } else if (uid) {
-      callData.uid = uid;
+    } else if (uid && typeof uid !== 'string') {
+      callData.uid = String(uid);
     }
     
-    if (email && email.trim && email.trim() !== '') {
+    if (email && typeof email === 'string' && email.trim() !== '') {
       callData.email = email.trim();
-    } else if (email) {
-      callData.email = email;
+    } else if (email && typeof email !== 'string') {
+      callData.email = String(email);
     }
     
     // Validate that we have either uid or email
@@ -92,25 +138,49 @@ export const updateAuthUserPassword = async (uid = null, email = null, newPasswo
     }
   } catch (error) {
     // Handle different error types
-    if (error.code === "functions/not-found" || error.code === "functions/unavailable") {
+    const errorCode = error.code || "";
+    const errorMessage = error.message || "";
+    
+    console.error("Error updating Firebase Auth user password:", {
+      code: errorCode,
+      message: errorMessage,
+      details: error.details,
+      fullError: error
+    });
+    
+    if (errorCode === "functions/not-found" || errorCode === "functions/unavailable") {
       logger.warn(
         "Cloud Function 'updateUserPassword' not found. Please deploy the function to enable Auth password updates.",
         error
       );
-    } else if (error.code === "functions/unauthenticated") {
+    } else if (errorCode === "functions/unauthenticated") {
       logger.warn(
         "Authentication required for password update. User must be logged in with Firebase Auth.",
         error
       );
-    } else if (error.code === "internal" || error.message?.includes("CORS") || error.message?.includes("cors")) {
-      logger.warn(
-        "CORS error or internal error when calling updateUserPassword. The function may not be properly deployed or configured. Please deploy the function: firebase deploy --only functions:updateUserPassword",
+    } else if (errorCode === "functions/internal" || errorCode === "internal" || errorMessage?.includes("INTERNAL") || errorMessage?.includes("CORS") || errorMessage?.includes("cors")) {
+      logger.error(
+        "Internal server error when calling updateUserPassword. This may indicate:\n" +
+        "1. The function encountered an unexpected error\n" +
+        "2. The function may need to be redeployed\n" +
+        "3. Check Firebase Functions logs for more details\n" +
+        "Error details: " + errorMessage,
+        error
+      );
+    } else if (errorCode === "functions/invalid-argument") {
+      logger.error(
+        "Invalid argument provided to updateUserPassword: " + errorMessage,
+        error
+      );
+    } else if (errorCode === "functions/not-found") {
+      logger.error(
+        "User not found: " + errorMessage,
         error
       );
     } else {
       logger.error("Error updating Firebase Auth user password:", {
-        code: error.code,
-        message: error.message,
+        code: errorCode,
+        message: errorMessage,
         error: error
       });
     }
@@ -158,6 +228,7 @@ export const attemptUpdateAuthPassword = async (userData, newPassword) => {
   
   if (emailToUse) {
     console.log("Attempting password update with email:", emailToUse);
+    // Pass emailToUse as the email parameter (the function accepts both email and firebaseEmail)
     const success = await updateAuthUserPassword(null, emailToUse, newPassword);
     if (success) {
       console.log("Password update successful using email");

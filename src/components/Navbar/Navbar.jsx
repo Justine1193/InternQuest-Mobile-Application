@@ -27,18 +27,74 @@ import {
 import logo from "../../assets/InternQuest_Logo.png";
 import logoIcon from "../../assets/Website_Icon.png";
 import { getAdminRole, getAdminSession, canViewDashboard, canCreateAccounts, hasRole, ROLES } from "../../utils/auth";
+import { loadColleges } from "../../utils/collegeUtils";
 import "./Navbar.css";
 
 const Navbar = ({ onLogout }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
+  const [collegeName, setCollegeName] = useState("");
   const location = useLocation();
   const currentRole = getAdminRole();
   const canViewDash = canViewDashboard();
   const canCreate = canCreateAccounts();
   const isAdviser = currentRole === ROLES.ADVISER;
+  const isSuperAdmin = currentRole === ROLES.SUPER_ADMIN;
   const adminSession = getAdminSession();
   const username = adminSession?.username || "Admin";
+  const sections = Array.isArray(adminSession?.sections)
+    ? adminSession.sections.filter((s) => typeof s === "string" && s.trim())
+    : [];
+  const sessionCollegeName =
+    typeof adminSession?.college_name === "string" && adminSession.college_name.trim()
+      ? adminSession.college_name.trim()
+      : "";
+  const collegeCode =
+    typeof adminSession?.college_code === "string" && adminSession.college_code.trim()
+      ? adminSession.college_code.trim().toUpperCase()
+      : "";
+
+  const sectionsLabel =
+    sections.length === 0
+      ? ""
+      : sections.length === 1
+      ? sections[0]
+      : `${sections.slice(0, 2).join(", ")}${sections.length > 2 ? ` +${sections.length - 2}` : ""}`;
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const resolveCollegeName = async () => {
+      if (sessionCollegeName) {
+        setCollegeName(sessionCollegeName);
+        return;
+      }
+      if (!collegeCode) {
+        setCollegeName("");
+        return;
+      }
+
+      try {
+        const colleges = await loadColleges();
+        const match = colleges.find((c) => {
+          const code = (c?.college_code || "").toString().trim().toUpperCase();
+          return code && code === collegeCode;
+        });
+        if (isMounted) {
+          setCollegeName(match?.college_name ? String(match.college_name).trim() : "");
+        }
+      } catch (err) {
+        if (isMounted) {
+          setCollegeName("");
+        }
+      }
+    };
+
+    resolveCollegeName();
+    return () => {
+      isMounted = false;
+    };
+  }, [collegeCode, sessionCollegeName]);
   
   // Format role name for display
   const getRoleDisplayName = (role) => {
@@ -180,14 +236,14 @@ const Navbar = ({ onLogout }) => {
             <a 
               href="/adminManagement" 
               className={`sidebar-link ${isActive("/adminManagement") ? "active" : ""}`}
-              title="Admin Management"
+              title="User & Role Management"
             >
               <IoShieldCheckmarkOutline className="sidebar-icon" />
-              {!isCollapsed && <span>Admin Management</span>}
+              {!isCollapsed && <span>User & Role Management</span>}
             </a>
           )}
           
-          {canViewDash && (
+          {isSuperAdmin && (
             <a 
               href="/deleted" 
               className={`sidebar-link ${isActive("/deleted") ? "active" : ""}`}
@@ -198,7 +254,7 @@ const Navbar = ({ onLogout }) => {
             </a>
           )}
           
-          {canViewDash && (
+          {isSuperAdmin && (
             <a 
               href="/activityLog" 
               className={`sidebar-link ${isActive("/activityLog") ? "active" : ""}`}
@@ -208,6 +264,15 @@ const Navbar = ({ onLogout }) => {
               {!isCollapsed && <span>Activity Log</span>}
             </a>
           )}
+          
+          <a 
+            href="/security-settings" 
+            className={`sidebar-link ${isActive("/security-settings") ? "active" : ""}`}
+            title="Security Settings"
+          >
+            <IoSettingsOutline className="sidebar-icon" />
+            {!isCollapsed && <span>Security</span>}
+          </a>
         </div>
       </div>
 
@@ -222,6 +287,23 @@ const Navbar = ({ onLogout }) => {
             <div className="user-info-text">
               <span className="user-name">{username}</span>
               <span className="user-role">{getRoleDisplayName(currentRole)}</span>
+              {collegeCode && (
+                <span
+                  className="user-meta user-meta-college"
+                  title={
+                    collegeName
+                      ? `College: ${collegeName}`
+                      : `College: ${collegeCode}`
+                  }
+                >
+                  College: {collegeName || collegeCode}
+                </span>
+              )}
+              {sectionsLabel && (
+                <span className="user-meta" title={`Sections: ${sections.join(", ")}`}>
+                  Sections: {sectionsLabel}
+                </span>
+              )}
             </div>
           )}
         </div>

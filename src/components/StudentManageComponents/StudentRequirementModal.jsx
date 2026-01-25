@@ -1288,14 +1288,53 @@ const StudentRequirementModal = ({
                   <p className="section-subtitle">Upload and manage student requirements</p>
                 </div>
                 <div className="documents-progress">
-                  <span className="progress-text">
-                    {storageFiles.length} / 7 submitted
-                  </span>
+                  {(() => {
+                    const REQUIRED_FOLDERS = new Set([
+                      "proof-of-enrollment-com",
+                      "parent-guardian-consent-form",
+                      "medical-certificate",
+                      "psychological-test-certification",
+                      "proof-of-insurance",
+                      "moa-memorandum-of-agreement",
+                      "resume-cv",
+                    ]);
+                    const submittedFolderNames = new Set(
+                      (storageFiles || [])
+                        .map((f) => f.folderName)
+                        .filter((n) => typeof n === "string" && REQUIRED_FOLDERS.has(n))
+                    );
+                    const submittedCount = submittedFolderNames.size;
+                    return (
+                      <span className="progress-text">
+                        {submittedCount} / 7 submitted
+                      </span>
+                    );
+                  })()}
                   <div className="progress-bar">
-                    <div 
-                      className="progress-fill" 
-                      style={{ width: `${(storageFiles.length / 7) * 100}%` }}
-                    />
+                    {(() => {
+                      const REQUIRED_FOLDERS = new Set([
+                        "proof-of-enrollment-com",
+                        "parent-guardian-consent-form",
+                        "medical-certificate",
+                        "psychological-test-certification",
+                        "proof-of-insurance",
+                        "moa-memorandum-of-agreement",
+                        "resume-cv",
+                      ]);
+                      const submittedFolderNames = new Set(
+                        (storageFiles || [])
+                          .map((f) => f.folderName)
+                          .filter((n) => typeof n === "string" && REQUIRED_FOLDERS.has(n))
+                      );
+                      const submittedCount = submittedFolderNames.size;
+                      const pct = Math.min(100, Math.max(0, (submittedCount / 7) * 100));
+                      return (
+                        <div
+                          className="progress-fill"
+                          style={{ width: `${pct}%` }}
+                        />
+                      );
+                    })()}
                   </div>
                 </div>
               </div>

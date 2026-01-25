@@ -35,6 +35,8 @@ import {
   IoCalendarOutline,
 } from "react-icons/io5";
 
+const PAGE_SIZE = 20;
+
 const ActivityLogViewer = () => {
   const [activities, setActivities] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -42,13 +44,14 @@ const ActivityLogViewer = () => {
   const [hasMore, setHasMore] = useState(true);
   const [filter, setFilter] = useState("all"); // all, success, error
   const [searchQuery, setSearchQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
   const { toasts, removeToast, error: showError } = useToast();
   const navigate = useNavigate();
 
   useEffect(() => {
     document.title = "Activity Log | InternQuest Admin";
     fetchActivities();
-  }, [filter]);
+  }, []);
 
   const fetchActivities = async (loadMore = false) => {
     try {
@@ -229,6 +232,56 @@ const ActivityLogViewer = () => {
     return true;
   });
 
+  // Reset pagination when filters/search change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filter, searchQuery]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredActivities.length / PAGE_SIZE));
+  const pageStart = (currentPage - 1) * PAGE_SIZE;
+  const pageEnd = pageStart + PAGE_SIZE;
+  const visibleActivities = filteredActivities.slice(pageStart, pageEnd);
+
+  const handleNextPage = async () => {
+    // If we already have enough items loaded for the next page, just paginate locally
+    if (currentPage < totalPages) {
+      setCurrentPage((p) => p + 1);
+      return;
+    }
+
+    // Otherwise, fetch more from Firestore if available
+    if (hasMore && !isLoading) {
+      await fetchActivities(true);
+      setCurrentPage((p) => p + 1);
+    }
+  };
+
+  const handlePrevPage = () => {
+    setCurrentPage((p) => Math.max(1, p - 1));
+  };
+
+  const getPageButtons = () => {
+    // Show a compact pager: 1 ... (current-1) current (current+1) ... last
+    const buttons = [];
+    const last = totalPages;
+    const push = (n) => buttons.push(n);
+
+    if (last <= 7) {
+      for (let i = 1; i <= last; i++) push(i);
+      return buttons;
+    }
+
+    push(1);
+    if (currentPage > 3) push("ellipsis-left");
+    const start = Math.max(2, currentPage - 1);
+    const end = Math.min(last - 1, currentPage + 1);
+    for (let i = start; i <= end; i++) push(i);
+    if (currentPage < last - 2) push("ellipsis-right");
+    push(last);
+
+    return buttons;
+  };
+
   return (
     <div className="activity-log-container">
       <Navbar onLogout={handleLogout} />
@@ -354,7 +407,7 @@ const ActivityLogViewer = () => {
               </p>
             </div>
           ) : (
-            filteredActivities.map((activity) => {
+            visibleActivities.map((activity) => {
               const timestamp = activity.createdAt
                 ? new Date(activity.createdAt)
                 : activity.timestamp
@@ -430,22 +483,67 @@ const ActivityLogViewer = () => {
           )}
         </div>
 
-        {hasMore && !isLoading && (
-          <div className="load-more-container">
-            <button
-              className="load-more-btn"
-              onClick={() => fetchActivities(true)}
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <>
-                  <span className="spinner-small"></span>
-                  Loading...
-                </>
-              ) : (
-                "Load More Activities"
+        {/* Pagination */}
+        {filteredActivities.length > 0 && (
+          <div className="activity-pagination">
+            <div className="activity-pagination-left">
+              <span className="activity-pagination-info">
+                Showing {Math.min(pageStart + 1, filteredActivities.length)}–{Math.min(pageEnd, filteredActivities.length)} of {filteredActivities.length}
+              </span>
+              {hasMore && (
+                <span className="activity-pagination-badge" title="More logs available to load">
+                  More available
+                </span>
               )}
-            </button>
+            </div>
+
+            <div className="activity-pagination-controls" role="navigation" aria-label="Activity log pages">
+              <button
+                type="button"
+                className="activity-page-btn"
+                onClick={handlePrevPage}
+                disabled={currentPage === 1 || isLoading}
+                aria-label="Previous page"
+              >
+                ‹
+              </button>
+
+              <div className="activity-page-numbers" aria-label="Page numbers">
+                {getPageButtons().map((item) => {
+                  if (typeof item === "string" && item.startsWith("ellipsis")) {
+                    return (
+                      <span key={item} className="activity-page-ellipsis" aria-hidden="true">
+                        …
+                      </span>
+                    );
+                  }
+                  const page = item;
+                  const isActive = page === currentPage;
+                  return (
+                    <button
+                      key={page}
+                      type="button"
+                      className={`activity-page-btn ${isActive ? "active" : ""}`}
+                      onClick={() => setCurrentPage(page)}
+                      disabled={isLoading}
+                      aria-current={isActive ? "page" : undefined}
+                    >
+                      {page}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <button
+                type="button"
+                className="activity-page-btn"
+                onClick={handleNextPage}
+                disabled={(!hasMore && currentPage >= totalPages) || isLoading}
+                aria-label={hasMore ? "Next page (loads more if needed)" : "Next page"}
+              >
+                {isLoading ? <span className="spinner-small" aria-hidden="true"></span> : "›"}
+              </button>
+            </div>
           </div>
         )}
       </div>

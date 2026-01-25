@@ -26,6 +26,7 @@ const DeletedRecords = () => {
   const [deletedCompanies, setDeletedCompanies] = useState([]);
   const [deletedAdmins, setDeletedAdmins] = useState([]);
   const [rejectedRequirements, setRejectedRequirements] = useState([]);
+  const [activeTab, setActiveTab] = useState("students"); // students | companies | admins | requirements
   const [showConfirm, setShowConfirm] = useState(false);
   const [restoreItem, setRestoreItem] = useState(null);
   const [restoreType, setRestoreType] = useState(null); // 'student', 'company', 'admin', or 'requirement'
@@ -42,6 +43,11 @@ const DeletedRecords = () => {
   const [companySearchQuery, setCompanySearchQuery] = useState("");
   const [adminSearchQuery, setAdminSearchQuery] = useState("");
   const [requirementSearchQuery, setRequirementSearchQuery] = useState("");
+  const [studentProgramFilter, setStudentProgramFilter] = useState("all");
+  const [studentArchivedByFilter, setStudentArchivedByFilter] = useState("all");
+  const [companyFieldFilter, setCompanyFieldFilter] = useState("all");
+  const [adminRoleFilter, setAdminRoleFilter] = useState("all");
+  const [requirementTypeFilter, setRequirementTypeFilter] = useState("all");
   const [currentStudentPage, setCurrentStudentPage] = useState(1);
   const [currentCompanyPage, setCurrentCompanyPage] = useState(1);
   const [currentAdminPage, setCurrentAdminPage] = useState(1);
@@ -245,8 +251,37 @@ const DeletedRecords = () => {
     }
   };
 
+  const getUniqueOptions = (values) =>
+    [...new Set(values.filter(Boolean).map((v) => String(v).trim()))].sort((a, b) =>
+      a.localeCompare(b)
+    );
+
+  const studentProgramOptions = getUniqueOptions(
+    deletedStudents.map((s) => s.program).filter(Boolean)
+  );
+  const studentArchivedByOptions = getUniqueOptions(
+    deletedStudents.map((s) => s.deletedByRole).filter(Boolean)
+  );
+  const companyFieldOptions = getUniqueOptions(
+    deletedCompanies
+      .flatMap((c) => (Array.isArray(c.fields) ? c.fields : []))
+      .filter(Boolean)
+  );
+  const adminRoleOptions = getUniqueOptions(
+    deletedAdmins.map((a) => a.deletedRole).filter(Boolean)
+  );
+  const requirementTypeOptions = getUniqueOptions(
+    rejectedRequirements.map((r) => r.requirementType).filter(Boolean)
+  );
+
   // Filter and paginate students
   const filteredStudents = deletedStudents.filter((student) => {
+    if (studentProgramFilter !== "all") {
+      if ((student.program || "") !== studentProgramFilter) return false;
+    }
+    if (studentArchivedByFilter !== "all") {
+      if ((student.deletedByRole || "") !== studentArchivedByFilter) return false;
+    }
     if (!studentSearchQuery) return true;
     const query = studentSearchQuery.toLowerCase();
     const fullName = `${student.firstName || ''} ${student.lastName || ''}`.toLowerCase();
@@ -263,6 +298,10 @@ const DeletedRecords = () => {
 
   // Filter and paginate companies
   const filteredCompanies = deletedCompanies.filter((company) => {
+    if (companyFieldFilter !== "all") {
+      const fields = Array.isArray(company.fields) ? company.fields : [];
+      if (!fields.includes(companyFieldFilter)) return false;
+    }
     if (!companySearchQuery) return true;
     const query = companySearchQuery.toLowerCase();
     const name = (company.companyName || company.companyDescription || '').toLowerCase();
@@ -278,6 +317,9 @@ const DeletedRecords = () => {
 
   // Filter and paginate admins
   const filteredAdmins = deletedAdmins.filter((admin) => {
+    if (adminRoleFilter !== "all") {
+      if ((admin.deletedRole || "") !== adminRoleFilter) return false;
+    }
     if (!adminSearchQuery) return true;
     const query = adminSearchQuery.toLowerCase();
     const username = (admin.deletedUsername || '').toLowerCase();
@@ -293,6 +335,9 @@ const DeletedRecords = () => {
 
   // Filter and paginate rejected requirements
   const filteredRequirements = rejectedRequirements.filter((req) => {
+    if (requirementTypeFilter !== "all") {
+      if ((req.requirementType || "") !== requirementTypeFilter) return false;
+    }
     if (!requirementSearchQuery) return true;
     const query = requirementSearchQuery.toLowerCase();
     const studentName = (req.studentName || '').toLowerCase();
@@ -322,28 +367,64 @@ const DeletedRecords = () => {
             </div>
           </div>
           <div className="header-stats">
-            <div className="stat-card">
+            <div
+              className={`stat-card clickable ${activeTab === "students" ? "active" : ""}`}
+              role="button"
+              tabIndex={0}
+              onClick={() => setActiveTab("students")}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") setActiveTab("students");
+              }}
+              title="View archived students"
+            >
               <IoPeopleOutline className="stat-icon" />
               <div>
                 <span className="stat-value">{deletedStudents.length}</span>
                 <span className="stat-label">Archived Students</span>
               </div>
             </div>
-            <div className="stat-card">
+            <div
+              className={`stat-card clickable ${activeTab === "companies" ? "active" : ""}`}
+              role="button"
+              tabIndex={0}
+              onClick={() => setActiveTab("companies")}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") setActiveTab("companies");
+              }}
+              title="View archived companies"
+            >
               <IoBusinessOutline className="stat-icon" />
               <div>
                 <span className="stat-value">{deletedCompanies.length}</span>
                 <span className="stat-label">Archived Companies</span>
               </div>
             </div>
-            <div className="stat-card">
+            <div
+              className={`stat-card clickable ${activeTab === "admins" ? "active" : ""}`}
+              role="button"
+              tabIndex={0}
+              onClick={() => setActiveTab("admins")}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") setActiveTab("admins");
+              }}
+              title="View archived admins"
+            >
               <IoShieldOutline className="stat-icon" />
               <div>
                 <span className="stat-value">{deletedAdmins.length}</span>
                 <span className="stat-label">Archived Admins</span>
               </div>
             </div>
-            <div className="stat-card">
+            <div
+              className={`stat-card clickable ${activeTab === "requirements" ? "active" : ""}`}
+              role="button"
+              tabIndex={0}
+              onClick={() => setActiveTab("requirements")}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") setActiveTab("requirements");
+              }}
+              title="View rejected requirements"
+            >
               <IoDocumentTextOutline className="stat-icon" />
               <div>
                 <span className="stat-value">{rejectedRequirements.length}</span>
@@ -359,13 +440,109 @@ const DeletedRecords = () => {
           </div>
         )}
 
+        {/* Tabs (no scrolling between tables) */}
+        <div className="archive-tabs-wrapper" role="tablist" aria-label="Archive sections">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "students"}
+            className={`archive-tab ${activeTab === "students" ? "active" : ""}`}
+            onClick={() => setActiveTab("students")}
+          >
+            <IoPeopleOutline className="tab-icon" />
+            Students
+            <span className="tab-badge">{deletedStudents.length}</span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "companies"}
+            className={`archive-tab ${activeTab === "companies" ? "active" : ""}`}
+            onClick={() => setActiveTab("companies")}
+          >
+            <IoBusinessOutline className="tab-icon" />
+            Companies
+            <span className="tab-badge">{deletedCompanies.length}</span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "admins"}
+            className={`archive-tab ${activeTab === "admins" ? "active" : ""}`}
+            onClick={() => setActiveTab("admins")}
+          >
+            <IoShieldOutline className="tab-icon" />
+            Admins
+            <span className="tab-badge">{deletedAdmins.length}</span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "requirements"}
+            className={`archive-tab ${activeTab === "requirements" ? "active" : ""}`}
+            onClick={() => setActiveTab("requirements")}
+          >
+            <IoDocumentTextOutline className="tab-icon" />
+            Requirements
+            <span className="tab-badge">{rejectedRequirements.length}</span>
+          </button>
+        </div>
+
         <div className="deleted-sections">
-          <section className="deleted-section">
+          {activeTab === "students" && (
+          <section className="deleted-section" role="tabpanel">
             <div className="section-header">
               <div className="section-title-wrapper">
                 <IoPeopleOutline className="section-icon" />
                 <h2>Archived Students</h2>
                 <span className="section-count">({deletedStudents.length})</span>
+              </div>
+              <div className="filters-wrapper" aria-label="Student archive filters">
+                <select
+                  className="filter-select"
+                  value={studentProgramFilter}
+                  onChange={(e) => {
+                    setStudentProgramFilter(e.target.value);
+                    setCurrentStudentPage(1);
+                  }}
+                  aria-label="Filter by program"
+                >
+                  <option value="all">All Programs</option>
+                  {studentProgramOptions.map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  className="filter-select"
+                  value={studentArchivedByFilter}
+                  onChange={(e) => {
+                    setStudentArchivedByFilter(e.target.value);
+                    setCurrentStudentPage(1);
+                  }}
+                  aria-label="Filter by archived by"
+                >
+                  <option value="all">All Archived By</option>
+                  {studentArchivedByOptions.map((r) => (
+                    <option key={r} value={r}>
+                      {r}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className="filter-clear-btn"
+                  onClick={() => {
+                    setStudentProgramFilter("all");
+                    setStudentArchivedByFilter("all");
+                    setStudentSearchQuery("");
+                    setCurrentStudentPage(1);
+                  }}
+                  title="Clear student filters"
+                >
+                  Clear
+                </button>
               </div>
               <div className="search-wrapper">
                 <IoSearchOutline className="search-icon" />
@@ -524,13 +701,45 @@ const DeletedRecords = () => {
               </div>
             )}
           </section>
+          )}
 
-          <section className="deleted-section">
+          {activeTab === "companies" && (
+          <section className="deleted-section" role="tabpanel">
             <div className="section-header">
               <div className="section-title-wrapper">
                 <IoBusinessOutline className="section-icon" />
                 <h2>Archived Companies</h2>
                 <span className="section-count">({deletedCompanies.length})</span>
+              </div>
+              <div className="filters-wrapper" aria-label="Company archive filters">
+                <select
+                  className="filter-select"
+                  value={companyFieldFilter}
+                  onChange={(e) => {
+                    setCompanyFieldFilter(e.target.value);
+                    setCurrentCompanyPage(1);
+                  }}
+                  aria-label="Filter by field"
+                >
+                  <option value="all">All Fields</option>
+                  {companyFieldOptions.map((f) => (
+                    <option key={f} value={f}>
+                      {f}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className="filter-clear-btn"
+                  onClick={() => {
+                    setCompanyFieldFilter("all");
+                    setCompanySearchQuery("");
+                    setCurrentCompanyPage(1);
+                  }}
+                  title="Clear company filters"
+                >
+                  Clear
+                </button>
               </div>
               <div className="search-wrapper">
                 <IoSearchOutline className="search-icon" />
@@ -685,13 +894,45 @@ const DeletedRecords = () => {
               </div>
             )}
           </section>
+          )}
 
-          <section className="deleted-section">
+          {activeTab === "admins" && (
+          <section className="deleted-section" role="tabpanel">
             <div className="section-header">
               <div className="section-title-wrapper">
                 <IoShieldOutline className="section-icon" />
                 <h2>Archived Admins</h2>
                 <span className="section-count">({deletedAdmins.length})</span>
+              </div>
+              <div className="filters-wrapper" aria-label="Admin archive filters">
+                <select
+                  className="filter-select"
+                  value={adminRoleFilter}
+                  onChange={(e) => {
+                    setAdminRoleFilter(e.target.value);
+                    setCurrentAdminPage(1);
+                  }}
+                  aria-label="Filter by admin role"
+                >
+                  <option value="all">All Roles</option>
+                  {adminRoleOptions.map((r) => (
+                    <option key={r} value={r}>
+                      {r}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className="filter-clear-btn"
+                  onClick={() => {
+                    setAdminRoleFilter("all");
+                    setAdminSearchQuery("");
+                    setCurrentAdminPage(1);
+                  }}
+                  title="Clear admin filters"
+                >
+                  Clear
+                </button>
               </div>
               <div className="search-wrapper">
                 <IoSearchOutline className="search-icon" />
@@ -825,13 +1066,45 @@ const DeletedRecords = () => {
               </div>
             )}
           </section>
+          )}
 
-          <section className="deleted-section">
+          {activeTab === "requirements" && (
+          <section className="deleted-section" role="tabpanel">
             <div className="section-header">
               <div className="section-title-wrapper">
                 <IoDocumentTextOutline className="section-icon" />
                 <h2>Rejected Requirements</h2>
                 <span className="section-count">({rejectedRequirements.length})</span>
+              </div>
+              <div className="filters-wrapper" aria-label="Rejected requirements filters">
+                <select
+                  className="filter-select"
+                  value={requirementTypeFilter}
+                  onChange={(e) => {
+                    setRequirementTypeFilter(e.target.value);
+                    setCurrentRequirementPage(1);
+                  }}
+                  aria-label="Filter by requirement type"
+                >
+                  <option value="all">All Types</option>
+                  {requirementTypeOptions.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className="filter-clear-btn"
+                  onClick={() => {
+                    setRequirementTypeFilter("all");
+                    setRequirementSearchQuery("");
+                    setCurrentRequirementPage(1);
+                  }}
+                  title="Clear requirement filters"
+                >
+                  Clear
+                </button>
               </div>
               <div className="search-wrapper">
                 <IoSearchOutline className="search-icon" />
@@ -999,6 +1272,7 @@ const DeletedRecords = () => {
               </div>
             )}
           </section>
+          )}
         </div>
       </div>
       <StudentDetailModal

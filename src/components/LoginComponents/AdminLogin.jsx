@@ -235,13 +235,6 @@ const AdminLogin = () => {
           let authSuccess = false;
           let lastAuthError = null;
           
-          console.log("Attempting Firebase Auth sign-in with:", {
-            email: firebaseEmail,
-            emailLength: firebaseEmail.length,
-            passwordLength: trimmedPassword.length,
-            hasFirebasePassword: !!adminData.firebasePassword
-          });
-          
           try {
             await signInWithEmailAndPassword(
               auth,
@@ -249,7 +242,7 @@ const AdminLogin = () => {
               trimmedPassword
             );
             authSuccess = true;
-            console.log("Firebase Auth sign-in successful with user password");
+            console.log("Sign-in successful");
           } catch (authError1) {
             lastAuthError = authError1;
             console.error("Firebase Auth sign-in error (first attempt):", {
@@ -268,7 +261,7 @@ const AdminLogin = () => {
                   adminData.firebasePassword
                 );
                 authSuccess = true;
-                console.log("Firebase Auth sign-in successful with stored firebasePassword");
+                console.log("Sign-in successful");
               } catch (authError2) {
                 lastAuthError = authError2;
                 console.error("Firebase Auth sign-in failed with both passwords:", {
@@ -439,7 +432,7 @@ const AdminLogin = () => {
           try {
             // Try signing in directly with Firebase Auth using the entered password.
             await signInWithEmailAndPassword(auth, firebaseEmail, trimmedPassword);
-            console.log("Firebase Auth sign-in successful with new password (password was changed outside the system).");
+            console.log("Sign-in successful with new password (password was changed outside the system).");
 
             // If that works, update Firestore to store the new password so everything stays in sync.
             try {

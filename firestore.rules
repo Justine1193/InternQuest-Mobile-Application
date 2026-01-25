@@ -16,22 +16,33 @@ service cloud.firestore {
 
     // ADMIN USERS
     match /adminusers/{adminId} {
-      allow read: if true;
-      allow create: if request.auth != null;  // Allow authenticated users to create admin accounts
-      // Allow delete for authenticated users (app logic blocks super_admin deletion)
+      // Read: Allow authenticated users to read (filtering happens in app logic)
+      allow read: if request.auth != null;
+      
+      // Create: Allow authenticated users to create admin accounts
+      // PIN verification is enforced at app level and Cloud Functions level
+      allow create: if request.auth != null &&
+        // Prevent password storage in Firestore - passwords only in Firebase Auth
+        !('password' in request.resource.data) &&
+        !('firebasePassword' in request.resource.data);
+      
+      // Delete: Allow authenticated users to delete
+      // PIN verification and role checks enforced at app level
       allow delete: if request.auth != null;
-      // Allow update for authenticated users (app logic blocks super_admin editing)
-      // Also allow password-only updates without auth (for password reset/changes when Firebase Auth is out of sync)
-      // This is safe because the app verifies the current password before allowing updates
-      // We check that only password-related fields are being updated by ensuring other critical fields remain unchanged
-      allow update: if request.auth != null || 
-        (// Only allow if updating password-related fields
-         request.resource.data.password is string &&
-         request.resource.data.firebasePassword is string &&
-         // Ensure other critical fields are not being changed (if they exist)
-         (!('username' in resource.data) || request.resource.data.username == resource.data.username) &&
-         (!('email' in resource.data) || request.resource.data.email == resource.data.email) &&
-         (!('role' in resource.data) || request.resource.data.role == resource.data.role));
+      
+      // Update: Allow authenticated users to update
+      // PIN verification enforced at app level for sensitive operations
+      allow update: if request.auth != null &&
+        // Prevent password storage in Firestore - passwords only in Firebase Auth
+        !('password' in request.resource.data) &&
+        !('firebasePassword' in request.resource.data);
+    }
+    
+    // PIN Verification Status Collection
+    // Stores PIN verification status keyed by email for rule checking
+    match /pin_verifications/{email} {
+      allow read: if request.auth != null && request.auth.token.email == email;
+      allow write: if request.auth != null && request.auth.token.email == email;
     }
 
     match /users/{userId} {

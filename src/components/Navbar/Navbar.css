@@ -302,6 +302,25 @@
   text-transform: capitalize;
 }
 
+.user-meta {
+  font-size: 0.72rem;
+  color: #64748b;
+  display: block;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
+  margin-top: 2px;
+}
+
+.user-meta-college {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  word-break: break-word;
+}
+
 /* Logout Button */
 .logout-btn {
   display: flex;

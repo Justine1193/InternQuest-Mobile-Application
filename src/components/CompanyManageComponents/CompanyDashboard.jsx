@@ -521,41 +521,43 @@ const Dashboard = () => {
         </div>
 
         {/* Stats Cards */}
-        <div className="company-stats-row">
-          <div className="company-stat-card">
-            <div className="company-stat-icon total">
-              <IoBusinessOutline />
+        <div className="iq-stats-wrapper">
+          <div className="iq-stats-grid">
+            <div className="iq-stat-card iq-stat--info">
+              <div className="iq-stat-icon-wrapper" aria-hidden="true">
+                <IoBusinessOutline className="iq-stat-icon" />
+              </div>
+              <div className="iq-stat-content">
+                <div className="iq-stat-value">{overviewStats.totalCompanies || 0}</div>
+                <div className="iq-stat-label">Total Companies</div>
+              </div>
             </div>
-            <div className="company-stat-content">
-              <h3>{overviewStats.totalCompanies || 0}</h3>
-              <p>Total Companies</p>
+            <div className="iq-stat-card iq-stat--success">
+              <div className="iq-stat-icon-wrapper" aria-hidden="true">
+                <IoCheckmarkCircleOutline className="iq-stat-icon" />
+              </div>
+              <div className="iq-stat-content">
+                <div className="iq-stat-value">{overviewStats.moaValid || 0}</div>
+                <div className="iq-stat-label">Active MOA</div>
+              </div>
             </div>
-          </div>
-          <div className="company-stat-card">
-            <div className="company-stat-icon active">
-              <IoCheckmarkCircleOutline />
+            <div className="iq-stat-card iq-stat--warning">
+              <div className="iq-stat-icon-wrapper" aria-hidden="true">
+                <IoWarningOutline className="iq-stat-icon" />
+              </div>
+              <div className="iq-stat-content">
+                <div className="iq-stat-value">{overviewStats.moaExpiringSoon || 0}</div>
+                <div className="iq-stat-label">Expiring Soon</div>
+              </div>
             </div>
-            <div className="company-stat-content">
-              <h3>{overviewStats.moaValid || 0}</h3>
-              <p>Active MOA</p>
-            </div>
-          </div>
-          <div className="company-stat-card">
-            <div className="company-stat-icon expiring">
-              <IoWarningOutline />
-            </div>
-            <div className="company-stat-content">
-              <h3>{overviewStats.moaExpiringSoon || 0}</h3>
-              <p>Expiring Soon</p>
-            </div>
-          </div>
-          <div className="company-stat-card">
-            <div className="company-stat-icon expired">
-              <IoAlertCircleOutline />
-            </div>
-            <div className="company-stat-content">
-              <h3>{overviewStats.moaExpired || 0}</h3>
-              <p>Expired MOA</p>
+            <div className="iq-stat-card iq-stat--danger">
+              <div className="iq-stat-icon-wrapper" aria-hidden="true">
+                <IoAlertCircleOutline className="iq-stat-icon" />
+              </div>
+              <div className="iq-stat-content">
+                <div className="iq-stat-value">{overviewStats.moaExpired || 0}</div>
+                <div className="iq-stat-label">Expired MOA</div>
+              </div>
             </div>
           </div>
         </div>

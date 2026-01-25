@@ -16,6 +16,7 @@ const DeletedRecords = lazy(() => import("../components/DeletedRecords/DeletedRe
 const ActivityLogViewer = lazy(() => import("../components/ActivityLog/ActivityLogViewer.jsx"));
 const PasswordChange = lazy(() => import("../components/PasswordChange/PasswordChange.jsx"));
 const ForgotPassword = lazy(() => import("../components/ForgotPassword/ForgotPassword.jsx"));
+const SecuritySettings = lazy(() => import("../components/SecuritySettings/SecuritySettings.jsx"));
 // const SignatureManagement = lazy(() => import("../components/SignatureManagement/SignatureManagement.jsx")); // Removed
 
 // Loading fallback component
@@ -109,7 +110,7 @@ function App() {
             path="/deleted"
             element={
               <ProtectedRoute
-                allowedRoles={[ROLES.SUPER_ADMIN, ROLES.COORDINATOR]}
+                allowedRoles={[ROLES.SUPER_ADMIN]}
               >
                 <DeletedRecords />
               </ProtectedRoute>
@@ -120,7 +121,7 @@ function App() {
               path="/archive"
               element={
                 <ProtectedRoute
-                  allowedRoles={[ROLES.SUPER_ADMIN, ROLES.COORDINATOR]}
+                  allowedRoles={[ROLES.SUPER_ADMIN]}
                 >
                   <DeletedRecords />
                 </ProtectedRoute>
@@ -130,9 +131,17 @@ function App() {
             path="/activityLog"
             element={
               <ProtectedRoute
-                allowedRoles={[ROLES.SUPER_ADMIN, ROLES.COORDINATOR]}
+                allowedRoles={[ROLES.SUPER_ADMIN]}
               >
                 <ActivityLogViewer />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/security-settings"
+            element={
+              <ProtectedRoute>
+                <SecuritySettings />
               </ProtectedRoute>
             }
           />

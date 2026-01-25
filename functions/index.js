@@ -4,9 +4,11 @@
  */
 
 const deleteUser = require("./deleteUser");
-const updateUserPassword = require("./updateUserPassword");
+const createUserWithRole = require("./createUserWithRole");
+const listManagedUsers = require("./listManagedUsers");
 
 // Export all functions
 exports.deleteUser = deleteUser.deleteUser;
-exports.updateUserPassword = updateUserPassword.updateUserPassword;
+exports.createUserWithRole = createUserWithRole.createUserWithRole;
+exports.listManagedUsers = listManagedUsers.listManagedUsers;
 

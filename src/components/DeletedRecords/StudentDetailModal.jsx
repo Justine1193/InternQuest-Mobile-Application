@@ -53,10 +53,16 @@ const StudentDetailModal = ({ open, student, onClose, onRestore }) => {
             )}
             <button
               className="student-detail-close-btn"
-              onClick={onClose}
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onClose();
+              }}
               aria-label="Close"
             >
-              <IoCloseOutline />
+              <span className="student-detail-close-x" aria-hidden="true">
+                ×
+              </span>
             </button>
           </div>
         </div>
@@ -213,6 +219,27 @@ const StudentDetailModal = ({ open, student, onClose, onRestore }) => {
               </div>
             </div>
           )}
+
+          {/* Submitted Requirements (from archive snapshot) */}
+          <div className="detail-section">
+            <h3 className="detail-section-title">
+              <IoDocumentTextOutline className="detail-section-icon" />
+              Submitted Requirements
+            </h3>
+            {Array.isArray(student.submittedRequirements) && student.submittedRequirements.length > 0 ? (
+              <div className="req-list">
+                {student.submittedRequirements.map((req) => (
+                  <span key={req} className="req-pill">
+                    {req}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="req-empty">
+                No submitted requirements snapshot found for this archived student.
+              </p>
+            )}
+          </div>
 
           {/* Archive Information */}
           <div className="detail-section">

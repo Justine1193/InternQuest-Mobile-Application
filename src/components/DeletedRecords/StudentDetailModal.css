@@ -132,26 +132,33 @@
 }
 
 .student-detail-close-btn {
-  width: 36px;
-  height: 36px;
-  border: none;
-  background: #f3f4f6;
+  width: 40px;
+  height: 40px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
   border-radius: 8px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.2s ease;
-  color: #6b7280;
+  color: #0f172a;
+  line-height: 0;
+  flex-shrink: 0;
 }
 
 .student-detail-close-btn:hover {
   background: #e5e7eb;
-  color: #374151;
+  border-color: #d1d5db;
+  color: #111827;
 }
 
-.student-detail-close-btn svg {
-  font-size: 1.5rem;
+.student-detail-close-x {
+  display: block;
+  font-size: 24px;
+  font-weight: 900;
+  line-height: 1;
+  transform: translateY(-1px);
 }
 
 .student-detail-body {
@@ -264,6 +271,31 @@
   font-size: 0.875rem;
   font-weight: 500;
   box-shadow: 0 2px 6px rgba(99, 102, 241, 0.2);
+}
+
+/* Submitted requirements pills */
+.req-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.req-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.4rem 0.85rem;
+  background: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #dbeafe;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.req-empty {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.95rem;
 }
 
 /* Responsive */

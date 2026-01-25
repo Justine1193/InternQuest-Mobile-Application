@@ -24,6 +24,7 @@ import * as FileSystem from 'expo-file-system';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import OJTChecklistGenerator from '../services/ojtChecklistGenerator';
 import { colors, radii, shadows } from '../ui/theme';
+import { Screen } from '../ui/components/Screen';
 
 type RequirementsNavigationProp = StackNavigationProp<RootStackParamList, 'RequirementsChecklist'>;
 
@@ -1175,8 +1176,7 @@ const RequirementsChecklistScreen: React.FC = () => {
     };
 
     return (
-        <View style={styles.container}>
-            <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
+        <Screen contentContainerStyle={{ paddingHorizontal: 0, paddingTop: 0 }}>
 
             {/* Header */}
             <View style={styles.headerWrap}>
@@ -1373,7 +1373,7 @@ const RequirementsChecklistScreen: React.FC = () => {
                 ))}
 
                 {/* Spacer for bottom nav */}
-                <View style={{ height: 100 }} />
+                <View style={{ height: 24 }} />
             </ScrollView>
 
             {/* Upload Modal */}
@@ -1419,7 +1419,7 @@ const RequirementsChecklistScreen: React.FC = () => {
                     </View>
                 </View>
             </Modal>
-        </View>
+        </Screen>
     );
 };
 

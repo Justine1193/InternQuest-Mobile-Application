@@ -6,7 +6,6 @@ import {
 import { Card, FAB } from 'react-native-paper';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/Ionicons';
-import BottomNavbar from '../components/BottomNav';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import type { RootStackParamList } from '../App';
@@ -18,6 +17,8 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import Feather from 'react-native-vector-icons/Feather';
 import { colors, radii, shadows } from '../ui/theme';
+import { Screen } from '../ui/components/Screen';
+import { AppHeader } from '../ui/components/AppHeader';
 
 // Types
 type TimeLog = {
@@ -665,11 +666,9 @@ const OJTTrackerScreen: React.FC = () => {
   };
 
   return (
-    <><ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
-      <View style={styles.header}>
-        <Icon name="arrow-back" size={24} color={colors.onPrimary} onPress={() => navigation.goBack()} />
-        <Text style={styles.headerText}>OJT Personal Tracker</Text>
-      </View>
+    <Screen contentContainerStyle={{ paddingHorizontal: 0, paddingTop: 0 }}>
+      <AppHeader back title="OJT tracker" />
+      <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
 
       <View style={styles.infoRow}>
         <View style={styles.infoBox}>
@@ -796,11 +795,6 @@ const OJTTrackerScreen: React.FC = () => {
         icon="plus"
         color={colors.onPrimary}
         onPress={toggleDropdown} />
-
-      {/* Bottom Navbar */}
-      <View style={styles.bottomNavbar}>
-        <BottomNavbar navigation={navigation} />
-      </View>
 
       <Modal visible={modalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
@@ -1029,13 +1023,13 @@ const OJTTrackerScreen: React.FC = () => {
           </View>
         </View>
       </Modal>
-    </>
+    </Screen>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { padding: 16, backgroundColor: colors.bg, flex: 1, paddingTop: 30 },
-  scrollContent: { paddingBottom: 100 },
+  container: { padding: 16, flex: 1 },
+  scrollContent: { paddingBottom: 24 },
   header: { flexDirection: 'row', alignItems: 'center', marginBottom: 16, padding: 12, backgroundColor: colors.primary, borderRadius: radii.lg },
   headerText: { fontSize: 18, fontWeight: '700', marginLeft: 8, color: colors.onPrimary },
   infoRow: { flexDirection: 'row', justifyContent: 'space-between' },

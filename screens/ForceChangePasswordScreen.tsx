@@ -13,6 +13,8 @@ import { EmailAuthProvider, reauthenticateWithCredential, signOut, updatePasswor
 import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { auth, firestore } from '../firebase/config';
 import { colors, radii, shadows, spacing } from '../ui/theme';
+import { Screen } from '../ui/components/Screen';
+import { AppHeader } from '../ui/components/AppHeader';
 
 type Props = {
   navigation: any;
@@ -25,6 +27,10 @@ const ForceChangePasswordScreen: React.FC<Props> = ({ navigation, onPasswordChan
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [focused, setFocused] = useState<'current' | 'next' | 'confirm' | null>(null);
+  const [showCurrent, setShowCurrent] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const allowExitRef = useRef(false);
 
   const canSubmit = useMemo(() => {
@@ -95,14 +101,10 @@ const ForceChangePasswordScreen: React.FC<Props> = ({ navigation, onPasswordChan
 
       // Allow leaving this screen once we have succeeded.
       allowExitRef.current = true;
-
-      // Reset navigation to the main app.
-      try {
-        navigation?.reset?.({ index: 0, routes: [{ name: 'Home' }] });
-      } catch (e) {
-        // Fallback: attempt navigate
-        try { navigation?.navigate?.('Home'); } catch (_) { /* ignore */ }
-      }
+      // NOTE:
+      // We do not navigate/reset here because when `mustChangePassword === true`,
+      // App.tsx only registers the ForceChangePassword route in the navigator.
+      // The parent (`onPasswordChangeComplete`) will flip the gate and show Home.
     } catch (e: any) {
       let msg = 'Failed to change password.';
       if (e?.code === 'auth/wrong-password') {
@@ -137,56 +139,123 @@ const ForceChangePasswordScreen: React.FC<Props> = ({ navigation, onPasswordChan
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.headerRow}>
-        <View style={styles.headerIconWrap}>
-          <Icon name="shield-lock-outline" size={22} color={colors.primary} />
+    <Screen scroll contentContainerStyle={styles.container}>
+      <View style={styles.hero}>
+        <View style={styles.heroBadge}>
+          <Icon name="shield-check-outline" size={16} color={stylesBrand.blue} />
+          <Text style={styles.heroBadgeText}>Required</Text>
         </View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.title}>Change your password</Text>
-          <Text style={styles.subtitle}>Required one-time security step to continue.</Text>
-        </View>
+        <Text style={styles.title}>Change your password</Text>
+        <Text style={styles.subtitle}>
+          This is a one-time security step. Please update your password to continue.
+        </Text>
       </View>
 
       <View style={styles.card}>
-        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+        {error ? (
+          <View style={styles.errorBox}>
+            <Icon name="alert-circle-outline" size={18} color={colors.danger} />
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : null}
 
-        <Text style={styles.label}>Current Password</Text>
-        <TextInput
-          style={styles.input}
-          value={currentPassword}
-          onChangeText={setCurrentPassword}
-          secureTextEntry
-          placeholder="Enter current password"
-        />
+        <Text style={styles.label}>Current password</Text>
+        <View style={[styles.field, focused === 'current' && styles.fieldFocused]}>
+          <View style={styles.fieldIcon}>
+            <Icon name="lock-outline" size={18} color={stylesBrand.blue} />
+          </View>
+          <TextInput
+            style={styles.fieldInput}
+            value={currentPassword}
+            onChangeText={setCurrentPassword}
+            secureTextEntry={!showCurrent}
+            placeholder="Enter current password"
+            placeholderTextColor={colors.textSubtle}
+            onFocus={() => setFocused('current')}
+            onBlur={() => setFocused(null)}
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="next"
+          />
+          <TouchableOpacity
+            style={styles.eyeBtn}
+            onPress={() => setShowCurrent((v) => !v)}
+            accessibilityRole="button"
+            accessibilityLabel={showCurrent ? 'Hide password' : 'Show password'}
+          >
+            <Icon name={showCurrent ? 'eye-off-outline' : 'eye-outline'} size={18} color={colors.textMuted} />
+          </TouchableOpacity>
+        </View>
 
-        <Text style={styles.label}>New Password</Text>
-        <TextInput
-          style={styles.input}
-          value={newPassword}
-          onChangeText={setNewPassword}
-          secureTextEntry
-          placeholder="Enter new password"
-        />
+        <Text style={styles.label}>New password</Text>
+        <View style={[styles.field, focused === 'next' && styles.fieldFocused]}>
+          <View style={styles.fieldIcon}>
+            <Icon name="shield-lock-outline" size={18} color={stylesBrand.blue} />
+          </View>
+          <TextInput
+            style={styles.fieldInput}
+            value={newPassword}
+            onChangeText={setNewPassword}
+            secureTextEntry={!showNew}
+            placeholder="Create a new password"
+            placeholderTextColor={colors.textSubtle}
+            onFocus={() => setFocused('next')}
+            onBlur={() => setFocused(null)}
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="next"
+          />
+          <TouchableOpacity
+            style={styles.eyeBtn}
+            onPress={() => setShowNew((v) => !v)}
+            accessibilityRole="button"
+            accessibilityLabel={showNew ? 'Hide password' : 'Show password'}
+          >
+            <Icon name={showNew ? 'eye-off-outline' : 'eye-outline'} size={18} color={colors.textMuted} />
+          </TouchableOpacity>
+        </View>
 
-        <Text style={styles.label}>Confirm New Password</Text>
-        <TextInput
-          style={styles.input}
-          value={confirmNewPassword}
-          onChangeText={setConfirmNewPassword}
-          secureTextEntry
-          placeholder="Confirm new password"
-        />
+        <Text style={styles.hint}>At least 8 characters.</Text>
+
+        <Text style={styles.label}>Confirm new password</Text>
+        <View style={[styles.field, focused === 'confirm' && styles.fieldFocused]}>
+          <View style={styles.fieldIcon}>
+            <Icon name="check-decagram-outline" size={18} color={stylesBrand.blue} />
+          </View>
+          <TextInput
+            style={styles.fieldInput}
+            value={confirmNewPassword}
+            onChangeText={setConfirmNewPassword}
+            secureTextEntry={!showConfirm}
+            placeholder="Re-enter new password"
+            placeholderTextColor={colors.textSubtle}
+            onFocus={() => setFocused('confirm')}
+            onBlur={() => setFocused(null)}
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="done"
+            onSubmitEditing={handleChangePassword}
+          />
+          <TouchableOpacity
+            style={styles.eyeBtn}
+            onPress={() => setShowConfirm((v) => !v)}
+            accessibilityRole="button"
+            accessibilityLabel={showConfirm ? 'Hide password' : 'Show password'}
+          >
+            <Icon name={showConfirm ? 'eye-off-outline' : 'eye-outline'} size={18} color={colors.textMuted} />
+          </TouchableOpacity>
+        </View>
 
         <TouchableOpacity
           style={[styles.primaryButton, (!canSubmit || loading) && styles.primaryButtonDisabled]}
           onPress={handleChangePassword}
           disabled={!canSubmit}
+          activeOpacity={0.9}
         >
           {loading ? (
             <ActivityIndicator color={colors.onPrimary} />
           ) : (
-            <Text style={styles.primaryButtonText}>Save New Password</Text>
+            <Text style={styles.primaryButtonText}>Save new password</Text>
           )}
         </TouchableOpacity>
 
@@ -209,48 +278,67 @@ const ForceChangePasswordScreen: React.FC<Props> = ({ navigation, onPasswordChan
             );
           }}
           disabled={loading}
+          activeOpacity={0.9}
         >
-          <Text style={styles.secondaryButtonText}>Sign Out</Text>
+          <Text style={styles.secondaryButtonText}>Sign out</Text>
         </TouchableOpacity>
 
         <Text style={styles.helperText}>
           Tip: the default password provided by the admin is usually required as your current password.
         </Text>
       </View>
-    </View>
+    </Screen>
   );
+};
+
+const stylesBrand = {
+  blue: '#2B7FFF',
 };
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-    backgroundColor: colors.bg,
-    paddingHorizontal: spacing.xl,
-    paddingTop: 56,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xl,
   },
-  headerRow: {
+  hero: {
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    padding: spacing.lg,
+    borderRadius: radii.xl,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.card,
+  },
+  heroBadge: {
+    alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing.lg,
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: 'rgba(43,127,255,0.10)',
+    borderWidth: 1,
+    borderColor: 'rgba(43,127,255,0.20)',
+    marginBottom: spacing.sm,
   },
-  headerIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: colors.primarySoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.md,
+  heroBadgeText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: stylesBrand.blue,
   },
   title: {
     fontSize: 22,
-    fontWeight: '800',
+    fontWeight: '900',
     color: colors.text,
   },
   subtitle: {
     marginTop: 2,
-    fontSize: 14,
+    fontSize: 13,
+    fontWeight: '600',
     color: colors.textMuted,
+    lineHeight: 18,
   },
   card: {
     backgroundColor: colors.surface,
@@ -259,54 +347,110 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     ...shadows.card,
+    marginHorizontal: spacing.lg,
   },
   label: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 12,
+    fontWeight: '800',
     color: colors.textMuted,
     marginBottom: 6,
+    letterSpacing: 0.3,
   },
-  input: {
+  field: {
+    flexDirection: 'row',
+    alignItems: 'center',
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: radii.md,
-    padding: 12,
-    marginBottom: spacing.md,
-    fontSize: 16,
+    borderRadius: radii.lg,
     backgroundColor: colors.surfaceAlt,
+    paddingHorizontal: 12,
+    height: 48,
+    marginBottom: spacing.md,
+  },
+  fieldFocused: {
+    borderColor: stylesBrand.blue,
+    backgroundColor: colors.surface,
+  },
+  fieldIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    backgroundColor: 'rgba(43,127,255,0.10)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  fieldInput: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '700',
     color: colors.text,
+    paddingVertical: 0,
+  },
+  eyeBtn: {
+    padding: 8,
+    marginRight: -6,
+  },
+  hint: {
+    marginTop: -8,
+    marginBottom: spacing.md,
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textSubtle,
   },
   primaryButton: {
-    backgroundColor: colors.primary,
-    paddingVertical: 14,
-    borderRadius: radii.md,
+    backgroundColor: stylesBrand.blue,
+    height: 48,
+    borderRadius: 999,
     alignItems: 'center',
-    marginTop: spacing.sm,
+    justifyContent: 'center',
+    marginTop: spacing.xs,
+    shadowColor: '#000',
+    shadowOpacity: 0.10,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 3,
   },
   primaryButtonDisabled: {
     opacity: 0.7,
   },
   primaryButtonText: {
     color: colors.onPrimary,
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '900',
   },
   secondaryButton: {
     marginTop: spacing.md,
-    paddingVertical: 12,
-    borderRadius: radii.md,
+    height: 48,
+    borderRadius: 999,
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   secondaryButtonText: {
     color: colors.text,
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  errorBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    padding: 12,
+    borderRadius: radii.md,
+    backgroundColor: colors.dangerSoft,
+    borderWidth: 1,
+    borderColor: 'rgba(239,68,68,0.22)',
+    marginBottom: spacing.md,
   },
   errorText: {
+    flex: 1,
     color: colors.danger,
-    fontSize: 14,
-    marginBottom: spacing.md,
+    fontSize: 13,
+    fontWeight: '700',
+    lineHeight: 18,
   },
   helperText: {
     marginTop: spacing.md,

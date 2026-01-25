@@ -14,7 +14,6 @@ import {
   RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import BottomNavbar from '../components/BottomNav';
 import { auth, firestore } from '../firebase/config';
 import { doc, setDoc, collection, getDoc, getDocs, deleteDoc } from "firebase/firestore";
 import * as ImagePicker from 'expo-image-picker';
@@ -24,6 +23,8 @@ import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "fire
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { colors, radii, shadows } from '../ui/theme';
+import { Screen } from '../ui/components/Screen';
+import { AppHeader } from '../ui/components/AppHeader';
 
 // Add type for userData
 type UserData = {
@@ -357,7 +358,8 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
   const avatarUri = userData && userData.avatar ? userData.avatar : undefined;
 
   return (
-    <View style={styles.container}>
+    <Screen contentContainerStyle={{ paddingHorizontal: 0, paddingTop: 0 }}>
+      <AppHeader title="Profile" />
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         refreshControl={
@@ -514,10 +516,7 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
           </TouchableOpacity>
         </View>
       )}
-
-      {/* Bottom Navbar */}
-      <BottomNavbar navigation={navigation} currentRoute="Profile" />
-    </View>
+    </Screen>
   );
 };
 
@@ -525,11 +524,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.bg,
-    paddingTop: 30,
   },
   scrollContent: {
     paddingHorizontal: 15,
-    paddingBottom: 20,
+    paddingBottom: 24,
   },
   header: {
     fontSize: 24,

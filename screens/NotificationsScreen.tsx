@@ -7,18 +7,17 @@ import {
   TouchableOpacity,
   Image,
   Modal,
-  ScrollView,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../App';
-import BottomNavbar from '../components/BottomNav';
 import { Swipeable } from 'react-native-gesture-handler';
 import { auth, firestore } from '../firebase/config';
 import { doc, getDoc, collection, getDocs, query, orderBy, setDoc, where } from 'firebase/firestore';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { SecurityUtils } from '../services/security';
 import { colors, radii, shadows } from '../ui/theme';
+import { Screen } from '../ui/components/Screen';
 
 type Props = {
   navigation: StackNavigationProp<RootStackParamList, 'Notifications'>;
@@ -326,92 +325,91 @@ const NotificationsScreen: React.FC<Props> = ({ navigation }) => {
   ];
 
   return (
-    <>
-      <View style={styles.container}>
-        {/* Header */}
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.headerTitle}>Notifications</Text>
-            {userName ? <Text style={styles.headerSubtitle}>Hi, {userName.split(' ')[0]}</Text> : null}
-          </View>
+    <Screen contentContainerStyle={{ paddingHorizontal: 0, paddingTop: 0 }}>
+      {/* Header */}
+      <View style={styles.header}>
+        <View>
+          <Text style={styles.headerTitle}>Notifications</Text>
+          {userName ? <Text style={styles.headerSubtitle}>Hi, {userName.split(' ')[0]}</Text> : null}
         </View>
-        <FlatList
-          data={feed}
-          keyExtractor={(_, idx) => idx.toString()}
-          contentContainerStyle={styles.scrollContent}
-          ListHeaderComponent={
-            isAdmin && pendingApplications.length > 0 ? (
-              <View style={styles.adminSection}>
-                <Text style={styles.adminSectionTitle}>Pending Applications</Text>
-                {pendingApplications.slice(0, 20).map((app: PendingApplicationItem) => (
-                  <TouchableOpacity
-                    key={app.id}
-                    style={styles.adminAppCard}
-                    onPress={() => {
-                      if (app.companyId) {
-                        navigation.navigate('CompanyProfile', { companyId: app.companyId });
-                      }
-                    }}
-                    accessibilityRole="button"
-                  >
-                    <Text style={styles.adminAppTitle}>{app.companyName}</Text>
-                    <Text style={styles.adminAppSub}>
-                      Applicant: {app.applicantName || app.userId || 'Unknown'}
-                      {app.applicantEmail ? ` (${app.applicantEmail})` : ''}
-                    </Text>
-                    {app.appliedAt ? <Text style={styles.adminAppMeta}>Applied: {app.appliedAt}</Text> : null}
-                  </TouchableOpacity>
-                ))}
-              </View>
-            ) : null
-          }
-          renderItem={({ item }) => {
-            if (item.type === 'reminder' && 'text' in item) {
-              // Make reminders clickable: go to RequirementsChecklist or WeeklyReport
-              let onPress = undefined;
-              if (item.text.includes('upload your')) {
-                onPress = () => navigation.navigate('RequirementsChecklist');
-              } else if (item.text.includes('weekly accomplishment report')) {
-                onPress = () => navigation.navigate('WeeklyReport');
-              }
-              return (
-                <TouchableOpacity onPress={onPress} disabled={!onPress}>
-                  <View style={styles.reminderCard}>
-                    <Ionicons name="alert-circle" size={20} color={colors.warning} style={{ marginRight: 8 }} />
-                    <Text style={styles.reminderText}>{item.text}</Text>
-                  </View>
-                </TouchableOpacity>
-              );
-            } else if (item.type === 'notification' && 'title' in item && 'description' in item && 'id' in item) {
-              // Make notification action button interactive
-              let actionPress = undefined;
-              if (item.action === 'View all jobs') {
-                actionPress = () => navigation.navigate('Home');
-              } else if (item.action === 'Send message') {
-                actionPress = () => setModalVisible(true);
-              }
-              return (
-                <Swipeable renderRightActions={() => renderRightActions(item.id)}>
-                  <View style={styles.notificationCard}>
-                    <Icon name="bell" size={20} color={colors.primary} style={{ marginRight: 8 }} />
-                    <View>
-                      <Text style={styles.notificationTitle}>{item.title}</Text>
-                      <Text style={styles.notificationText}>{item.description}</Text>
-                      {item.action && (
-                        <TouchableOpacity style={styles.actionButton} onPress={actionPress}>
-                          <Text style={styles.actionButtonText}>{item.action}</Text>
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                  </View>
-                </Swipeable>
-              );
-            } else {
-              return null;
-            }
-          }}
-        />
       </View>
+
+      <FlatList
+        data={feed}
+        keyExtractor={(_, idx) => idx.toString()}
+        contentContainerStyle={styles.scrollContent}
+        ListHeaderComponent={
+          isAdmin && pendingApplications.length > 0 ? (
+            <View style={styles.adminSection}>
+              <Text style={styles.adminSectionTitle}>Pending Applications</Text>
+              {pendingApplications.slice(0, 20).map((app: PendingApplicationItem) => (
+                <TouchableOpacity
+                  key={app.id}
+                  style={styles.adminAppCard}
+                  onPress={() => {
+                    if (app.companyId) {
+                      navigation.navigate('CompanyProfile', { companyId: app.companyId });
+                    }
+                  }}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.adminAppTitle}>{app.companyName}</Text>
+                  <Text style={styles.adminAppSub}>
+                    Applicant: {app.applicantName || app.userId || 'Unknown'}
+                    {app.applicantEmail ? ` (${app.applicantEmail})` : ''}
+                  </Text>
+                  {app.appliedAt ? <Text style={styles.adminAppMeta}>Applied: {app.appliedAt}</Text> : null}
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : null
+        }
+        renderItem={({ item }) => {
+          if (item.type === 'reminder' && 'text' in item) {
+            // Make reminders clickable: go to RequirementsChecklist or WeeklyReport
+            let onPress = undefined;
+            if (item.text.includes('upload your')) {
+              onPress = () => navigation.navigate('RequirementsChecklist');
+            } else if (item.text.includes('weekly accomplishment report')) {
+              onPress = () => navigation.navigate('WeeklyReport');
+            }
+            return (
+              <TouchableOpacity onPress={onPress} disabled={!onPress}>
+                <View style={styles.reminderCard}>
+                  <Ionicons name="alert-circle" size={20} color={colors.warning} style={{ marginRight: 8 }} />
+                  <Text style={styles.reminderText}>{item.text}</Text>
+                </View>
+              </TouchableOpacity>
+            );
+          } else if (item.type === 'notification' && 'title' in item && 'description' in item && 'id' in item) {
+            // Make notification action button interactive
+            let actionPress = undefined;
+            if (item.action === 'View all jobs') {
+              actionPress = () => navigation.navigate('Home');
+            } else if (item.action === 'Send message') {
+              actionPress = () => setModalVisible(true);
+            }
+            return (
+              <Swipeable renderRightActions={() => renderRightActions(item.id)}>
+                <View style={styles.notificationCard}>
+                  <Icon name="bell" size={20} color={colors.primary} style={{ marginRight: 8 }} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.notificationTitle}>{item.title}</Text>
+                    <Text style={styles.notificationText}>{item.description}</Text>
+                    {item.action && (
+                      <TouchableOpacity style={styles.actionButton} onPress={actionPress}>
+                        <Text style={styles.actionButtonText}>{item.action}</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+              </Swipeable>
+            );
+          } else {
+            return null;
+          }
+        }}
+      />
 
       {/* Notification Details Modal */}
       <Modal
@@ -441,30 +439,20 @@ const NotificationsScreen: React.FC<Props> = ({ navigation }) => {
           </View>
         </View>
       </Modal>
-
-      {/* Bottom Navbar */}
-      <BottomNavbar navigation={navigation} currentRoute="Notifications" />
-    </>
+    </Screen>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bg,
-    padding: 16,
-    paddingTop: 30,
-  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 18,
-    paddingHorizontal: 8,
-    paddingVertical: 12,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 14,
     backgroundColor: colors.primary,
-    borderRadius: radii.lg,
   },
-  headerTitle: { flex: 1, fontSize: 18, fontWeight: '700', color: colors.onPrimary },
+  headerTitle: { flex: 1, fontSize: 22, fontWeight: '800', color: colors.onPrimary },
   headerSubtitle: { fontSize: 12, color: colors.onPrimaryMuted, marginTop: 2 },
   profileImage: {
     width: 40,
@@ -678,7 +666,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   scrollContent: {
-    paddingBottom: 80, // Add padding to the bottom for the navbar
+    padding: 16,
+    paddingBottom: 24,
   },
 });
 

@@ -1,0 +1,197 @@
+[debug] [2026-01-25T14:39:51.019Z] ----------------------------------------------------------------------
+[debug] [2026-01-25T14:39:51.024Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\Justine\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js deploy --only functions:lookupEmailByStudentId
+[debug] [2026-01-25T14:39:51.025Z] CLI Version:   15.4.0
+[debug] [2026-01-25T14:39:51.025Z] Platform:      win32
+[debug] [2026-01-25T14:39:51.025Z] Node Version:  v22.14.0
+[debug] [2026-01-25T14:39:51.025Z] Time:          Sun Jan 25 2026 22:39:51 GMT+0800 (China Standard Time)
+[debug] [2026-01-25T14:39:51.025Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-01-25T14:39:55.427Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-01-25T14:39:55.428Z] > authorizing via signed-in user (rodriguezjustined@gmail.com)
+[debug] [2026-01-25T14:39:55.428Z] [iam] checking project neuinternshipdb for permissions ["cloudfunctions.functions.create","cloudfunctions.functions.delete","cloudfunctions.functions.get","cloudfunctions.functions.list","cloudfunctions.functions.update","cloudfunctions.operations.get","firebase.projects.get"]
+[debug] [2026-01-25T14:39:55.431Z] Checked if tokens are valid: true, expires at: 1769355582720
+[debug] [2026-01-25T14:39:55.431Z] Checked if tokens are valid: true, expires at: 1769355582720
+[debug] [2026-01-25T14:39:55.432Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/neuinternshipdb:testIamPermissions [none]
+[debug] [2026-01-25T14:39:55.432Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/neuinternshipdb:testIamPermissions x-goog-quota-user=projects/neuinternshipdb
+[debug] [2026-01-25T14:39:55.432Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/neuinternshipdb:testIamPermissions {"permissions":["cloudfunctions.functions.create","cloudfunctions.functions.delete","cloudfunctions.functions.get","cloudfunctions.functions.list","cloudfunctions.functions.update","cloudfunctions.operations.get","firebase.projects.get"]}
+[debug] [2026-01-25T14:39:56.479Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/neuinternshipdb:testIamPermissions 200
+[debug] [2026-01-25T14:39:56.479Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/neuinternshipdb:testIamPermissions {"permissions":["cloudfunctions.functions.create","cloudfunctions.functions.delete","cloudfunctions.functions.get","cloudfunctions.functions.list","cloudfunctions.functions.update","cloudfunctions.operations.get","firebase.projects.get"]}
+[debug] [2026-01-25T14:39:56.479Z] Checked if tokens are valid: true, expires at: 1769355582720
+[debug] [2026-01-25T14:39:56.479Z] Checked if tokens are valid: true, expires at: 1769355582720
+[debug] [2026-01-25T14:39:56.479Z] >>> [apiv2][query] POST https://iam.googleapis.com/v1/projects/neuinternshipdb/serviceAccounts/neuinternshipdb@appspot.gserviceaccount.com:testIamPermissions [none]
+[debug] [2026-01-25T14:39:56.479Z] >>> [apiv2][body] POST https://iam.googleapis.com/v1/projects/neuinternshipdb/serviceAccounts/neuinternshipdb@appspot.gserviceaccount.com:testIamPermissions {"permissions":["iam.serviceAccounts.actAs"]}
+[debug] [2026-01-25T14:39:57.660Z] <<< [apiv2][status] POST https://iam.googleapis.com/v1/projects/neuinternshipdb/serviceAccounts/neuinternshipdb@appspot.gserviceaccount.com:testIamPermissions 200
+[debug] [2026-01-25T14:39:57.661Z] <<< [apiv2][body] POST https://iam.googleapis.com/v1/projects/neuinternshipdb/serviceAccounts/neuinternshipdb@appspot.gserviceaccount.com:testIamPermissions {"permissions":["iam.serviceAccounts.actAs"]}
+[info] 
+[info] === Deploying to 'neuinternshipdb'...
+[info] 
+[info] i  deploying functions 
+[debug] [2026-01-25T14:39:57.666Z] Checked if tokens are valid: true, expires at: 1769355582720
+[debug] [2026-01-25T14:39:57.666Z] Checked if tokens are valid: true, expires at: 1769355582720
+[debug] [2026-01-25T14:39:57.666Z] >>> [apiv2][query] GET https://cloudresourcemanager.googleapis.com/v1/projects/neuinternshipdb [none]
+[debug] [2026-01-25T14:39:57.892Z] <<< [apiv2][status] GET https://cloudresourcemanager.googleapis.com/v1/projects/neuinternshipdb 200
+[debug] [2026-01-25T14:39:57.892Z] <<< [apiv2][body] GET https://cloudresourcemanager.googleapis.com/v1/projects/neuinternshipdb {"projectNumber":"918910739132","projectId":"neuinternshipdb","lifecycleState":"ACTIVE","name":"neuinternshipdb","labels":{"firebase":"enabled","firebase-core":"disabled"},"createTime":"2025-04-19T16:28:14.990511Z"}
+[info] i  functions: preparing codebase default for deployment 
+[info] i  functions: ensuring required API cloudfunctions.googleapis.com is enabled... 
+[debug] [2026-01-25T14:39:57.894Z] Checked if tokens are valid: true, expires at: 1769355582720
+[debug] [2026-01-25T14:39:57.894Z] Checked if tokens are valid: true, expires at: 1769355582720
+[debug] [2026-01-25T14:39:57.895Z] Checked if tokens are valid: true, expires at: 1769355582720
+[debug] [2026-01-25T14:39:57.895Z] Checked if tokens are valid: true, expires at: 1769355582720
+[info] i  functions: ensuring required API cloudbuild.googleapis.com is enabled... 
+[debug] [2026-01-25T14:39:57.898Z] Checked if tokens are valid: true, expires at: 1769355582720
+[debug] [2026-01-25T14:39:57.898Z] Checked if tokens are valid: true, expires at: 1769355582720
+[info] i  artifactregistry: ensuring required API artifactregistry.googleapis.com is enabled... 
+[debug] [2026-01-25T14:39:57.899Z] Checked if tokens are valid: true, expires at: 1769355582720
+[debug] [2026-01-25T14:39:57.899Z] Checked if tokens are valid: true, expires at: 1769355582720
+[debug] [2026-01-25T14:39:57.899Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/neuinternshipdb/services/cloudfunctions.googleapis.com [none]
+[debug] [2026-01-25T14:39:57.899Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/neuinternshipdb/services/cloudfunctions.googleapis.com x-goog-quota-user=projects/neuinternshipdb
+[debug] [2026-01-25T14:39:57.900Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/neuinternshipdb/services/runtimeconfig.googleapis.com [none]
+[debug] [2026-01-25T14:39:57.900Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/neuinternshipdb/services/runtimeconfig.googleapis.com x-goog-quota-user=projects/neuinternshipdb
+[debug] [2026-01-25T14:39:57.902Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/neuinternshipdb/services/cloudbuild.googleapis.com [none]
+[debug] [2026-01-25T14:39:57.902Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/neuinternshipdb/services/cloudbuild.googleapis.com x-goog-quota-user=projects/neuinternshipdb
+[debug] [2026-01-25T14:39:57.903Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/neuinternshipdb/services/artifactregistry.googleapis.com [none]
+[debug] [2026-01-25T14:39:57.903Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/neuinternshipdb/services/artifactregistry.googleapis.com x-goog-quota-user=projects/neuinternshipdb
+[debug] [2026-01-25T14:39:59.280Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/neuinternshipdb/services/runtimeconfig.googleapis.com 200
+[debug] [2026-01-25T14:39:59.280Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/neuinternshipdb/services/runtimeconfig.googleapis.com [omitted]
+[debug] [2026-01-25T14:39:59.289Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/neuinternshipdb/services/cloudbuild.googleapis.com 200
+[debug] [2026-01-25T14:39:59.290Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/neuinternshipdb/services/cloudbuild.googleapis.com [omitted]
+[info] +  functions: required API cloudbuild.googleapis.com is enabled 
+[debug] [2026-01-25T14:39:59.296Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/neuinternshipdb/services/cloudfunctions.googleapis.com 200
+[debug] [2026-01-25T14:39:59.297Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/neuinternshipdb/services/cloudfunctions.googleapis.com [omitted]
+[info] +  functions: required API cloudfunctions.googleapis.com is enabled 
+[debug] [2026-01-25T14:39:59.307Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/neuinternshipdb/services/artifactregistry.googleapis.com 200
+[debug] [2026-01-25T14:39:59.307Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/neuinternshipdb/services/artifactregistry.googleapis.com [omitted]
+[info] +  artifactregistry: required API artifactregistry.googleapis.com is enabled 
+[debug] [2026-01-25T14:39:59.313Z] Checked if tokens are valid: true, expires at: 1769355582720
+[debug] [2026-01-25T14:39:59.313Z] Checked if tokens are valid: true, expires at: 1769355582720
+[debug] [2026-01-25T14:39:59.313Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/neuinternshipdb/adminSdkConfig [none]
+[debug] [2026-01-25T14:40:00.126Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/neuinternshipdb/adminSdkConfig 200
+[debug] [2026-01-25T14:40:00.126Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/neuinternshipdb/adminSdkConfig {"projectId":"neuinternshipdb","databaseURL":"https://neuinternshipdb-default-rtdb.asia-southeast1.firebasedatabase.app","storageBucket":"neuinternshipdb.firebasestorage.app"}
+[debug] [2026-01-25T14:40:00.126Z] Checked if tokens are valid: true, expires at: 1769355582720
+[debug] [2026-01-25T14:40:00.126Z] Checked if tokens are valid: true, expires at: 1769355582720
+[debug] [2026-01-25T14:40:00.126Z] >>> [apiv2][query] GET https://runtimeconfig.googleapis.com/v1beta1/projects/neuinternshipdb/configs [none]
+[debug] [2026-01-25T14:40:01.199Z] <<< [apiv2][status] GET https://runtimeconfig.googleapis.com/v1beta1/projects/neuinternshipdb/configs 200
+[debug] [2026-01-25T14:40:01.199Z] <<< [apiv2][body] GET https://runtimeconfig.googleapis.com/v1beta1/projects/neuinternshipdb/configs {"configs":[{"name":"projects/neuinternshipdb/configs/smtp"},{"name":"projects/neuinternshipdb/configs/app"},{"name":"projects/neuinternshipdb/configs/email"}]}
+[debug] [2026-01-25T14:40:01.200Z] Checked if tokens are valid: true, expires at: 1769355582720
+[debug] [2026-01-25T14:40:01.200Z] Checked if tokens are valid: true, expires at: 1769355582720
+[debug] [2026-01-25T14:40:01.200Z] Checked if tokens are valid: true, expires at: 1769355582720
+[debug] [2026-01-25T14:40:01.200Z] Checked if tokens are valid: true, expires at: 1769355582720
+[debug] [2026-01-25T14:40:01.200Z] Checked if tokens are valid: true, expires at: 1769355582720
+[debug] [2026-01-25T14:40:01.200Z] Checked if tokens are valid: true, expires at: 1769355582720
+[debug] [2026-01-25T14:40:01.200Z] >>> [apiv2][query] GET https://runtimeconfig.googleapis.com/v1beta1/projects/neuinternshipdb/configs/smtp/variables [none]
+[debug] [2026-01-25T14:40:01.201Z] >>> [apiv2][query] GET https://runtimeconfig.googleapis.com/v1beta1/projects/neuinternshipdb/configs/app/variables [none]
+[debug] [2026-01-25T14:40:01.203Z] >>> [apiv2][query] GET https://runtimeconfig.googleapis.com/v1beta1/projects/neuinternshipdb/configs/email/variables [none]
+[debug] [2026-01-25T14:40:01.564Z] <<< [apiv2][status] GET https://runtimeconfig.googleapis.com/v1beta1/projects/neuinternshipdb/configs/app/variables 200
+[debug] [2026-01-25T14:40:01.564Z] <<< [apiv2][body] GET https://runtimeconfig.googleapis.com/v1beta1/projects/neuinternshipdb/configs/app/variables {"variables":[{"name":"projects/neuinternshipdb/configs/app/variables/base_url","updateTime":"2026-01-20T14:06:06.662644741Z"}]}
+[debug] [2026-01-25T14:40:01.565Z] Checked if tokens are valid: true, expires at: 1769355582720
+[debug] [2026-01-25T14:40:01.565Z] Checked if tokens are valid: true, expires at: 1769355582720
+[debug] [2026-01-25T14:40:01.565Z] >>> [apiv2][query] GET https://runtimeconfig.googleapis.com/v1beta1/projects/neuinternshipdb/configs/app/variables/base_url [none]
+[debug] [2026-01-25T14:40:01.573Z] <<< [apiv2][status] GET https://runtimeconfig.googleapis.com/v1beta1/projects/neuinternshipdb/configs/email/variables 200
+[debug] [2026-01-25T14:40:01.574Z] <<< [apiv2][body] GET https://runtimeconfig.googleapis.com/v1beta1/projects/neuinternshipdb/configs/email/variables {"variables":[{"name":"projects/neuinternshipdb/configs/email/variables/pass","updateTime":"2026-01-17T10:21:01.878528984Z"},{"name":"projects/neuinternshipdb/configs/email/variables/user","updateTime":"2026-01-17T10:21:01.832866290Z"}]}
+[debug] [2026-01-25T14:40:01.574Z] Checked if tokens are valid: true, expires at: 1769355582720
+[debug] [2026-01-25T14:40:01.574Z] Checked if tokens are valid: true, expires at: 1769355582720
+[debug] [2026-01-25T14:40:01.574Z] Checked if tokens are valid: true, expires at: 1769355582720
+[debug] [2026-01-25T14:40:01.574Z] Checked if tokens are valid: true, expires at: 1769355582720
+[debug] [2026-01-25T14:40:01.574Z] >>> [apiv2][query] GET https://runtimeconfig.googleapis.com/v1beta1/projects/neuinternshipdb/configs/email/variables/pass [none]
+[debug] [2026-01-25T14:40:01.574Z] >>> [apiv2][query] GET https://runtimeconfig.googleapis.com/v1beta1/projects/neuinternshipdb/configs/email/variables/user [none]
+[debug] [2026-01-25T14:40:01.881Z] <<< [apiv2][status] GET https://runtimeconfig.googleapis.com/v1beta1/projects/neuinternshipdb/configs/app/variables/base_url 200
+[debug] [2026-01-25T14:40:01.881Z] <<< [apiv2][body] GET https://runtimeconfig.googleapis.com/v1beta1/projects/neuinternshipdb/configs/app/variables/base_url {"name":"projects/neuinternshipdb/configs/app/variables/base_url","updateTime":"2026-01-20T14:06:06.662644741Z","text":"https://your-admin-site.com"}
+[debug] [2026-01-25T14:40:01.926Z] <<< [apiv2][status] GET https://runtimeconfig.googleapis.com/v1beta1/projects/neuinternshipdb/configs/email/variables/pass 200
+[debug] [2026-01-25T14:40:01.926Z] <<< [apiv2][body] GET https://runtimeconfig.googleapis.com/v1beta1/projects/neuinternshipdb/configs/email/variables/pass {"name":"projects/neuinternshipdb/configs/email/variables/pass","updateTime":"2026-01-17T10:21:01.878528984Z","text":"your-app-password"}
+[debug] [2026-01-25T14:40:02.035Z] <<< [apiv2][status] GET https://runtimeconfig.googleapis.com/v1beta1/projects/neuinternshipdb/configs/email/variables/user 200
+[debug] [2026-01-25T14:40:02.035Z] <<< [apiv2][body] GET https://runtimeconfig.googleapis.com/v1beta1/projects/neuinternshipdb/configs/email/variables/user {"name":"projects/neuinternshipdb/configs/email/variables/user","updateTime":"2026-01-17T10:21:01.832866290Z","text":"your-email@gmail.com"}
+[debug] [2026-01-25T14:40:02.085Z] <<< [apiv2][status] GET https://runtimeconfig.googleapis.com/v1beta1/projects/neuinternshipdb/configs/smtp/variables 200
+[debug] [2026-01-25T14:40:02.085Z] <<< [apiv2][body] GET https://runtimeconfig.googleapis.com/v1beta1/projects/neuinternshipdb/configs/smtp/variables {"variables":[{"name":"projects/neuinternshipdb/configs/smtp/variables/host","updateTime":"2026-01-20T14:06:06.567505121Z"},{"name":"projects/neuinternshipdb/configs/smtp/variables/pass","updateTime":"2026-01-20T14:06:08.633045852Z"},{"name":"projects/neuinternshipdb/configs/smtp/variables/port","updateTime":"2026-01-20T14:06:06.493378857Z"},{"name":"projects/neuinternshipdb/configs/smtp/variables/user","updateTime":"2026-01-20T14:06:08.307088265Z"},{"name":"projects/neuinternshipdb/configs/smtp/variables/from","updateTime":"2026-01-20T14:06:05.881600682Z"}]}
+[debug] [2026-01-25T14:40:02.085Z] Checked if tokens are valid: true, expires at: 1769355582720
+[debug] [2026-01-25T14:40:02.085Z] Checked if tokens are valid: true, expires at: 1769355582720
+[debug] [2026-01-25T14:40:02.085Z] Checked if tokens are valid: true, expires at: 1769355582720
+[debug] [2026-01-25T14:40:02.085Z] Checked if tokens are valid: true, expires at: 1769355582720
+[debug] [2026-01-25T14:40:02.085Z] Checked if tokens are valid: true, expires at: 1769355582720
+[debug] [2026-01-25T14:40:02.085Z] Checked if tokens are valid: true, expires at: 1769355582720
+[debug] [2026-01-25T14:40:02.085Z] Checked if tokens are valid: true, expires at: 1769355582720
+[debug] [2026-01-25T14:40:02.085Z] Checked if tokens are valid: true, expires at: 1769355582720
+[debug] [2026-01-25T14:40:02.085Z] Checked if tokens are valid: true, expires at: 1769355582720
+[debug] [2026-01-25T14:40:02.085Z] Checked if tokens are valid: true, expires at: 1769355582720
+[debug] [2026-01-25T14:40:02.085Z] >>> [apiv2][query] GET https://runtimeconfig.googleapis.com/v1beta1/projects/neuinternshipdb/configs/smtp/variables/host [none]
+[debug] [2026-01-25T14:40:02.086Z] >>> [apiv2][query] GET https://runtimeconfig.googleapis.com/v1beta1/projects/neuinternshipdb/configs/smtp/variables/pass [none]
+[debug] [2026-01-25T14:40:02.086Z] >>> [apiv2][query] GET https://runtimeconfig.googleapis.com/v1beta1/projects/neuinternshipdb/configs/smtp/variables/port [none]
+[debug] [2026-01-25T14:40:02.086Z] >>> [apiv2][query] GET https://runtimeconfig.googleapis.com/v1beta1/projects/neuinternshipdb/configs/smtp/variables/user [none]
+[debug] [2026-01-25T14:40:02.087Z] >>> [apiv2][query] GET https://runtimeconfig.googleapis.com/v1beta1/projects/neuinternshipdb/configs/smtp/variables/from [none]
+[debug] [2026-01-25T14:40:02.347Z] <<< [apiv2][status] GET https://runtimeconfig.googleapis.com/v1beta1/projects/neuinternshipdb/configs/smtp/variables/user 200
+[debug] [2026-01-25T14:40:02.347Z] <<< [apiv2][body] GET https://runtimeconfig.googleapis.com/v1beta1/projects/neuinternshipdb/configs/smtp/variables/user {"name":"projects/neuinternshipdb/configs/smtp/variables/user","updateTime":"2026-01-20T14:06:08.307088265Z","text":"YOUR_EMAIL@gmail.com"}
+[debug] [2026-01-25T14:40:02.352Z] <<< [apiv2][status] GET https://runtimeconfig.googleapis.com/v1beta1/projects/neuinternshipdb/configs/smtp/variables/port 200
+[debug] [2026-01-25T14:40:02.352Z] <<< [apiv2][body] GET https://runtimeconfig.googleapis.com/v1beta1/projects/neuinternshipdb/configs/smtp/variables/port {"name":"projects/neuinternshipdb/configs/smtp/variables/port","updateTime":"2026-01-20T14:06:06.493378857Z","text":"587"}
+[debug] [2026-01-25T14:40:02.475Z] <<< [apiv2][status] GET https://runtimeconfig.googleapis.com/v1beta1/projects/neuinternshipdb/configs/smtp/variables/pass 200
+[debug] [2026-01-25T14:40:02.475Z] <<< [apiv2][body] GET https://runtimeconfig.googleapis.com/v1beta1/projects/neuinternshipdb/configs/smtp/variables/pass {"name":"projects/neuinternshipdb/configs/smtp/variables/pass","updateTime":"2026-01-20T14:06:08.633045852Z","text":"YOUR_APP_PASSWORD"}
+[debug] [2026-01-25T14:40:02.494Z] <<< [apiv2][status] GET https://runtimeconfig.googleapis.com/v1beta1/projects/neuinternshipdb/configs/smtp/variables/from 200
+[debug] [2026-01-25T14:40:02.494Z] <<< [apiv2][body] GET https://runtimeconfig.googleapis.com/v1beta1/projects/neuinternshipdb/configs/smtp/variables/from {"name":"projects/neuinternshipdb/configs/smtp/variables/from","updateTime":"2026-01-20T14:06:05.881600682Z","text":"InternQuest <YOUR_EMAIL@gmail.com>"}
+[debug] [2026-01-25T14:40:02.917Z] <<< [apiv2][status] GET https://runtimeconfig.googleapis.com/v1beta1/projects/neuinternshipdb/configs/smtp/variables/host 200
+[debug] [2026-01-25T14:40:02.917Z] <<< [apiv2][body] GET https://runtimeconfig.googleapis.com/v1beta1/projects/neuinternshipdb/configs/smtp/variables/host {"name":"projects/neuinternshipdb/configs/smtp/variables/host","updateTime":"2026-01-20T14:06:06.567505121Z","text":"smtp.gmail.com"}
+[debug] [2026-01-25T14:40:02.918Z] Validating nodejs source
+[warn] !  functions: Couldn't find firebase-functions package in your source code. Have you run 'npm install'? 
+[debug] [2026-01-25T14:40:02.931Z] getFunctionsSDKVersion encountered error: Cannot find module 'firebase-functions'
+Require stack:
+- C:\Users\Justine\AppData\Roaming\npm\node_modules\firebase-tools\lib\deploy\functions\runtimes\node\versioning.js
+- C:\Users\Justine\AppData\Roaming\npm\node_modules\firebase-tools\lib\deploy\functions\runtimes\node\index.js
+- C:\Users\Justine\AppData\Roaming\npm\node_modules\firebase-tools\lib\deploy\functions\runtimes\index.js
+- C:\Users\Justine\AppData\Roaming\npm\node_modules\firebase-tools\lib\deploy\functions\prepare.js
+- C:\Users\Justine\AppData\Roaming\npm\node_modules\firebase-tools\lib\emulator\functionsEmulatorShared.js
+- C:\Users\Justine\AppData\Roaming\npm\node_modules\firebase-tools\lib\frameworks\index.js
+- C:\Users\Justine\AppData\Roaming\npm\node_modules\firebase-tools\lib\deploy\hosting\prepare.js
+- C:\Users\Justine\AppData\Roaming\npm\node_modules\firebase-tools\lib\deploy\hosting\index.js
+- C:\Users\Justine\AppData\Roaming\npm\node_modules\firebase-tools\lib\deploy\index.js
+- C:\Users\Justine\AppData\Roaming\npm\node_modules\firebase-tools\lib\commands\deploy.js
+- C:\Users\Justine\AppData\Roaming\npm\node_modules\firebase-tools\lib\commands\index.js
+- C:\Users\Justine\AppData\Roaming\npm\node_modules\firebase-tools\lib\index.js
+- C:\Users\Justine\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\cli.js
+- C:\Users\Justine\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js {"code":"MODULE_NOT_FOUND","requireStack":["C:\\Users\\Justine\\AppData\\Roaming\\npm\\node_modules\\firebase-tools\\lib\\deploy\\functions\\runtimes\\node\\versioning.js","C:\\Users\\Justine\\AppData\\Roaming\\npm\\node_modules\\firebase-tools\\lib\\deploy\\functions\\runtimes\\node\\index.js","C:\\Users\\Justine\\AppData\\Roaming\\npm\\node_modules\\firebase-tools\\lib\\deploy\\functions\\runtimes\\index.js","C:\\Users\\Justine\\AppData\\Roaming\\npm\\node_modules\\firebase-tools\\lib\\deploy\\functions\\prepare.js","C:\\Users\\Justine\\AppData\\Roaming\\npm\\node_modules\\firebase-tools\\lib\\emulator\\functionsEmulatorShared.js","C:\\Users\\Justine\\AppData\\Roaming\\npm\\node_modules\\firebase-tools\\lib\\frameworks\\index.js","C:\\Users\\Justine\\AppData\\Roaming\\npm\\node_modules\\firebase-tools\\lib\\deploy\\hosting\\prepare.js","C:\\Users\\Justine\\AppData\\Roaming\\npm\\node_modules\\firebase-tools\\lib\\deploy\\hosting\\index.js","C:\\Users\\Justine\\AppData\\Roaming\\npm\\node_modules\\firebase-tools\\lib\\deploy\\index.js","C:\\Users\\Justine\\AppData\\Roaming\\npm\\node_modules\\firebase-tools\\lib\\commands\\deploy.js","C:\\Users\\Justine\\AppData\\Roaming\\npm\\node_modules\\firebase-tools\\lib\\commands\\index.js","C:\\Users\\Justine\\AppData\\Roaming\\npm\\node_modules\\firebase-tools\\lib\\index.js","C:\\Users\\Justine\\AppData\\Roaming\\npm\\node_modules\\firebase-tools\\lib\\bin\\cli.js","C:\\Users\\Justine\\AppData\\Roaming\\npm\\node_modules\\firebase-tools\\lib\\bin\\firebase.js"]}
+[debug] [2026-01-25T14:40:02.932Z] checkFunctionsSDKVersion encountered error: Invalid Version:  {}
+[debug] [2026-01-25T14:40:02.932Z] > [functions] package.json contents: {
+  "name": "functions",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "expo-server-sdk": "^4.0.0",
+    "firebase-admin": "^13.6.0",
+    "firebase-functions": "^7.0.2"
+  }
+}
+[debug] [2026-01-25T14:40:02.933Z] Building nodejs source
+[info] i  functions: Loading and analyzing source code for codebase default to determine what to deploy 
+[debug] [2026-01-25T14:40:02.933Z] Could not parse firebase-functions version '' into semver.
+[debug] [2026-01-25T14:40:02.934Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-01-25T14:40:03.128Z] Error: Cannot find module 'firebase-functions'
+Require stack:
+- C:\Users\Justine\AppData\Roaming\npm\node_modules\firebase-tools\lib\deploy\functions\runtimes\node\index.js
+- C:\Users\Justine\AppData\Roaming\npm\node_modules\firebase-tools\lib\deploy\functions\runtimes\index.js
+- C:\Users\Justine\AppData\Roaming\npm\node_modules\firebase-tools\lib\deploy\functions\prepare.js
+- C:\Users\Justine\AppData\Roaming\npm\node_modules\firebase-tools\lib\emulator\functionsEmulatorShared.js
+- C:\Users\Justine\AppData\Roaming\npm\node_modules\firebase-tools\lib\frameworks\index.js
+- C:\Users\Justine\AppData\Roaming\npm\node_modules\firebase-tools\lib\deploy\hosting\prepare.js
+- C:\Users\Justine\AppData\Roaming\npm\node_modules\firebase-tools\lib\deploy\hosting\index.js
+- C:\Users\Justine\AppData\Roaming\npm\node_modules\firebase-tools\lib\deploy\index.js
+- C:\Users\Justine\AppData\Roaming\npm\node_modules\firebase-tools\lib\commands\deploy.js
+- C:\Users\Justine\AppData\Roaming\npm\node_modules\firebase-tools\lib\commands\index.js
+- C:\Users\Justine\AppData\Roaming\npm\node_modules\firebase-tools\lib\index.js
+- C:\Users\Justine\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\cli.js
+- C:\Users\Justine\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1225:15)
+    at Function.resolve (node:internal/modules/helpers:146:19)
+    at Delegate.findFunctionsBinary (C:\Users\Justine\AppData\Roaming\npm\node_modules\firebase-tools\lib\deploy\functions\runtimes\node\index.js:101:33)
+    at Delegate.spawnFunctionsProcess (C:\Users\Justine\AppData\Roaming\npm\node_modules\firebase-tools\lib\deploy\functions\runtimes\node\index.js:131:30)
+    at Delegate.serveAdmin (C:\Users\Justine\AppData\Roaming\npm\node_modules\firebase-tools\lib\deploy\functions\runtimes\node\index.js:152:35)
+    at Delegate.discoverBuild (C:\Users\Justine\AppData\Roaming\npm\node_modules\firebase-tools\lib\deploy\functions\runtimes\node\index.js:192:41)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async loadCodebases (C:\Users\Justine\AppData\Roaming\npm\node_modules\firebase-tools\lib\deploy\functions\prepare.js:330:33)
+    at async prepare (C:\Users\Justine\AppData\Roaming\npm\node_modules\firebase-tools\lib\deploy\functions\prepare.js:69:24)
+    at async chain (C:\Users\Justine\AppData\Roaming\npm\node_modules\firebase-tools\lib\deploy\index.js:43:9)
+[error] 
+[error] Error: An unexpected error has occurred.

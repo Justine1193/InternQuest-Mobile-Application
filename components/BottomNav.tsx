@@ -1,13 +1,11 @@
 import React from 'react';
 import { View, TouchableOpacity, StyleSheet, Text } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import { StackNavigationProp } from '@react-navigation/stack';
-import { RootStackParamList } from '../App';
 import { useNavigation } from '@react-navigation/native';
-import { colors, spacing } from '../ui/theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { colors, radii, shadows, spacing } from '../ui/theme';
 
 type Props = {
-  navigation?: StackNavigationProp<RootStackParamList>;
   currentRoute?: string;
 };
 
@@ -15,6 +13,7 @@ const BottomNavbar: React.FC<Props> = ({ currentRoute }) => {
   // Get the navigation object directly from useNavigation hook
   // This ensures we always have the most up-to-date navigation context
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
 
   const isActive = (route: string) => currentRoute === route;
 
@@ -29,8 +28,16 @@ const BottomNavbar: React.FC<Props> = ({ currentRoute }) => {
   };
 
   return (
-    <View style={styles.container}>
-      <TouchableOpacity onPress={() => handleNavigation('Home')} style={styles.tab}>
+    <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, spacing.sm) }]}>
+      <TouchableOpacity
+        onPress={() => handleNavigation('Home')}
+        style={styles.tab}
+        activeOpacity={0.7}
+        accessibilityRole="tab"
+        accessibilityState={{ selected: isActive('Home') }}
+        accessibilityLabel="Home"
+        hitSlop={{ top: 8, bottom: 8, left: 12, right: 12 }}
+      >
         <Icon
           name={isActive('Home') ? "home" : "home-outline"}
           size={24}
@@ -39,7 +46,15 @@ const BottomNavbar: React.FC<Props> = ({ currentRoute }) => {
         <Text style={[styles.label, isActive('Home') && styles.activeLabel]}>Home</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity onPress={() => handleNavigation('Notifications')} style={styles.tab}>
+      <TouchableOpacity
+        onPress={() => handleNavigation('Notifications')}
+        style={styles.tab}
+        activeOpacity={0.7}
+        accessibilityRole="tab"
+        accessibilityState={{ selected: isActive('Notifications') }}
+        accessibilityLabel="Notifications"
+        hitSlop={{ top: 8, bottom: 8, left: 12, right: 12 }}
+      >
         <Icon
           name={isActive('Notifications') ? "bell" : "bell-outline"}
           size={24}
@@ -48,7 +63,15 @@ const BottomNavbar: React.FC<Props> = ({ currentRoute }) => {
         <Text style={[styles.label, isActive('Notifications') && styles.activeLabel]}>Notifications</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity onPress={() => handleNavigation('HelpDesk')} style={styles.tab}>
+      <TouchableOpacity
+        onPress={() => handleNavigation('HelpDesk')}
+        style={styles.tab}
+        activeOpacity={0.7}
+        accessibilityRole="tab"
+        accessibilityState={{ selected: isActive('HelpDesk') }}
+        accessibilityLabel="Resources"
+        hitSlop={{ top: 8, bottom: 8, left: 12, right: 12 }}
+      >
         <Icon
           name={isActive('HelpDesk') ? "folder" : "folder-outline"}
           size={24}
@@ -57,7 +80,15 @@ const BottomNavbar: React.FC<Props> = ({ currentRoute }) => {
         <Text style={[styles.label, isActive('HelpDesk') && styles.activeLabel]}>Resources</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity onPress={() => handleNavigation('Settings')} style={styles.tab}>
+      <TouchableOpacity
+        onPress={() => handleNavigation('Settings')}
+        style={styles.tab}
+        activeOpacity={0.7}
+        accessibilityRole="tab"
+        accessibilityState={{ selected: isActive('Settings') }}
+        accessibilityLabel="Settings"
+        hitSlop={{ top: 8, bottom: 8, left: 12, right: 12 }}
+      >
         <Icon
           name={isActive('Settings') ? "cog" : "cog-outline"}
           size={24}
@@ -66,7 +97,15 @@ const BottomNavbar: React.FC<Props> = ({ currentRoute }) => {
         <Text style={[styles.label, isActive('Settings') && styles.activeLabel]}>Settings</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity onPress={() => handleNavigation('Profile')} style={styles.tab}>
+      <TouchableOpacity
+        onPress={() => handleNavigation('Profile')}
+        style={styles.tab}
+        activeOpacity={0.7}
+        accessibilityRole="tab"
+        accessibilityState={{ selected: isActive('Profile') }}
+        accessibilityLabel="Profile"
+        hitSlop={{ top: 8, bottom: 8, left: 12, right: 12 }}
+      >
         <Icon
           name={isActive('Profile') ? "account" : "account-outline"}
           size={24}
@@ -82,13 +121,16 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    paddingVertical: spacing.sm,
+    paddingTop: spacing.sm,
     borderTopWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
+    ...shadows.card,
   },
   tab: {
     alignItems: 'center',
+    flex: 1,
+    paddingVertical: spacing.xs,
   },
   label: {
     fontSize: 12,
@@ -97,6 +139,7 @@ const styles = StyleSheet.create({
   },
   activeLabel: {
     color: colors.primary,
+    fontWeight: '700',
   },
 });
 

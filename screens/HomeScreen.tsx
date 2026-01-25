@@ -6,11 +6,9 @@ import {
   TouchableOpacity,
   ScrollView,
   StyleSheet,
-  StatusBar,
   RefreshControl,
   Modal,
 } from 'react-native';
-import BottomNavbar from '../components/BottomNav';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList, Post as BasePost } from '../App';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,6 +18,7 @@ import { firestore, db, auth } from '../firebase/config';
 import { onAuthStateChanged } from 'firebase/auth';
 import { ref, onValue } from 'firebase/database';
 import { accentPalette, colors, radii, shadows } from '../ui/theme';
+import { Screen } from '../ui/components/Screen';
 
 type MoaValidity = {
   years: number | null;
@@ -420,12 +419,11 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
   };
 
   return (
-    <View style={styles.container}>
-      <StatusBar translucent backgroundColor="transparent" barStyle="dark-content" />
-
+    <Screen contentContainerStyle={{ paddingHorizontal: 0, paddingTop: 0 }}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Find Internships</Text>
+        <Text style={styles.headerTitle}>Find internships</Text>
+        <Text style={styles.headerSubtitle}>Browse companies matched to your profile</Text>
       </View>
 
       <ScrollView
@@ -441,7 +439,7 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
             <Ionicons name="search" size={20} color={colors.textMuted} style={styles.searchIcon} />
             <TextInput
               style={styles.searchInput}
-              placeholder="Search companies"
+              placeholder="Search companies, skills, location…"
               value={searchText}
               onChangeText={setSearchText}
               placeholderTextColor={colors.textSubtle}
@@ -459,6 +457,8 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
           <TouchableOpacity
             style={styles.filterButtonNext}
             onPress={() => setShowAdvancedFilters(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Open filters"
           >
             <Ionicons name="filter" size={22} color={colors.text} />
           </TouchableOpacity>
@@ -724,24 +724,15 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
       >
         <Ionicons name="calendar" size={24} color={colors.onPrimary} />
       </TouchableOpacity>
-
-      <BottomNavbar navigation={navigation} currentRoute="Home" />
-    </View>
+    </Screen>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: 50,
-    paddingBottom: 16,
+    paddingTop: 14,
+    paddingBottom: 14,
     backgroundColor: colors.primary,
     borderBottomWidth: 0,
   },
@@ -749,6 +740,12 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '800',
     color: colors.onPrimary,
+  },
+  headerSubtitle: {
+    marginTop: 2,
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.onPrimaryMuted,
   },
   filterButton: {
     padding: 8,
@@ -759,14 +756,13 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 16,
-    paddingBottom: 100,
+    paddingBottom: 24,
   },
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 16,
     marginTop: 8,
-    paddingHorizontal: 16,
   },
   searchContainer: {
     flex: 1,

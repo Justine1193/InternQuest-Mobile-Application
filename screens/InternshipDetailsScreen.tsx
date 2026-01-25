@@ -10,16 +10,18 @@ import {
   Alert,
   ActivityIndicator,
   RefreshControl,
-  StatusBar,
 } from 'react-native';
 import { RouteProp, useNavigation } from '@react-navigation/native';
 import { RootStackParamList } from '../App';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useSavedInternships } from '../context/SavedInternshipsContext';
-import { Platform } from 'react-native';
 import { doc, setDoc, getDoc, serverTimestamp, collection, query, where, getDocs } from 'firebase/firestore';
 import { auth, firestore } from '../firebase/config';
 import { colors, radii, shadows } from '../ui/theme';
+import { IconButton } from 'react-native-paper';
+import { Screen } from '../ui/components/Screen';
+import { AppHeader } from '../ui/components/AppHeader';
+import MapPreview from '../components/MapPreview';
 
 // Types
 import type { NavigationProp } from '@react-navigation/native';
@@ -305,17 +307,21 @@ const InternshipDetailsScreen: React.FC<Props> = ({ route }) => {
   };
 
   return (
-    <View style={styles.container}>
-      <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
-      {/* Fixed Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Icon name="arrow-left" size={24} color={colors.onPrimary} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Internship Details</Text>
-        <TouchableOpacity onPress={handleSaveInternship}>
-          <Icon name={isSaved ? "bookmark" : "bookmark-outline"} size={24} color={colors.onPrimary} />
-        </TouchableOpacity>
+    <Screen contentContainerStyle={{ paddingHorizontal: 0, paddingTop: 0 }}>
+      <View style={{ paddingHorizontal: 6 }}>
+        <AppHeader
+          back
+          title="Internship details"
+          right={
+            <IconButton
+              icon={isSaved ? 'bookmark' : 'bookmark-outline'}
+              size={22}
+              iconColor={colors.text}
+              onPress={handleSaveInternship}
+              accessibilityLabel={isSaved ? 'Remove from saved' : 'Save internship'}
+            />
+          }
+        />
       </View>
 
       <ScrollView
@@ -323,10 +329,8 @@ const InternshipDetailsScreen: React.FC<Props> = ({ route }) => {
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
-        showsVerticalScrollIndicator={true}
-        bounces={true}
-        overScrollMode="always"
-        scrollEventThrottle={16}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
         {/* Content starts here */}
         <View style={styles.contentContainer}>
@@ -430,47 +434,13 @@ const InternshipDetailsScreen: React.FC<Props> = ({ route }) => {
             onPress={openLocationInMaps}
             activeOpacity={0.9}
           >
-            {/* Avoid importing react-native-maps on web (native-only). Use require at runtime. */}
-            {Platform.OS !== 'web' ? (
-              // Use dynamic require so bundler will not include native-only modules for web
-              (() => {
-                // eslint-disable-next-line @typescript-eslint/no-var-requires
-                const rnMaps: any = require('react-native-maps');
-                const MapViewComp = rnMaps.default || rnMaps;
-                const MarkerComp = rnMaps.Marker;
-
-                const region = coordinates
-                  ? {
-                      latitude: coordinates.latitude,
-                      longitude: coordinates.longitude,
-                      latitudeDelta: 0.01,
-                      longitudeDelta: 0.01,
-                    }
-                  : {
-                      latitude: 14.5995,
-                      longitude: 120.9842,
-                      latitudeDelta: 0.01,
-                      longitudeDelta: 0.01,
-                    };
-
-                return (
-                  <MapViewComp
-                    style={styles.mapView}
-                    initialRegion={region}
-                    scrollEnabled={false}
-                    zoomEnabled={false}
-                    pitchEnabled={false}
-                    rotateEnabled={false}
-                  >
-                    <MarkerComp coordinate={{ latitude: region.latitude, longitude: region.longitude }} title={post.company} description={post.location} />
-                  </MapViewComp>
-                );
-              })()
-            ) : (
-              <View style={[styles.mapView, styles.mapFallback]}>
-                <Text style={styles.mapFallbackText}>Map preview unavailable on web</Text>
-              </View>
-            )}
+            <MapPreview
+              style={styles.mapView}
+              latitude={coordinates?.latitude}
+              longitude={coordinates?.longitude}
+              title={post.company}
+              description={post.location}
+            />
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.saveButton, isSaved && styles.savedButton]}
@@ -485,7 +455,7 @@ const InternshipDetailsScreen: React.FC<Props> = ({ route }) => {
         {/* Extra padding at the bottom for better scrolling */}
         <View style={{ height: 30 }} />
       </ScrollView>
-    </View>
+    </Screen>
   );
 };
 
@@ -501,17 +471,6 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     width: '100%',
-  },
-  header: {
-    paddingTop: 50,
-    paddingBottom: 16,
-    paddingHorizontal: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.primary,
-    borderBottomWidth: 0,
-    zIndex: 10,
   },
   headerTitle: { fontSize: 16, fontWeight: '700', color: colors.onPrimary },
   companyHeader: { marginBottom: 16, flexDirection: 'row', alignItems: 'center' },
@@ -599,16 +558,6 @@ const styles = StyleSheet.create({
     height: 200,
     width: '100%',
     borderRadius: 12,
-  },
-  mapFallback: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: 12,
-  },
-  mapFallbackText: {
-    color: colors.textMuted,
-    fontSize: 13,
   },
   bottomButtons: {
     flexDirection: 'row',

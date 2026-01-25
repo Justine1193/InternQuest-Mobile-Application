@@ -7,9 +7,7 @@ import {
     TouchableOpacity,
     ActivityIndicator,
     Alert,
-    ScrollView,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { collection, addDoc, Timestamp } from 'firebase/firestore';
@@ -17,6 +15,8 @@ import { firestore, storage } from '../firebase/config';
 import { getAuth } from 'firebase/auth';
 import PDFGenerator, { WeeklyReportEntry, WeeklyReportData } from '../services/pdfGenerator';
 import { colors, radii, shadows } from '../ui/theme';
+import { Screen } from '../ui/components/Screen';
+import { AppHeader } from '../ui/components/AppHeader';
 
 type WeeklyReportEntryForm = Omit<WeeklyReportEntry, 'hours'> & { hours: string };
 
@@ -30,11 +30,6 @@ const emptyEntry: WeeklyReportEntryForm = {
 };
 
 const WeeklyReportScreen: React.FC = () => {
-    const insets = useSafeAreaInsets();
-    // Bottom navbar height is approximately 60-70px (icon + label + padding)
-    const BOTTOM_NAV_HEIGHT = 70;
-    const bottomPadding = insets.bottom + BOTTOM_NAV_HEIGHT;
-
     const [formInfo, setFormInfo] = useState({
         traineeName: '',
         departmentAssigned: '',
@@ -202,10 +197,8 @@ const WeeklyReportScreen: React.FC = () => {
     };
 
     return (
-        <ScrollView 
-            contentContainerStyle={[styles.scroll, { paddingBottom: bottomPadding }]}
-            showsVerticalScrollIndicator={true}
-        >
+        <Screen scroll contentContainerStyle={styles.scroll}>
+            <AppHeader title="Weekly report" back />
             <View style={styles.section}>
                 <Text style={styles.title}>Weekly Accomplishment Report</Text>
                 <Text style={styles.description}>
@@ -349,7 +342,7 @@ const WeeklyReportScreen: React.FC = () => {
                     )}
                 </TouchableOpacity>
             </View>
-        </ScrollView>
+        </Screen>
     );
 };
 

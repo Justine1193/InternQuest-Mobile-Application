@@ -19,6 +19,8 @@ import { auth, firestore } from '../firebase/config';
 import { doc, getDoc, setDoc, collection, addDoc } from 'firebase/firestore';
 import * as FileSystem from 'expo-file-system';
 import { colors, radii, shadows } from '../ui/theme';
+import { Screen } from '../ui/components/Screen';
+import { AppHeader } from '../ui/components/AppHeader';
 
 type CompanyProfileRouteProp = RouteProp<RootStackParamList, 'CompanyProfile'>;
 type CompanyProfileNavigationProp = StackNavigationProp<RootStackParamList, 'CompanyProfile'>;
@@ -267,26 +269,17 @@ const CompanyProfileScreen: React.FC = () => {
 
     if (!company) {
         return (
-            <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+            <Screen contentContainerStyle={{ justifyContent: 'center', alignItems: 'center' }}>
                 <ActivityIndicator size="large" color={colors.primary} />
-            </View>
+            </Screen>
         );
     }
 
     return (
-        <View style={styles.container}>
-            <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
+        <Screen contentContainerStyle={{ paddingHorizontal: 0, paddingTop: 0 }}>
+            <AppHeader back title="Company profile" />
 
-            {/* Header */}
-            <View style={styles.header}>
-                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                    <Ionicons name="arrow-back" size={24} color={colors.onPrimary} />
-                </TouchableOpacity>
-                <Text style={styles.headerTitle}>Company Profile</Text>
-                <View style={{ width: 24 }} />
-            </View>
-
-            <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+            <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
                 {/* Company Header Card */}
                 <Card style={styles.companyHeaderCard}>
                     <Card.Content>
@@ -480,7 +473,7 @@ const CompanyProfileScreen: React.FC = () => {
                 {/* Spacer for bottom nav */}
                 <View style={{ height: 100 }} />
             </ScrollView>
-        </View>
+        </Screen>
     );
 };
 

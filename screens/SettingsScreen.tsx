@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   Alert,
   ActivityIndicator,
@@ -16,9 +15,10 @@ import { signOut, deleteUser, updatePassword, EmailAuthProvider, reauthenticateW
 import { auth, firestore } from '../firebase/config';
 import { RootStackParamList } from '../App';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import BottomNavbar from '../components/BottomNav';
 import { doc, deleteDoc, getDoc, setDoc } from 'firebase/firestore';
 import { colors, radii, shadows } from '../ui/theme';
+import { Screen } from '../ui/components/Screen';
+import { AppHeader } from '../ui/components/AppHeader';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'Settings'>;
 
@@ -185,9 +185,8 @@ const SettingsScreen: React.FC = () => {
   };
 
   return (
-    <>
-      <ScrollView contentContainerStyle={styles.container}>
-        <Text style={styles.header}>Settings</Text>
+    <Screen scroll contentContainerStyle={styles.container}>
+        <AppHeader title="Settings" />
 
         {/* Profile & Password */}
         <View style={styles.card}>
@@ -290,7 +289,7 @@ const SettingsScreen: React.FC = () => {
           <Icon name="logout" size={20} color={colors.onPrimary} style={{ marginRight: 8 }} />
           <Text style={styles.logoutText}>Log Out</Text>
         </TouchableOpacity>
-      </ScrollView>
+
 
       {/* Account Security Modal */}
       <Modal visible={showSecurityModal} animationType="fade" transparent onRequestClose={() => setShowSecurityModal(false)}>
@@ -499,24 +498,14 @@ const SettingsScreen: React.FC = () => {
           </View>
         </View>
       </Modal>
-
-      <BottomNavbar navigation={navigation} />
-    </>
+    </Screen>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    padding: 20,
-    paddingTop: 40,
-    backgroundColor: colors.bg,
-  },
-  header: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginBottom: 30,
-    color: colors.text,
-    alignSelf: 'center',
+    paddingTop: 0,
+    paddingBottom: 24,
   },
   card: {
     backgroundColor: colors.surface,

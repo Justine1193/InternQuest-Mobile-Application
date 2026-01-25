@@ -17,6 +17,8 @@ import * as DocumentPicker from 'expo-document-picker';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { SecurityUtils } from '../services/security';
 import { colors, radii, shadows } from '../ui/theme';
+import { Screen } from '../ui/components/Screen';
+import { AppHeader } from '../ui/components/AppHeader';
 
 const SignatureUploadScreen: React.FC = () => {
     const [signatureUrl, setSignatureUrl] = useState<string | null>(null);
@@ -170,14 +172,15 @@ const SignatureUploadScreen: React.FC = () => {
 
     if (loading) {
         return (
-            <View style={styles.container}>
+            <Screen contentContainerStyle={styles.container}>
                 <ActivityIndicator size="large" color={colors.primary} />
-            </View>
+            </Screen>
         );
     }
 
     return (
-        <ScrollView style={styles.container}>
+        <Screen scroll contentContainerStyle={styles.container}>
+            <AppHeader title="Digital signature" back />
             <View style={styles.content}>
                 <Card style={styles.card}>
                     <Card.Content>
@@ -257,7 +260,7 @@ const SignatureUploadScreen: React.FC = () => {
                     </Card.Content>
                 </Card>
             </View>
-        </ScrollView>
+        </Screen>
     );
 };
 

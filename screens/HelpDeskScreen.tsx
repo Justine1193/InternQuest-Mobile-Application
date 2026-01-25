@@ -12,6 +12,8 @@ import * as Sharing from 'expo-sharing';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { SecurityUtils } from '../services/security';
 import { colors, radii, shadows, spacing } from '../ui/theme';
+import { Screen } from '../ui/components/Screen';
+import { AppHeader } from '../ui/components/AppHeader';
 
 const FIRESTORE_MAX_BYTES = 700 * 1024; // ~700KB
 
@@ -627,8 +629,8 @@ const HelpDeskScreen: React.FC = () => {
   const groupedDocs = Object.keys(groupedDocMap).map(k => groupedDocMap[k]);
 
   return (
-    <View style={styles.page}>
-      <StatusBar barStyle="dark-content" />
+    <Screen contentContainerStyle={{ paddingHorizontal: 0, paddingTop: 0 }}>
+      <AppHeader title="Resources" />
 
       {/* big decorative header */}
       <View style={styles.headerWrap}>
@@ -646,7 +648,7 @@ const HelpDeskScreen: React.FC = () => {
       </View>
 
       {/* main content area */}
-      <ScrollView style={styles.contentWrap} contentContainerStyle={{ padding: 16, paddingBottom: 120 }}>
+      <ScrollView style={styles.contentWrap} contentContainerStyle={{ padding: 16, paddingBottom: 24 }}>
         {loading ? (
           <ActivityIndicator animating size="large" color={colors.primary} style={{ marginTop: 20 }} />
         ) : templates.length === 0 ? (
@@ -877,7 +879,7 @@ const HelpDeskScreen: React.FC = () => {
           )}
         </View>
       </Modal>
-    </View>
+    </Screen>
   );
 };
 

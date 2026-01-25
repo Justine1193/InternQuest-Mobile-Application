@@ -4,6 +4,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { Host } from 'react-native-portalize';
 import { Provider as PaperProvider } from 'react-native-paper';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from './firebase/config';
 import { doc, getDoc, getDocs, query, collection, where, setDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
@@ -17,7 +18,8 @@ import { SavedInternshipsProvider } from './context/SavedInternshipsContext';
 
 // Screens
 import LaunchScreen from './screens/LaunchScreen';
-import SignInScreen from './screens/SignInScreen';
+import LoginScreen from './screens/LoginScreen';
+import ForgotPasswordScreen from './screens/ForgotPasswordScreen';
 import { SetupAccountScreen } from './screens/SetupAccountScreen';
 import HomeScreen from './screens/HomeScreen';
 import ProfileScreen from './screens/ProfileScreen';
@@ -57,6 +59,7 @@ export type RootStackParamList = {
   Launch: undefined;
   Home: undefined;
   SignIn: undefined;
+  ForgotPassword: { email?: string } | undefined;
   SetupAccount: undefined;
   ForceChangePassword: undefined;
   InternshipDetails: { post: Post };
@@ -72,13 +75,15 @@ export type RootStackParamList = {
 
 const Stack = createStackNavigator<RootStackParamList>();
 
-const App: React.FC = () => {
+const AppInner: React.FC = () => {
+  const insets = useSafeAreaInsets();
   const [isLoading, setIsLoading] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isProfileComplete, setIsProfileComplete] = useState<boolean | null>(null);
   const [mustChangePassword, setMustChangePassword] = useState<boolean | null>(null);
-  const [currentScreen, setCurrentScreen] = useState<string>('Home');
+  const [currentScreen, setCurrentScreen] = useState<string>('Launch');
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
+  const navigationRef = React.useRef<any>(null);
 
   const { registerActivity } = useAutoLogout({
     enabled: isLoggedIn,
@@ -249,6 +254,9 @@ const App: React.FC = () => {
     setCurrentScreen(screenName);
   };
 
+  const showBottomNav = isLoggedIn && isProfileComplete && mustChangePassword !== true && !isLoading;
+  const bottomNavHeight = 60 + Math.max(insets.bottom, 0);
+
   const renderMainContent = () => {
     if (isLoading) {
       return (
@@ -262,8 +270,9 @@ const App: React.FC = () => {
       return (
         <>
           <Stack.Screen name="SignIn">
-            {props => <SignInScreen {...props} setIsLoggedIn={setIsLoggedIn} />}
+            {props => <LoginScreen {...props} setIsLoggedIn={setIsLoggedIn} />}
           </Stack.Screen>
+          <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
         </>
       );
     }
@@ -315,28 +324,23 @@ const App: React.FC = () => {
         <Stack.Screen
           name="Home"
           component={HomeScreen}
-          listeners={{ focus: () => handleScreenChange('Home') }}
         />
         <Stack.Screen
           name="Profile"
           component={ProfileScreen}
-          listeners={{ focus: () => handleScreenChange('Profile') }}
         />
         <Stack.Screen
           name="Notifications"
           component={NotificationsScreen}
-          listeners={{ focus: () => handleScreenChange('Notifications') }}
         />
         <Stack.Screen
           name="HelpDesk"
           // lazy-load the screen when accessed
           component={require('./screens/HelpDeskScreen').default}
-          listeners={{ focus: () => handleScreenChange('HelpDesk') }}
         />
         <Stack.Screen
           name="Settings"
           component={SettingsScreen}
-          listeners={{ focus: () => handleScreenChange('Settings') }}
         />
         <Stack.Screen
           name="InternshipDetails"
@@ -366,11 +370,37 @@ const App: React.FC = () => {
     <PaperProvider theme={paperTheme}>
       <Host>
         <SavedInternshipsProvider>
-          <NavigationContainer theme={navigationTheme}>
-          {/* Global StatusBar configuration */}
-          <StatusBar translucent backgroundColor="transparent" barStyle="dark-content" />
+          <NavigationContainer
+            ref={navigationRef}
+            theme={navigationTheme}
+            onStateChange={() => {
+              try {
+                const route = navigationRef.current?.getCurrentRoute?.();
+                if (route?.name) handleScreenChange(route.name);
+              } catch (e) {
+                // ignore
+              }
+            }}
+          >
+          {/* Global StatusBar configuration (route-aware to avoid flicker on Android) */}
+          {(() => {
+            const routeName =
+              (navigationRef.current?.getCurrentRoute?.()?.name as string | undefined) || currentScreen;
+
+            const BRAND_BLUE = '#2B7FFF';
+            const blueScreens = new Set<string>(['Launch', 'SignIn', 'ForgotPassword', 'SetupAccount']);
+            const isBlue = blueScreens.has(routeName);
+
+            return (
+              <StatusBar
+                translucent
+                backgroundColor={isBlue ? BRAND_BLUE : colors.bg}
+                barStyle={isBlue ? 'light-content' : 'dark-content'}
+              />
+            );
+          })()}
           <View
-            style={{ flex: 1 }}
+            style={{ flex: 1, paddingBottom: showBottomNav ? bottomNavHeight : 0 }}
             onStartShouldSetResponderCapture={() => {
               registerActivity();
               return false;
@@ -381,7 +411,7 @@ const App: React.FC = () => {
             </Stack.Navigator>
 
             {/* Only show bottom navbar when logged in and profile is complete */}
-            {isLoggedIn && isProfileComplete && mustChangePassword !== true && (
+            {showBottomNav && (
               <View style={styles.bottomNavWrapper}>
                 <BottomNavbar currentRoute={currentScreen} />
               </View>
@@ -394,15 +424,20 @@ const App: React.FC = () => {
   );
 };
 
+const App: React.FC = () => {
+  return (
+    <SafeAreaProvider>
+      <AppInner />
+    </SafeAreaProvider>
+  );
+};
+
 const styles = StyleSheet.create({
   bottomNavWrapper: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: colors.surface,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
     zIndex: 100,
   },
 });

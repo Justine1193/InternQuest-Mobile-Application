@@ -1110,7 +1110,7 @@ const StudentRequirementModal = ({
                       {student.firstName} {student.lastName}
                     </h3>
                     <p className="student-id-display">
-                      {student.studentNumber || student.studentId || "No ID"}
+                      {student.studentId || "No ID"}
                     </p>
                     <div className="student-status-badges">
                       {student.status === "hired" ? (
@@ -1162,6 +1162,37 @@ const StudentRequirementModal = ({
                     <span className="detail-label">Program</span>
                     <span className="detail-value">
                       {student.program || <span className="empty-value">Not set</span>}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="detail-item">
+                  <span className="detail-icon">🏫</span>
+                  <div className="detail-content">
+                    <span className="detail-label">College</span>
+                    <span className="detail-value">
+                      {student.college || <span className="empty-value">Not set</span>}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="detail-item">
+                  <span className="detail-icon">🕒</span>
+                  <div className="detail-content">
+                    <span className="detail-label">Created At</span>
+                    <span className="detail-value">
+                      {student.createdAt ? (
+                        (() => {
+                          try {
+                            const date = new Date(student.createdAt);
+                            return date.toLocaleString();
+                          } catch (e) {
+                            return <span className="empty-value">Invalid date</span>;
+                          }
+                        })()
+                      ) : (
+                        <span className="empty-value">Not set</span>
+                      )}
                     </span>
                   </div>
                 </div>

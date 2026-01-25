@@ -1661,7 +1661,7 @@
   padding: 0.5rem 0;
 }
 
-.logout-btn {
+.logout-dropdown .logout-btn {
   width: 100%;
   background: none;
   border: none;
@@ -1673,7 +1673,7 @@
   transition: background 0.15s;
 }
 
-.logout-btn:hover {
+.logout-dropdown .logout-btn:hover {
   background: #f3f4f6;
 }
 

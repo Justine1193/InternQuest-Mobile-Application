@@ -90,8 +90,8 @@ const StudentTable = ({
               </th>
             )}
             <th
-              className={getSortClass("studentNumber")}
-              onClick={() => handleHeaderClick("studentNumber")}
+              className={getSortClass("studentId")}
+              onClick={() => handleHeaderClick("studentId")}
             >
               Student ID
             </th>

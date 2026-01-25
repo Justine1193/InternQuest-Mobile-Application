@@ -17,6 +17,7 @@ const ActivityLogViewer = lazy(() => import("../components/ActivityLog/ActivityL
 const PasswordChange = lazy(() => import("../components/PasswordChange/PasswordChange.jsx"));
 const ForgotPassword = lazy(() => import("../components/ForgotPassword/ForgotPassword.jsx"));
 const SecuritySettings = lazy(() => import("../components/SecuritySettings/SecuritySettings.jsx"));
+const PlatformData = lazy(() => import("../components/PlatformData/PlatformData.jsx"));
 // const SignatureManagement = lazy(() => import("../components/SignatureManagement/SignatureManagement.jsx")); // Removed
 
 // Loading fallback component
@@ -142,6 +143,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <SecuritySettings />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/platform-data"
+            element={
+              <ProtectedRoute allowedRoles={[ROLES.SUPER_ADMIN, ROLES.COORDINATOR]}>
+                <PlatformData />
               </ProtectedRoute>
             }
           />

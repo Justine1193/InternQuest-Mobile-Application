@@ -22,7 +22,7 @@ const StudentDetailModal = ({ open, student, onClose, onRestore }) => {
   };
 
   const studentName = `${student.firstName || ''} ${student.lastName || ''}`.trim() || "Unknown Student";
-  const studentId = student.studentNumber || student.studentId || "N/A";
+  const studentId = student.studentId || "N/A";
 
   return (
     <div className="student-detail-modal-backdrop" onClick={onClose}>

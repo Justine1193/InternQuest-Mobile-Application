@@ -167,16 +167,30 @@ export const convertCSVToStudents = (csvData) => {
         lastName = nameParts.slice(1).join(' ') || '';
       }
 
-      const studentIdValue = row['Student Number'] || row['studentNumber'] || 
-                             row['Student ID'] || row['studentId'] || '';
+      const studentIdValue = row['Student ID'] || row['studentId'] ||
+                             row['Student Number'] || row['studentNumber'] || '';
+      const sectionValue = row['Section'] || row['section'] || '';
+      const collegeValue = row['College'] || row['college'] || '';
+
+      // Try to derive yearLevel + program from section format like: 4BSIT-2
+      // pattern: [Year][Program]-[SectionNo]
+      const sectionTrimmed = String(sectionValue || '').trim();
+      const derived = { yearLevel: "", program: "" };
+      const sectionMatch = sectionTrimmed.match(/^(\d{1,2})([A-Za-z]+)-([A-Za-z0-9]+)$/);
+      if (sectionMatch) {
+        derived.yearLevel = sectionMatch[1];
+        derived.program = sectionMatch[2].toUpperCase();
+      }
+
       const student = {
-        studentNumber: studentIdValue,
-        studentId: studentIdValue, // Save to both fields for compatibility
+        studentId: studentIdValue,
         firstName: firstName || '',
         lastName: lastName || '',
         email: row['Email'] || row['email'] || '',
-        program: row['Program'] || row['program'] || '',
-        yearLevel: row['Year Level'] || row['yearLevel'] || '',
+        section: sectionTrimmed,
+        college: String(collegeValue || '').trim(),
+        program: row['Program'] || row['program'] || derived.program || '',
+        yearLevel: row['Year Level'] || row['yearLevel'] || derived.yearLevel || '',
         contact: row['Contact Number'] || row['Contact'] || row['contact'] || '',
         companyName: row['Company'] || row['companyName'] || '',
         status: parseBooleanField(row['Status'] || row['status'] || ''),
@@ -185,8 +199,8 @@ export const convertCSVToStudents = (csvData) => {
       };
 
       // Validation
-      if (!student.studentNumber) {
-        throw new Error('Student Number/ID is required');
+      if (!student.studentId) {
+        throw new Error('Student ID is required');
       }
       if (!student.firstName || !student.lastName) {
         throw new Error('First Name and Last Name are required');
@@ -194,8 +208,11 @@ export const convertCSVToStudents = (csvData) => {
       if (!student.email) {
         throw new Error('Email is required');
       }
-      if (!student.program) {
-        throw new Error('Program is required');
+      if (!student.section) {
+        throw new Error('Section is required');
+      }
+      if (!student.college) {
+        throw new Error('College is required');
       }
 
       students.push(student);

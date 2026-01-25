@@ -584,9 +584,9 @@ const StudentTableRow = ({
         </td>
       )}
       <td className="student-number-cell">
-        {row.studentNumber || row.studentId ? (
+        {row.studentId ? (
           <span className="student-number-text">
-            {row.studentNumber || row.studentId}
+            {row.studentId}
           </span>
         ) : (
           <span className="empty-value">-</span>

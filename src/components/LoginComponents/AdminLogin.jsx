@@ -539,7 +539,7 @@ const AdminLogin = () => {
         </div>
         <div className="right-container">
           <div className="login-card">
-            <h1>Admin Management System</h1>
+            <h1>Management System</h1>
             <form
               id="login-form"
               className="login-form"

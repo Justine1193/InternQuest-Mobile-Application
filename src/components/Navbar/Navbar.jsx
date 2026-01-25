@@ -19,6 +19,7 @@ import {
   IoTrashOutline,
   IoTimeOutline,
   IoPersonCircleOutline,
+  IoServerOutline,
   IoChevronBackOutline,
   IoChevronForwardOutline,
   IoLogOutOutline,
@@ -273,6 +274,17 @@ const Navbar = ({ onLogout }) => {
             <IoSettingsOutline className="sidebar-icon" />
             {!isCollapsed && <span>Security</span>}
           </a>
+
+          {canCreate && (
+            <a
+              href="/platform-data"
+              className={`sidebar-link ${isActive("/platform-data") ? "active" : ""}`}
+              title="Platform Data"
+            >
+              <IoServerOutline className="sidebar-icon" />
+              {!isCollapsed && <span>Platform Data</span>}
+            </a>
+          )}
         </div>
       </div>
 

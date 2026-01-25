@@ -51,7 +51,6 @@ const AddStudentModal = ({
   defaultCollege = null,
 }) => {
   const [formData, setFormData] = useState({
-    studentNumber: "",
     studentId: "",
     firstName: "",
     lastName: "",
@@ -734,15 +733,14 @@ const AddStudentModal = ({
   const validateForm = () => {
     const newErrors = {};
 
-    const studentIdValue =
-      formData.studentNumber.trim() || formData.studentId.trim();
+    const studentIdValue = formData.studentId.trim();
     if (!studentIdValue) {
-      newErrors.studentNumber = "Student ID is required";
+      newErrors.studentId = "Student ID is required";
     } else {
       // Perfect format: XX-XXXXX-XXX (2 digits, dash, 5 digits, dash, 3 digits)
       const perfectFormatRegex = /^\d{2}-\d{5}-\d{3}$/;
       if (!perfectFormatRegex.test(studentIdValue)) {
-        newErrors.studentNumber =
+        newErrors.studentId =
           "Student ID must be in format: XX-XXXXX-XXX (e.g., 12-12345-678)";
       }
     }
@@ -815,8 +813,7 @@ const AddStudentModal = ({
   const handleSubmit = (e) => {
     e.preventDefault();
     if (validateForm()) {
-      const studentIdValue =
-        formData.studentNumber.trim() || formData.studentId.trim();
+      const studentIdValue = formData.studentId.trim();
       // Password is the same as Student ID
       const passwordToUse = studentIdValue;
       // Combine section components into format: [Year][Program]-[Section] (all uppercase)
@@ -825,8 +822,7 @@ const AddStudentModal = ({
         .toUpperCase()}-${formData.sectionNumber.trim().toUpperCase()}`;
       onSubmit({
         ...formData,
-        studentNumber: studentIdValue,
-        studentId: studentIdValue, // Save to both fields for compatibility
+        studentId: studentIdValue,
         email: formData.email.trim(), // Required for contact purposes
         section: section,
         password: passwordToUse,
@@ -836,7 +832,6 @@ const AddStudentModal = ({
 
   const handleClose = () => {
     setFormData({
-      studentNumber: "",
       studentId: "",
       firstName: "",
       lastName: "",
@@ -901,59 +896,55 @@ const AddStudentModal = ({
 
           <form onSubmit={handleSubmit}>
             <div className="form-group">
-              <label htmlFor="studentNumber">
+              <label htmlFor="studentId">
                 Student ID <span className="required">*</span>
               </label>
               <input
                 type="text"
-                id="studentNumber"
-                name="studentNumber"
-                value={formData.studentNumber || formData.studentId}
+                id="studentId"
+                name="studentId"
+                value={formData.studentId}
                 onChange={(e) => {
                   const formattedValue = formatStudentId(e.target.value);
                   setFormData((prev) => ({
                     ...prev,
-                    studentNumber: formattedValue,
                     studentId: formattedValue,
                   }));
                   // Clear error when user starts typing
-                  if (errors.studentNumber) {
-                    setErrors((prev) => ({ ...prev, studentNumber: "" }));
+                  if (errors.studentId) {
+                    setErrors((prev) => ({ ...prev, studentId: "" }));
                   }
                 }}
                 onBlur={() => {
                   // Validate on blur
-                  const studentIdValue =
-                    formData.studentNumber.trim() || formData.studentId.trim();
+                  const studentIdValue = formData.studentId.trim();
                   if (studentIdValue) {
                     const perfectFormatRegex = /^\d{2}-\d{5}-\d{3}$/;
                     if (!perfectFormatRegex.test(studentIdValue)) {
                       setErrors((prev) => ({
                         ...prev,
-                        studentNumber:
+                        studentId:
                           "Student ID must be in format: XX-XXXXX-XXX (e.g., 12-12345-678)",
                       }));
                     } else {
-                      setErrors((prev) => ({ ...prev, studentNumber: "" }));
+                      setErrors((prev) => ({ ...prev, studentId: "" }));
                     }
                   }
                 }}
                 className={
-                  errors.studentNumber
+                  errors.studentId
                     ? "error"
-                    : (formData.studentNumber || formData.studentId) &&
-                      !errors.studentNumber
+                    : formData.studentId && !errors.studentId
                     ? "success"
                     : ""
                 }
                 placeholder="e.g., 12-12345-678"
                 maxLength={12}
               />
-              {errors.studentNumber && (
-                <span className="error-message">{errors.studentNumber}</span>
+              {errors.studentId && (
+                <span className="error-message">{errors.studentId}</span>
               )}
-              {(formData.studentNumber || formData.studentId) &&
-                !errors.studentNumber && (
+              {formData.studentId && !errors.studentId && (
                   <span className="success-message">
                     <span style={{ color: "#2e7d32", marginRight: "4px" }}>
                       ✓

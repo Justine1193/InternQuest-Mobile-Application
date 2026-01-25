@@ -59,6 +59,21 @@ const DeletedRecords = () => {
     fetchDeleted();
   }, []);
 
+  const formatDateTime = (value) => {
+    if (!value) return "N/A";
+    try {
+      // Firestore Timestamp support
+      if (typeof value === "object" && typeof value.toDate === "function") {
+        return value.toDate().toLocaleString();
+      }
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return String(value);
+      return date.toLocaleString();
+    } catch (e) {
+      return String(value);
+    }
+  };
+
   // Scroll to top when error occurs
   useEffect(() => {
     if (error) {
@@ -287,7 +302,7 @@ const DeletedRecords = () => {
     const fullName = `${student.firstName || ''} ${student.lastName || ''}`.toLowerCase();
     const email = (student.email || '').toLowerCase();
     const program = (student.program || '').toLowerCase();
-    const studentId = ((student.studentNumber || student.studentId) || '').toLowerCase();
+    const studentId = ((student.studentId) || '').toLowerCase();
     return fullName.includes(query) || email.includes(query) || program.includes(query) || studentId.includes(query);
   });
 
@@ -578,6 +593,7 @@ const DeletedRecords = () => {
                     <th>Student ID</th>
                     <th>Email</th>
                     <th>Program</th>
+                    <th>Created At</th>
                     <th>Archived At</th>
                     <th>Archived By</th>
                     <th>Actions</th>
@@ -586,7 +602,7 @@ const DeletedRecords = () => {
                 <tbody>
                   {deletedStudents.length === 0 ? (
                     <tr>
-                      <td colSpan="7" style={{ padding: 0, border: "none" }}>
+                      <td colSpan="8" style={{ padding: 0, border: "none" }}>
                         <EmptyState
                           type="document"
                           title="No archived students"
@@ -597,7 +613,7 @@ const DeletedRecords = () => {
                     </tr>
                   ) : filteredStudents.length === 0 ? (
                     <tr>
-                      <td colSpan="7" style={{ padding: 0, border: "none" }}>
+                      <td colSpan="8" style={{ padding: 0, border: "none" }}>
                         <EmptyState
                           type="search"
                           title="No students found"
@@ -620,13 +636,14 @@ const DeletedRecords = () => {
                         <td>
                           {s.firstName || ""} {s.lastName || ""}
                         </td>
-                        <td>{s.studentNumber || s.studentId || "N/A"}</td>
+                        <td>{s.studentId || "N/A"}</td>
                         <td>{s.email || "N/A"}</td>
                         <td>{s.program || "N/A"}</td>
                         <td>
-                          {s.deletedAt
-                            ? new Date(s.deletedAt).toLocaleString()
-                            : "N/A"}
+                          {formatDateTime(s.createdAt)}
+                        </td>
+                        <td>
+                          {formatDateTime(s.deletedAt)}
                         </td>
                         <td>{s.deletedByRole || "N/A"}</td>
                         <td>
@@ -774,6 +791,7 @@ const DeletedRecords = () => {
                     <th>Company</th>
                     <th>Email</th>
                     <th>Field</th>
+                    <th>Created At</th>
                     <th>Archived At</th>
                     <th>Actions</th>
                   </tr>
@@ -781,7 +799,7 @@ const DeletedRecords = () => {
                 <tbody>
                   {deletedCompanies.length === 0 ? (
                     <tr>
-                      <td colSpan="5" style={{ padding: 0, border: "none" }}>
+                      <td colSpan="6" style={{ padding: 0, border: "none" }}>
                         <EmptyState
                           type="document"
                           title="No archived companies"
@@ -792,7 +810,7 @@ const DeletedRecords = () => {
                     </tr>
                   ) : filteredCompanies.length === 0 ? (
                     <tr>
-                      <td colSpan="5" style={{ padding: 0, border: "none" }}>
+                      <td colSpan="6" style={{ padding: 0, border: "none" }}>
                         <EmptyState
                           type="search"
                           title="No companies found"
@@ -818,9 +836,10 @@ const DeletedRecords = () => {
                           {Array.isArray(c.fields) ? c.fields.join(", ") : "N/A"}
                         </td>
                         <td>
-                          {c.deletedAt
-                            ? new Date(c.deletedAt).toLocaleString()
-                            : "N/A"}
+                          {formatDateTime(c.createdAt)}
+                        </td>
+                        <td>
+                          {formatDateTime(c.deletedAt)}
                         </td>
                         <td>
                           <button
@@ -968,6 +987,7 @@ const DeletedRecords = () => {
                     <th>Email</th>
                     <th>Role</th>
                     <th>Program</th>
+                    <th>Created At</th>
                     <th>Archived At</th>
                     <th>Archived By</th>
                   </tr>
@@ -975,7 +995,7 @@ const DeletedRecords = () => {
                 <tbody>
                   {deletedAdmins.length === 0 ? (
                     <tr>
-                      <td colSpan="6" style={{ padding: 0, border: "none" }}>
+                      <td colSpan="7" style={{ padding: 0, border: "none" }}>
                         <EmptyState
                           type="document"
                           title="No archived admins"
@@ -986,7 +1006,7 @@ const DeletedRecords = () => {
                     </tr>
                   ) : filteredAdmins.length === 0 ? (
                     <tr>
-                      <td colSpan="6" style={{ padding: 0, border: "none" }}>
+                      <td colSpan="7" style={{ padding: 0, border: "none" }}>
                         <EmptyState
                           type="search"
                           title="No admins found"
@@ -1003,9 +1023,10 @@ const DeletedRecords = () => {
                         <td>{admin.deletedRole || "N/A"}</td>
                         <td>{admin.deletedProgram || "N/A"}</td>
                         <td>
-                          {admin.deletedAt
-                            ? new Date(admin.deletedAt).toLocaleString()
-                            : "N/A"}
+                          {formatDateTime(admin.createdAt)}
+                        </td>
+                        <td>
+                          {formatDateTime(admin.deletedAt)}
                         </td>
                         <td>{admin.deletedByRole || "N/A"}</td>
                       </tr>
@@ -1139,6 +1160,7 @@ const DeletedRecords = () => {
                     <th>Student</th>
                     <th>Requirement Type</th>
                     <th>File Name</th>
+                    <th>Uploaded At</th>
                     <th>Rejected At</th>
                     <th>Rejected By</th>
                     <th>Reason</th>
@@ -1148,7 +1170,7 @@ const DeletedRecords = () => {
                 <tbody>
                   {rejectedRequirements.length === 0 ? (
                     <tr>
-                      <td colSpan="7" style={{ padding: 0, border: "none" }}>
+                      <td colSpan="8" style={{ padding: 0, border: "none" }}>
                         <EmptyState
                           type="document"
                           title="No rejected requirements"
@@ -1159,7 +1181,7 @@ const DeletedRecords = () => {
                     </tr>
                   ) : filteredRequirements.length === 0 ? (
                     <tr>
-                      <td colSpan="7" style={{ padding: 0, border: "none" }}>
+                      <td colSpan="8" style={{ padding: 0, border: "none" }}>
                         <EmptyState
                           type="search"
                           title="No requirements found"
@@ -1189,9 +1211,10 @@ const DeletedRecords = () => {
                           )}
                         </td>
                         <td>
-                          {req.rejectedAt
-                            ? new Date(req.rejectedAt).toLocaleString()
-                            : "N/A"}
+                          {formatDateTime(req.originalUploadedAt)}
+                        </td>
+                        <td>
+                          {formatDateTime(req.rejectedAt)}
                         </td>
                         <td>{req.rejectedBy || "N/A"}</td>
                         <td>

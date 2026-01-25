@@ -255,7 +255,6 @@ const SecuritySettings = () => {
     }
   };
 
-
   return (
     <div className="security-settings-page">
       <LoadingSpinner isLoading={isLoading} message="Processing request..." />

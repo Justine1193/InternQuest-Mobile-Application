@@ -144,7 +144,7 @@ const StudentDashboard = () => {
       const studentIdMap = new Map();
       const csvDuplicates = [];
       students.forEach((student, index) => {
-        const studentId = student.studentNumber || student.studentId || "";
+        const studentId = student.studentId || "";
         if (studentId) {
           if (studentIdMap.has(studentId)) {
             csvDuplicates.push({
@@ -189,9 +189,8 @@ const StudentDashboard = () => {
         try {
           const student = students[i];
 
-          // Check if student number/ID already exists
-          const importStudentIdValue =
-            student.studentNumber || student.studentId || "";
+          // Check if student ID already exists
+          const importStudentIdValue = student.studentId || "";
           let trimmedId = "";
 
           if (importStudentIdValue) {
@@ -212,12 +211,6 @@ const StudentDashboard = () => {
             }
 
             // Then check if it exists in Firestore database
-            const studentNumberQuery = query(
-              collection(db, "users"),
-              where("studentNumber", "==", trimmedId)
-            );
-            const studentNumberSnapshot = await getDocs(studentNumberQuery);
-
             // Check studentId field
             const studentIdQuery = query(
               collection(db, "users"),
@@ -225,9 +218,9 @@ const StudentDashboard = () => {
             );
             const studentIdSnapshot = await getDocs(studentIdQuery);
 
-            if (!studentNumberSnapshot.empty || !studentIdSnapshot.empty) {
+            if (!studentIdSnapshot.empty) {
               throw new Error(
-                `Student ID/Number ${trimmedId} already exists in database`
+                `Student ID ${trimmedId} already exists in database`
               );
             }
           }
@@ -295,13 +288,14 @@ const StudentDashboard = () => {
           const normalizedEmail = trimmedEmail.toLowerCase();
 
           const newStudent = {
-            studentNumber: trimmedId || importStudentIdValue?.trim() || "",
-            studentId: trimmedId || importStudentIdValue?.trim() || "", // Save to both fields for compatibility
+            studentId: trimmedId || importStudentIdValue?.trim() || "",
             firstName: student.firstName,
             lastName: student.lastName,
             email: normalizedEmail, // Store institutional email (same as authEmail - both use normalized email)
             authEmail: normalizedEmail, // Store email used for Firebase Auth (same as email - both use institutional email)
             uid: firebaseUser.uid, // Link to Firebase Auth UID
+            section: student.section || "",
+            college: student.college || "",
             program: student.program,
             yearLevel: student.yearLevel || "",
             contact: student.contact || "",
@@ -1926,19 +1920,26 @@ const StudentDashboard = () => {
   // Use debouncedSearchQuery instead of searchQuery for better performance
   const filteredData = useMemo(() => {
     return dataSource.filter((student) => {
+      const q = debouncedSearchQuery.toLowerCase();
       const matchesSearch =
+        (!q ? true : false) ||
         (typeof student.firstName === "string" &&
           student.firstName
             .toLowerCase()
-            .includes(debouncedSearchQuery.toLowerCase())) ||
+            .includes(q)) ||
         (typeof student.lastName === "string" &&
           student.lastName
             .toLowerCase()
-            .includes(debouncedSearchQuery.toLowerCase())) ||
+            .includes(q)) ||
+        (typeof student.studentId === "string" &&
+          student.studentId.toLowerCase().includes(q)) ||
         (typeof student.program === "string" &&
           student.program
             .toLowerCase()
-            .includes(debouncedSearchQuery.toLowerCase()));
+            .includes(q)) ||
+        (typeof student.section === "string" &&
+          student.section.toLowerCase().includes(q)) ||
+        (typeof student.email === "string" && student.email.toLowerCase().includes(q));
       const matchesProgram = activeFilterValues.program
         ? typeof student.program === "string" &&
           student.program
@@ -2469,10 +2470,9 @@ const StudentDashboard = () => {
     try {
       setIsCreatingStudent(true);
 
-      // Check if student number/ID already exists in Firestore
+      // Check if student ID already exists in Firestore
       const usersRef = collection(db, "users");
-      const newStudentIdValue =
-        studentData.studentNumber?.trim() || studentData.studentId?.trim();
+      const newStudentIdValue = studentData.studentId?.trim();
 
       if (newStudentIdValue) {
         // Validate Student ID format: XX-XXXXX-XXX
@@ -2485,13 +2485,6 @@ const StudentDashboard = () => {
           return;
         }
 
-        // Check studentNumber field
-        const studentNumberQuery = query(
-          usersRef,
-          where("studentNumber", "==", newStudentIdValue)
-        );
-        const studentNumberSnapshot = await getDocs(studentNumberQuery);
-
         // Check studentId field
         const studentIdQuery = query(
           usersRef,
@@ -2499,9 +2492,9 @@ const StudentDashboard = () => {
         );
         const studentIdSnapshot = await getDocs(studentIdQuery);
 
-        if (!studentNumberSnapshot.empty || !studentIdSnapshot.empty) {
+        if (!studentIdSnapshot.empty) {
           showError(
-            "A student with this Student ID/Number already exists. Student IDs must be unique."
+            "A student with this Student ID already exists. Student IDs must be unique."
           );
           setIsCreatingStudent(false);
           return;
@@ -2679,14 +2672,10 @@ const StudentDashboard = () => {
       }
 
       // Create student document in Firestore
-      const createdStudentIdValue =
-        studentData.studentNumber?.trim() ||
-        studentData.studentId?.trim() ||
-        "";
+      const createdStudentIdValue = studentData.studentId?.trim() || "";
 
       const newStudent = {
-        studentNumber: createdStudentIdValue,
-        studentId: createdStudentIdValue, // Save to both fields for compatibility
+        studentId: createdStudentIdValue,
         firstName: studentData.firstName.trim(),
         lastName: studentData.lastName.trim(),
         section: studentData.section?.trim() || "",
@@ -3015,11 +3004,7 @@ const StudentDashboard = () => {
                                   const query = studentSearchQuery.toLowerCase();
                                   const fullName =
                                     `${student.firstName} ${student.lastName}`.toLowerCase();
-                                  const studentId = (
-                                    student.studentNumber ||
-                                    student.studentId ||
-                                    ""
-                                  ).toLowerCase();
+                                  const studentId = (student.studentId || "").toLowerCase();
                                   const section = (
                                     student.section || ""
                                   ).toLowerCase();
@@ -3071,9 +3056,7 @@ const StudentDashboard = () => {
                                           {student.firstName} {student.lastName}
                                         </div>
                                         <div className="dropdown-item-details">
-                                          {student.studentNumber ||
-                                            student.studentId}{" "}
-                                          - {student.section}
+                                          {student.studentId} - {student.section}
                                         </div>
                                       </div>
                                     </div>
@@ -3084,11 +3067,7 @@ const StudentDashboard = () => {
                                 const query = studentSearchQuery.toLowerCase();
                                 const fullName =
                                   `${student.firstName} ${student.lastName}`.toLowerCase();
-                                const studentId = (
-                                  student.studentNumber ||
-                                  student.studentId ||
-                                  ""
-                                ).toLowerCase();
+                                const studentId = (student.studentId || "").toLowerCase();
                                 const section = (
                                   student.section || ""
                                 ).toLowerCase();

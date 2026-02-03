@@ -65,10 +65,6 @@ export const LOOKUP_EMAIL_FUNCTION_BASE_URL =
     ? buildFunctionsEmulatorUrl('lookupEmailByStudentId')
     : (LOOKUP_EMAIL_FROM_ENV || LOOKUP_EMAIL_FROM_CONSTANTS || '');
 
-// Optional: API key for lookupEmailByStudentId (only if your function enforces it)
-const LOOKUP_EMAIL_API_KEY_FROM_ENV = process.env.LOOKUP_EMAIL_API_KEY;
-const LOOKUP_EMAIL_API_KEY_FROM_CONSTANTS = extras?.LOOKUP_EMAIL_API_KEY;
-export const LOOKUP_EMAIL_API_KEY = LOOKUP_EMAIL_API_KEY_FROM_ENV || LOOKUP_EMAIL_API_KEY_FROM_CONSTANTS || '';
 
 // Admin-only: Cloud Function to create user accounts
 const CREATE_USER_FROM_ENV = process.env.CREATE_USER_FUNCTION_BASE_URL;

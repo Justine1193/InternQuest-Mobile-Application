@@ -3,7 +3,7 @@ import {
   View, Text, ScrollView, Modal, TextInput,
   TouchableOpacity, Alert, StyleSheet, Platform, PermissionsAndroid, Linking, Share
 } from 'react-native';
-import { Card, FAB } from 'react-native-paper';
+import { Card } from 'react-native-paper';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -15,10 +15,10 @@ import { Picker } from '@react-native-picker/picker';
 import RNBlobUtil from 'react-native-blob-util';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
-import Feather from 'react-native-vector-icons/Feather';
+import { LinearGradient } from 'expo-linear-gradient';
 import { colors, radii, shadows } from '../ui/theme';
 import { Screen } from '../ui/components/Screen';
-import { AppHeader } from '../ui/components/AppHeader';
+import Svg, { Circle } from 'react-native-svg';
 
 // Types
 type TimeLog = {
@@ -52,12 +52,10 @@ const OJTTrackerScreen: React.FC = () => {
   const [goalModalVisible, setGoalModalVisible] = useState(false);
   const [goalInput, setGoalInput] = useState('300');
   const [totalHours, setTotalHours] = useState(0);
-  const [showCalendar, setShowCalendar] = useState(false);
-  const [selectedDate, setSelectedDate] = useState('');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [tempDate, setTempDate] = useState({
     year: new Date().getFullYear(),
-    month: new Date().getMonth() + 1,
+    month: new Date().getMonth() + 1, // 1–12
     day: new Date().getDate()
   });
   const [currentPage, setCurrentPage] = useState(1);
@@ -136,13 +134,9 @@ const OJTTrackerScreen: React.FC = () => {
                 if (appliedId) {
                   try {
                     await deleteDoc(doc(firestore, 'applications', `${uid}_${appliedId}`));
-                  } catch (delErr) {
-                    console.warn('OJTTracker: failed to delete application doc', delErr);
-                  }
+                  } catch (delErr) {}
                 }
-              } catch (readErr) {
-                console.warn('OJTTracker: failed to read user doc before deleting application', readErr);
-              }
+              } catch (readErr) {}
 
               await setDoc(doc(firestore, 'users', uid), {
                 appliedCompanyId: null,
@@ -172,15 +166,13 @@ const OJTTrackerScreen: React.FC = () => {
     if (!auth.currentUser) return;
     try {
       const userId = auth.currentUser.uid;
-      console.log('loadLogsFromFirestore: loading logs for user', userId);
       const logsCol = collection(firestore, `users/${userId}/ojtLogs`);
       const logsSnap = await getDocs(logsCol);
-      console.log('loadLogsFromFirestore: found', logsSnap.size, 'documents');
       const logs: TimeLog[] = [];
       logsSnap.forEach((doc: any) => logs.push(doc.data() as TimeLog));
       setTimeLogs(logs.sort((a, b) => b.date.localeCompare(a.date)));
     } catch (error: any) {
-      console.error('Error loading logs:', error);
+      console.error('OJT Tracker: load time logs failed', error?.message || error);
       Alert.alert('Error', 'Failed to load time logs: ' + (error?.message || String(error)));
     }
   };
@@ -203,7 +195,6 @@ const OJTTrackerScreen: React.FC = () => {
   // Firestore operations
   const syncLogToFirestore = async (log: TimeLog) => {
     if (!auth.currentUser) {
-      console.warn('syncLogToFirestore: no auth.currentUser — user not signed in');
       throw new Error('Not authenticated');
     }
 
@@ -212,18 +203,9 @@ const OJTTrackerScreen: React.FC = () => {
       const logId = `${log.date}_${log.clockIn}`.replace(/\W/g, '');
       const path = `users/${userId}/ojtLogs/${logId}`;
       const logRef = doc(firestore, path);
-
-      console.log('syncLogToFirestore: attempting to write', { userId, path, log });
       await setDoc(logRef, log);
-      console.log('syncLogToFirestore: write succeeded', { userId, path, logId });
     } catch (error: any) {
-      // Provide helpful debug logs for permission issues and other failures
-      console.error('syncLogToFirestore: failed to write log —', {
-        message: error?.message ?? error,
-        code: error?.code ?? null,
-        stack: error?.stack ?? null,
-      });
-      // Re-throw so callers can show an error message (or handle as they see fit)
+      console.error('OJT Tracker: sync log failed', error?.message || error);
       throw error;
     }
   };
@@ -235,17 +217,12 @@ const OJTTrackerScreen: React.FC = () => {
       const logId = `${log.date}_${log.clockIn}`.replace(/\W/g, '');
       const path = `users/${userId}/ojtLogs/${logId}`;
       const logRef = doc(firestore, path);
-      console.log('deleteLogFromFirestore: attempting delete', { userId, path, logId });
       await deleteDoc(logRef);
-      console.log('deleteLogFromFirestore: delete succeeded', { userId, path, logId });
     } catch (error) {
-      console.error('Error deleting log:', error);
-      // Diagnostic write so we can inspect failure server-side
+      console.error('OJT Tracker: delete log failed', error);
       try {
         if (auth.currentUser) await setDoc(doc(firestore, 'users', auth.currentUser.uid), { lastOjtSyncError: { time: new Date().toISOString(), message: String(error) } }, { merge: true });
-      } catch (dbgErr) {
-        console.error('deleteLogFromFirestore: failed to write debug info to user doc:', dbgErr);
-      }
+      } catch (dbgErr) {}
       throw error;
     }
   };
@@ -285,6 +262,15 @@ const OJTTrackerScreen: React.FC = () => {
       return '';
     }
 
+    // Automatically subtract 1 hour lunch break if the shift covers 12:00–13:00
+    // (typical 8am–5pm OJT day becomes 8 hours instead of 9)
+    const lunchStart = 12; // 12:00
+    const lunchEnd = 13;   // 13:00
+    const coversLunch = startTime <= lunchStart && endTime >= lunchEnd;
+    if (coversLunch) {
+      hours -= 1;
+    }
+
     // Round to nearest whole number
     const roundedHours = Math.round(hours);
 
@@ -294,7 +280,6 @@ const OJTTrackerScreen: React.FC = () => {
 
   const handleSave = async () => {
     try {
-      console.log('handleSave: saving formData', formData);
       // Validate inputs
       if (!formData.date || !formData.clockIn || !formData.clockOut) {
         Alert.alert('Error', 'Please fill in all required fields.');
@@ -313,7 +298,7 @@ const OJTTrackerScreen: React.FC = () => {
         return;
       }
 
-      // Calculate hours if manual input is empty
+      // Calculate hours (lunch break is automatically deducted)
       const calculatedHours = calculateHours(
         formData.clockIn,
         formData.clockOut,
@@ -321,8 +306,8 @@ const OJTTrackerScreen: React.FC = () => {
         clockOutAmPm
       );
 
-      const hours = formData.hours || calculatedHours;
-      const hoursNum = parseInt(hours);
+      const hoursToUse = formData.hours || calculatedHours;
+      const hoursNum = parseInt(hoursToUse);
 
       if (isNaN(hoursNum) || hoursNum <= 0 || hoursNum > MAX_HOURS) {
         Alert.alert('Error', `Please enter a valid whole number of hours (1-${MAX_HOURS}).`);
@@ -340,11 +325,11 @@ const OJTTrackerScreen: React.FC = () => {
       }
 
       // Save log
-      const logToSave = {
+      const logToSave: TimeLog = {
         ...formData,
         clockIn: `${formData.clockIn} ${clockInAmPm}`,
         clockOut: `${formData.clockOut} ${clockOutAmPm}`,
-        hours: hours,
+        hours: hoursToUse,
       };
 
       if (editIndex !== null) {
@@ -354,7 +339,7 @@ const OJTTrackerScreen: React.FC = () => {
         try {
           await syncLogToFirestore(logToSave);
         } catch (error: any) {
-          console.error('handleSave: sync edited log failed', error);
+          console.error('OJT Tracker: save edited log failed', error?.message || error);
           Alert.alert('Error', `Failed saving edited log: ${error?.message || String(error)}`);
           return; // stop, keep modal open for retry
         }
@@ -364,9 +349,8 @@ const OJTTrackerScreen: React.FC = () => {
         try {
           await syncLogToFirestore(logToSave);
         } catch (error: any) {
-          console.error('handleSave: sync new log failed', error);
+          console.error('OJT Tracker: save new log failed', error?.message || error);
           Alert.alert('Error', `Failed saving new log: ${error?.message || String(error)}`);
-          // revert the optimistic add
           setTimeLogs(timeLogs);
           return;
         }
@@ -378,7 +362,7 @@ const OJTTrackerScreen: React.FC = () => {
       setFormData({ date: '', clockIn: '', clockOut: '', hours: '' });
       Alert.alert('Success', 'Time log saved successfully!');
     } catch (error: any) {
-      console.error('Error saving log:', error);
+      console.error('OJT Tracker: save time log failed', error?.message || error);
       Alert.alert('Error', `Failed to save time log: ${error?.message || String(error)}. Please try again.`);
 
       // Diagnostic: attempt to write a small debug object to the user's root document
@@ -392,11 +376,8 @@ const OJTTrackerScreen: React.FC = () => {
               message: error?.message || String(error),
             }
           }, { merge: true });
-          console.log('handleSave: wrote lastOjtSyncError to users/' + uid);
         }
-      } catch (dbgErr) {
-        console.error('handleSave: failed to write debug info to user doc:', dbgErr);
-      }
+      } catch (dbgErr) {}
     }
   };
 
@@ -413,7 +394,7 @@ const OJTTrackerScreen: React.FC = () => {
             setTimeLogs(filtered);
             await loadLogsFromFirestore();
           } catch (error: any) {
-            console.error('Error deleting log:', error);
+            console.error('OJT Tracker: delete time log failed', error?.message || error);
             Alert.alert('Error', `Failed to delete time log: ${error?.message || String(error)}`);
           }
         }
@@ -446,7 +427,6 @@ const OJTTrackerScreen: React.FC = () => {
       );
       return granted === PermissionsAndroid.RESULTS.GRANTED;
     } catch (err) {
-      console.warn(err);
       return false;
     }
   };
@@ -468,7 +448,7 @@ const OJTTrackerScreen: React.FC = () => {
 
       Alert.alert('Success', 'CSV file has been prepared for download.');
     } catch (error) {
-      console.error('Error preparing CSV:', error);
+      console.error('OJT Tracker: prepare CSV failed', error);
       Alert.alert('Error', 'Failed to prepare CSV file for download.');
     }
   };
@@ -524,16 +504,11 @@ const OJTTrackerScreen: React.FC = () => {
     try {
       const userDocRef = doc(firestore, "users", auth.currentUser.uid);
       await setDoc(userDocRef, { totalHours }, { merge: true });
-      console.log('totalHours updated in Firestore:', totalHours);
     } catch (error) {
-      console.error('Error updating totalHours in Firestore:', error);
-      // Diagnostic fallback so we can inspect failure server-side
+      console.error('OJT Tracker: update totalHours failed', error);
       try {
         if (auth.currentUser) await setDoc(doc(firestore, 'users', auth.currentUser.uid), { lastOjtSyncError: { time: new Date().toISOString(), message: String(error) } }, { merge: true });
-        console.log('updateTotalHoursInFirestore: wrote lastOjtSyncError to user doc');
-      } catch (dbgErr) {
-        console.error('updateTotalHoursInFirestore: failed to write debug info to user doc:', dbgErr);
-      }
+      } catch (dbgErr) {}
     }
   };
 
@@ -586,21 +561,20 @@ const OJTTrackerScreen: React.FC = () => {
     }
   };
 
-  // Add useEffect to update hours when clock in/out times change
+  // Auto-update hours when clock in/out change (lunch break is automatically deducted)
   useEffect(() => {
     if (formData.clockIn && formData.clockOut) {
-      const calculatedHours = calculateHours(
+      const calculated = calculateHours(
         formData.clockIn,
         formData.clockOut,
         clockInAmPm,
         clockOutAmPm
       );
 
-      // Only update if manual input is empty or if the calculated hours are different
-      if (!formData.hours || formData.hours !== calculatedHours) {
+      if (!formData.hours || formData.hours !== calculated) {
         setFormData(prev => ({
           ...prev,
-          hours: calculatedHours
+          hours: calculated
         }));
       }
     }
@@ -622,27 +596,15 @@ const OJTTrackerScreen: React.FC = () => {
 
   // Update the handleDateSelect function
   const handleDateSelect = (day: number) => {
-    const currentDate = new Date();
-    const formattedDate = `${currentDate.getFullYear()}/${String(currentDate.getMonth() + 1).padStart(2, '0')}/${String(day).padStart(2, '0')}`;
+    // Use the currently selected calendar month/year (tempDate)
+    const year = tempDate.year;
+    const month = tempDate.month;
+    const formattedDate = `${year}/${String(month).padStart(2, '0')}/${String(day).padStart(2, '0')}`;
     setFormData(prev => ({
       ...prev,
-      date: formattedDate
+      date: formattedDate,
     }));
     setShowDatePicker(false);
-  };
-
-  // Update the handleMonthChange function
-  const handleMonthChange = (increment: number) => {
-    const currentDate = new Date();
-    const currentYear = currentDate.getFullYear();
-    const currentMonth = currentDate.getMonth() + 1;
-
-    // Only allow viewing the current month
-    setTempDate(prev => ({
-      ...prev,
-      month: currentMonth,
-      year: currentYear
-    }));
   };
 
   const generateDaysInMonth = (year: number, month: number) => {
@@ -659,340 +621,526 @@ const OJTTrackerScreen: React.FC = () => {
     return Math.ceil(timeLogs.length / itemsPerPage);
   };
 
+  // Progress for total hours
+  const progress = requiredHours > 0 ? Math.min(1, totalHours / requiredHours) : 0;
+  const progressPercent = Math.round(progress * 100);
+
   const handlePageChange = (page: number) => {
     if (page >= 1 && page <= getTotalPages()) {
       setCurrentPage(page);
     }
   };
 
+  const openDatePickerModal = () => {
+    // If a date is already selected, start the calendar at that month/year
+    if (formData.date) {
+      const parts = formData.date.split('/');
+      if (parts.length === 3) {
+        const [y, m, d] = parts.map(Number);
+        if (!Number.isNaN(y) && !Number.isNaN(m) && m >= 1 && m <= 12) {
+          setTempDate({
+            year: y,
+            month: m,
+            day: !Number.isNaN(d) ? d : 1,
+          });
+        }
+      }
+    } else {
+      const today = new Date();
+      setTempDate({
+        year: today.getFullYear(),
+        month: today.getMonth() + 1,
+        day: today.getDate(),
+      });
+    }
+    setShowDatePicker(true);
+  };
+
+  const handleMonthChange = (direction: 'prev' | 'next') => {
+    setTempDate(prev => {
+      let year = prev.year;
+      let month = prev.month + (direction === 'next' ? 1 : -1);
+
+      if (month < 1) {
+        month = 12;
+        year -= 1;
+      } else if (month > 12) {
+        month = 1;
+        year += 1;
+      }
+
+      // Do not allow selecting months after the current month/year
+      const today = new Date();
+      const maxYear = today.getFullYear();
+      const maxMonth = today.getMonth() + 1;
+      if (year > maxYear || (year === maxYear && month > maxMonth)) {
+        return prev;
+      }
+
+      return { ...prev, year, month };
+    });
+  };
+
   return (
-    <Screen contentContainerStyle={{ paddingHorizontal: 0, paddingTop: 0 }}>
-      <AppHeader back title="OJT tracker" />
+    <Screen style={{ backgroundColor: colors.white }} contentContainerStyle={{ paddingHorizontal: 0, paddingTop: 0 }}>
       <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
-
-      <View style={styles.infoRow}>
-        <View style={styles.infoBox}>
-          <Text style={styles.infoLabel}>Goal</Text>
-          <TouchableOpacity onPress={() => setGoalModalVisible(true)}>
-            <Text style={styles.infoValue}>{totalHours}hrs / {requiredHours} hrs</Text>
-          </TouchableOpacity>
-          <Text style={styles.subText}>
-            {Math.max(0, requiredHours - totalHours)} hours remaining
-          </Text>
-        </View>
-        <View style={styles.infoBox}>
-          <Text style={styles.infoLabel}>Company</Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Text style={styles.infoValue}>{userCompany || appliedCompanyName || 'Not Applied'}</Text>
-            {appliedCompanyName && !userCompany && userStatus !== 'hired' ? (
-              <TouchableOpacity onPress={handleClearAppliedCompany} style={styles.removeButton} accessibilityLabel="Remove applied company">
-                <Feather name="trash-2" size={18} color={colors.danger} />
-              </TouchableOpacity>
-            ) : null}
-          </View>
-        </View>
-      </View>
-
-      <View style={styles.noteBox}>
-        <Icon name="warning-outline" size={18} color={colors.warning} />
-        <Text style={styles.noteText}>
-          This tracker is for personal use only. For official time logs, please check with your HR.
-        </Text>
-      </View>
-
-      <TouchableOpacity
-        style={styles.weeklyReportButton}
-        onPress={() => navigation.navigate('WeeklyReport')}
-      >
-        <Icon name="document-text-outline" size={18} color={colors.onPrimary} />
-        <Text style={styles.weeklyReportButtonText}>Submit Weekly Report</Text>
-      </TouchableOpacity>
-
-      <Card style={styles.tableCard}>
-        <View style={styles.tableHeader}>
-          <Text style={styles.tableHeaderText}>Date</Text>
-          <Text style={styles.tableHeaderText}>Clock In</Text>
-          <Text style={styles.tableHeaderText}>Clock Out</Text>
-          <Text style={styles.tableHeaderText}>Hours</Text>
-        </View>
-
-        {getPaginatedLogs().map((item, index) => (
-          <View key={index} style={styles.tableRow}>
-            <Text style={styles.tableCell}>{item.date}</Text>
-            <Text style={styles.tableCell}>{item.clockIn}</Text>
-            <Text style={styles.tableCell}>{item.clockOut}</Text>
-            <Text style={styles.tableCell}>{item.hours}</Text>
-            <TouchableOpacity onPress={() => openModal(item, index)}>
-              <Icon name="create-outline" size={18} color={colors.primary} />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => handleDelete(index)}>
-              <Icon name="trash-outline" size={18} color={colors.danger} style={{ marginLeft: 8 }} />
-            </TouchableOpacity>
-          </View>
-        ))}
-      </Card>
-
-      <View style={styles.pagination}>
-        <TouchableOpacity
-          onPress={() => handlePageChange(currentPage - 1)}
-          disabled={currentPage === 1}
-          style={[styles.paginationButton, currentPage === 1 && styles.paginationButtonDisabled]}
+        {/* Hero header - scrolls with content */}
+        <LinearGradient
+          colors={['#4F46E5', '#6366F1', '#818CF8']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.heroContainer}
         >
-          <Text style={[styles.paginationText, currentPage === 1 && styles.paginationTextDisabled]}>‹ Previous</Text>
-        </TouchableOpacity>
+          <View style={styles.heroCard}>
+            <View style={styles.heroTitleRow}>
+              <Icon name="time" size={26} color={colors.onPrimary} style={styles.heroIcon} />
+              <Text style={styles.heroTitle}>OJT Tracker</Text>
+            </View>
+            <Text style={styles.heroSubtitle}>
+              Log your daily hours and track your internship progress toward your goal.
+            </Text>
+          </View>
+        </LinearGradient>
 
-        <View style={styles.pageNumbers}>
-          {Array.from({ length: getTotalPages() }, (_, i) => i + 1).map(pageNum => (
+        {/* Section: Your progress */}
+        <Text style={styles.sectionTitle}>Your progress</Text>
+        <View style={styles.infoRow}>
+          <View style={styles.infoBox}>
+            <View style={styles.infoLabelRow}>
+              <Icon name="time-outline" size={16} color={colors.textMuted} />
+              <Text style={styles.infoLabel}>Total hours</Text>
+            </View>
             <TouchableOpacity
-              key={pageNum}
-              onPress={() => handlePageChange(pageNum)}
-              style={[
-                styles.pageNumberButton,
-                currentPage === pageNum && styles.pageNumberButtonActive
-              ]}
+              onPress={() => setGoalModalVisible(true)}
+              activeOpacity={0.9}
+              style={styles.progressTapArea}
             >
-              <Text style={[
-                styles.pageNumberText,
-                currentPage === pageNum && styles.pageNumberTextActive
-              ]}>
-                {pageNum}
+              <View style={styles.progressRingWrapper}>
+                <Svg width={120} height={120} viewBox="0 0 100 100">
+                  {/* Background track */}
+                  <Circle
+                    cx={50}
+                    cy={50}
+                    r={40}
+                    stroke={colors.surfaceAlt}
+                    strokeWidth={10}
+                    fill="none"
+                    strokeLinecap="round"
+                  />
+                  {/* Progress arc */}
+                  <Circle
+                    cx={50}
+                    cy={50}
+                    r={40}
+                    stroke={colors.success}
+                    strokeWidth={10}
+                    fill="none"
+                    strokeLinecap="round"
+                    strokeDasharray={2 * Math.PI * 40}
+                    strokeDashoffset={(1 - progress) * 2 * Math.PI * 40}
+                    transform="rotate(-90 50 50)"
+                  />
+                </Svg>
+                <View style={styles.progressCenter}>
+                  <Text style={styles.progressPercentText}>{totalHours} hrs</Text>
+                  <Text style={styles.progressHoursSub}>/ {requiredHours} hrs</Text>
+                </View>
+              </View>
+              <Text style={styles.progressRemainingText}>
+                {Math.max(0, requiredHours - totalHours)} hours remaining
               </Text>
+              <Text style={styles.progressTapHint}>Tap to set your goal</Text>
             </TouchableOpacity>
-          ))}
+          </View>
+          <View style={styles.infoBox}>
+            <View style={styles.infoLabelRow}>
+              <Icon name="business-outline" size={16} color={colors.textMuted} />
+              <Text style={styles.infoLabel}>Company</Text>
+            </View>
+            <View style={styles.companyRow}>
+              <Text style={styles.infoValue}>
+                {userStatus === 'hired' && userCompany ? userCompany : 'Not assigned yet'}
+              </Text>
+            </View>
+          </View>
         </View>
 
-        <TouchableOpacity
-          onPress={() => handlePageChange(currentPage + 1)}
-          disabled={currentPage === getTotalPages()}
-          style={[styles.paginationButton, currentPage === getTotalPages() && styles.paginationButtonDisabled]}
-        >
-          <Text style={[styles.paginationText, currentPage === getTotalPages() && styles.paginationTextDisabled]}>Next ›</Text>
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
+        {/* Reminder */}
+        <View style={styles.noteBox}>
+          <Icon name="information-circle-outline" size={20} color={colors.info} />
+          <View style={styles.noteContent}>
+            <Text style={styles.noteTitle}>For your reference</Text>
+            <Text style={styles.noteText}>
+              Use this tracker to log hours for your own records. Lunch (12–1 PM) is auto-deducted.
+            </Text>
+          </View>
+        </View>
 
-      {/* Dropdown Buttons */}
+        {/* Weekly report shortcut */}
+        <TouchableOpacity
+          style={styles.weeklyReportButton}
+          onPress={() => navigation.navigate('WeeklyReport')}
+          activeOpacity={0.9}
+        >
+          <Icon name="document-text-outline" size={18} color={colors.onPrimary} />
+          <Text style={styles.weeklyReportButtonText}>Submit weekly report</Text>
+        </TouchableOpacity>
+
+        {/* Time logs section */}
+        <Text style={styles.sectionTitle}>Time logs</Text>
+        <Card style={styles.tableCard}>
+          <View style={styles.tableHeader}>
+            <Text style={styles.tableHeaderText}>Date</Text>
+            <Text style={styles.tableHeaderText}>Clock in</Text>
+            <Text style={styles.tableHeaderText}>Clock out</Text>
+            <Text style={styles.tableHeaderText}>Hours</Text>
+            <View style={styles.tableHeaderActionsSpacer} />
+          </View>
+
+          {getPaginatedLogs().length === 0 ? (
+            <View style={styles.emptyState}>
+              <Icon name="calendar-outline" size={48} color={colors.textSubtle} style={styles.emptyStateIcon} />
+              <Text style={styles.emptyStateTitle}>No time logs yet</Text>
+              <Text style={styles.emptyStateText}>Add your first log to start tracking your OJT hours.</Text>
+              <TouchableOpacity
+                style={styles.emptyStateButton}
+                onPress={() => { setIsDropdownVisible(false); openModal(); }}
+                activeOpacity={0.85}
+              >
+                <Icon name="add" size={20} color={colors.onPrimary} />
+                <Text style={styles.emptyStateButtonText}>Add time log</Text>
+              </TouchableOpacity>
+            </View>
+          ) : getPaginatedLogs().map((item, index) => {
+            const actualIndex = (currentPage - 1) * itemsPerPage + index;
+            const isEven = index % 2 === 0;
+            return (
+              <View
+                key={`${item.date}-${item.clockIn}`}
+                style={[
+                  styles.tableRow,
+                  isEven && styles.tableRowAlt,
+                ]}
+              >
+                <Text style={[styles.tableCell, styles.tableCellDate]}>{item.date}</Text>
+                <Text style={styles.tableCell}>{item.clockIn}</Text>
+                <Text style={styles.tableCell}>{item.clockOut}</Text>
+                <View style={styles.hoursPillCell}>
+                  <View style={styles.hoursPill}>
+                    <Text style={styles.hoursPillText}>{item.hours}h</Text>
+                  </View>
+                </View>
+                <View style={styles.rowActions}>
+                  <TouchableOpacity
+                    onPress={() => openModal(item, actualIndex)}
+                    style={styles.rowIconBtn}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    activeOpacity={0.7}
+                  >
+                    <Icon name="create-outline" size={20} color={colors.primary} />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => handleDelete(actualIndex)}
+                    style={styles.rowIconBtn}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    activeOpacity={0.7}
+                  >
+                    <Icon name="trash-outline" size={20} color="#DC2626" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            );
+          })}
+        </Card>
+
+        {/* Pagination - only show when there are logs and more than one page */}
+        {timeLogs.length > 0 && getTotalPages() > 1 && (
+          <View style={styles.pagination}>
+            <TouchableOpacity
+              onPress={() => handlePageChange(currentPage - 1)}
+              disabled={currentPage === 1}
+              style={[styles.paginationButton, currentPage === 1 && styles.paginationButtonDisabled]}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.paginationText, currentPage === 1 && styles.paginationTextDisabled]}>‹ Previous</Text>
+            </TouchableOpacity>
+
+            <Text style={styles.paginationSummary}>
+              Page {currentPage} of {getTotalPages()}
+            </Text>
+
+            <TouchableOpacity
+              onPress={() => handlePageChange(currentPage + 1)}
+              disabled={currentPage === getTotalPages()}
+              style={[styles.paginationButton, currentPage === getTotalPages() && styles.paginationButtonDisabled]}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.paginationText, currentPage === getTotalPages() && styles.paginationTextDisabled]}>Next ›</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </ScrollView>
+
+      {/* FAB menu: Add log + Export CSV */}
       {isDropdownVisible && (
         <View style={styles.dropdownContainer}>
-          <FAB
-            style={[styles.dropdownButton, { backgroundColor: colors.textMuted, borderRadius: 24, width: 48, height: 48, justifyContent: 'center', alignItems: 'center' }]}
-            icon="download"
-            color={colors.onPrimary}
-            onPress={handleSaveCSV} />
-          <FAB
-            style={[styles.dropdownButton, { backgroundColor: colors.success, borderRadius: 24, width: 48, height: 48, justifyContent: 'center', alignItems: 'center' }]}
-            icon={({ color, size }) => (
-              <Feather name="file-plus" size={size} color={color} />
-            )}
-            color={colors.onPrimary}
-            onPress={() => openModal()} />
+          <TouchableOpacity
+            style={styles.fabMenuItem}
+            onPress={() => { setIsDropdownVisible(false); openModal(); }}
+            activeOpacity={0.85}
+          >
+            <View style={[styles.fabMenuIconWrap, { backgroundColor: colors.primary }]}>
+              <Icon name="add" size={24} color={colors.onPrimary} />
+            </View>
+            <Text style={styles.fabMenuLabel}>Add time log</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.fabMenuItem}
+            onPress={() => { setIsDropdownVisible(false); handleSaveCSV(); }}
+            activeOpacity={0.85}
+          >
+            <View style={[styles.fabMenuIconWrap, { backgroundColor: colors.textMuted }]}>
+              <Icon name="download-outline" size={24} color={colors.onPrimary} />
+            </View>
+            <Text style={styles.fabMenuLabel}>Export CSV</Text>
+          </TouchableOpacity>
         </View>
       )}
 
-      {/* Plus Button */}
-      <FAB
-        style={[styles.fabPlus, { backgroundColor: colors.primary }]}
-        icon="plus"
-        color={colors.onPrimary}
-        onPress={toggleDropdown} />
+      {/* Main FAB */}
+      <TouchableOpacity
+        style={styles.fabPlus}
+        onPress={toggleDropdown}
+        activeOpacity={0.9}
+      >
+        <Icon name={isDropdownVisible ? 'close' : 'add'} size={28} color={colors.onPrimary} />
+      </TouchableOpacity>
 
       <Modal visible={modalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>{editIndex !== null ? 'Edit Log' : 'Add Time Log'}</Text>
+            <Text style={styles.modalSubtitle}>Quickly log your OJT hours for a single day.</Text>
 
-            {/* Date Field with Calendar */}
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Date</Text>
-              <TouchableOpacity
-                style={styles.dateInput}
-                onPress={() => setShowDatePicker(true)}
-              >
-                <View style={styles.dateInputContent}>
-                  <Icon name="calendar-outline" size={20} color={colors.primary} style={styles.dateIcon} />
-                  <Text style={[
-                    styles.dateInputText,
-                    !formData.date && styles.dateInputPlaceholder
-                  ]}>
-                    {formData.date || 'Select Date'}
-                  </Text>
-                </View>
-                <Icon name="chevron-down" size={20} color={colors.textMuted} />
-              </TouchableOpacity>
-            </View>
-
-            {/* Custom Date Picker Modal */}
-            <Modal
-              visible={showDatePicker}
-              transparent
-              animationType="fade"
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.modalFormContent}
             >
-              <View style={styles.datePickerOverlay}>
-                <View style={styles.datePickerContainer}>
-                  <View style={styles.datePickerHeader}>
-                    <Text style={styles.datePickerTitle}>
-                      {new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}
+              {/* Date Field with Calendar */}
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Date</Text>
+                <TouchableOpacity
+                  style={styles.dateInput}
+                  onPress={openDatePickerModal}
+                >
+                  <View style={styles.dateInputContent}>
+                    <Icon name="calendar-outline" size={20} color={colors.primary} style={styles.dateIcon} />
+                    <Text style={[
+                      styles.dateInputText,
+                      !formData.date && styles.dateInputPlaceholder
+                    ]}>
+                      {formData.date || 'Select Date'}
                     </Text>
-                    <Text style={styles.datePickerSubtitle}>Select a date from this month</Text>
                   </View>
-                  <View style={styles.datePickerGrid}>
-                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                      <Text key={day} style={styles.datePickerDayHeader}>{day}</Text>
-                    ))}
-                    {Array.from({ length: generateDaysInMonth(new Date().getFullYear(), new Date().getMonth() + 1) }, (_, i) => {
-                      const day = i + 1;
-                      const date = new Date(new Date().getFullYear(), new Date().getMonth(), day);
-                      const isToday = new Date().toDateString() === date.toDateString();
-                      const isSelected = formData.date === `${new Date().getFullYear()}/${String(new Date().getMonth() + 1).padStart(2, '0')}/${String(day).padStart(2, '0')}`;
-                      const isPastDate = date < new Date(new Date().setHours(0, 0, 0, 0));
+                  <Icon name="chevron-down" size={20} color={colors.textMuted} />
+                </TouchableOpacity>
+              </View>
 
-                      return (
+              {/* Custom Date Picker Modal */}
+              <Modal
+                visible={showDatePicker}
+                transparent
+                animationType="fade"
+              >
+                <View style={styles.datePickerOverlay}>
+                  <View style={styles.datePickerContainer}>
+                    <View style={styles.datePickerHeader}>
+                      <View style={styles.datePickerHeaderRow}>
                         <TouchableOpacity
-                          key={day}
-                          style={[
-                            styles.datePickerDay,
-                            isToday && styles.datePickerToday,
-                            isSelected && styles.datePickerSelected,
-                            isPastDate && styles.datePickerPastDay
-                          ]}
-                          onPress={() => !isPastDate && handleDateSelect(day)}
-                          disabled={isPastDate}
+                          onPress={() => handleMonthChange('prev')}
+                          style={styles.datePickerNavBtn}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                         >
-                          <Text style={[
-                            styles.datePickerDayText,
-                            isToday && styles.datePickerTodayText,
-                            isSelected && styles.datePickerSelectedText,
-                            isPastDate && styles.datePickerPastDayText
-                          ]}>
-                            {day}
-                          </Text>
+                          <Icon name="chevron-back-outline" size={20} color={colors.text} />
                         </TouchableOpacity>
-                      );
-                    })}
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.datePickerTitle}>
+                            {new Date(tempDate.year, tempDate.month - 1).toLocaleString('default', { month: 'long', year: 'numeric' })}
+                          </Text>
+                          <Text style={styles.datePickerSubtitle}>Select a date</Text>
+                        </View>
+                        <TouchableOpacity
+                          onPress={() => handleMonthChange('next')}
+                          style={styles.datePickerNavBtn}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Icon name="chevron-forward-outline" size={20} color={colors.text} />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                    <View style={styles.datePickerGrid}>
+                      {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                        <Text key={day} style={styles.datePickerDayHeader}>{day}</Text>
+                      ))}
+                      {Array.from({ length: generateDaysInMonth(tempDate.year, tempDate.month) }, (_, i) => {
+                        const day = i + 1;
+                        const date = new Date(tempDate.year, tempDate.month - 1, day);
+                        const today = new Date();
+                        const todayMid = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                        const isToday = todayMid.toDateString() === date.toDateString();
+                        const isSelected = formData.date === `${tempDate.year}/${String(tempDate.month).padStart(2, '0')}/${String(day).padStart(2, '0')}`;
+                        const isFutureDate = date > todayMid;
+
+                        return (
+                          <TouchableOpacity
+                            key={day}
+                            style={[
+                              styles.datePickerDay,
+                              isToday && styles.datePickerToday,
+                              isSelected && styles.datePickerSelected,
+                              isFutureDate && styles.datePickerPastDay
+                            ]}
+                            onPress={() => !isFutureDate && handleDateSelect(day)}
+                            disabled={isFutureDate}
+                          >
+                            <Text style={[
+                              styles.datePickerDayText,
+                              isToday && styles.datePickerTodayText,
+                              isSelected && styles.datePickerSelectedText,
+                              isFutureDate && styles.datePickerPastDayText
+                            ]}>
+                              {day}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                    <TouchableOpacity
+                      style={styles.datePickerCloseButton}
+                      onPress={() => setShowDatePicker(false)}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={styles.datePickerCloseButtonText}>Done</Text>
+                    </TouchableOpacity>
                   </View>
-                  <TouchableOpacity
-                    style={styles.datePickerCloseButton}
-                    onPress={() => setShowDatePicker(false)}
-                  >
-                    <Text style={styles.datePickerCloseButtonText}>Close</Text>
-                  </TouchableOpacity>
                 </View>
-              </View>
-            </Modal>
+              </Modal>
 
-            {/* Clock In Field */}
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Clock In</Text>
-              <View style={styles.timeInputContainer}>
-                <TextInput
-                  placeholder="HH:MM"
-                  style={[styles.input, { flex: 1 }]}
-                  value={formData.clockIn}
-                  onChangeText={text => {
-                    const formatted = formatTimeInput(text);
-                    setFormData({ ...formData, clockIn: formatted });
-                  }}
-                  keyboardType="number-pad"
-                  maxLength={5}
-                />
-                <View style={styles.amPmContainer}>
-                  <TouchableOpacity
-                    style={[
-                      styles.amPmButton,
-                      clockInAmPm === 'AM' && styles.amPmButtonActive
-                    ]}
-                    onPress={() => setClockInAmPm('AM')}
-                  >
-                    <Text style={[
-                      styles.amPmText,
-                      clockInAmPm === 'AM' && styles.amPmTextActive
-                    ]}>AM</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.amPmButton,
-                      clockInAmPm === 'PM' && styles.amPmButtonActive
-                    ]}
-                    onPress={() => setClockInAmPm('PM')}
-                  >
-                    <Text style={[
-                      styles.amPmText,
-                      clockInAmPm === 'PM' && styles.amPmTextActive
-                    ]}>PM</Text>
-                  </TouchableOpacity>
+              {/* Clock In Field */}
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Clock In</Text>
+                <View style={styles.timeInputContainer}>
+                  <TextInput
+                    placeholder="HH:MM"
+                    style={[styles.input, { flex: 1 }]}
+                    value={formData.clockIn}
+                    onChangeText={text => {
+                      const formatted = formatTimeInput(text);
+                      setFormData({ ...formData, clockIn: formatted });
+                    }}
+                    keyboardType="number-pad"
+                    maxLength={5}
+                  />
+                  <View style={styles.amPmContainer}>
+                    <TouchableOpacity
+                      style={[
+                        styles.amPmButton,
+                        clockInAmPm === 'AM' && styles.amPmButtonActive
+                      ]}
+                      onPress={() => setClockInAmPm('AM')}
+                    >
+                      <Text style={[
+                        styles.amPmText,
+                        clockInAmPm === 'AM' && styles.amPmTextActive
+                      ]}>AM</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.amPmButton,
+                        clockInAmPm === 'PM' && styles.amPmButtonActive
+                      ]}
+                      onPress={() => setClockInAmPm('PM')}
+                    >
+                      <Text style={[
+                        styles.amPmText,
+                        clockInAmPm === 'PM' && styles.amPmTextActive
+                      ]}>PM</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
+                <Text style={styles.helperText}>Enter time in HH:MM format</Text>
               </View>
-              <Text style={styles.helperText}>Enter time in HH:MM format</Text>
-            </View>
 
-            {/* Clock Out Field */}
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Clock Out</Text>
-              <View style={styles.timeInputContainer}>
-                <TextInput
-                  placeholder="HH:MM"
-                  style={[styles.input, { flex: 1 }]}
-                  value={formData.clockOut}
-                  onChangeText={text => {
-                    const formatted = formatTimeInput(text);
-                    setFormData({ ...formData, clockOut: formatted });
-                  }}
-                  keyboardType="number-pad"
-                  maxLength={5}
-                />
-                <View style={styles.amPmContainer}>
-                  <TouchableOpacity
-                    style={[
-                      styles.amPmButton,
-                      clockOutAmPm === 'AM' && styles.amPmButtonActive
-                    ]}
-                    onPress={() => setClockOutAmPm('AM')}
-                  >
-                    <Text style={[
-                      styles.amPmText,
-                      clockOutAmPm === 'AM' && styles.amPmTextActive
-                    ]}>AM</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.amPmButton,
-                      clockOutAmPm === 'PM' && styles.amPmButtonActive
-                    ]}
-                    onPress={() => setClockOutAmPm('PM')}
-                  >
-                    <Text style={[
-                      styles.amPmText,
-                      clockOutAmPm === 'PM' && styles.amPmTextActive
-                    ]}>PM</Text>
-                  </TouchableOpacity>
+              {/* Clock Out Field */}
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Clock Out</Text>
+                <View style={styles.timeInputContainer}>
+                  <TextInput
+                    placeholder="HH:MM"
+                    style={[styles.input, { flex: 1 }]}
+                    value={formData.clockOut}
+                    onChangeText={text => {
+                      const formatted = formatTimeInput(text);
+                      setFormData({ ...formData, clockOut: formatted });
+                    }}
+                    keyboardType="number-pad"
+                    maxLength={5}
+                  />
+                  <View style={styles.amPmContainer}>
+                    <TouchableOpacity
+                      style={[
+                        styles.amPmButton,
+                        clockOutAmPm === 'AM' && styles.amPmButtonActive
+                      ]}
+                      onPress={() => setClockOutAmPm('AM')}
+                    >
+                      <Text style={[
+                        styles.amPmText,
+                        clockOutAmPm === 'AM' && styles.amPmTextActive
+                      ]}>AM</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.amPmButton,
+                        clockOutAmPm === 'PM' && styles.amPmButtonActive
+                      ]}
+                      onPress={() => setClockOutAmPm('PM')}
+                    >
+                      <Text style={[
+                        styles.amPmText,
+                        clockOutAmPm === 'PM' && styles.amPmTextActive
+                      ]}>PM</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
+                <Text style={styles.helperText}>Enter time in HH:MM format</Text>
               </View>
-              <Text style={styles.helperText}>Enter time in HH:MM format</Text>
-            </View>
 
-            {/* Hours Field */}
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Hours</Text>
-              <View style={styles.hoursInputContainer}>
-                <TextInput
-                  style={[styles.input, styles.hoursInput, styles.readOnlyInput]}
-                  value={formData.hours}
-                  editable={false}
-                  placeholder="Calculated from clock in/out"
-                />
-                <Text style={styles.hoursLabel}>hours</Text>
+            {/* Total Hours Field */}
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Total hours</Text>
+                <View style={styles.hoursInputContainer}>
+                  <TextInput
+                    style={[styles.input, styles.hoursInput, styles.readOnlyInput]}
+                    value={formData.hours}
+                    editable={false}
+                    placeholder="Calculated from clock in/out"
+                  />
+                  <Text style={styles.hoursLabel}>hours</Text>
+                </View>
+                <Text style={styles.hoursHelperText}>
+                  Total hours are automatically calculated. Lunch break (12 PM - 1 PM) is automatically deducted.
+                </Text>
               </View>
-              <Text style={styles.hoursHelperText}>
-                Hours are automatically calculated from clock in and out times
-              </Text>
-            </View>
+            </ScrollView>
 
             <View style={styles.modalButtons}>
-              <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.cancelBtn}>
-                <Text>Cancel</Text>
+              <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.cancelBtn} activeOpacity={0.8}>
+                <Text style={styles.cancelBtnText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={handleSave} style={styles.saveBtn}>
-                <Text style={{ color: colors.onPrimary }}>Save</Text>
+              <TouchableOpacity onPress={handleSave} style={styles.saveBtn} activeOpacity={0.85}>
+                <Icon name="checkmark" size={18} color={colors.onPrimary} style={{ marginRight: 6 }} />
+                <Text style={styles.saveBtnText}>Save log</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1003,21 +1151,26 @@ const OJTTrackerScreen: React.FC = () => {
       <Modal visible={goalModalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Set Required Hours</Text>
-            <TextInput
-              placeholder="Required Hours"
-              style={styles.input}
-              value={goalInput}
-              onChangeText={setGoalInput}
-              keyboardType="number-pad"
-              maxLength={4}
-            />
+            <Text style={styles.modalTitle}>Set required hours</Text>
+            <Text style={styles.modalSubtitle}>Your OJT goal in total hours (e.g. 300).</Text>
+            <View style={styles.goalInputWrap}>
+              <TextInput
+                placeholder="e.g. 300"
+                placeholderTextColor={colors.textSubtle}
+                style={styles.goalInput}
+                value={goalInput}
+                onChangeText={setGoalInput}
+                keyboardType="number-pad"
+                maxLength={4}
+              />
+              <Text style={styles.goalInputSuffix}>hours</Text>
+            </View>
             <View style={styles.modalButtons}>
               <TouchableOpacity onPress={() => setGoalModalVisible(false)} style={styles.cancelBtn}>
-                <Text>Cancel</Text>
+                <Text style={styles.cancelBtnText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={saveGoal} style={styles.saveBtn}>
-                <Text style={{ color: colors.onPrimary }}>Save</Text>
+                <Text style={styles.saveBtnText}>Save goal</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1030,60 +1183,260 @@ const OJTTrackerScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: { padding: 16, flex: 1 },
   scrollContent: { paddingBottom: 24 },
-  header: { flexDirection: 'row', alignItems: 'center', marginBottom: 16, padding: 12, backgroundColor: colors.primary, borderRadius: radii.lg },
-  headerText: { fontSize: 18, fontWeight: '700', marginLeft: 8, color: colors.onPrimary },
+  heroContainer: {
+    marginHorizontal: -16,
+    paddingTop: 12,
+    paddingBottom: 16,
+    paddingHorizontal: 16,
+  },
+  heroCard: {
+    paddingVertical: 16,
+    paddingHorizontal: 4,
+  },
+  heroTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  heroIcon: {
+    marginRight: 10,
+  },
+  heroTitle: {
+    color: colors.onPrimary,
+    fontSize: 24,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+  heroSubtitle: {
+    color: colors.onPrimarySubtle,
+    fontSize: 14,
+    lineHeight: 20,
+    maxWidth: '95%',
+    marginTop: 6,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 10,
+    marginTop: 4,
+    paddingHorizontal: 2,
+  },
   infoRow: { flexDirection: 'row', justifyContent: 'space-between' },
   infoBox: {
-    width: '48%', backgroundColor: colors.surface, borderRadius: radii.lg, padding: 14,
-    borderWidth: 1, borderColor: colors.border, alignItems: 'center', ...shadows.card,
+    width: '48%',
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'flex-start',
+    ...shadows.card,
   },
-  infoLabel: { color: colors.primary, fontWeight: '800' },
-  infoValue: { fontSize: 16, fontWeight: 'bold', marginVertical: 4, color: colors.text },
+  infoLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  infoLabel: {
+    color: colors.textMuted,
+    fontWeight: '600',
+    fontSize: 12,
+    marginLeft: 6,
+    marginBottom: 0,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  infoValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginVertical: 2,
+    color: colors.text,
+  },
+  companyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  progressTapArea: {
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    marginTop: 6,
+  },
+  progressRingWrapper: {
+    width: 120,
+    height: 120,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  progressCenter: {
+    position: 'absolute',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  progressPercentText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  progressHoursSub: {
+    fontSize: 11,
+    color: colors.textMuted,
+    marginTop: -2,
+  },
+  progressRemainingText: {
+    marginTop: 6,
+    fontSize: 12,
+    color: colors.textMuted,
+  },
+  progressTapHint: {
+    marginTop: 4,
+    fontSize: 11,
+    color: colors.textSubtle,
+  },
   removeButton: { marginLeft: 8, padding: 6, borderRadius: 6, backgroundColor: 'transparent' },
   subText: { fontSize: 12, color: colors.textMuted },
   noteBox: {
-    marginVertical: 16, flexDirection: 'row', alignItems: 'center',
-    backgroundColor: colors.surfaceAlt, padding: 10, borderRadius: radii.md,
-    borderColor: colors.border, borderWidth: 1,
+    marginTop: 16,
+    marginBottom: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: radii.lg,
+    borderColor: colors.border,
+    borderWidth: 1,
   },
-  noteText: { color: colors.text, marginLeft: 8, fontSize: 13 },
-  tableCard: { borderRadius: radii.lg, overflow: 'hidden', marginTop: 10, marginBottom: 20, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  noteContent: {
+    flex: 1,
+    marginLeft: 10,
+  },
+  noteTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 2,
+  },
+  noteText: {
+    color: colors.textMuted,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  emptyState: {
+    paddingVertical: 32,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+  },
+  emptyStateIcon: {
+    marginBottom: 12,
+    opacity: 0.7,
+  },
+  emptyStateTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  emptyStateText: {
+    fontSize: 14,
+    color: colors.textMuted,
+    textAlign: 'center',
+    marginBottom: 20,
+    lineHeight: 20,
+  },
+  emptyStateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: radii.md,
+    gap: 8,
+    ...shadows.card,
+  },
+  emptyStateButtonText: {
+    color: colors.onPrimary,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  tableCard: { borderRadius: radii.lg, overflow: 'hidden', marginTop: 6, marginBottom: 20, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   tableHeader: {
     flexDirection: 'row',
     backgroundColor: colors.primary,
-    padding: 10,
-    alignItems: 'flex-start'
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    alignItems: 'center',
   },
   tableHeaderText: {
     color: colors.onPrimary,
     flex: 1,
-    fontWeight: 'bold',
+    fontWeight: '600',
     fontSize: 12,
-    textAlign: 'left'
+    textAlign: 'left',
+  },
+  tableHeaderActionsSpacer: {
+    width: 64,
   },
   tableRow: {
     flexDirection: 'row',
-    padding: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 14,
+    minHeight: 48,
     borderBottomColor: colors.border,
     borderBottomWidth: 1,
-    alignItems: 'center'
+    alignItems: 'center',
+  },
+  tableRowAlt: {
+    backgroundColor: colors.surfaceAlt,
   },
   tableCell: {
     flex: 1,
     fontSize: 12,
-    textAlign: 'center',
+    textAlign: 'left',
     color: colors.text,
+  },
+  tableCellDate: {
+    fontWeight: '500',
+  },
+  hoursPillCell: {
+    flex: 1,
+    alignItems: 'flex-start',
+  },
+  hoursPill: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 999,
+    backgroundColor: colors.primarySoft || colors.primary + '22',
+  },
+  hoursPillText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  rowActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  rowIconBtn: {
+    padding: 8,
+    minWidth: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   pagination: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    marginVertical: 20,
+    marginVertical: 16,
   },
   paginationButton: {
-    padding: 8,
-    borderRadius: 4,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: radii.sm,
+    backgroundColor: colors.surfaceAlt,
   },
   paginationButtonDisabled: {
     opacity: 0.5,
@@ -1091,53 +1444,59 @@ const styles = StyleSheet.create({
   paginationText: {
     color: colors.primary,
     fontSize: 14,
+    fontWeight: '600',
   },
   paginationTextDisabled: {
     color: colors.textSubtle,
   },
-  pageNumbers: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  pageNumberButton: {
-    padding: 8,
-    marginHorizontal: 4,
-    borderRadius: 4,
-    minWidth: 32,
-    alignItems: 'center',
-  },
-  pageNumberButtonActive: {
-    backgroundColor: colors.primary,
-  },
-  pageNumberText: {
-    color: colors.text,
-    fontSize: 14,
-  },
-  pageNumberTextActive: {
-    color: colors.onPrimary,
-    fontWeight: 'bold',
-  },
-  fabSave: {
-    position: 'absolute', bottom: 160, right: 20, backgroundColor: colors.success,
-  },
-  fabAdd: {
-    position: 'absolute', bottom: 80, right: 20, backgroundColor: colors.primary,
+  paginationSummary: {
+    fontSize: 13,
+    color: colors.textMuted,
+    fontWeight: '500',
   },
   fabPlus: {
     position: 'absolute',
-    bottom: 80, // Positioned above the Bottom Navbar
+    bottom: 88,
     right: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.card,
   },
   dropdownContainer: {
     position: 'absolute',
-    bottom: 140, // Positioned above the Plus Button
+    bottom: 156,
     right: 20,
-    alignItems: 'flex-end', // Align buttons to the right
+    alignItems: 'flex-end',
   },
-  dropdownButton: {
-    marginBottom: 10, // Space between dropdown buttons
-    backgroundColor: colors.success,
+  fabMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    paddingVertical: 8,
+    paddingLeft: 12,
+    paddingRight: 16,
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.card,
+  },
+  fabMenuIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  fabMenuLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.text,
   },
   bottomNavbar: {
     position: 'absolute',
@@ -1150,23 +1509,93 @@ const styles = StyleSheet.create({
     elevation: 5, // Add shadow for better visibility
   },
   modalOverlay: {
-    flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.overlay,
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.overlay,
   },
   modalContent: {
-    width: '85%', backgroundColor: colors.surface, padding: 20, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border,
+    width: '90%',
+    maxWidth: 420,
+    maxHeight: '85%',
+    backgroundColor: colors.surface,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 16,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.card,
   },
-  modalTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 12 },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 4,
+    color: colors.text,
+  },
+  modalSubtitle: {
+    fontSize: 13,
+    color: colors.textMuted,
+    marginBottom: 16,
+    lineHeight: 18,
+  },
+  modalFormContent: {
+    paddingBottom: 8,
+  },
   input: {
     borderBottomWidth: 1, borderBottomColor: colors.border, marginBottom: 10, paddingVertical: 4, color: colors.text,
   },
+  goalInputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    paddingHorizontal: 14,
+    marginBottom: 20,
+    backgroundColor: colors.surface,
+  },
+  goalInput: {
+    flex: 1,
+    paddingVertical: 14,
+    fontSize: 18,
+    color: colors.text,
+  },
+  goalInputSuffix: {
+    fontSize: 15,
+    color: colors.textMuted,
+    marginLeft: 6,
+    fontWeight: '500',
+  },
   modalButtons: {
-    flexDirection: 'row', justifyContent: 'space-between', marginTop: 16,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: 16,
   },
   cancelBtn: {
-    padding: 10, backgroundColor: colors.surfaceAlt, borderRadius: radii.sm,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: radii.sm,
+    marginRight: 8,
   },
   saveBtn: {
-    padding: 10, backgroundColor: colors.primary, borderRadius: radii.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    backgroundColor: colors.primary,
+    borderRadius: radii.md,
+  },
+  cancelBtnText: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  saveBtnText: {
+    color: colors.onPrimary,
+    fontSize: 14,
+    fontWeight: '600',
   },
   inputContainer: {
     marginBottom: 15,
@@ -1270,17 +1699,29 @@ const styles = StyleSheet.create({
   },
   datePickerContainer: {
     backgroundColor: colors.surface,
-    borderRadius: 12,
-    padding: 16,
-    width: '90%',
-    maxWidth: 400,
+    borderRadius: 20,
+    paddingVertical: 18,
+    paddingHorizontal: 16,
+    width: '92%',
+    maxWidth: 380,
     ...shadows.card,
   },
   datePickerHeader: {
+    marginBottom: 8,
+  },
+  datePickerHeaderRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  datePickerNavBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceAlt,
   },
   datePickerTitle: {
     fontSize: 20,
@@ -1297,6 +1738,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
+    marginTop: 8,
   },
   datePickerDayHeader: {
     width: '14.28%',
@@ -1310,7 +1752,8 @@ const styles = StyleSheet.create({
     aspectRatio: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    marginVertical: 2,
+    marginVertical: 4,
+    borderRadius: 999,
   },
   datePickerDayText: {
     fontSize: 16,
@@ -1334,15 +1777,17 @@ const styles = StyleSheet.create({
   },
   datePickerCloseButton: {
     marginTop: 16,
-    padding: 12,
-    backgroundColor: colors.primary,
-    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: 999,
     alignItems: 'center',
+    alignSelf: 'flex-end',
   },
   datePickerCloseButtonText: {
-    color: colors.onPrimary,
-    fontSize: 16,
-    fontWeight: 'bold',
+    color: colors.primary,
+    fontSize: 14,
+    fontWeight: '600',
   },
   readOnlyInput: {
     backgroundColor: colors.surfaceAlt,

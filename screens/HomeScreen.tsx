@@ -8,9 +8,12 @@ import {
   StyleSheet,
   RefreshControl,
   Modal,
+  Image,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList, Post as BasePost } from '../App';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSavedInternships } from '../context/SavedInternshipsContext';
 import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
@@ -19,6 +22,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { ref, onValue } from 'firebase/database';
 import { accentPalette, colors, radii, shadows } from '../ui/theme';
 import { Screen } from '../ui/components/Screen';
+import { useNotificationCount } from '../context/NotificationCountContext';
 
 type MoaValidity = {
   years: number | null;
@@ -33,6 +37,7 @@ type Props = {
   navigation: StackNavigationProp<RootStackParamList, 'Home'>;
 };
 
+const FEED_INTRO_DISMISSED_KEY = '@InternQuest_feedIntroDismissed';
 const userPreferences = ['Programming', 'AI', 'React Native', 'Cloud'];
 
 // Advanced filter options
@@ -41,8 +46,9 @@ const industryOptions = ['Technology', 'Finance', 'Healthcare', 'Education', 'Ma
 const workModeOptions = ['On-site', 'Remote', 'Hybrid', 'All Modes'];
 
 const HomeScreen: React.FC<Props> = ({ navigation }) => {
+  const { notificationCount } = useNotificationCount();
   const [searchText, setSearchText] = useState('');
-  const [activeFilter, setActiveFilter] = useState<string>('Most Recent');
+  const [activeFilter, setActiveFilter] = useState<string>('My Feed');
   const [showDropdown, setShowDropdown] = useState(false);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [companies, setCompanies] = useState<Post[]>([]);
@@ -52,6 +58,10 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
   const [userFields, setUserFields] = useState<string[]>([]);
   const [userSkills, setUserSkills] = useState<string[]>([]);
   const [userCourseOrProgram, setUserCourseOrProgram] = useState<string>('');
+  const [userAvatar, setUserAvatar] = useState<string | null>(null);
+  const [categoryTag, setCategoryTag] = useState<string>('All');
+  const [visibleCount, setVisibleCount] = useState<number>(15);
+  const [feedIntroDismissed, setFeedIntroDismissed] = useState(false);
 
   // Realtime MOA validity info (companyId -> validity metadata)
   const [moaValidity, setMoaValidity] = useState<{ [companyId: string]: MoaValidity }>({});
@@ -99,6 +109,17 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
     fetchCompanies();
   }, []);
 
+  // Reset visible internships when filters or search change
+  useEffect(() => {
+    setVisibleCount(15);
+  }, [activeFilter, searchText, selectedSkill, selectedIndustry, selectedWorkMode, categoryTag]);
+
+  useEffect(() => {
+    AsyncStorage.getItem(FEED_INTRO_DISMISSED_KEY).then((v: string | null) => {
+      if (v === 'true') setFeedIntroDismissed(true);
+    });
+  }, []);
+
   useEffect(() => {
     const fetchUserFieldsAndSkills = async () => {
       if (!auth.currentUser) return;
@@ -114,6 +135,7 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
           setUserFields(fields.filter(Boolean));
           const skills = Array.isArray(data.skills) ? data.skills : [];
           setUserSkills(skills.filter(Boolean));
+          setUserAvatar((data as any).avatar || null);
         }
       } catch (error) {
         console.error('Failed to fetch user fields/skills:', error);
@@ -301,8 +323,13 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
     return score;
   };
 
+  // Category tag quick-filter: show only skills the user has picked (from profile) + All + industries
+  const categoryTagOptions = ['All', ...userSkills, ...industryOptions.filter(i => i !== 'All Industries')];
+  const effectiveSkill = categoryTag === 'All' ? selectedSkill : (userSkills.includes(categoryTag) ? categoryTag : selectedSkill);
+  const effectiveIndustry = categoryTag === 'All' ? selectedIndustry : (industryOptions.includes(categoryTag) ? categoryTag : selectedIndustry);
+
   // Enhanced search and filtering logic
-  const filteredPosts = (activeFilter === 'Saved Internship' ? savedInternships : companies)
+  const filteredPosts = (activeFilter === 'Saved' ? savedInternships : companies)
     .filter(post => {
       // If no search text, show all posts
       if (!searchText.trim()) return true;
@@ -324,18 +351,18 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
         industryMatch || tagsMatch || workModeMatch;
     })
     .filter(post => {
-      // Apply advanced filters
-      if (selectedSkill !== 'All Skills') {
+      // Apply advanced filters (use effective skill/industry from category tag or modal)
+      if (effectiveSkill !== 'All Skills') {
         const postTags = Array.isArray(post.tags) ? post.tags.map(t => String(t).toLowerCase()) : [];
-        const selectedSkillLower = selectedSkill.toLowerCase();
-        if (!postTags.some(tag => tag.includes(selectedSkillLower))) {
+        const skillLower = effectiveSkill.toLowerCase();
+        if (!postTags.some(tag => tag.includes(skillLower))) {
           return false;
         }
       }
 
-      if (selectedIndustry !== 'All Industries' &&
+      if (effectiveIndustry !== 'All Industries' &&
         typeof post.industry === 'string' &&
-        !post.industry.toLowerCase().includes(selectedIndustry.toLowerCase())) {
+        !post.industry.toLowerCase().includes(effectiveIndustry.toLowerCase())) {
         return false;
       }
 
@@ -351,14 +378,14 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
       const aTime = (a.createdAt?.getTime?.() || 0);
       const bTime = (b.createdAt?.getTime?.() || 0);
 
-      const isDefaultBrowse =
-        activeFilter === 'Most Recent' &&
+      const useRelevanceSort =
+        (activeFilter === 'My Feed' || activeFilter === 'Best Matches') &&
         !searchText.trim() &&
         selectedSkill === 'All Skills' &&
         selectedIndustry === 'All Industries' &&
         selectedWorkMode === 'All Modes';
 
-      if (isDefaultBrowse) {
+      if (useRelevanceSort) {
         const userTokens = buildUserMatchTokens();
         const aScore = relevanceScoreForPost(a as Post, userTokens, userCourseOrProgram);
         const bScore = relevanceScoreForPost(b as Post, userTokens, userCourseOrProgram);
@@ -418,28 +445,79 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
     return segments.join(' • ') || '—';
   };
 
+  const hasActiveAdvancedFilters =
+    selectedSkill !== 'All Skills' ||
+    selectedIndustry !== 'All Industries' ||
+    selectedWorkMode !== 'All Modes';
+
+  const getInitials = (name: string) => {
+    const parts = (name || '').trim().split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+    return (name || 'U').charAt(0).toUpperCase();
+  };
+
   return (
     <Screen contentContainerStyle={{ paddingHorizontal: 0, paddingTop: 0 }}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Find internships</Text>
-        <Text style={styles.headerSubtitle}>Browse companies matched to your profile</Text>
+      {/* Header: profile pic | Internships | notification */}
+      <View style={styles.headerGradientWrapper}>
+        <LinearGradient
+          colors={['#4F46E5', '#6366F1', '#818CF8']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.headerGradient}
+        >
+          <View style={styles.headerRow}>
+            <TouchableOpacity
+              style={styles.headerAvatarWrap}
+              onPress={() => navigation.navigate('Profile')}
+              activeOpacity={0.8}
+              accessibilityLabel="Go to profile"
+            >
+              {userAvatar ? (
+                <Image source={{ uri: userAvatar }} style={styles.headerAvatar} />
+              ) : (
+                <View style={[styles.headerAvatar, styles.headerAvatarPlaceholder]}>
+                  <Text style={styles.headerAvatarText}>{getInitials((auth.currentUser?.email || 'User').split('@')[0])}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+            <Text style={styles.headerTitleCenter}>Internships</Text>
+            <TouchableOpacity
+              style={styles.headerNotificationButton}
+              onPress={() => navigation.navigate('Notifications')}
+              accessibilityLabel={notificationCount > 0 ? `${notificationCount} unread notifications` : 'Notifications'}
+            >
+              <View style={styles.headerNotificationIconWrap}>
+                <Ionicons name="notifications-outline" size={24} color={colors.white} />
+                {notificationCount > 0 && (
+                  <View style={styles.headerNotificationBadge}>
+                    <Text style={styles.headerNotificationBadgeText} numberOfLines={1}>
+                      {notificationCount > 99 ? '99+' : String(notificationCount)}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </TouchableOpacity>
+          </View>
+        </LinearGradient>
       </View>
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={fetchCompanies} />
+          <RefreshControl refreshing={refreshing} onRefresh={fetchCompanies} tintColor={colors.primary} />
         }
       >
-        {/* Search Bar + Filter Icon Row */}
+        {/* Search bar with magnifying glass + heart (like reference) */}
         <View style={styles.searchRow}>
           <View style={styles.searchContainer}>
-            <Ionicons name="search" size={20} color={colors.textMuted} style={styles.searchIcon} />
+            <View style={styles.searchIconWrapper}>
+              <Ionicons name="search" size={20} color={colors.primary} />
+            </View>
             <TextInput
               style={styles.searchInput}
-              placeholder="Search companies, skills, location…"
+              placeholder="Search for internships..."
               value={searchText}
               onChangeText={setSearchText}
               placeholderTextColor={colors.textSubtle}
@@ -449,127 +527,193 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
               returnKeyType="search"
             />
             {searchText.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchText('')} style={styles.clearButton}>
+              <TouchableOpacity onPress={() => setSearchText('')} style={styles.clearButton} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                 <Ionicons name="close-circle" size={20} color={colors.textSubtle} />
               </TouchableOpacity>
             )}
           </View>
           <TouchableOpacity
-            style={styles.filterButtonNext}
+            style={[styles.searchHeartButton, activeFilter === 'Saved' && styles.searchHeartButtonActive]}
+            onPress={() => setActiveFilter(activeFilter === 'Saved' ? 'My Feed' : 'Saved')}
+            accessibilityLabel={activeFilter === 'Saved' ? 'Show all internships' : 'Show saved internships'}
+          >
+            <Ionicons name={activeFilter === 'Saved' ? 'heart' : 'heart-outline'} size={22} color={activeFilter === 'Saved' ? colors.white : colors.primary} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.filterButtonNext, hasActiveAdvancedFilters && styles.filterButtonActive]}
             onPress={() => setShowAdvancedFilters(true)}
             accessibilityRole="button"
             accessibilityLabel="Open filters"
           >
-            <Ionicons name="filter" size={22} color={colors.text} />
+            <Ionicons name="filter" size={22} color={hasActiveAdvancedFilters ? colors.white : colors.text} />
+            {hasActiveAdvancedFilters && <View style={styles.filterBadge} />}
           </TouchableOpacity>
         </View>
 
-        {/* Quick Filters */}
-        <View style={styles.topFilters}>
-          {['Most Recent', 'Saved Internship'].map((label, index) => (
+        {/* Tabs: My Feed | Best Matches | Most Recent | Saved */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabsRow}
+        >
+          {['My Feed', 'Best Matches', 'Most Recent', 'Saved'].map((label) => (
             <TouchableOpacity
-              key={index}
-              style={[styles.filterPill, activeFilter === label && styles.activeFilter]}
+              key={label}
+              style={[styles.tabPill, activeFilter === label && styles.tabPillActive]}
               onPress={() => setActiveFilter(label)}
+              activeOpacity={0.7}
             >
-              <Text style={[styles.filterPillText, activeFilter === label && styles.activeFilterText]}>
+              {activeFilter === label && <View style={styles.tabPillIndicator} />}
+              <Text style={[styles.tabPillText, activeFilter === label && styles.tabPillTextActive]} numberOfLines={1}>
                 {label}
               </Text>
-              {activeFilter === label && <Ionicons name="checkmark" size={16} color={colors.onPrimary} style={{ marginLeft: 4 }} />}
             </TouchableOpacity>
           ))}
-        </View>
+        </ScrollView>
+
+        {/* Feed intro – dismissible message */}
+        {!feedIntroDismissed && (
+          <View style={styles.feedIntroBanner}>
+            <Text style={styles.feedIntroText}>
+              Build a personal feed of relevant internships by saving companies you like.
+            </Text>
+            <TouchableOpacity
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              onPress={() => {
+                setFeedIntroDismissed(true);
+                AsyncStorage.setItem(FEED_INTRO_DISMISSED_KEY, 'true');
+              }}
+              style={styles.feedIntroClose}
+            >
+              <Ionicons name="close" size={20} color={colors.textMuted} />
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Category tags: horizontal scroll */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.categoryTagsScroll}
+          style={styles.categoryTagsWrap}
+        >
+          {categoryTagOptions.map((tag) => (
+            <TouchableOpacity
+              key={tag}
+              style={[styles.categoryTag, categoryTag === tag && styles.categoryTagActive]}
+              onPress={() => setCategoryTag(tag)}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.categoryTagText, categoryTag === tag && styles.categoryTagTextActive]} numberOfLines={1}>
+                {tag}
+              </Text>
+            </TouchableOpacity>
+          ))}
+          <View style={styles.categoryTagArrow}>
+            <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} />
+          </View>
+        </ScrollView>
 
         {/* Active Filters Display */}
-        {(selectedSkill !== 'All Skills' ||
-          selectedIndustry !== 'All Industries' || selectedWorkMode !== 'All Modes') && (
-            <View style={styles.activeFiltersContainer}>
-              <Text style={styles.activeFiltersLabel}>Active Filters:</Text>
-              <View style={styles.activeFiltersList}>
-                {selectedSkill !== 'All Skills' && (
-                  <View style={styles.activeFilterChip}>
-                    <Text style={styles.activeFilterChipText}>{selectedSkill}</Text>
-                    <TouchableOpacity onPress={() => setSelectedSkill('All Skills')}>
-                      <Ionicons name="close" size={14} color={colors.onPrimary} />
-                    </TouchableOpacity>
-                  </View>
-                )}
-                {selectedIndustry !== 'All Industries' && (
-                  <View style={styles.activeFilterChip}>
-                    <Text style={styles.activeFilterChipText}>{selectedIndustry}</Text>
-                    <TouchableOpacity onPress={() => setSelectedIndustry('All Industries')}>
-                      <Ionicons name="close" size={14} color={colors.onPrimary} />
-                    </TouchableOpacity>
-                  </View>
-                )}
-                {selectedWorkMode !== 'All Modes' && (
-                  <View style={styles.activeFilterChip}>
-                    <Text style={styles.activeFilterChipText}>{selectedWorkMode}</Text>
-                    <TouchableOpacity onPress={() => setSelectedWorkMode('All Modes')}>
-                      <Ionicons name="close" size={14} color={colors.onPrimary} />
-                    </TouchableOpacity>
-                  </View>
-                )}
-              </View>
+        {hasActiveAdvancedFilters && (
+          <View style={styles.activeFiltersContainer}>
+            <Text style={styles.activeFiltersLabel}>Active filters</Text>
+            <View style={styles.activeFiltersList}>
+              {selectedSkill !== 'All Skills' && (
+                <View style={styles.activeFilterChip}>
+                  <Text style={styles.activeFilterChipText}>{selectedSkill}</Text>
+                  <TouchableOpacity onPress={() => setSelectedSkill('All Skills')} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                    <Ionicons name="close" size={14} color={colors.onPrimary} />
+                  </TouchableOpacity>
+                </View>
+              )}
+              {selectedIndustry !== 'All Industries' && (
+                <View style={styles.activeFilterChip}>
+                  <Text style={styles.activeFilterChipText}>{selectedIndustry}</Text>
+                  <TouchableOpacity onPress={() => setSelectedIndustry('All Industries')} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                    <Ionicons name="close" size={14} color={colors.onPrimary} />
+                  </TouchableOpacity>
+                </View>
+              )}
+              {selectedWorkMode !== 'All Modes' && (
+                <View style={styles.activeFilterChip}>
+                  <Text style={styles.activeFilterChipText}>{selectedWorkMode}</Text>
+                  <TouchableOpacity onPress={() => setSelectedWorkMode('All Modes')} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                    <Ionicons name="close" size={14} color={colors.onPrimary} />
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
-          )}
+          </View>
+        )}
 
         {/* Results Count */}
         <Text style={styles.resultsCount}>
           {filteredPosts.length} internship{filteredPosts.length !== 1 ? 's' : ''} found
         </Text>
 
-        {/* Company Cards */}
-        {filteredPosts.length === 0 && searchText.trim() !== '' ? (
-          <View style={styles.noResultsContainer}>
-            <Ionicons name="search" size={48} color={colors.textSubtle} />
-            <Text style={styles.noResultsText}>No internships found</Text>
-            <Text style={styles.noResultsSubtext}>
-              Try adjusting your search terms or filters
+        {/* Empty state: no saved items when on Saved tab */}
+        {filteredPosts.length === 0 && activeFilter === 'Saved' && !searchText.trim() && (
+          <View style={styles.emptyStateContainer}>
+            <View style={styles.emptyStateIconWrap}>
+              <Ionicons name="bookmark-outline" size={56} color={colors.textSubtle} />
+            </View>
+            <Text style={styles.emptyStateTitle}>No saved internships</Text>
+            <Text style={styles.emptyStateSubtext}>
+              Save internships from the list to see them here
             </Text>
           </View>
-        ) : (
-          filteredPosts.map(post => {
+        )}
+
+        {/* No search/filter results */}
+        {filteredPosts.length === 0 && (searchText.trim() !== '' || hasActiveAdvancedFilters) && activeFilter !== 'Saved' && (
+          <View style={styles.noResultsContainer}>
+            <View style={styles.noResultsIconWrap}>
+              <Ionicons name="search-outline" size={48} color={colors.textSubtle} />
+            </View>
+            <Text style={styles.noResultsText}>No internships found</Text>
+            <Text style={styles.noResultsSubtext}>
+              Try different keywords or clear some filters
+            </Text>
+            <TouchableOpacity
+              style={styles.noResultsButton}
+              onPress={() => { setSearchText(''); setSelectedSkill('All Skills'); setSelectedIndustry('All Industries'); setSelectedWorkMode('All Modes'); }}
+            >
+              <Text style={styles.noResultsButtonText}>Clear search & filters</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Company Cards (with 'Load more') */}
+        {filteredPosts.length > 0 && filteredPosts.slice(0, visibleCount).map(post => {
             const logo = getCompanyLogo(post.company);
             return (
               <TouchableOpacity
                 key={post.id}
                 style={styles.card}
+                activeOpacity={0.85}
                 onPress={() => navigation.navigate('CompanyProfile', { companyId: post.id })}
               >
-                <View style={styles.cardHeader}>
-                  <View style={styles.companyInfo}>
-                    {/* removed round logo to give a cleaner card — replaced with a slim accent stripe */}
-                    <View style={[styles.cardAccent, { backgroundColor: logo.color }]} />
-                    <View style={styles.companyDetails}>
-                      <Text style={styles.companyName}>{post.company}</Text>
-                      <Text style={styles.companyLocation}>
-                        <Ionicons name="location" size={14} color={colors.textMuted} />
-                        {' '}{typeof post.location === 'string' ? post.location : 'Location not specified'}
-                      </Text>
-                      <Text style={styles.companyIndustry}>
-                        <Ionicons name="briefcase" size={14} color={colors.textMuted} />
-                        {' '}{typeof post.industry === 'string' ? post.industry : 'Industry not specified'}
-                      </Text>
-                      {typeof post.id === 'string' && (
-                        <Text style={styles.moaRemaining}>
-                          MOA validity: {formatMoaValidity(post)}
-                        </Text>
-                      )}
-                    </View>
-                  </View>
+                {/* Top row: posted time left, save heart right (like reference) */}
+                <View style={styles.cardTopRow}>
+                  <Text style={styles.cardPostedTime}>Posted {timeAgo(post.createdAt ?? new Date())}</Text>
                   <TouchableOpacity
-                    onPress={() => toggleSaveInternship(post)}
-                    style={styles.bookmarkButton}
+                    onPress={(e) => { e?.stopPropagation?.(); toggleSaveInternship(post); }}
+                    style={styles.cardHeartButton}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   >
                     <Ionicons
-                      name={savedInternships.some(saved => saved.id === post.id) ? 'bookmark' : 'bookmark-outline'}
-                      size={20}
+                      name={savedInternships.some(saved => saved.id === post.id) ? 'heart' : 'heart-outline'}
+                      size={22}
                       color={colors.primary}
                     />
                   </TouchableOpacity>
                 </View>
-
+                <View style={[styles.cardAccent, { backgroundColor: logo.color }]} />
+                <Text style={styles.companyName}>{post.company}</Text>
+                <Text style={styles.cardDetailsLine}>
+                  {typeof post.modeOfWork === 'string' ? post.modeOfWork : 'Internship'} · {typeof post.location === 'string' ? post.location : 'Location not specified'}
+                </Text>
                 <View style={styles.descriptionContainer}>
                   <Text style={styles.description}>
                     {expanded[post.id] ? (typeof post.description === 'string' ? post.description : 'No description available') :
@@ -577,31 +721,42 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
                   </Text>
                   {typeof post.description === 'string' && post.description.length > 120 && (
                     <TouchableOpacity onPress={() => handleToggleExpand(post.id)}>
-                      <Text style={styles.readMore}>{expanded[post.id] ? 'Show Less' : 'Read More'}</Text>
+                      <Text style={styles.readMore}>{expanded[post.id] ? 'Show less' : 'more'}</Text>
                     </TouchableOpacity>
                   )}
                 </View>
-
-                <View style={styles.cardFooter}>
-                  <View style={styles.tagContainer}>
-                    {(Array.isArray(post.tags) ? post.tags.filter(tag => typeof tag === 'string') : []).slice(0, 3).map((tag, idx) => (
-                      <View key={idx} style={styles.tag}>
-                        <Text style={styles.tagText}>{tag}</Text>
-                      </View>
-                    ))}
-                    {Array.isArray(post.tags) && post.tags.filter(tag => typeof tag === 'string').length > 3 && (
-                      <Text style={styles.moreTagsText}>+{post.tags.filter(tag => typeof tag === 'string').length - 3} more</Text>
-                    )}
+                <View style={styles.tagContainer}>
+                  {(Array.isArray(post.tags) ? post.tags.filter(tag => typeof tag === 'string') : []).slice(0, 4).map((tag, idx) => (
+                    <View key={idx} style={styles.tag}>
+                      <Text style={styles.tagText}>{tag}</Text>
+                    </View>
+                  ))}
+                  {Array.isArray(post.tags) && post.tags.filter(tag => typeof tag === 'string').length > 4 && (
+                    <Text style={styles.moreTagsText}>+{post.tags.filter(tag => typeof tag === 'string').length - 4} more</Text>
+                  )}
+                </View>
+                <View style={styles.cardMetaRow}>
+                  <View style={styles.cardMetaItem}>
+                    <Ionicons name="location-outline" size={14} color={colors.textMuted} />
+                    <Text style={styles.cardMetaText}>{typeof post.location === 'string' ? post.location : '—'}</Text>
                   </View>
-
-                  <View style={styles.cardMeta}>
-                    <Text style={styles.workMode}>{typeof post.modeOfWork === 'string' ? post.modeOfWork : 'Work mode not specified'}</Text>
-                    <Text style={styles.timeStamp}>{timeAgo(post.createdAt ?? new Date())}</Text>
-                  </View>
+                  <Text style={styles.cardMetaDivider}>·</Text>
+                  <Text style={styles.cardMetaText}>{typeof post.modeOfWork === 'string' ? post.modeOfWork : '—'}</Text>
                 </View>
               </TouchableOpacity>
             );
-          })
+          })}
+
+        {filteredPosts.length > visibleCount && (
+          <View style={styles.loadMoreWrap}>
+            <TouchableOpacity
+              onPress={() => setVisibleCount(prev => prev + 15)}
+              style={styles.loadMoreButton}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.loadMoreText}>Load more</Text>
+            </TouchableOpacity>
+          </View>
         )}
       </ScrollView>
 
@@ -615,18 +770,21 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Advanced Filters</Text>
-              <TouchableOpacity onPress={() => setShowAdvancedFilters(false)}>
+              <Text style={styles.modalTitle}>Filters</Text>
+              <TouchableOpacity onPress={() => setShowAdvancedFilters(false)} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
                 <Ionicons name="close" size={24} color={colors.text} />
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.modalScroll}>
-              {/* Skills Filter */}
+            <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
+              {/* Skills Filter – only skills the user has picked (from profile) */}
               <View style={styles.filterSection}>
-                <Text style={styles.filterSectionTitle}>Skills</Text>
+                <View style={styles.filterSectionTitleRow}>
+                  <Ionicons name="code-slash" size={18} color={colors.primary} />
+                  <Text style={styles.filterSectionTitle}>Skills</Text>
+                </View>
                 <View style={styles.filterOptions}>
-                  {skillOptions.map((skill, index) => (
+                  {['All Skills', ...userSkills].map((skill, index) => (
                     <TouchableOpacity
                       key={index}
                       style={[
@@ -648,7 +806,10 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
 
               {/* Industry Filter */}
               <View style={styles.filterSection}>
-                <Text style={styles.filterSectionTitle}>Industry</Text>
+                <View style={styles.filterSectionTitleRow}>
+                  <Ionicons name="business" size={18} color={colors.primary} />
+                  <Text style={styles.filterSectionTitle}>Industry</Text>
+                </View>
                 <View style={styles.filterOptions}>
                   {industryOptions.map((industry, index) => (
                     <TouchableOpacity
@@ -672,7 +833,10 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
 
               {/* Work Mode Filter */}
               <View style={styles.filterSection}>
-                <Text style={styles.filterSectionTitle}>Work Mode</Text>
+                <View style={styles.filterSectionTitleRow}>
+                  <Ionicons name="desktop-outline" size={18} color={colors.primary} />
+                  <Text style={styles.filterSectionTitle}>Work Mode</Text>
+                </View>
                 <View style={styles.filterOptions}>
                   {workModeOptions.map((mode, index) => (
                     <TouchableOpacity
@@ -717,35 +881,108 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
           </View>
         </View>
       </Modal>
-
-      <TouchableOpacity
-        style={styles.ojtTrackerButton}
-        onPress={() => navigation.navigate('OJTTracker', {})}
-      >
-        <Ionicons name="calendar" size={24} color={colors.onPrimary} />
-      </TouchableOpacity>
     </Screen>
   );
 };
 
 const styles = StyleSheet.create({
-  header: {
+  headerGradientWrapper: {
+    overflow: 'hidden',
+  },
+  headerGradient: {
+    paddingBottom: 16,
+    borderBottomLeftRadius: radii.xl,
+    borderBottomRightRadius: radii.xl,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 14,
-    backgroundColor: colors.primary,
-    borderBottomWidth: 0,
+    paddingTop: 12,
   },
-  headerTitle: {
-    fontSize: 24,
+  headerAvatarWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  headerAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+  },
+  headerAvatarPlaceholder: {
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerAvatarText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.white,
+  },
+  headerTitleCenter: {
+    fontSize: 22,
     fontWeight: '800',
-    color: colors.onPrimary,
+    color: colors.white,
+    letterSpacing: -0.3,
   },
-  headerSubtitle: {
-    marginTop: 2,
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.onPrimaryMuted,
+  headerMenuButton: {
+    padding: 8,
+  },
+  headerNotificationButton: {
+    padding: 8,
+  },
+  headerNotificationIconWrap: {
+    position: 'relative',
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerNotificationBadge: {
+    position: 'absolute',
+    top: -6,
+    right: -10,
+    minHeight: 18,
+    paddingHorizontal: 6,
+    borderRadius: 9,
+    backgroundColor: colors.danger,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerNotificationBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.white,
+  },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    marginTop: 12,
+    paddingHorizontal: 16,
+  },
+  searchHeartButton: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    backgroundColor: colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 10,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  searchHeartButtonActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   filterButton: {
     padding: 8,
@@ -756,70 +993,258 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 16,
-    paddingBottom: 24,
-  },
-  searchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-    marginTop: 8,
+    paddingBottom: 100,
   },
   searchContainer: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.surface,
-    borderRadius: radii.lg,
-    paddingHorizontal: 12,
-    marginRight: 8,
-    height: 44,
-    borderWidth: 1,
+    borderRadius: radii.xl,
+    paddingHorizontal: 4,
+    height: 50,
+    borderWidth: 1.5,
     borderColor: colors.border,
-    ...shadows.card,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  searchIconWrapper: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: colors.primarySoft,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 4,
   },
   searchIcon: {
-    marginRight: 12,
+    marginRight: 0,
   },
   searchInput: {
     flex: 1,
     fontSize: 16,
     color: colors.text,
-    paddingVertical: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
     backgroundColor: 'transparent',
   },
   clearButton: {
     padding: 4,
-    marginLeft: 8,
+    marginLeft: 4,
+  },
+  filterButtonNext: {
+    backgroundColor: colors.surface,
+    borderRadius: radii.xl,
+    padding: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    height: 50,
+    width: 50,
+    marginLeft: 6,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  filterButtonActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primary,
+  },
+  filterBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.primary,
+  },
+  tabsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingHorizontal: 16,
+    gap: 10,
+    paddingVertical: 4,
+  },
+  tabPill: {
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: radii.lg,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
+    position: 'relative',
+    overflow: 'hidden',
+    minWidth: 90,
+    alignItems: 'center',
+  },
+  tabPillActive: {
+    backgroundColor: colors.primarySoft,
+    borderColor: colors.primary,
+  },
+  tabPillIndicator: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 3,
+    backgroundColor: colors.primary,
+    borderTopLeftRadius: 2,
+    borderTopRightRadius: 2,
+  },
+  tabPillText: {
+    fontSize: 14,
+    color: colors.textMuted,
+    fontWeight: '600',
+    zIndex: 1,
+  },
+  tabPillTextActive: {
+    color: colors.primary,
+    fontWeight: '700',
+  },
+  feedIntroBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+    marginHorizontal: 16,
+    paddingVertical: 14,
+    paddingLeft: 16,
+    paddingRight: 12,
+    backgroundColor: colors.primarySoft,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(99, 102, 241, 0.2)',
+  },
+  feedIntroText: {
+    flex: 1,
+    fontSize: 13,
+    color: colors.textMuted,
+    lineHeight: 20,
+    marginRight: 8,
+  },
+  feedIntroClose: {
+    padding: 4,
+  },
+  feedIntro: {
+    fontSize: 13,
+    color: colors.textMuted,
+    lineHeight: 20,
+    marginBottom: 14,
+    paddingHorizontal: 16,
+  },
+  categoryTagsWrap: {
+    marginBottom: 16,
+    maxHeight: 44,
+  },
+  categoryTagsScroll: {
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingRight: 8,
+  },
+  categoryTag: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: radii.lg,
+    backgroundColor: colors.surface,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
+  },
+  categoryTagActive: {
+    backgroundColor: colors.text,
+    borderColor: colors.text,
+  },
+  categoryTagText: {
+    fontSize: 13,
+    color: colors.text,
+    fontWeight: '500',
+  },
+  categoryTagTextActive: {
+    color: colors.surface,
+  },
+  categoryTagArrow: {
+    paddingLeft: 4,
+  },
+  filterPillCheck: {
+    marginLeft: 6,
   },
   noResultsContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 40,
-    paddingHorizontal: 20,
+    paddingVertical: 48,
+    paddingHorizontal: 24,
+  },
+  noResultsIconWrap: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: colors.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
   },
   noResultsText: {
     fontSize: 18,
     fontWeight: '600',
     color: colors.textMuted,
-    marginTop: 16,
     marginBottom: 8,
   },
   noResultsSubtext: {
     fontSize: 14,
     color: colors.textSubtle,
     textAlign: 'center',
+    marginBottom: 20,
   },
-  filterButtonNext: {
-    backgroundColor: colors.surface,
+  noResultsButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 20,
     borderRadius: radii.lg,
-    padding: 10,
-    justifyContent: 'center',
+    backgroundColor: colors.primarySoft,
+  },
+  noResultsButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  emptyStateContainer: {
     alignItems: 'center',
-    height: 44,
-    width: 44,
-    borderWidth: 1,
-    borderColor: colors.border,
-    ...shadows.card,
+    justifyContent: 'center',
+    paddingVertical: 56,
+    paddingHorizontal: 24,
+  },
+  emptyStateIconWrap: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: colors.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  emptyStateTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.textMuted,
+    marginBottom: 8,
+  },
+  emptyStateSubtext: {
+    fontSize: 14,
+    color: colors.textSubtle,
+    textAlign: 'center',
   },
   topFilters: {
     flexDirection: 'row',
@@ -879,66 +1304,80 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   resultsCount: {
-    fontSize: 14,
-    color: colors.textMuted,
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.text,
     marginBottom: 16,
-    fontWeight: '500',
+    marginTop: 4,
+    paddingHorizontal: 16,
+    letterSpacing: -0.2,
+  },
+  loadMoreWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+  },
+  loadMoreButton: {
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  loadMoreText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.primary,
   },
   card: {
     backgroundColor: colors.surface,
-    borderRadius: 18,
-    padding: 18,
-    paddingLeft: 18,
-    marginBottom: 16,
+    borderRadius: radii.xl,
+    padding: 20,
+    marginBottom: 18,
     borderWidth: 1,
     borderColor: colors.border,
-    ...shadows.card,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
   },
-  cardHeader: {
+  cardTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 16,
-  },
-  companyInfo: {
-    flexDirection: 'row',
-    flex: 1,
     alignItems: 'center',
+    marginBottom: 10,
   },
-  /* old circular company logo removed for cleaner layout */
+  cardPostedTime: {
+    fontSize: 12,
+    color: colors.textMuted,
+    fontWeight: '500',
+  },
+  cardHeartButton: {
+    padding: 6,
+    borderRadius: 20,
+    backgroundColor: 'rgba(99, 102, 241, 0.08)',
+  },
   cardAccent: {
-    width: 6,
-    height: 50,
-    borderRadius: 4,
-    marginRight: 12,
-    marginTop: 4,
-  },
-  companyDetails: {
-    flex: 1,
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    marginBottom: 12,
+    alignSelf: 'flex-start',
   },
   companyName: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '800',
     color: colors.text,
-    marginBottom: 6,
+    marginBottom: 8,
+    letterSpacing: -0.2,
   },
-  companyLocation: {
-    fontSize: 13,
+  cardDetailsLine: {
+    fontSize: 14,
     color: colors.textMuted,
-    marginBottom: 2,
-  },
-  companyIndustry: {
-    fontSize: 13,
-    color: colors.textMuted,
-  },
-  moaRemaining: {
-    fontSize: 12,
-    color: colors.warning,
-    marginTop: 6,
-    fontWeight: '700',
-  },
-  bookmarkButton: {
-    padding: 8,
+    marginBottom: 14,
+    fontWeight: '500',
   },
   descriptionContainer: {
     marginBottom: 16,
@@ -946,7 +1385,8 @@ const styles = StyleSheet.create({
   description: {
     fontSize: 15,
     color: colors.text,
-    lineHeight: 22,
+    lineHeight: 24,
+    fontWeight: '400',
   },
   readMore: {
     color: colors.primary,
@@ -954,44 +1394,52 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 8,
   },
-  cardFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-  },
   tagContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    flex: 1,
     gap: 6,
+    marginBottom: 12,
   },
   tag: {
     backgroundColor: colors.primarySoft,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: 'rgba(99, 102, 241, 0.2)',
   },
   tagText: {
     color: colors.primary,
     fontSize: 12,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   moreTagsText: {
     color: colors.textMuted,
     fontSize: 12,
     fontStyle: 'italic',
   },
-  cardMeta: {
-    alignItems: 'flex-end',
+  cardMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    marginTop: 4,
   },
-  workMode: {
+  cardMetaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  cardMetaText: {
+    fontSize: 13,
+    color: colors.textMuted,
+    fontWeight: '500',
+  },
+  cardMetaDivider: {
     fontSize: 12,
-    color: colors.success,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  timeStamp: {
-    fontSize: 11,
     color: colors.textSubtle,
   },
   tagDropdown: {
@@ -1045,11 +1493,16 @@ const styles = StyleSheet.create({
   filterSection: {
     marginBottom: 24,
   },
+  filterSectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
   filterSectionTitle: {
     fontSize: 16,
     fontWeight: '600',
     color: colors.text,
-    marginBottom: 12,
   },
   filterOptions: {
     flexDirection: 'row',
@@ -1102,18 +1555,6 @@ const styles = StyleSheet.create({
     color: colors.onPrimary,
     fontSize: 14,
     fontWeight: '600',
-  },
-  ojtTrackerButton: {
-    position: 'absolute',
-    right: 20,
-    bottom: 80,
-    backgroundColor: colors.primary,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...shadows.card,
   },
 });
 

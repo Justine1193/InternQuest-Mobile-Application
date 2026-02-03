@@ -36,6 +36,6 @@ Safety notes
 
 Client-side support
 
-The mobile app `HelpDeskScreen.tsx` was updated to fetch files only from Cloud Storage using `path`/`url`. It also includes an admin UI button for migrating individual documents from the client.
+The mobile app `ResourceManagementScreen.tsx` (formerly HelpDeskScreen) was updated to fetch files only from Cloud Storage using `path`/`url`. It also includes an admin UI button for migrating individual documents from the client.
 
 If you prefer an alternative migration strategy (signed URLs, changing storage rules, or server-side conversion), I can prepare that as well.

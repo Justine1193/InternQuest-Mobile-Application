@@ -13,9 +13,10 @@ import {
   Linking,
   RefreshControl,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { auth, firestore } from '../firebase/config';
-import { doc, setDoc, collection, getDoc, getDocs, deleteDoc } from "firebase/firestore";
+import { doc, setDoc, collection, getDoc, getDocFromServer, getDocs, deleteDoc, query, where, getDocsFromServer, serverTimestamp } from "firebase/firestore";
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 // removed `react-native-progress` dependency and use a simple native progress bar instead
@@ -39,6 +40,7 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [showUndoCompany, setShowUndoCompany] = useState(false);
   const [companyModalVisible, setCompanyModalVisible] = useState(false);
+  const [companyInfoModalVisible, setCompanyInfoModalVisible] = useState(false);
   const [companyName, setCompanyName] = useState('');
   const [avatarChanged, setAvatarChanged] = useState(false);
   const [totalHours, setTotalHours] = useState(0);
@@ -112,7 +114,7 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
 
     // If hired company only (no appliedId), just inform
     if ((userData as any).company) {
-      Alert.alert('Company', `You are currenty associated with ${ (userData as any).company }`);
+      setCompanyInfoModalVisible(true);
     }
   };
 
@@ -210,7 +212,97 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
       const userDocRef = doc(firestore, "users", auth.currentUser.uid);
       const userSnap = await getDoc(userDocRef);
       if (userSnap.exists()) {
-        const data = userSnap.data();
+        const data = { ...userSnap.data() } as UserData;
+        const appliedId = (data as any).appliedCompanyId;
+        // If user has an applied company, verify both:
+        // 1) The application status is not denied/cancelled
+        // 2) The company still exists in the companies collection
+        // Use getDocFromServer to avoid cache so we see real server state.
+        if (appliedId && typeof appliedId === 'string') {
+          try {
+            const applicationRef = doc(firestore, 'applications', `${auth.currentUser!.uid}_${appliedId}`);
+            const applicationSnap = await getDocFromServer(applicationRef);
+            const appStatus = applicationSnap.exists() ? (applicationSnap.data() as any).status : null;
+
+            // If the application was denied or cancelled, don't show this company in profile anymore.
+            if (appStatus === 'denied' || appStatus === 'cancelled') {
+              const appliedName = (data as any).appliedCompanyName;
+              data.appliedCompanyId = null;
+              (data as any).appliedCompanyName = null;
+              const updates: any = {
+                appliedCompanyId: null,
+                appliedCompanyName: null,
+                applicationRemovedAt: new Date().toISOString(),
+              };
+              if ((data as any).company === appliedName && data.status !== 'hired') {
+                (data as any).company = null;
+                updates.company = null;
+              }
+              await setDoc(userDocRef, updates, { merge: true });
+            } else {
+              // Only if application is not explicitly denied/cancelled, verify the company document still exists.
+              const companyRef = doc(firestore, 'companies', appliedId);
+              const companySnap = await getDocFromServer(companyRef);
+              if (!companySnap.exists()) {
+                const appliedName = (data as any).appliedCompanyName;
+                data.appliedCompanyId = null;
+                (data as any).appliedCompanyName = null;
+                const updates: any = {
+                  appliedCompanyId: null,
+                  appliedCompanyName: null,
+                  applicationRemovedAt: new Date().toISOString(),
+                };
+                if ((data as any).company === appliedName && data.status !== 'hired') {
+                  (data as any).company = null;
+                  updates.company = null;
+                }
+                await setDoc(userDocRef, updates, { merge: true });
+                try {
+                  await deleteDoc(doc(firestore, 'applications', `${auth.currentUser!.uid}_${appliedId}`));
+                } catch (_) {
+                  // ignore if application doc missing
+                }
+              }
+            }
+          } catch (checkErr) {
+            console.warn('ProfileScreen: could not verify applied company/application', checkErr);
+          }
+        }
+
+        // If admin already approved/accepted the application but the user doc wasn't updated yet,
+        // sync the approved company into the profile so the user sees it as assigned.
+        try {
+          const approvedQ = query(
+            collection(firestore, 'applications'),
+            where('userId', '==', auth.currentUser!.uid),
+            where('status', '==', 'approved')
+          );
+          const approvedSnap = await getDocsFromServer(approvedQ);
+          if (!approvedSnap.empty) {
+            const approved = approvedSnap.docs[0].data() as any;
+            const approvedCompanyName = String(approved.companyName || approved.company || '');
+            const approvedCompanyId = String(approved.companyId || '');
+
+            if ((data.status !== 'hired' || !data.company) && approvedCompanyName) {
+              data.status = 'hired';
+              (data as any).company = approvedCompanyName;
+              (data as any).hiredCompanyId = approvedCompanyId || null;
+
+              await setDoc(doc(firestore, 'users', auth.currentUser!.uid), {
+                status: 'hired',
+                company: approvedCompanyName,
+                hiredCompanyId: approvedCompanyId || null,
+                hiredAt: serverTimestamp(),
+                // once approved, clear applied fields to avoid confusion
+                appliedCompanyId: null,
+                appliedCompanyName: null,
+              }, { merge: true });
+            }
+          }
+        } catch (e) {
+          console.warn('ProfileScreen: failed to sync approved company into user profile', e);
+        }
+
         setUserData(data);
       }
     } catch (error) {
@@ -255,10 +347,11 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
     }
   };
 
-  // Refresh OJT data when screen comes into focus
+  // Refresh user data and OJT when screen comes into focus (so removed companies are cleared)
   useFocusEffect(
     React.useCallback(() => {
       const loadData = async () => {
+        await fetchUserData();
         await loadRequiredHours();
         await fetchOJTLogsAndProgress();
       };
@@ -271,11 +364,6 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
     const savedGoal = await AsyncStorage.getItem('OJT_REQUIRED_HOURS');
     if (savedGoal) setRequiredHours(Number(savedGoal));
   };
-
-  // Remove the old useEffect that loads data
-  useEffect(() => {
-    fetchUserData();
-  }, []);
 
   // no persisted avatar upload mode — always upload to Storage and optionally save small base64 preview
 
@@ -359,152 +447,492 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
 
   return (
     <Screen contentContainerStyle={{ paddingHorizontal: 0, paddingTop: 0 }}>
-      <AppHeader title="Profile" />
       <ScrollView
+        style={styles.profileScrollView}
         contentContainerStyle={styles.scrollContent}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
         }
       >
-        {/* Profile Header Card */}
-        <View style={styles.headerCardShadow}>
-          <View style={styles.headerCard}>
-            <TouchableOpacity
-              style={styles.avatarContainer}
-              onPress={handlePickImage}
-              accessibilityLabel="Edit profile picture"
-              accessibilityRole="button"
-              activeOpacity={0.7}
-            >
-              {avatarUri ? (
-                <Image source={{ uri: avatarUri }} style={styles.avatar} />
-              ) : (
-                <View style={[styles.avatar, { justifyContent: 'center', alignItems: 'center', backgroundColor: colors.surfaceAlt }]}>
-                  <Ionicons name="person-circle" size={100} color={colors.textSubtle} />
+        {/* Header + Profile section with gradient background */}
+        <View style={styles.headerGradientWrapper}>
+          <LinearGradient
+            colors={['#4F46E5', '#6366F1', '#818CF8']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.headerGradient}
+          >
+            {/* Decorative circles */}
+            <View style={styles.decorativeCircle1} />
+            <View style={styles.decorativeCircle2} />
+            <View style={styles.decorativeCircle3} />
+            
+            <AppHeader title="Profile" variant="hero" back />
+            {/* Profile section - scrolls with content */}
+            <View style={styles.profileHeaderSection}>
+              <View style={styles.profileHeaderBackground}>
+                <View style={styles.profileHeaderContent}>
+                  {/* Avatar with glow effect */}
+                  <View style={styles.avatarGlowWrapper}>
+                    <TouchableOpacity
+                      style={styles.avatarContainer}
+                      onPress={handlePickImage}
+                      accessibilityLabel="Edit profile picture"
+                      accessibilityRole="button"
+                      activeOpacity={0.8}
+                    >
+                      {avatarUri ? (
+                        <Image source={{ uri: avatarUri }} style={styles.avatar} />
+                      ) : (
+                        <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                          <Ionicons name="person-circle" size={100} color={colors.white} />
+                        </View>
+                      )}
+                      <View style={styles.editIconOverlay}>
+                        {avatarUploading ? (
+                          <ActivityIndicator size="small" color={colors.onPrimary} />
+                        ) : (
+                          <Ionicons name="camera" size={18} color={colors.onPrimary} style={styles.editIcon} />
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                  </View>
+                  
+                  {/* Name */}
+                  <Text style={styles.profileName}>
+                    {userData.name || (userData.firstName && userData.lastName ? userData.firstName + ' ' + userData.lastName : '')}
+                  </Text>
+                  
+                  <Text style={styles.profileEmail}>{userData.email || auth.currentUser?.email || ''}</Text>
+                  
+                  {/* Decorative divider */}
+                  <View style={styles.profileDivider} />
                 </View>
-              )}
-              {/* Edit Icon Overlay */}
-              <View style={styles.editIconOverlay}>
-                {avatarUploading ? (
-                  <ActivityIndicator size="small" color={colors.primary} />
-                ) : (
-                  <Ionicons name="camera" size={28} color={colors.onPrimary} style={styles.editIcon} />
-                )}
               </View>
-            </TouchableOpacity>
-            <Text style={styles.name}>{userData.name || (userData.firstName && userData.lastName ? userData.firstName + ' ' + userData.lastName : '')}</Text>
-            <Text style={styles.subtext}>{userData.course}</Text>
-            {userData.status === 'hired' && userData.company && (
-              <Text style={styles.subtext}>Company: {userData.company}</Text>
-            )}
-            {userData.appliedCompanyName && !userData.company && (
-              <Text style={styles.subtext}>Applied: {userData.appliedCompanyName}</Text>
-            )}
+            </View>
+          </LinearGradient>
+        </View>
+
+        {/* White content card - stats and below */}
+        <View style={styles.profileContentCard}>
+        {/* Stats Cards */}
+        <View style={styles.statsRow}>
+          {/* Hours Done Card */}
+          <View style={styles.statCardWrapper}>
+            <LinearGradient
+              colors={['#F3E8FF', '#EDE9FE', '#F5F3FF']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.statCardGradient}
+            >
+              <View style={styles.statCardIconWrapper}>
+                <Ionicons name="checkmark-circle" size={24} color="#8B5CF6" />
+              </View>
+              <Text style={styles.statNumberEnhanced}>{totalHours}</Text>
+              <Text style={styles.statLabelEnhanced}>Hours Done</Text>
+            </LinearGradient>
+          </View>
+
+          {/* Remaining Hours Card */}
+          <View style={styles.statCardWrapper}>
+            <LinearGradient
+              colors={['#FEF3C7', '#FEF9E7', '#FFFBEB']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.statCardGradient}
+            >
+              <View style={styles.statCardIconWrapper}>
+                <Ionicons name="time" size={24} color="#F59E0B" />
+              </View>
+              <Text style={styles.statNumberEnhancedDark}>{Math.max(0, requiredHours - totalHours)}</Text>
+              <Text style={styles.statLabelEnhancedDark}>Remaining</Text>
+            </LinearGradient>
+          </View>
+
+          {/* Required Hours Card */}
+          <View style={styles.statCardWrapper}>
+            <LinearGradient
+              colors={['#DBEAFE', '#EFF6FF', '#F0F9FF']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.statCardGradient}
+            >
+              <View style={styles.statCardIconWrapper}>
+                <Ionicons name="flag" size={24} color="#3B82F6" />
+              </View>
+              <Text style={styles.statNumberEnhancedDark}>{requiredHours}</Text>
+              <Text style={styles.statLabelEnhancedDark}>Required</Text>
+            </LinearGradient>
           </View>
         </View>
 
-        {/* Stats Section */}
-        <View style={styles.statsRow}>
-          <View style={styles.statCard}>
-            <Ionicons name="time-outline" size={24} color={colors.primary} style={{ marginBottom: 4 }} />
-            <Text style={styles.statLabel}>Remaining Hours</Text>
-            <Text style={styles.statValue}>{Math.max(0, requiredHours - totalHours)} hrs</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Ionicons name="business-outline" size={24} color={colors.primary} style={{ marginBottom: 4 }} />
-            <Text style={styles.statLabel}>Company</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <TouchableOpacity onPress={handleCompanyPress} accessibilityRole="button" style={{ flexShrink: 1 }}>
-                <Text style={styles.statValue}>{userData.company || userData.appliedCompanyName || 'Not Applied'}</Text>
-              </TouchableOpacity>
-              {userData.appliedCompanyName && !userData.company && userData.status !== 'hired' ? (
-                <TouchableOpacity onPress={handleClearAppliedCompanyProfile} style={styles.removeButton} accessibilityLabel="Remove applied company">
-                  <Ionicons name="trash" size={18} color={colors.danger} />
-                </TouchableOpacity>
-              ) : null}
+        {/* Section Header */}
+        <View style={styles.sectionHeaderContainer}>
+          <Text style={styles.sectionHeaderText}>Personal Information</Text>
+        </View>
+
+        {/* Profile Details List */}
+        <View style={styles.settingsListCard}>
+          <TouchableOpacity 
+            style={styles.settingsRow}
+            activeOpacity={0.7}
+            disabled
+          >
+            <View style={[styles.settingsIconWrapper, { backgroundColor: '#F3E8FF' }]}>
+              <Ionicons name="id-card" size={20} color="#8B5CF6" />
             </View>
+            <View style={styles.settingsTextWrapper}>
+              <Text style={styles.settingsTitle}>Student ID</Text>
+              <Text style={styles.settingsSubtitle} numberOfLines={2}>
+                {(userData as any).studentId || 'Not set'}
+              </Text>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.settingsRow}
+            activeOpacity={0.7}
+            disabled
+          >
+            <View style={[styles.settingsIconWrapper, { backgroundColor: '#DBEAFE' }]}>
+              <Ionicons name="school" size={20} color="#3B82F6" />
+            </View>
+            <View style={styles.settingsTextWrapper}>
+              <Text style={styles.settingsTitle}>Program</Text>
+              <Text style={styles.settingsSubtitle} numberOfLines={2}>
+                {(userData as any).program || (userData as any).course || 'Not set'}
+              </Text>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.settingsRow}
+            activeOpacity={0.7}
+            disabled
+          >
+            <View style={[styles.settingsIconWrapper, { backgroundColor: '#D1FAE5' }]}>
+              <Ionicons name="people" size={20} color="#22C55E" />
+            </View>
+            <View style={styles.settingsTextWrapper}>
+              <Text style={styles.settingsTitle}>Section</Text>
+              <Text style={styles.settingsSubtitle} numberOfLines={2}>
+                {(userData as any).section || 'Not set'}
+              </Text>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.settingsRow}
+            activeOpacity={0.7}
+            disabled
+          >
+            <View style={[styles.settingsIconWrapper, { backgroundColor: '#FEF3C7' }]}>
+              <Ionicons name="briefcase" size={20} color="#F59E0B" />
+            </View>
+            <View style={styles.settingsTextWrapper}>
+              <Text style={styles.settingsTitle}>Preferred Field</Text>
+              <Text style={styles.settingsSubtitle} numberOfLines={2}>
+                {Array.isArray((userData as any).field)
+                  ? (userData as any).field.join(', ')
+                  : (userData as any).field || 'Not set'}
+              </Text>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.settingsRow, { borderBottomWidth: 0 }]}
+            activeOpacity={0.7}
+            onPress={userData.status === 'hired' && userData.company ? handleCompanyPress : undefined}
+            disabled={!(userData.status === 'hired' && userData.company)}
+          >
+            <View style={[styles.settingsIconWrapper, { backgroundColor: '#FEE2E2' }]}>
+              <Ionicons name="business" size={20} color="#EF4444" />
+            </View>
+            <View style={styles.settingsTextWrapper}>
+              <Text style={styles.settingsTitle}>Company</Text>
+              <Text style={styles.settingsSubtitle} numberOfLines={2}>
+                {userData.status === 'hired' && userData.company ? userData.company : 'Not assigned yet'}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        {/* Section Header */}
+        <View style={styles.sectionHeaderContainer}>
+          <Text style={styles.sectionHeaderText}>Skills & Progress</Text>
+        </View>
+
+        {/* Skills Section */}
+        <View style={styles.skillsCardContainer}>
+          <View style={styles.skillsCardHeader}>
+            <View style={[styles.settingsIconWrapper, { backgroundColor: '#FEF3C7' }]}>
+              <Ionicons name="star" size={20} color="#F59E0B" />
+            </View>
+            <Text style={styles.skillsCardTitle}>Skills</Text>
+            {Array.isArray((userData as any).skills) && (userData as any).skills.length > 0 && (
+              <Text style={styles.skillsCount}>({(userData as any).skills.length})</Text>
+            )}
           </View>
+          
+          {Array.isArray((userData as any).skills) && (userData as any).skills.length > 0 ? (
+            <View style={styles.skillsChipsContainer}>
+              {(userData as any).skills.map((skill: string, index: number) => {
+                const accentColors = ['#6366F1', '#8B5CF6', '#06B6D4', '#22C55E', '#F59E0B', '#EF4444', '#3B82F6'];
+                const colorIndex = index % accentColors.length;
+                return (
+                  <View 
+                    key={`${skill}-${index}`} 
+                    style={[
+                      styles.skillChipNew, 
+                      { 
+                        backgroundColor: `${accentColors[colorIndex]}15`, 
+                        borderColor: accentColors[colorIndex] 
+                      }
+                    ]}
+                  >
+                    <Text style={[styles.skillChipTextNew, { color: accentColors[colorIndex] }]}>
+                      {skill}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+          ) : (
+            <View style={styles.skillsEmptyContainer}>
+              <Ionicons name="star-outline" size={32} color={colors.textMuted} />
+              <Text style={styles.skillsEmptyText}>No skills added yet</Text>
+              <Text style={styles.skillsEmptySubtext}>You can add skills in Settings</Text>
+            </View>
+          )}
         </View>
 
         {/* Internship Progress Section */}
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionHeader}>Internship Progress</Text>
-          <View style={styles.progressBarContainer}>
-            <View style={styles.progressBackground}>
-              <View style={[styles.progressFill, { width: `${Math.round(progress * 100)}%` }]} />
+        <View style={styles.settingsListCard}>
+          <TouchableOpacity 
+            style={[styles.settingsRow, { borderBottomWidth: 0 }]}
+            activeOpacity={0.7}
+            disabled
+          >
+            <View style={[styles.settingsIconWrapper, { backgroundColor: '#DBEAFE' }]}>
+              <Ionicons name="bar-chart" size={20} color="#3B82F6" />
             </View>
-          </View>
-          <Text style={styles.progressText}>
-            {totalHours} hrs / {requiredHours} hrs ({Math.round(progress * 100)}% completed)
-          </Text>
+            <View style={styles.settingsTextWrapper}>
+              <Text style={styles.settingsTitle}>Internship Progress</Text>
+              <Text style={styles.settingsSubtitle} numberOfLines={2}>
+                {totalHours} hrs / {requiredHours} hrs ({Math.round(progress * 100)}% completed)
+              </Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        {/* Section Header */}
+        <View style={styles.sectionHeaderContainer}>
+          <Text style={styles.sectionHeaderText}>Contact Information</Text>
         </View>
 
         {/* Contact & Details Section */}
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionHeader}>Contact & Details</Text>
-          <TouchableOpacity style={styles.detailRow} onPress={handleEmailPress} activeOpacity={0.7}>
-            <Ionicons name="mail-outline" size={20} color={colors.primary} style={styles.detailIcon} />
-            <Text style={styles.detailValue}>{userData.email}</Text>
+        <View style={styles.settingsListCard}>
+          <TouchableOpacity 
+            style={styles.settingsRow}
+            activeOpacity={0.7}
+            disabled
+          >
+            <View style={[styles.settingsIconWrapper, { backgroundColor: '#FEE2E2' }]}>
+              <Ionicons name="mail" size={20} color="#EF4444" />
+            </View>
+            <View style={styles.settingsTextWrapper}>
+              <Text style={styles.settingsTitle}>Email</Text>
+              <Text style={styles.settingsSubtitle} numberOfLines={2}>
+                {userData.email || 'Not set'}
+              </Text>
+            </View>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.detailRow} onPress={handlePhonePress} activeOpacity={0.7}>
-            <Ionicons name="call-outline" size={20} color={colors.primary} style={styles.detailIcon} />
-            <Text style={styles.detailValue}>{userData.contact}</Text>
+
+          <TouchableOpacity 
+            style={styles.settingsRow}
+            activeOpacity={0.7}
+            disabled
+          >
+            <View style={[styles.settingsIconWrapper, { backgroundColor: '#D1FAE5' }]}>
+              <Ionicons name="call" size={20} color="#22C55E" />
+            </View>
+            <View style={styles.settingsTextWrapper}>
+              <Text style={styles.settingsTitle}>Phone</Text>
+              <Text style={styles.settingsSubtitle} numberOfLines={2}>
+                {userData.contact || 'Not set'}
+              </Text>
+            </View>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.detailRow} onPress={handleLinkedInPress} activeOpacity={0.7}>
-            <Ionicons name="logo-linkedin" size={20} color={colors.primary} style={styles.detailIcon} />
-            <Text style={styles.detailValue}>{userData.linkedin}</Text>
+
+          <TouchableOpacity 
+            style={[styles.settingsRow, { borderBottomWidth: 0 }]}
+            activeOpacity={0.7}
+            disabled
+          >
+            <View style={[styles.settingsIconWrapper, { backgroundColor: '#DBEAFE' }]}>
+              <Ionicons name="logo-linkedin" size={20} color="#0A66C2" />
+            </View>
+            <View style={styles.settingsTextWrapper}>
+              <Text style={styles.settingsTitle}>LinkedIn</Text>
+              <Text style={styles.settingsSubtitle} numberOfLines={2}>
+                {userData.linkedin || 'Not set'}
+              </Text>
+            </View>
           </TouchableOpacity>
         </View>
-
-        {/* Action Buttons */}
-        <View style={styles.buttonGroup}>
-          <TouchableOpacity
-            style={[styles.actionButton, { backgroundColor: colors.success }]}
-            onPress={() => navigation.navigate('RequirementsChecklist')}
-          >
-            <Ionicons name="checkmark-circle-outline" size={20} color={colors.onPrimary} />
-            <Text style={styles.buttonText}>Requirements Checklist</Text>
-          </TouchableOpacity>
         </View>
       </ScrollView>
 
       {/* Company Details Modal */}
       <Modal
         visible={companyModalVisible}
-        animationType="slide"
+        animationType="fade"
         transparent={true}
         onRequestClose={() => setCompanyModalVisible(false)}
       >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalHeader}>
-              {userData.status === 'hired' ? 'Update Company' : 'Add Company'}
-            </Text>
-
-            <Text style={styles.label}>Company Name</Text>
-            <TextInput
-              style={styles.input}
-              value={companyName}
-              onChangeText={setCompanyName}
-              placeholder="Enter company name"
-            />
-
-            <View style={styles.modalButtons}>
+        <TouchableOpacity
+          style={styles.modalContainer}
+          activeOpacity={1}
+          onPress={() => setCompanyModalVisible(false)}
+        >
+          <TouchableOpacity
+            style={styles.modalContent}
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <View style={styles.modalHeaderContainer}>
+              <View style={styles.modalHeaderIconWrapper}>
+                <Ionicons name="business" size={24} color={colors.primary} />
+              </View>
+              <View style={styles.modalHeaderTextWrapper}>
+                <Text style={styles.modalHeader}>
+                  {userData.status === 'hired' ? 'Update Company' : 'Add Company'}
+                </Text>
+                <Text style={styles.modalSubtitle}>
+                  {userData.status === 'hired' 
+                    ? 'Update your current company information' 
+                    : 'Add the company where you are interning'}
+                </Text>
+              </View>
               <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
+                style={styles.modalCloseButton}
                 onPress={() => setCompanyModalVisible(false)}
+                activeOpacity={0.7}
               >
-                <Text style={styles.modalButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.saveButton]}
-                onPress={handleCompanyUpdate}
-              >
-                <Text style={styles.modalButtonText}>Save</Text>
+                <Ionicons name="close" size={24} color={colors.textMuted} />
               </TouchableOpacity>
             </View>
-          </View>
-        </View>
+
+            {/* Input Section */}
+            <View style={styles.modalInputSection}>
+              <Text style={styles.modalLabel}>Company Name</Text>
+              <View style={styles.modalInputWrapper}>
+                <Ionicons name="business-outline" size={20} color={colors.textMuted} style={styles.modalInputIcon} />
+                <TextInput
+                  style={styles.modalInput}
+                  value={companyName}
+                  onChangeText={setCompanyName}
+                  placeholder="Enter company name"
+                  placeholderTextColor={colors.textMuted}
+                  autoFocus={true}
+                />
+              </View>
+            </View>
+
+            {/* Modal Buttons */}
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalCancelButton]}
+                onPress={() => setCompanyModalVisible(false)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.modalCancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.modalButton, 
+                  styles.modalSaveButton,
+                  !companyName.trim() && styles.modalSaveButtonDisabled
+                ]}
+                onPress={handleCompanyUpdate}
+                activeOpacity={0.8}
+                disabled={!companyName.trim()}
+              >
+                <Ionicons 
+                  name="checkmark" 
+                  size={18} 
+                  color={!companyName.trim() ? colors.textMuted : colors.onPrimary} 
+                  style={{ marginRight: 6 }} 
+                />
+                <Text style={[
+                  styles.modalSaveButtonText,
+                  !companyName.trim() && styles.modalSaveButtonTextDisabled
+                ]}>
+                  Save
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Company Information Display Modal */}
+      <Modal
+        visible={companyInfoModalVisible}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setCompanyInfoModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalContainer}
+          activeOpacity={1}
+          onPress={() => setCompanyInfoModalVisible(false)}
+        >
+          <TouchableOpacity
+            style={styles.companyInfoModalContent}
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <View style={styles.companyInfoModalHeader}>
+              <View style={styles.companyInfoModalIconWrapper}>
+                <Ionicons name="business" size={28} color={colors.primary} />
+              </View>
+              <View style={styles.companyInfoModalHeaderTextWrapper}>
+                <Text style={styles.companyInfoModalTitle}>Company</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.modalCloseButton}
+                onPress={() => setCompanyInfoModalVisible(false)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="close" size={24} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Company Information */}
+            <View style={styles.companyInfoModalBody}>
+              <Text style={styles.companyInfoModalText}>
+                You are currently associated with{' '}
+                <Text style={styles.companyInfoModalCompanyName}>
+                  {(userData as any).company}
+                </Text>
+              </Text>
+            </View>
+
+            {/* Modal Button */}
+            <View style={styles.companyInfoModalFooter}>
+              <TouchableOpacity
+                style={styles.companyInfoModalButton}
+                onPress={() => setCompanyInfoModalVisible(false)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.companyInfoModalButtonText}>OK</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
 
       {/* Undo Company Snackbar */}
@@ -525,9 +953,22 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.bg,
   },
+  profileScrollView: {
+    flex: 1,
+  },
   scrollContent: {
-    paddingHorizontal: 15,
     paddingBottom: 24,
+    paddingHorizontal: 16,
+    flexGrow: 1,
+    backgroundColor: colors.bg,
+  },
+  profileContentCard: {
+    backgroundColor: colors.bg,
+    borderTopLeftRadius: radii.xl,
+    borderTopRightRadius: radii.xl,
+    paddingTop: 20,
+    marginTop: 0,
+    flexGrow: 1,
   },
   header: {
     fontSize: 24,
@@ -540,9 +981,75 @@ const styles = StyleSheet.create({
     marginVertical: 25,
   },
   removeButton: { marginLeft: 8, padding: 6, borderRadius: 6, backgroundColor: 'transparent' },
+  headerGradientWrapper: {
+    marginBottom: 0,
+    marginHorizontal: -16,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  headerGradient: {
+    paddingBottom: 40,
+    borderBottomLeftRadius: radii.xl,
+    borderBottomRightRadius: radii.xl,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  decorativeCircle1: {
+    position: 'absolute',
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    top: -80,
+    right: -50,
+  },
+  decorativeCircle2: {
+    position: 'absolute',
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    top: 100,
+    left: -40,
+  },
+  decorativeCircle3: {
+    position: 'absolute',
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    bottom: 20,
+    right: 30,
+  },
+  profileHeaderSection: {
+    marginBottom: 0,
+    paddingTop: 8,
+    paddingBottom: 40,
+    paddingHorizontal: 20,
+    width: '100%',
+    backgroundColor: 'transparent',
+    position: 'relative',
+    zIndex: 1,
+  },
+  profileHeaderBackground: {
+    alignItems: 'center',
+    width: '100%',
+    backgroundColor: 'transparent',
+  },
+  profileHeaderContent: {
+    alignItems: 'center',
+    width: '100%',
+  },
+  avatarGlowWrapper: {
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 8,
+  },
   avatarContainer: {
     alignSelf: 'center',
-    marginBottom: 12,
     position: 'relative',
   },
   
@@ -550,36 +1057,76 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 60,
-    borderWidth: 2,
-    borderColor: colors.primary,
+    borderWidth: 5,
+    borderColor: colors.white,
     backgroundColor: colors.surface,
+  },
+  avatarPlaceholder: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
   },
   editIconOverlay: {
     position: 'absolute',
     right: 0,
     bottom: 0,
-    backgroundColor: colors.primary,
+    backgroundColor: '#4F46E5',
     borderRadius: 20,
-    padding: 4,
-    borderWidth: 2,
-    borderColor: colors.surface,
+    width: 40,
+    height: 40,
+    borderWidth: 4,
+    borderColor: colors.white,
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
+  },
+  profileName: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: colors.white,
+    textAlign: 'center',
+    lineHeight: 32,
+    letterSpacing: 0.3,
+    marginTop: 20,
+    marginBottom: 8,
+    textShadowColor: 'rgba(0, 0, 0, 0.2)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+  },
+  profileEmail: {
+    fontSize: 15,
+    color: 'rgba(255, 255, 255, 0.95)',
+    textAlign: 'center',
+    lineHeight: 22,
+    letterSpacing: 0.2,
+    marginBottom: 16,
+  },
+  profileDivider: {
+    width: 60,
+    height: 3,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 2,
+    marginTop: 8,
   },
   editIcon: {},
   name: {
     fontSize: 22,
-    fontWeight: 'bold',
+    fontWeight: '700',
     color: colors.text,
-    marginTop: 12,
-    marginBottom: 2,
+    marginBottom: 4,
     textAlign: 'center',
+    letterSpacing: -0.2,
   },
   subtext: {
     fontSize: 15,
     color: colors.textMuted,
     textAlign: 'center',
-    marginBottom: 2,
+    marginTop: 0,
+    fontWeight: '500',
   },
   statsContainer: {
     flexDirection: 'row',
@@ -596,6 +1143,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     ...shadows.card,
+  },
+  statCardFull: {
+    flex: 1,
+    width: '100%',
   },
   statLabel: {
     fontSize: 13,
@@ -617,6 +1168,34 @@ const styles = StyleSheet.create({
     color: colors.primary,
     marginBottom: 12,
   },
+  skillsCard: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#F59E0B',
+  },
+  skillsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  contactCard: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#3B82F6',
+  },
+  contactHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  detailIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
   detailLabel: {
     fontSize: 14,
     color: colors.textMuted,
@@ -630,28 +1209,115 @@ const styles = StyleSheet.create({
     marginTop: 20,
     marginBottom: 30,
   },
-  progressBarContainer: {
-    marginTop: 10,
-    height: 20,
-    justifyContent: 'center',
+  progressChartContainer: {
+    alignItems: 'center',
+    marginBottom: 24,
   },
-  progressBackground: {
+  circularProgressWrapper: {
+    width: 160,
+    height: 160,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+    position: 'relative',
+  },
+  circularProgressBackground: {
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    borderWidth: 12,
+    borderColor: colors.border,
+    position: 'absolute',
+  },
+  circularProgressFill: {
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    borderWidth: 12,
+    borderColor: colors.primary,
+    position: 'absolute',
+  },
+  circularProgressInner: {
+    width: 136,
+    height: 136,
+    borderRadius: 68,
+    backgroundColor: colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: colors.border,
+  },
+  circularProgressPercent: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: colors.text,
+  },
+  circularProgressLabel: {
+    fontSize: 12,
+    color: colors.textMuted,
+    marginTop: 4,
+  },
+  progressStatsGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 10,
+    width: '100%',
+  },
+  progressStatBox: {
+    flex: 1,
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: radii.md,
+    gap: 10,
+    minHeight: 110,
+    justifyContent: 'flex-start',
+  },
+  progressStatIconWrapper: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  progressStatNumber: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: colors.text,
+    marginTop: 4,
+  },
+  progressStatText: {
+    fontSize: 12,
+    color: colors.textMuted,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginTop: 2,
+  },
+  progressBarContainer: {
+    marginTop: 0,
+    width: '100%',
+  },
+  progressBarBackground: {
     width: '100%',
     height: 12,
     backgroundColor: colors.border,
     borderRadius: 10,
     overflow: 'hidden',
+    marginBottom: 12,
   },
-  progressFill: {
+  progressBarFill: {
     height: '100%',
-    backgroundColor: colors.primary,
     borderRadius: 10,
   },
   progressText: {
     fontSize: 14,
     color: colors.textMuted,
-    marginTop: 8,
     textAlign: 'center',
+    lineHeight: 20,
+    paddingVertical: 4,
+    includeFontPadding: false,
+    textAlignVertical: 'center',
   },
   button: {
     flexDirection: 'row',
@@ -672,22 +1338,217 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.overlay,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    paddingHorizontal: 20,
   },
   modalContent: {
-    width: '90%',
+    width: '100%',
+    maxWidth: 400,
     backgroundColor: colors.surface,
-    borderRadius: radii.lg,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: colors.border,
-    ...shadows.card,
+    borderRadius: radii.xl,
+    padding: 0,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 10,
+  },
+  modalHeaderContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    padding: 24,
+    paddingBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  modalHeaderIconWrapper: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: `${colors.primary}15`,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  modalHeaderTextWrapper: {
+    flex: 1,
+    paddingRight: 8,
   },
   modalHeader: {
     fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 20,
-    textAlign: 'center',
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 4,
+    lineHeight: 26,
+  },
+  modalSubtitle: {
+    fontSize: 13,
+    color: colors.textMuted,
+    lineHeight: 18,
+  },
+  modalCloseButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
+  },
+  modalInputSection: {
+    padding: 24,
+    paddingTop: 20,
+  },
+  modalLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 10,
+  },
+  modalInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: radii.lg,
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
+    paddingHorizontal: 16,
+    minHeight: 52,
+  },
+  modalInputIcon: {
+    marginRight: 12,
+  },
+  modalInput: {
+    flex: 1,
+    fontSize: 16,
+    color: colors.text,
+    paddingVertical: 0,
+    includeFontPadding: false,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    padding: 24,
+    paddingTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: radii.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+  },
+  modalCancelButton: {
+    backgroundColor: '#F3F4F6',
+  },
+  modalSaveButton: {
+    backgroundColor: colors.primary,
+    shadowColor: colors.primary,
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+  },
+  modalCancelButtonText: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalSaveButtonText: {
+    color: colors.onPrimary,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalSaveButtonDisabled: {
+    backgroundColor: '#E5E7EB',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  modalSaveButtonTextDisabled: {
+    color: colors.textMuted,
+  },
+  companyInfoModalContent: {
+    width: '100%',
+    maxWidth: 400,
+    backgroundColor: colors.surface,
+    borderRadius: radii.xl,
+    padding: 0,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 10,
+  },
+  companyInfoModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 24,
+    paddingBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  companyInfoModalIconWrapper: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: `${colors.primary}15`,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  companyInfoModalHeaderTextWrapper: {
+    flex: 1,
+    paddingRight: 8,
+  },
+  companyInfoModalTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: colors.text,
+    lineHeight: 28,
+  },
+  companyInfoModalBody: {
+    padding: 24,
+    paddingTop: 20,
+    paddingBottom: 20,
+  },
+  companyInfoModalText: {
+    fontSize: 16,
+    color: colors.text,
+    lineHeight: 24,
+  },
+  companyInfoModalCompanyName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.primary,
+    lineHeight: 24,
+  },
+  companyInfoModalFooter: {
+    padding: 24,
+    paddingTop: 0,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+  },
+  companyInfoModalButton: {
+    width: '100%',
+    paddingVertical: 14,
+    borderRadius: radii.lg,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: colors.primary,
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+  },
+  companyInfoModalButtonText: {
+    color: colors.onPrimary,
+    fontSize: 16,
+    fontWeight: '600',
   },
   input: {
     fontSize: 14,
@@ -699,29 +1560,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceAlt,
     marginBottom: 15,
     color: colors.text,
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 20,
-  },
-  modalButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 5,
-    alignItems: 'center',
-    marginHorizontal: 5,
-  },
-  saveButton: {
-    backgroundColor: colors.primary,
-  },
-  cancelButton: {
-    backgroundColor: colors.danger,
-  },
-  modalButtonText: {
-    color: colors.onPrimary,
-    fontSize: 14,
-    fontWeight: 'bold',
   },
   label: {
     fontSize: 14,
@@ -795,29 +1633,249 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   headerCardShadow: {
-    ...shadows.card,
-    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+    marginBottom: 20,
     marginTop: 16,
-    borderRadius: 20,
+    borderRadius: radii.xl,
     alignSelf: 'center',
+    overflow: 'hidden',
   },
   headerCard: {
     backgroundColor: colors.surface,
-    borderRadius: 20,
+    borderRadius: radii.xl,
     alignItems: 'center',
-    paddingVertical: 24,
-    paddingHorizontal: 16,
-    width: 320,
+    paddingTop: 28,
+    paddingBottom: 24,
+    paddingHorizontal: 20,
+    width: '100%',
+    maxWidth: 360,
     alignSelf: 'center',
     borderWidth: 1,
     borderColor: colors.border,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  headerGradientAccent: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 4,
+    backgroundColor: colors.primary,
+    borderTopLeftRadius: radii.xl,
+    borderTopRightRadius: radii.xl,
+  },
+  headerNameSection: {
+    alignItems: 'center',
+    marginTop: 12,
+    marginBottom: 20,
+    width: '100%',
+  },
+  iconRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 24,
+    paddingHorizontal: 4,
+    width: '100%',
+  },
+  profileIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 4,
+  },
+  headerStudentDetails: {
+    width: '100%',
+    marginTop: 20,
+    paddingTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+    gap: 14,
+  },
+  detailCard: {
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: radii.md,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  detailItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  detailIconWrapper: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+  },
+  detailTextWrapper: {
+    flex: 1,
+  },
+  detailLabel: {
+    fontSize: 11,
+    color: colors.textMuted,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 4,
+  },
+  detailText: {
+    fontSize: 15,
+    color: colors.text,
+    fontWeight: '600',
+    lineHeight: 20,
+  },
+  headerDetailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    minHeight: 28,
+    width: '100%',
+  },
+  headerDetailLeft: {
+    flex: 1,
+    paddingRight: 12,
+  },
+  headerDetailRight: {
+    flex: 1,
+    alignItems: 'flex-end',
+  },
+  headerAcademicRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingVertical: 8,
+  },
+  headerAcademicLabel: {
+    fontSize: 13,
+    color: '#6B7280',
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    flex: 0,
+    minWidth: 110,
+  },
+  headerAcademicValue: {
+    fontSize: 16,
+    color: '#111827',
+    fontWeight: '600',
+    textAlign: 'right',
+    flex: 1,
+    marginLeft: 'auto',
   },
   statsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 16,
-    gap: 12,
+    marginBottom: 20,
+    gap: 10,
     paddingHorizontal: 16,
+  },
+  statCardWrapper: {
+    flex: 1,
+    borderRadius: radii.lg,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  statCardGradient: {
+    alignItems: 'center',
+    paddingVertical: 22,
+    paddingHorizontal: 12,
+    minHeight: 100,
+    justifyContent: 'center',
+    borderRadius: radii.lg,
+  },
+  statCardIconWrapper: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  statNumberEnhanced: {
+    fontSize: 30,
+    fontWeight: '700',
+    color: '#8B5CF6',
+    marginBottom: 5,
+  },
+  statLabelEnhanced: {
+    fontSize: 12,
+    color: '#7C3AED',
+    fontWeight: '600',
+    letterSpacing: 0.2,
+  },
+  statNumberEnhancedDark: {
+    fontSize: 30,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 5,
+  },
+  statLabelEnhancedDark: {
+    fontSize: 12,
+    color: colors.textMuted,
+    fontWeight: '600',
+    letterSpacing: 0.2,
+  },
+  statCardClean: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 20,
+    paddingHorizontal: 12,
+    borderRadius: radii.lg,
+    minHeight: 90,
+    justifyContent: 'center',
+  },
+  statCardElevated: {
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
+  statNumberClean: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#8B5CF6',
+    marginBottom: 4,
+  },
+  statLabelClean: {
+    fontSize: 13,
+    color: '#8B5CF6',
+    fontWeight: '600',
+  },
+  statNumberCleanDark: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 4,
+  },
+  statLabelCleanDark: {
+    fontSize: 13,
+    color: colors.textMuted,
+    fontWeight: '600',
   },
   buttonGroup: {
     marginTop: 16,
@@ -836,23 +1894,199 @@ const styles = StyleSheet.create({
   },
   sectionCard: {
     backgroundColor: colors.surface,
-    borderRadius: 16,
+    borderRadius: radii.lg,
     padding: 20,
     marginBottom: 16,
     marginHorizontal: 16,
     borderWidth: 1,
     borderColor: colors.border,
-    ...shadows.card,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  settingsListCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
+    marginBottom: 16,
+    marginHorizontal: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
+  },
+  settingsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 18,
+    paddingHorizontal: 18,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+    minHeight: 72,
+  },
+  settingsIconWrapper: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 14,
+  },
+  settingsTextWrapper: {
+    flex: 1,
+  },
+  settingsTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 4,
+    lineHeight: 22,
+  },
+  settingsSubtitle: {
+    fontSize: 14,
+    color: colors.textMuted,
+    lineHeight: 20,
+  },
+  sectionHeaderContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 8,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  sectionHeaderText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   detailRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingVertical: 12,
+    minHeight: 48,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
   detailIcon: {
     marginRight: 12,
+  },
+  academicRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingVertical: 6,
+  },
+  academicLabel: {
+    fontSize: 14,
+    color: colors.textMuted,
+  },
+  academicValue: {
+    fontSize: 14,
+    color: colors.text,
+    fontWeight: '500',
+    flexShrink: 1,
+    textAlign: 'right',
+    marginLeft: 16,
+  },
+  academicEmptyText: {
+    fontSize: 13,
+    color: colors.textMuted,
+    marginTop: 8,
+  },
+  skillsCardContainer: {
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
+    marginBottom: 16,
+    marginHorizontal: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
+  },
+  skillsCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  skillsCardTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+    marginLeft: 12,
+    flex: 1,
+  },
+  skillsCount: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.textMuted,
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  skillsChipsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  skillChipNew: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: radii.lg,
+    borderWidth: 1.5,
+    marginBottom: 4,
+  },
+  skillChipTextNew: {
+    fontSize: 14,
+    fontWeight: '600',
+    lineHeight: 18,
+  },
+  skillsEmptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 32,
+    paddingHorizontal: 20,
+  },
+  skillsEmptyText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  skillsEmptySubtext: {
+    fontSize: 14,
+    color: colors.textMuted,
+    textAlign: 'center',
+  },
+  skillsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 8,
+  },
+  skillChip: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    backgroundColor: colors.primarySoft,
+    borderWidth: 1.5,
+  },
+  skillChipText: {
+    fontSize: 13,
+    color: colors.primary,
+    fontWeight: '600',
   },
 });
 

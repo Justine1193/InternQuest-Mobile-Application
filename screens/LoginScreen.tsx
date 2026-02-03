@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
-  Alert,
   Image,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -14,6 +13,7 @@ import { useNavigation } from '@react-navigation/native';
 import { auth, LOOKUP_EMAIL_FUNCTION_BASE_URL } from '../firebase/config';
 import { signInWithEmailAndPassword, onAuthStateChanged } from 'firebase/auth';
 import { SecurityUtils } from '../services/security';
+import { authenticate } from '../services/biometric';
 import { colors, radii, spacing } from '../ui/theme';
 import { Screen } from '../ui/components/Screen';
 import type { StackNavigationProp } from '@react-navigation/stack';
@@ -21,16 +21,25 @@ import type { RootStackParamList } from '../App';
 
 type LoginProps = {
   setIsLoggedIn?: (v: boolean) => void;
+  /** When true, user is auto-logged in but can use password or biometric; no separate gate UI */
+  gateMode?: boolean;
+  onBiometricUnlock?: () => void;
+  /** Called when user signs in with password while in gate mode (so app can clear gate state) */
+  onPasswordUnlock?: () => void;
 };
 
-const LoginScreen: React.FC<LoginProps> = ({ setIsLoggedIn }) => {
+type LoginErrorType = 'student_id' | 'password' | 'network' | 'other';
+
+const LoginScreen: React.FC<LoginProps> = ({ setIsLoggedIn, gateMode, onBiometricUnlock, onPasswordUnlock }) => {
   const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
   const [studentId, setStudentId] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [focused, setFocused] = useState<'studentId' | 'password' | null>(null);
   const [loading, setLoading] = useState(false);
+  const [biometricLoading, setBiometricLoading] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
+  const [loginError, setLoginError] = useState<{ type: LoginErrorType; message: string } | null>(null);
 
   const formatStudentId = (text: string) => {
     // Enforce Student ID format: XX-XXXXX-XXX (2-5-3 digits)
@@ -43,38 +52,66 @@ const LoginScreen: React.FC<LoginProps> = ({ setIsLoggedIn }) => {
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (user: any) => {
       if (user) {
-        if (setIsLoggedIn) {
+        // In gate mode, App controls unlock; don't auto-set isLoggedIn here
+        if (!gateMode && setIsLoggedIn) {
           setIsLoggedIn(true);
-        } else {
+        } else if (!gateMode) {
           try { (navigation as any).getParent?.()?.navigate?.('Home'); } catch (e) { /* ignore */ }
         }
       }
       setCheckingSession(false);
     });
     return unsub;
-  }, [navigation]);
+  }, [navigation, gateMode]);
+
+  // When in gate mode, show the system biometric prompt automatically
+  useEffect(() => {
+    if (!gateMode || !onBiometricUnlock) return;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      setBiometricLoading(true);
+      authenticate('Unlock InternQuest').then((success) => {
+        if (!cancelled) {
+          setBiometricLoading(false);
+          if (success) onBiometricUnlock();
+        }
+      });
+    }, 400);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [gateMode, onBiometricUnlock]);
+
+  const clearError = () => setLoginError(null);
 
   const handleSignIn = async () => {
     const identifier = SecurityUtils.sanitizeInput(studentId);
+    setLoginError(null);
 
-    if (!identifier || !password) {
-      Alert.alert('Missing fields', 'Please enter your Student ID and password.');
+    if (!identifier && !password) {
+      setLoginError({ type: 'other', message: 'Enter your Student ID and password to sign in.' });
+      return;
+    }
+    if (!identifier) {
+      setLoginError({ type: 'student_id', message: 'Enter your Student ID.' });
+      return;
+    }
+    if (!password) {
+      setLoginError({ type: 'password', message: 'Enter your password.' });
       return;
     }
 
     const isStudentId = SecurityUtils.validateStudentId(identifier);
     if (!isStudentId) {
-      Alert.alert('Invalid Student ID', 'Please use this format: XX-XXXXX-XXX');
+      setLoginError({ type: 'student_id', message: 'Invalid format. Use XX-XXXXX-XXX.' });
       return;
     }
 
     setLoading(true);
     try {
       if (!LOOKUP_EMAIL_FUNCTION_BASE_URL) {
-        Alert.alert(
-          'Configuration Error',
-          'LOOKUP_EMAIL_FUNCTION_BASE_URL is not configured. Please set this in your Expo app.json or environment variables.'
-        );
+        setLoginError({ type: 'other', message: 'Sign-in is not configured. Please contact support.' });
         return;
       }
 
@@ -86,10 +123,10 @@ const LoginScreen: React.FC<LoginProps> = ({ setIsLoggedIn }) => {
         });
         if (!res.ok) {
           if (res.status === 403) {
-            Alert.alert('Sign-in Error', 'Sign-in verification is currently restricted. Please contact your adviser.');
+            setLoginError({ type: 'other', message: 'Sign-in is currently restricted. Please contact your adviser.' });
             return null;
           }
-          Alert.alert('Sign-in Error', `We couldn’t verify your Student ID right now (Error ${res.status}). Please try again later.`);
+          setLoginError({ type: 'network', message: 'We could not verify your Student ID right now. Please try again later.' });
           return null;
         }
         const data = await res.json();
@@ -106,34 +143,46 @@ const LoginScreen: React.FC<LoginProps> = ({ setIsLoggedIn }) => {
           emailToUse = await lookupEmail(normalized);
         }
       } catch (fetchErr) {
-        Alert.alert('Network Error', 'Please check your internet connection and try again.');
+        setLoginError({ type: 'network', message: 'Please check your internet connection and try again.' });
         return;
+      } finally {
+        setLoading(false);
       }
 
       if (!emailToUse) {
-        Alert.alert('Account Not Found', `No account found for Student ID: ${identifier}. Please contact your adviser.`);
+        setLoginError({
+          type: 'student_id',
+          message: "No account found for this Student ID. Please check the number or contact your adviser to create an account.",
+        });
         return;
       }
 
+      setLoading(true);
+
       await signInWithEmailAndPassword(auth, emailToUse.trim(), password);
 
+      if (gateMode && onPasswordUnlock) onPasswordUnlock();
       if (setIsLoggedIn) setIsLoggedIn(true);
       else { try { (navigation as any).getParent?.()?.navigate?.('Home'); } catch (e) { /* ignore */ } }
     } catch (e: any) {
       const code = e?.code ?? '';
-      let message = 'Failed to sign in. Please try again.';
+      let type: LoginErrorType = 'other';
+      let message = 'Something went wrong. Please try again.';
 
       if (code === 'auth/user-not-found') {
-        message = `No account found for Student ID: ${identifier}\n\nPlease contact your adviser to create an account.`;
-      } else if (code === 'auth/wrong-password') {
-        message = 'Incorrect password.\n\nDefault password is: Student@123\n\nIf you\'ve changed it and forgot, contact your adviser to reset it.';
-      } else if (code === 'auth/invalid-login-credentials') {
-        message = 'Invalid Student ID or password.\n\nPlease check:\n• Student ID format: XX-XXXXX-XXX\n• Default password: Student@123\n\nIf the problem persists, contact your adviser.';
+        type = 'student_id';
+        message = "No account found for this Student ID. Please contact your adviser to create an account.";
+      } else if (code === 'auth/wrong-password' || code === 'auth/invalid-login-credentials' || code === 'auth/invalid-credential') {
+        type = 'password';
+        message = "Incorrect password. Please try again or use Forgot password to reset it.";
+      } else if (code === 'auth/network-request-failed') {
+        type = 'network';
+        message = 'Please check your internet connection and try again.';
       } else if (code === 'permission-denied') {
         message = 'Permission denied. Please contact your adviser.';
       }
 
-      Alert.alert('Login Failed', message);
+      setLoginError({ type, message });
     } finally {
       setLoading(false);
     }
@@ -180,7 +229,7 @@ const LoginScreen: React.FC<LoginProps> = ({ setIsLoggedIn }) => {
                 style={styles.pillInput}
                 placeholder="Student ID (XX-XXXXX-XXX)"
                 value={studentId}
-                onChangeText={(t) => setStudentId(formatStudentId(t))}
+                onChangeText={(t) => { setStudentId(formatStudentId(t)); clearError(); }}
                 autoCapitalize="none"
                 keyboardType="number-pad"
                 placeholderTextColor={colors.textSubtle}
@@ -204,7 +253,7 @@ const LoginScreen: React.FC<LoginProps> = ({ setIsLoggedIn }) => {
                 placeholder="Password"
                 secureTextEntry={!showPassword}
                 value={password}
-                onChangeText={setPassword}
+                onChangeText={(t) => { setPassword(t); clearError(); }}
                 placeholderTextColor={colors.textSubtle}
                 autoCorrect={false}
                 onFocus={() => setFocused('password')}
@@ -222,6 +271,21 @@ const LoginScreen: React.FC<LoginProps> = ({ setIsLoggedIn }) => {
             </View>
           </View>
 
+          {loginError ? (
+            <View style={[styles.errorBanner, loginError.type === 'password' && styles.errorBannerPassword, loginError.type === 'student_id' && styles.errorBannerStudentId]} accessible accessibilityRole="alert">
+              <Icon
+                name={loginError.type === 'password' ? 'lock-alert-outline' : loginError.type === 'student_id' ? 'account-alert-outline' : 'alert-circle-outline'}
+                size={22}
+                color={loginError.type === 'password' ? colors.danger : loginError.type === 'student_id' ? colors.warning : colors.textMuted}
+                style={styles.errorBannerIcon}
+              />
+              <Text style={styles.errorBannerText} numberOfLines={3}>{loginError.message}</Text>
+              <TouchableOpacity onPress={clearError} style={styles.errorBannerDismiss} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityLabel="Dismiss">
+                <Icon name="close" size={20} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+          ) : null}
+
           <TouchableOpacity style={styles.button} onPress={handleSignIn} disabled={loading}>
             {loading ? <ActivityIndicator color={colors.onPrimary} /> : <Text style={styles.buttonText}>Sign in</Text>}
           </TouchableOpacity>
@@ -235,6 +299,31 @@ const LoginScreen: React.FC<LoginProps> = ({ setIsLoggedIn }) => {
           >
             <Text style={styles.forgotText}>Forgot password?</Text>
           </TouchableOpacity>
+
+          {gateMode && onBiometricUnlock ? (
+            <TouchableOpacity
+              style={styles.biometricLink}
+              onPress={async () => {
+                setBiometricLoading(true);
+                try {
+                  const success = await authenticate('Unlock to continue');
+                  if (success) onBiometricUnlock();
+                } finally {
+                  setBiometricLoading(false);
+                }}
+              }
+              disabled={biometricLoading || loading}
+              accessibilityRole="button"
+              accessibilityLabel="Unlock with biometric"
+            >
+              {biometricLoading ? (
+                <ActivityIndicator size="small" color="#2B7FFF" style={{ marginRight: 8 }} />
+              ) : (
+                <Icon name="fingerprint" size={18} color="#2B7FFF" style={{ marginRight: 6 }} />
+              )}
+              <Text style={styles.biometricLinkText}>Unlock with biometric</Text>
+            </TouchableOpacity>
+          ) : null}
           </View>
         </View>
       </Screen>
@@ -385,6 +474,53 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: '#2B7FFF',
+  },
+  biometricLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 14,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  biometricLinkText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#2B7FFF',
+  },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: 'rgba(107, 114, 128, 0.12)',
+    borderRadius: radii.md,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginTop: 18,
+    marginBottom: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: colors.textMuted,
+  },
+  errorBannerPassword: {
+    backgroundColor: 'rgba(239, 68, 68, 0.08)',
+    borderLeftColor: colors.danger,
+  },
+  errorBannerStudentId: {
+    backgroundColor: 'rgba(245, 158, 11, 0.12)',
+    borderLeftColor: colors.warning,
+  },
+  errorBannerIcon: {
+    marginRight: 10,
+    marginTop: 2,
+  },
+  errorBannerText: {
+    flex: 1,
+    fontSize: 14,
+    color: colors.text,
+    lineHeight: 20,
+    fontWeight: '500',
+  },
+  errorBannerDismiss: {
+    padding: 4,
   },
 });
 

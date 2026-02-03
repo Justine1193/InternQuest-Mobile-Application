@@ -9,32 +9,33 @@ import {
     Linking,
     StatusBar,
     ActivityIndicator,
+    Modal,
 } from 'react-native';
-import { Card, Chip, Button } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList, Post } from '../App';
 import { auth, firestore } from '../firebase/config';
-import { doc, getDoc, setDoc, collection, addDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, collection, addDoc, query, where, getDocsFromServer } from 'firebase/firestore';
 import * as FileSystem from 'expo-file-system';
-import { colors, radii, shadows } from '../ui/theme';
+import { colors, radii, shadows, spacing } from '../ui/theme';
 import { Screen } from '../ui/components/Screen';
-import { AppHeader } from '../ui/components/AppHeader';
+import { useSavedInternships } from '../context/SavedInternshipsContext';
 
 type CompanyProfileRouteProp = RouteProp<RootStackParamList, 'CompanyProfile'>;
 type CompanyProfileNavigationProp = StackNavigationProp<RootStackParamList, 'CompanyProfile'>;
 
 type ApplicationStatus = 'pending' | 'approved' | 'rejected' | 'not_applied';
 
+const BOTTOM_BAR_HEIGHT = 80;
+
 const CompanyProfileScreen: React.FC = () => {
     const navigation = useNavigation<CompanyProfileNavigationProp>();
     const route = useRoute<CompanyProfileRouteProp>();
     const { companyId } = route.params;
+    const { savedInternships, toggleSaveInternship } = useSavedInternships();
 
     const [company, setCompany] = useState<Post | null>(null);
-    const [requirementsComplete, setRequirementsComplete] = useState(false);
-    const [loadingRequirements, setLoadingRequirements] = useState(true);
 
     useEffect(() => {
         const loadCompany = async () => {
@@ -71,13 +72,18 @@ const CompanyProfileScreen: React.FC = () => {
     }, [companyId]);
 
     const [isLoading, setIsLoading] = useState(false);
+    const [cancelingApplication, setCancelingApplication] = useState(false);
     const [applicationStatus, setApplicationStatus] = useState<ApplicationStatus>('not_applied');
     const [userProfile, setUserProfile] = useState<any>(null);
+    const [showApplySuccess, setShowApplySuccess] = useState(false);
+    const [showWithdrawConfirm, setShowWithdrawConfirm] = useState(false);
+    const [placementLocked, setPlacementLocked] = useState(false);
+    const [placementCompanyName, setPlacementCompanyName] = useState<string>('');
+    const [placementLockStatus, setPlacementLockStatus] = useState<'pending' | 'approved' | ''>('');
+    const [showPlacementLockedModal, setShowPlacementLockedModal] = useState(false);
 
     useEffect(() => {
-        // fetch profile and requirements status
         fetchUserProfile();
-        checkRequirementsStatus();
     }, []);
 
     // when the company record has been loaded, check application status
@@ -87,28 +93,46 @@ const CompanyProfileScreen: React.FC = () => {
         }
     }, [company]);
 
-    const checkRequirementsStatus = async () => {
-        if (!auth.currentUser) {
-            setLoadingRequirements(false);
-            return;
-        }
+    const checkPlacementLock = async () => {
+        if (!auth.currentUser) return;
         try {
-            const userDoc = await getDoc(doc(firestore, 'users', auth.currentUser.uid));
-            if (userDoc.exists()) {
-                const requirements = userDoc.data().requirements || [];
-                // Requirements must be approved by adviser to unlock MOA
-                const allComplete = requirements.length > 0 && requirements.every((req: any) => 
-                    req.approvalStatus === 'approved' && 
-                    (req.uploadedFiles && req.uploadedFiles.length > 0)
-                );
-                setRequirementsComplete(allComplete);
+            const q = query(
+                collection(firestore, 'applications'),
+                where('userId', '==', auth.currentUser.uid),
+                // Only one active application at a time:
+                // if the user already has a pending OR approved application elsewhere, block applying here.
+                where('status', 'in', ['approved', 'pending'])
+            );
+            const snap = await getDocsFromServer(q);
+            if (!snap.empty) {
+                // If there's an approved application for a different company, lock applying elsewhere
+                const app = snap.docs[0].data() as any;
+                const approvedCompanyId = String(app.companyId || '');
+                const approvedCompanyName = String(app.companyName || app.company || '');
+                const status = String(app.status || '') as any;
+                if (approvedCompanyId && approvedCompanyId !== String(companyId)) {
+                    setPlacementLocked(true);
+                    setPlacementCompanyName(approvedCompanyName || 'your assigned company');
+                    setPlacementLockStatus(status === 'pending' ? 'pending' : 'approved');
+                    return;
+                }
             }
-        } catch (error) {
-            console.error('Error checking requirements:', error);
-        } finally {
-            setLoadingRequirements(false);
+            setPlacementLocked(false);
+            setPlacementCompanyName('');
+            setPlacementLockStatus('');
+        } catch (e) {
+            // best-effort; don't block UI if query fails
+            console.warn('CompanyProfile: failed to check placement lock', e);
+            setPlacementLocked(false);
+            setPlacementCompanyName('');
+            setPlacementLockStatus('');
         }
     };
+
+    // Also check if the user is already approved elsewhere (only one approved company allowed)
+    useEffect(() => {
+        void checkPlacementLock();
+    }, [companyId, applicationStatus]);
 
     const fetchUserProfile = async () => {
         if (!auth.currentUser) return;
@@ -147,7 +171,8 @@ const CompanyProfileScreen: React.FC = () => {
             const applicationRef = doc(firestore, 'applications', `${auth.currentUser.uid}_${companyId}`);
             const applicationDoc = await getDoc(applicationRef);
             if (applicationDoc.exists()) {
-                setApplicationStatus(applicationDoc.data().status || 'pending');
+                const status = applicationDoc.data().status;
+                setApplicationStatus(status === 'cancelled' ? 'not_applied' : (status || 'pending'));
             }
         } catch (error) {
             console.error('Error checking application status:', error);
@@ -164,6 +189,11 @@ const CompanyProfileScreen: React.FC = () => {
     const handleApply = async () => {
         if (!auth.currentUser) {
             Alert.alert('Error', 'You must be logged in to apply.');
+            return;
+        }
+
+        if (placementLocked) {
+            setShowPlacementLockedModal(true);
             return;
         }
 
@@ -207,12 +237,35 @@ const CompanyProfileScreen: React.FC = () => {
             }, { merge: true });
 
             setApplicationStatus('pending');
-            Alert.alert('Success', 'Your application has been submitted successfully!');
+            setShowApplySuccess(true);
         } catch (error) {
             console.error('Error submitting application:', error);
             Alert.alert('Error', 'Failed to submit application. Please try again.');
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const handleCancelApplication = () => {
+        // Open a custom confirmation modal instead of a system alert
+        setShowWithdrawConfirm(true);
+    };
+
+    const confirmWithdrawApplication = async () => {
+        if (!auth.currentUser || !company) return;
+        setCancelingApplication(true);
+        try {
+            const applicationRef = doc(firestore, 'applications', `${auth.currentUser.uid}_${company.id}`);
+            await updateDoc(applicationRef, {
+                status: 'cancelled',
+                cancelledAt: new Date(),
+            });
+            await checkApplicationStatus();
+            setShowWithdrawConfirm(false);
+        } catch (error) {
+            Alert.alert('Error', 'Could not withdraw application. Please try again.');
+        } finally {
+            setCancelingApplication(false);
         }
     };
 
@@ -275,380 +328,1110 @@ const CompanyProfileScreen: React.FC = () => {
         );
     }
 
+    const modeColor = (() => {
+        const m = (company.modeOfWork || '').toString().toLowerCase();
+        if (m.includes('remote')) return colors.success;
+        if (m.includes('hybrid')) return colors.warning;
+        if (m.includes('site') || m.includes('on-site') || m.includes('onsite') || m.includes('on site')) return colors.primary;
+        return colors.textMuted;
+    })();
+
+    const isSaved = company ? savedInternships.some((s) => s.id === company.id) : false;
+
+    const handleSave = () => {
+        if (!company) return;
+        toggleSaveInternship(company);
+    };
+
+    const fieldItems: string[] = Array.isArray(company.industry)
+        ? company.industry
+        : typeof company.industry === 'string' && company.industry
+            ? company.industry.split(/[,/]+/).map((s: string) => s.trim()).filter(Boolean)
+            : [];
+
+    // Required skills that the user has (skills picked by the user that match this internship)
+    const userMatchingSkills: string[] =
+        company.tags && Array.isArray(company.tags) && userProfile?.skills?.length
+            ? company.tags.filter((tag: string) =>
+                userProfile.skills.some((s: string) =>
+                    String(s).trim().toLowerCase() === String(tag).trim().toLowerCase()
+                )
+            )
+            : [];
+
     return (
         <Screen contentContainerStyle={{ paddingHorizontal: 0, paddingTop: 0 }}>
-            <AppHeader back title="Company profile" />
+            {/* Header: back (left) | title | right spacer – matches Notifications style */}
+            <View style={styles.header}>
+                <TouchableOpacity
+                    onPress={() => navigation.goBack()}
+                    style={styles.headerBackButton}
+                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                    accessibilityLabel="Go back"
+                >
+                    <Ionicons name="arrow-back" size={24} color={colors.text} />
+                </TouchableOpacity>
+                <Text style={styles.headerTitle}>Company Details</Text>
+                <View style={styles.headerRightButton} />
+            </View>
 
-            <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
-                {/* Company Header Card */}
-                <Card style={styles.companyHeaderCard}>
-                    <Card.Content>
-                                    <View style={styles.companyHeader}>
-                                        {/* removed large logo for a cleaner profile — replaced with slim accent */}
-                                        <View style={[styles.cardAccent, { backgroundColor: colors.primary }]} />
-                                        <View style={styles.companyInfoEnhanced}>
-                                <Text style={styles.companyName}>{company.company}</Text>
-                                <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center' }} onPress={() => openMaps(company.location)} accessibilityRole="link">
-                                    <Ionicons name="location" size={16} color={colors.info} />
-                                    <Text style={[styles.companyLocation, { color: colors.info, marginLeft: 6 }]}>{company.location}</Text>
-                                </TouchableOpacity>
-                                <Text style={styles.companyIndustry}>
-                                    <Ionicons name="briefcase" size={16} color={colors.textMuted} />
-                                    {' '}{company.industry}
-                                </Text>
-                            </View>
+            <ScrollView
+                style={styles.scrollView}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={[styles.scrollContent, { paddingBottom: 24 + BOTTOM_BAR_HEIGHT }]}
+            >
+                {/* Hero: company name card + meta */}
+                <View style={styles.hero}>
+                    <View style={styles.companyNameCard}>
+                        <View style={styles.companyNameCardInner}>
+                            <Text style={styles.heroTitle} numberOfLines={3} selectable>
+                                {company.company || 'Unnamed Company'}
+                            </Text>
                         </View>
-                    </Card.Content>
-                </Card>
-
-                {/* Application Status */}
-                {applicationStatus !== 'not_applied' && (
-                    <Card style={styles.statusCard}>
-                        <Card.Content>
-                            <View style={styles.statusContainer}>
-                                <Text style={styles.statusLabel}>Application Status:</Text>
-                                <Chip
-                                    mode="outlined"
-                                    textStyle={{ color: getStatusColor(applicationStatus) }}
-                                    style={[styles.statusChip, { borderColor: getStatusColor(applicationStatus) }]}
-                                >
-                                    {getStatusText(applicationStatus)}
-                                </Chip>
-                            </View>
-                        </Card.Content>
-                    </Card>
-                )}
-
-                {/* Company Description */}
-                <Card style={styles.sectionCard}>
-                    <Card.Content>
-                        <Text style={styles.sectionTitle}>About the Company</Text>
-                        <Text style={styles.description}>{company.description}</Text>
-                    </Card.Content>
-                </Card>
-
-                {/* Work Details */}
-                <Card style={styles.sectionCard}>
-                    <Card.Content>
-                        <Text style={styles.sectionTitle}>Work Details</Text>
-                        <View style={styles.detailRow}>
-                            <Ionicons name="time" size={20} color={(() => {
-                                const m = (company.modeOfWork || '').toString().toLowerCase();
-                                if (m.includes('remote')) return colors.success;
-                                if (m.includes('hybrid')) return colors.warning;
-                                if (m.includes('site') || m.includes('on-site') || m.includes('onsite') || m.includes('on site')) return colors.primary;
-                                return colors.textMuted;
-                            })()} />
-                            <Text style={styles.detailText}>Mode: {company.modeOfWork || 'Not specified'}</Text>
-                        </View>
-                    </Card.Content>
-                </Card>
-
-                {/* MOA Download Section */}
-                {company.moa && (
-                    <Card style={[styles.sectionCard, { borderLeftWidth: 4, borderLeftColor: requirementsComplete ? colors.success : colors.danger }]}>
-                        <Card.Content>
-                            <Text style={styles.sectionTitle}>Memorandum of Agreement (MOA)</Text>
-                            {loadingRequirements ? (
-                                <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: 8 }} />
-                            ) : requirementsComplete ? (
-                                <>
-                                    <Text style={styles.description}>✓ Requirements approved! You can now download the MOA.</Text>
-                                    <TouchableOpacity
-                                        style={[styles.moaButton, { backgroundColor: colors.success }]}
-                                        onPress={handleDownloadMOA}
-                                    >
-                                        <Ionicons name="download" size={18} color={colors.onPrimary} style={{ marginRight: 8 }} />
-                                        <Text style={styles.moaButtonText}>Download MOA</Text>
-                                    </TouchableOpacity>
-                                </>
-                            ) : (
-                                <>
-                                    <Text style={styles.description}>⚠ Submit all requirements and wait for adviser approval to unlock the MOA.</Text>
-                                    <TouchableOpacity
-                                        style={[styles.moaButton, { backgroundColor: colors.primary }]}
-                                        onPress={() => navigation.navigate('RequirementsChecklist')}
-                                    >
-                                        <Ionicons name="documents" size={18} color={colors.onPrimary} style={{ marginRight: 8 }} />
-                                        <Text style={styles.moaButtonText}>Submit Requirements to Unlock</Text>
-                                    </TouchableOpacity>
-                                </>
-                            )}
-                        </Card.Content>
-                    </Card>
-                )}
-
-                {/* Required Skills */}
-                <Card style={styles.sectionCard}>
-                    <Card.Content>
-                        <Text style={styles.sectionTitle}>Required Skills</Text>
-                        <View style={styles.skillsContainer}>
-                            {company.tags && company.tags.map((skill: string, index: number) => (
-                                <Chip key={index} style={styles.skillChip} mode="outlined">
-                                    {skill}
-                                </Chip>
-                            ))}
-                        </View>
-                    </Card.Content>
-                </Card>
-
-                {/* Contact Information */}
-                <Card style={styles.sectionCard}>
-                    <Card.Content>
-                        <Text style={styles.sectionTitle}>Contact Information</Text>
-                        <Text style={styles.sectionSubtitle}>Company's primary contact details</Text>
-                        {company.location ? (
-                            <TouchableOpacity style={styles.contactRow} onPress={() => openMaps(company.location)} accessibilityRole="link">
-                                <Ionicons name="location" size={20} color={colors.info} />
-                                <Text style={[styles.infoText, { flex: 1, marginLeft: 8 }]}>{company.location}</Text>
-                                <Ionicons name="open-outline" size={16} color={colors.textMuted} />
-                            </TouchableOpacity>
-                        ) : null}
-                        {company.email && (
-                            <TouchableOpacity style={styles.contactRow} onPress={() => handleContact('email')}>
-                                <Ionicons name="mail" size={20} color={colors.info} />
-                                <Text style={styles.contactText}>{company.email}</Text>
-                                <Ionicons name="open-outline" size={16} color={colors.textMuted} />
-                            </TouchableOpacity>
-                        )}
-                        {company.website && (
-                            <TouchableOpacity style={styles.contactRow} onPress={() => handleContact('website')}>
-                                <Ionicons name="globe" size={20} color={colors.info} />
-                                <Text style={styles.contactText}>{company.website}</Text>
-                                <Ionicons name="open-outline" size={16} color={colors.textMuted} />
-                            </TouchableOpacity>
-                        )}
-                    </Card.Content>
-                </Card>
-
-                {/* Contact Person Information */}
-                <Card style={styles.sectionCard}>
-                    <Card.Content>
-                        <Text style={styles.sectionTitle}>Contact Person Information</Text>
-                        <Text style={styles.sectionSubtitle}>Optional contact details for the company representative</Text>
-
-                        {company.contactPersonName ? (
-                            <View style={styles.contactRow}>
-                                <Ionicons name="person" size={20} color={colors.textMuted} />
-                                <Text style={[styles.infoText, { marginLeft: 8, flex: 1 }]}>{company.contactPersonName}</Text>
-                            </View>
-                        ) : (
-                            <View style={styles.contactRow}>
-                                <Ionicons name="person" size={20} color={colors.textMuted} />
-                                <Text style={[styles.mutedText, { marginLeft: 8, flex: 1 }]}>Not provided</Text>
-                            </View>
-                        )}
-
-                        {company.contactPersonPhone ? (
-                            <TouchableOpacity style={styles.contactRow} onPress={() => handleContact('phone')} accessibilityRole="link">
-                                <Ionicons name="call" size={20} color={colors.info} />
-                                <Text style={styles.contactText}>{company.contactPersonPhone}</Text>
-                                <Ionicons name="open-outline" size={16} color={colors.textMuted} />
-                            </TouchableOpacity>
-                        ) : (
-                            <View style={styles.contactRow}>
-                                <Ionicons name="call" size={20} color={colors.textMuted} />
-                                <Text style={[styles.mutedText, { marginLeft: 8, flex: 1 }]}>Not provided</Text>
-                            </View>
-                        )}
-                    </Card.Content>
-                </Card>
-
-                {/* Apply Button */}
-                {applicationStatus === 'not_applied' && (
-                    <View style={styles.applyContainer}>
-                        <Button
-                            mode="contained"
-                            onPress={handleApply}
-                            loading={isLoading}
-                            disabled={isLoading}
-                            style={styles.applyButton}
-                            contentStyle={styles.applyButtonContent}
+                    </View>
+                    <View style={styles.heroMeta}>
+                        <TouchableOpacity
+                            style={styles.heroPill}
+                            onPress={() => company.location && openMaps(company.location)}
+                            activeOpacity={0.7}
+                            accessibilityRole="link"
+                            disabled={!company.location}
                         >
-                            Apply for Internship
-                        </Button>
+                            <Ionicons name="location-outline" size={18} color={colors.info} style={{ marginRight: 8 }} />
+                            <View style={styles.heroPillTextWrap}>
+                                <Text style={styles.heroPillLabel}>Location</Text>
+                                <Text style={styles.heroPillText}>{company.location || '—'}</Text>
+                            </View>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+
+                {/* Application status (when applied) */}
+                {applicationStatus !== 'not_applied' && (
+                    <View style={[styles.statusCard, { borderLeftColor: getStatusColor(applicationStatus) }]}>
+                        <View style={styles.statusRow}>
+                            <View style={[styles.statusIconWrap, { backgroundColor: getStatusColor(applicationStatus) + '18' }]}>
+                                <Ionicons
+                                    name={applicationStatus === 'approved' ? 'checkmark-circle' : applicationStatus === 'rejected' ? 'close-circle' : 'time'}
+                                    size={22}
+                                    color={getStatusColor(applicationStatus)}
+                                />
+                            </View>
+                            <View style={styles.statusTextWrap}>
+                                <Text style={styles.statusLabel}>Application status</Text>
+                                <Text style={[styles.statusValue, { color: getStatusColor(applicationStatus) }]}>{getStatusText(applicationStatus)}</Text>
+                            </View>
+                        </View>
+                        {applicationStatus === 'pending' && (
+                            <View style={styles.withdrawRow}>
+                                <TouchableOpacity
+                                    style={styles.withdrawBtn}
+                                    onPress={handleCancelApplication}
+                                    disabled={cancelingApplication}
+                                    activeOpacity={0.8}
+                                >
+                                    {cancelingApplication ? (
+                                        <ActivityIndicator size="small" color={colors.danger} />
+                                    ) : (
+                                        <>
+                                            <Ionicons name="close-circle-outline" size={18} color={colors.danger} style={{ marginRight: 6 }} />
+                                            <Text style={styles.withdrawBtnText}>Withdraw application</Text>
+                                        </>
+                                    )}
+                                </TouchableOpacity>
+                                <Text style={styles.withdrawHint}>You can apply again later if you change your mind.</Text>
+                            </View>
+                        )}
                     </View>
                 )}
 
-                {/* Spacer for bottom nav */}
-                <View style={{ height: 100 }} />
+                {/* About */}
+                <View style={styles.section}>
+                    <Text style={styles.sectionLabel}>About</Text>
+                    <Text style={styles.bodyText}>{company.description || 'No description provided.'}</Text>
+                </View>
+
+                {/* Apply CTA – placed high so it’s visible without scrolling to the bottom */}
+                {/* Work setup */}
+                <View style={styles.section}>
+                    <Text style={styles.sectionLabel}>Work setup</Text>
+                    <View style={styles.workModeRow}>
+                        <View style={[styles.modePill, { backgroundColor: modeColor + '18' }]}>
+                            <Ionicons name="desktop-outline" size={18} color={modeColor} />
+                            <Text style={[styles.modePillText, { color: modeColor }]}>{company.modeOfWork || 'Not specified'}</Text>
+                        </View>
+                    </View>
+                </View>
+
+                {/* MOA */}
+                {company.moa && (
+                    <View style={[styles.section, styles.moaSection, applicationStatus === 'approved' && styles.moaSectionUnlocked]}>
+                        <Text style={styles.sectionLabel}>Memorandum of Agreement (MOA)</Text>
+                        {applicationStatus === 'approved' ? (
+                            <>
+                                <Text style={styles.moaMessage}>Your application was approved. You can now download the MOA.</Text>
+                                <TouchableOpacity style={styles.moaButton} onPress={handleDownloadMOA} activeOpacity={0.85}>
+                                    <Ionicons name="download-outline" size={20} color={colors.onPrimary} style={{ marginRight: 8 }} />
+                                    <Text style={styles.moaButtonText}>Download MOA</Text>
+                                </TouchableOpacity>
+                            </>
+                        ) : applicationStatus === 'pending' ? (
+                            <View style={styles.moaLockRow}>
+                                <Ionicons name="time-outline" size={22} color={colors.warning} />
+                                <Text style={styles.moaLockText}>Your application is under review. The MOA will be available once you are approved.</Text>
+                            </View>
+                        ) : applicationStatus === 'rejected' ? (
+                            <View style={styles.moaLockRow}>
+                                <Ionicons name="close-circle-outline" size={22} color={colors.danger} />
+                                <Text style={styles.moaLockText}>Your application was not approved. The MOA is not available for this placement.</Text>
+                            </View>
+                        ) : (
+                            <View style={styles.moaLockRow}>
+                                <Ionicons name="lock-closed-outline" size={22} color={colors.textMuted} />
+                                <Text style={styles.moaLockText}>Apply first. After your application is approved, you can download the MOA.</Text>
+                            </View>
+                        )}
+                    </View>
+                )}
+
+                {/* Required skills – show only the skills the user has that match */}
+                {company.tags && company.tags.length > 0 && (
+                    <View style={styles.section}>
+                        <Text style={styles.sectionLabel}>Required skills (your matches)</Text>
+                        <View style={styles.skillsWrap}>
+                            {userMatchingSkills.length > 0
+                                ? userMatchingSkills.map((skill: string, index: number) => (
+                                    <View key={index} style={styles.skillPill}>
+                                        <Text style={styles.skillPillText}>{skill}</Text>
+                                    </View>
+                                ))
+                                : (
+                                    <Text style={styles.skillsEmptyText}>None of your profile skills match the required skills for this internship.</Text>
+                                )}
+                        </View>
+                    </View>
+                )}
+
+                {/* Field */}
+                <View style={styles.section}>
+                    <Text style={styles.sectionLabel}>Field</Text>
+                    <View style={styles.fieldPillRow}>
+                        {fieldItems.length > 0
+                            ? fieldItems.map((field: string, index: number) => (
+                                <View key={index} style={styles.fieldPill}>
+                                    <Text style={styles.fieldPillText}>{field}</Text>
+                                </View>
+                            ))
+                            : (
+                                <View style={styles.fieldPill}>
+                                    <Text style={styles.fieldPillText}>—</Text>
+                                </View>
+                            )}
+                    </View>
+                </View>
+
+                {/* Contact & reach out (single section) */}
+                {(company.location || company.email || company.website || company.contactPersonName || company.contactPersonPhone) ? (
+                <View style={styles.section}>
+                    <Text style={styles.sectionLabel}>Contact & reach out</Text>
+                    {company.location ? (
+                        <TouchableOpacity style={styles.contactRow} onPress={() => openMaps(company.location)} activeOpacity={0.7} accessibilityRole="link">
+                            <View style={styles.contactIconWrap}>
+                                <Ionicons name="location-outline" size={20} color={colors.info} />
+                            </View>
+                            <View style={styles.contactContent}>
+                                <Text style={styles.contactLabel}>Address</Text>
+                                <Text style={styles.contactValue} numberOfLines={2}>{company.location}</Text>
+                            </View>
+                            <Ionicons name="open-outline" size={18} color={colors.textSubtle} />
+                        </TouchableOpacity>
+                    ) : null}
+                    {company.email ? (
+                        <TouchableOpacity style={styles.contactRow} onPress={() => handleContact('email')} activeOpacity={0.7}>
+                            <View style={styles.contactIconWrap}>
+                                <Ionicons name="mail-outline" size={20} color={colors.info} />
+                            </View>
+                            <View style={styles.contactContent}>
+                                <Text style={styles.contactLabel}>Email</Text>
+                                <Text style={styles.contactValue} numberOfLines={1}>{company.email}</Text>
+                            </View>
+                            <Ionicons name="open-outline" size={18} color={colors.textSubtle} />
+                        </TouchableOpacity>
+                    ) : null}
+                    {company.website ? (
+                        <TouchableOpacity style={styles.contactRow} onPress={() => handleContact('website')} activeOpacity={0.7}>
+                            <View style={styles.contactIconWrap}>
+                                <Ionicons name="globe-outline" size={20} color={colors.info} />
+                            </View>
+                            <View style={styles.contactContent}>
+                                <Text style={styles.contactLabel}>Website</Text>
+                                <Text style={styles.contactValue} numberOfLines={1}>{company.website}</Text>
+                            </View>
+                            <Ionicons name="open-outline" size={18} color={colors.textSubtle} />
+                        </TouchableOpacity>
+                    ) : null}
+                    {(company.contactPersonName || company.contactPersonPhone) ? (
+                        <>
+                            {company.contactPersonName ? (
+                                <View style={styles.contactRow}>
+                                    <View style={styles.contactIconWrap}>
+                                        <Ionicons name="person-outline" size={20} color={colors.textMuted} />
+                                    </View>
+                                    <View style={styles.contactContent}>
+                                        <Text style={styles.contactLabel}>Contact person</Text>
+                                        <Text style={styles.contactValue}>{company.contactPersonName}</Text>
+                                    </View>
+                                </View>
+                            ) : null}
+                            {company.contactPersonPhone ? (
+                                <TouchableOpacity style={styles.contactRow} onPress={() => handleContact('phone')} activeOpacity={0.7} accessibilityRole="link">
+                                    <View style={styles.contactIconWrap}>
+                                        <Ionicons name="call-outline" size={20} color={colors.info} />
+                                    </View>
+                                    <View style={styles.contactContent}>
+                                        <Text style={styles.contactLabel}>Phone</Text>
+                                        <Text style={styles.contactValue}>{company.contactPersonPhone}</Text>
+                                    </View>
+                                    <Ionicons name="open-outline" size={18} color={colors.textSubtle} />
+                                </TouchableOpacity>
+                            ) : null}
+                        </>
+                    ) : null}
+                </View>
+                ) : null}
+
             </ScrollView>
+
+            {/* Application success modal */}
+            <Modal
+                visible={showApplySuccess}
+                animationType="fade"
+                transparent
+                onRequestClose={() => setShowApplySuccess(false)}
+            >
+                <View style={styles.successOverlay}>
+                    <View style={styles.successCard}>
+                        <View style={styles.successIconCircle}>
+                            <Ionicons name="checkmark" size={22} color={colors.onPrimary} />
+                        </View>
+                        <Text style={styles.successTitle}>Application submitted</Text>
+                        <Text style={styles.successMessage}>
+                            Your application has been submitted successfully. You can track its status here in the company details screen.
+                        </Text>
+                        <TouchableOpacity
+                            style={styles.successButton}
+                            onPress={() => setShowApplySuccess(false)}
+                            activeOpacity={0.85}
+                        >
+                            <Text style={styles.successButtonText}>Got it</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Withdraw application confirmation modal */}
+            <Modal
+                visible={showWithdrawConfirm}
+                animationType="fade"
+                transparent
+                onRequestClose={() => setShowWithdrawConfirm(false)}
+            >
+                <View style={styles.successOverlay}>
+                    <View style={styles.withdrawCard}>
+                        <View style={styles.withdrawIconCircle}>
+                            <Ionicons name="alert-circle" size={22} color={colors.danger} />
+                        </View>
+                        <Text style={styles.withdrawTitle}>Withdraw application?</Text>
+                        <Text style={styles.withdrawMessage}>
+                            Are you sure you want to withdraw your application? You can apply again later if you change your mind.
+                        </Text>
+                        <View style={styles.withdrawButtonsRow}>
+                            <TouchableOpacity
+                                style={styles.withdrawSecondaryBtn}
+                                onPress={() => setShowWithdrawConfirm(false)}
+                                activeOpacity={0.8}
+                                disabled={cancelingApplication}
+                            >
+                                <Text style={styles.withdrawSecondaryText}>Keep application</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[
+                                    styles.withdrawPrimaryBtn,
+                                    cancelingApplication && { opacity: 0.7 },
+                                ]}
+                                onPress={confirmWithdrawApplication}
+                                activeOpacity={0.85}
+                                disabled={cancelingApplication}
+                            >
+                                {cancelingApplication ? (
+                                    <ActivityIndicator size="small" color={colors.onPrimary} />
+                                ) : (
+                                    <Text style={styles.withdrawPrimaryText}>Withdraw</Text>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Placement locked modal (already approved elsewhere) */}
+            <Modal
+                visible={showPlacementLockedModal}
+                animationType="fade"
+                transparent
+                onRequestClose={() => setShowPlacementLockedModal(false)}
+            >
+                <View style={styles.successOverlay}>
+                    <View style={styles.lockedCard}>
+                        <View style={styles.lockedIconCircle}>
+                            <Ionicons name="lock-closed" size={22} color={colors.primary} />
+                        </View>
+                        <Text style={styles.lockedTitle}>You’re already assigned</Text>
+                        <Text style={styles.lockedMessage}>
+                            {placementLockStatus === 'pending'
+                                ? `You already have a pending application at ${placementCompanyName || 'another company'}. You can’t apply to another company until the admin decides, or you withdraw that application.`
+                                : `You’re already approved at ${placementCompanyName || 'your assigned company'}. You can’t apply to another company unless the admin removes your current placement.`}
+                        </Text>
+                        <TouchableOpacity
+                            style={styles.lockedButton}
+                            onPress={() => setShowPlacementLockedModal(false)}
+                            activeOpacity={0.85}
+                        >
+                            <Text style={styles.lockedButtonText}>OK</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Fixed bottom bar: Apply + Save Internship */}
+            <View style={[styles.bottomBar, { height: BOTTOM_BAR_HEIGHT }]}>
+                <TouchableOpacity
+                    style={[
+                        styles.bottomBarApplyBtn,
+                        (applicationStatus !== 'not_applied' || placementLocked) && styles.bottomBarApplyBtnDisabled,
+                    ]}
+                    onPress={handleApply}
+                    disabled={isLoading || applicationStatus !== 'not_applied' || placementLocked}
+                    activeOpacity={0.8}
+                >
+                    {isLoading ? (
+                        <ActivityIndicator size="small" color={colors.onPrimary} />
+                    ) : (
+                        <Text
+                            style={[
+                                styles.bottomBarApplyText,
+                                (applicationStatus !== 'not_applied' || placementLocked) && styles.bottomBarApplyTextDisabled,
+                            ]}
+                            numberOfLines={1}
+                            ellipsizeMode="tail"
+                        >
+                            {placementLocked
+                                ? (placementLockStatus === 'pending' ? 'Locked' : 'Assigned')
+                                : applicationStatus === 'not_applied'
+                                    ? 'Apply now'
+                                    : applicationStatus === 'pending'
+                                        ? 'Pending'
+                                        : applicationStatus === 'approved'
+                                            ? 'Approved'
+                                            : 'Rejected'}
+                        </Text>
+                    )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                    style={[styles.bottomBarSaveBtn, isSaved && styles.bottomBarSaveBtnSaved]}
+                    onPress={handleSave}
+                    activeOpacity={0.8}
+                >
+                    <View style={styles.bottomBarSaveContent}>
+                        <Ionicons
+                            name={isSaved ? 'heart' : 'heart-outline'}
+                            size={22}
+                            color={colors.primary}
+                            style={styles.bottomBarSaveIcon}
+                        />
+                        <Text style={styles.bottomBarSaveText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>
+                            {isSaved ? 'Saved Internship' : 'Save Internship'}
+                        </Text>
+                    </View>
+                </TouchableOpacity>
+            </View>
         </Screen>
     );
 };
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: colors.bg,
-    },
+    /* Header – matches Notifications screen */
     header: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingHorizontal: 16,
-        paddingTop: 50,
-        paddingBottom: 16,
-        backgroundColor: colors.primary,
-        borderBottomWidth: 0,
+        paddingTop: 14,
+        paddingBottom: 14,
+        backgroundColor: colors.surface,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        borderBottomColor: colors.border,
+        ...shadows.card,
     },
-    backButton: {
-        padding: 8,
+    headerBackButton: {
+        padding: 4,
+        minWidth: 40,
+        alignItems: 'flex-start',
     },
     headerTitle: {
         fontSize: 18,
         fontWeight: '700',
-        color: colors.onPrimary,
+        color: colors.text,
+        textAlign: 'center',
+        flex: 1,
     },
+    headerRightButton: {
+        padding: 4,
+        minWidth: 40,
+        alignItems: 'flex-end',
+    },
+
     scrollView: {
         flex: 1,
-        padding: 16,
+        backgroundColor: colors.bg,
     },
-    companyHeaderCard: {
-        marginBottom: 16,
-        elevation: 3,
-        borderRadius: 14,
-        overflow: 'hidden',
-        borderWidth: 0,
+    scrollContent: {
+        paddingHorizontal: 20,
+        paddingTop: 20,
+        paddingBottom: 32,
     },
-    companyHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: 12,
-    },
-    /* circular logo removed - using a slim accent stripe */
-    cardAccent: {
-        width: 8,
-        height: 64,
-        borderRadius: 4,
-        marginRight: 12,
-    },
-    companyInfoEnhanced: {
-        flex: 1,
-        paddingVertical: 4,
-        paddingRight: 6,
-    },
-    companyInfo: {
-        flex: 1,
-    },
-    companyName: {
-        fontSize: 20,
-        fontWeight: '800',
-        color: colors.text,
-        marginBottom: 6,
-    },
-    companyLocation: {
-        fontSize: 13,
-        color: colors.textMuted,
-        marginBottom: 2,
-    },
-    companyIndustry: {
-        fontSize: 13,
-        color: colors.textMuted,
-    },
-    statusCard: {
-        marginBottom: 16,
-        elevation: 2,
-        borderRadius: 12,
-    },
-    statusContainer: {
+
+    /* Fixed bottom bar (Apply + Save Internship) – full width to avoid clipping */
+    bottomBar: {
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        bottom: 0,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
+        gap: 12,
+        paddingHorizontal: 12,
+        paddingVertical: 12,
+        paddingBottom: 12,
+        backgroundColor: colors.surface,
+        borderTopWidth: 1,
+        borderTopColor: colors.border,
+        shadowColor: '#000',
+        shadowOpacity: 0.06,
+        shadowRadius: 8,
+        shadowOffset: { width: 0, height: -2 },
+        elevation: 4,
     },
-    statusLabel: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: colors.text,
-    },
-    statusChip: {
-        height: 28,
-    },
-    sectionCard: {
-        marginBottom: 16,
-        elevation: 2,
-        borderRadius: 12,
-    },
-    sectionTitle: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: colors.text,
-        marginBottom: 12,
-    },
-    sectionSubtitle: {
-        marginTop: -6,
-        marginBottom: 10,
-        color: colors.textMuted,
-        fontSize: 13,
-        lineHeight: 18,
-    },
-    description: {
-        fontSize: 16,
-        color: colors.textMuted,
-        lineHeight: 24,
-    },
-    detailRow: {
+    bottomBarApplyBtn: {
+        flex: 1,
+        flexShrink: 1,
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 8,
+        justifyContent: 'center',
+        paddingVertical: 14,
+        paddingHorizontal: 10,
+        borderRadius: 24,
+        backgroundColor: colors.primary,
+        minWidth: 0,
     },
-    detailText: {
-        fontSize: 16,
+    bottomBarApplyBtnDisabled: {
+        backgroundColor: colors.surfaceAlt,
+        borderWidth: 1,
+        borderColor: colors.border,
+    },
+    bottomBarApplyText: {
+        fontSize: 15,
+        fontWeight: '700',
+        color: colors.onPrimary,
+        lineHeight: 20,
+        includeFontPadding: false,
+    },
+    bottomBarApplyTextDisabled: {
         color: colors.textMuted,
-        marginLeft: 8,
     },
-    
-    skillsContainer: {
+    bottomBarSaveBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 14,
+        paddingHorizontal: 16,
+        borderRadius: 24,
+        backgroundColor: colors.surface,
+        borderWidth: 2,
+        borderColor: colors.primary,
+        flexShrink: 0,
+        minWidth: 165,
+    },
+    bottomBarSaveBtnSaved: {
+        backgroundColor: colors.primarySoft,
+        borderColor: colors.primary,
+    },
+    bottomBarSaveContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    bottomBarSaveIcon: {
+        marginRight: 8,
+    },
+    bottomBarSaveText: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: colors.primary,
+        lineHeight: 22,
+        includeFontPadding: false,
+    },
+
+    /* Hero */
+    hero: {
+        marginBottom: 24,
+    },
+    companyNameCard: {
+        backgroundColor: colors.surface,
+        borderRadius: radii.lg,
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: colors.border,
+        borderLeftWidth: 4,
+        borderLeftColor: colors.primary,
+        overflow: 'hidden',
+        ...shadows.card,
+    },
+    companyNameCardInner: {
+        paddingVertical: 20,
+        paddingHorizontal: 20,
+    },
+    heroTitle: {
+        fontSize: 24,
+        fontWeight: '800',
+        color: colors.text,
+        lineHeight: 32,
+        letterSpacing: -0.3,
+    },
+    heroMeta: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 12,
+    },
+    heroPill: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        paddingVertical: 12,
+        paddingHorizontal: 14,
+        borderRadius: radii.md,
+        backgroundColor: colors.surfaceAlt,
+        borderWidth: 1,
+        borderColor: colors.border,
+        minWidth: '100%',
+        flex: 1,
+    },
+    heroPillTextWrap: {
+        flex: 1,
+        minWidth: 0,
+    },
+    heroPillLabel: {
+        fontSize: 10,
+        fontWeight: '700',
+        color: colors.textMuted,
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+        marginBottom: 2,
+    },
+    heroPillText: {
+        fontSize: 14,
+        color: colors.info,
+        fontWeight: '500',
+        lineHeight: 20,
+    },
+    fieldPillRow: {
         flexDirection: 'row',
         flexWrap: 'wrap',
         gap: 8,
+        marginTop: 4,
     },
-    skillChip: {
+    fieldPill: {
+        paddingVertical: 8,
+        paddingHorizontal: 14,
+        borderRadius: 20,
+        backgroundColor: 'rgba(13, 148, 136, 0.14)',
+    },
+    fieldPillText: {
+        fontSize: 14,
+        fontWeight: '500',
+        color: '#0D9488',
+    },
+
+    /* Status card */
+    statusCard: {
+        backgroundColor: colors.surface,
+        borderRadius: radii.lg,
+        borderLeftWidth: 4,
+        borderWidth: 1,
+        borderColor: colors.border,
+        marginBottom: 24,
+        overflow: 'hidden',
+        ...shadows.card,
+    },
+    statusRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 16,
+        paddingHorizontal: 18,
+    },
+    statusIconWrap: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 14,
+    },
+    statusTextWrap: {
+        flex: 1,
+    },
+    statusLabel: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: colors.textMuted,
+        textTransform: 'uppercase',
+        letterSpacing: 0.6,
+        marginBottom: 2,
+    },
+    statusValue: {
+        fontSize: 17,
+        fontWeight: '700',
+    },
+    withdrawRow: {
+        paddingHorizontal: 18,
+        paddingTop: 12,
+        paddingBottom: 18,
+        borderTopWidth: 1,
+        borderTopColor: colors.border,
+    },
+    withdrawBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        borderRadius: radii.md,
+        backgroundColor: colors.dangerSoft,
+        borderWidth: 1.5,
+        borderColor: colors.danger,
+    },
+    withdrawBtnText: {
+        fontSize: 15,
+        fontWeight: '700',
+        color: colors.danger,
+    },
+    withdrawHint: {
+        marginTop: 10,
+        fontSize: 12,
+        color: colors.textMuted,
+        textAlign: 'center',
+        lineHeight: 18,
+    },
+
+    /* Sections */
+    section: {
+        backgroundColor: colors.surface,
+        borderRadius: radii.lg,
+        paddingVertical: 18,
+        paddingHorizontal: 20,
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: colors.border,
+        ...shadows.card,
+    },
+    sectionLabel: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: colors.textMuted,
+        textTransform: 'uppercase',
+        letterSpacing: 0.8,
+        marginBottom: 12,
+    },
+    bodyText: {
+        fontSize: 15,
+        color: colors.text,
+        lineHeight: 26,
+        letterSpacing: 0.2,
+    },
+
+    /* Work setup */
+    workModeRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+    },
+    modePill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 10,
+        paddingHorizontal: 14,
+        borderRadius: radii.md,
+        gap: 8,
+    },
+    modePillText: {
+        fontSize: 15,
+        fontWeight: '600',
+    },
+
+    /* Application success modal */
+    successOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.4)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 24,
+    },
+    successCard: {
+        width: '100%',
+        maxWidth: 360,
+        backgroundColor: colors.surface,
+        borderRadius: radii.xl,
+        paddingVertical: 24,
+        paddingHorizontal: 22,
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: colors.border,
+        ...shadows.card,
+    },
+    successIconCircle: {
+        width: 60,
+        height: 60,
+        borderRadius: 30,
+        backgroundColor: colors.success,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 16,
+    },
+    successTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: colors.text,
         marginBottom: 8,
+        textAlign: 'center',
+    },
+    successMessage: {
+        fontSize: 14,
+        color: colors.textMuted,
+        textAlign: 'center',
+        lineHeight: 20,
+        marginBottom: 20,
+    },
+    successButton: {
+        marginTop: 4,
+        paddingHorizontal: 24,
+        paddingVertical: 10,
+        borderRadius: 999,
+        backgroundColor: colors.primary,
+    },
+    successButtonText: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: colors.onPrimary,
+    },
+
+    /* Apply CTA */
+    applyCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: colors.primary,
+        borderRadius: radii.lg,
+        paddingVertical: 18,
+        paddingHorizontal: 20,
+        marginBottom: 24,
+        ...shadows.card,
+    },
+    applyIconWrap: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 16,
+    },
+    applyBody: {
+        flex: 1,
+    },
+    applyTitle: {
+        fontSize: 17,
+        fontWeight: '700',
+        color: colors.onPrimary,
+        marginBottom: 4,
+    },
+    applySub: {
+        fontSize: 13,
+        color: 'rgba(255,255,255,0.9)',
+    },
+
+    /* MOA */
+    moaSection: {
+        borderLeftWidth: 4,
+        borderLeftColor: colors.border,
+    },
+    moaSectionUnlocked: {
+        borderLeftColor: colors.success,
+    },
+    moaMessage: {
+        fontSize: 15,
+        color: colors.text,
+        lineHeight: 22,
+        marginBottom: 14,
     },
     moaButton: {
         flexDirection: 'row',
-        paddingVertical: 12,
-        paddingHorizontal: 16,
-        borderRadius: 8,
         alignItems: 'center',
         justifyContent: 'center',
-        marginTop: 12,
+        backgroundColor: colors.success,
+        paddingVertical: 14,
+        paddingHorizontal: 20,
+        borderRadius: radii.md,
     },
     moaButtonText: {
-        color: colors.onPrimary,
         fontSize: 16,
-        fontWeight: '600',
+        fontWeight: '700',
+        color: colors.onPrimary,
     },
+    moaLockRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 12,
+    },
+    moaLockText: {
+        flex: 1,
+        fontSize: 15,
+        color: colors.textMuted,
+        lineHeight: 22,
+    },
+
+    /* Application success modal */
+    successOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.4)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 24,
+    },
+    successCard: {
+        width: '100%',
+        maxWidth: 360,
+        backgroundColor: colors.surface,
+        borderRadius: radii.xl,
+        paddingVertical: 24,
+        paddingHorizontal: 22,
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: colors.border,
+        ...shadows.card,
+    },
+    successIconCircle: {
+        width: 60,
+        height: 60,
+        borderRadius: 30,
+        backgroundColor: colors.success,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 16,
+    },
+    successTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: colors.text,
+        marginBottom: 8,
+        textAlign: 'center',
+    },
+    successMessage: {
+        fontSize: 14,
+        color: colors.textMuted,
+        textAlign: 'center',
+        lineHeight: 20,
+        marginBottom: 20,
+    },
+    successButton: {
+        marginTop: 4,
+        paddingHorizontal: 24,
+        paddingVertical: 10,
+        borderRadius: 999,
+        backgroundColor: colors.primary,
+    },
+    successButtonText: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: colors.onPrimary,
+    },
+
+    /* Withdraw confirmation modal */
+    withdrawCard: {
+        width: '100%',
+        maxWidth: 360,
+        backgroundColor: colors.surface,
+        borderRadius: radii.xl,
+        paddingVertical: 24,
+        paddingHorizontal: 22,
+        borderWidth: 1,
+        borderColor: colors.border,
+        ...shadows.card,
+    },
+    withdrawIconCircle: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: colors.dangerSoft,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 14,
+    },
+    withdrawTitle: {
+        fontSize: 17,
+        fontWeight: '700',
+        color: colors.text,
+        marginBottom: 6,
+    },
+    withdrawMessage: {
+        fontSize: 14,
+        color: colors.textMuted,
+        lineHeight: 20,
+        marginBottom: 20,
+    },
+    withdrawButtonsRow: {
+        flexDirection: 'row',
+        justifyContent: 'flex-end',
+        gap: 10,
+    },
+    withdrawSecondaryBtn: {
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+        borderRadius: 999,
+        backgroundColor: colors.surfaceAlt,
+    },
+    withdrawSecondaryText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: colors.text,
+    },
+    withdrawPrimaryBtn: {
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderRadius: 999,
+        backgroundColor: colors.danger,
+    },
+    withdrawPrimaryText: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: colors.onPrimary,
+    },
+
+    /* Placement locked modal */
+    lockedCard: {
+        width: '100%',
+        maxWidth: 360,
+        backgroundColor: colors.surface,
+        borderRadius: radii.xl,
+        paddingVertical: 24,
+        paddingHorizontal: 22,
+        borderWidth: 1,
+        borderColor: colors.border,
+        ...shadows.card,
+    },
+    lockedIconCircle: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: colors.primarySoft,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 14,
+    },
+    lockedTitle: {
+        fontSize: 17,
+        fontWeight: '700',
+        color: colors.text,
+        marginBottom: 6,
+    },
+    lockedMessage: {
+        fontSize: 14,
+        color: colors.textMuted,
+        lineHeight: 20,
+        marginBottom: 18,
+    },
+    lockedButton: {
+        alignSelf: 'flex-end',
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderRadius: 999,
+        backgroundColor: colors.primary,
+    },
+    lockedButtonText: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: colors.onPrimary,
+    },
+
+    /* Skills */
+    skillsWrap: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 10,
+    },
+    skillPill: {
+        paddingVertical: 8,
+        paddingHorizontal: 14,
+        borderRadius: radii.md,
+        backgroundColor: colors.surfaceAlt,
+        borderWidth: 1,
+        borderColor: colors.border,
+    },
+    skillPillText: {
+        fontSize: 14,
+        color: colors.text,
+        fontWeight: '500',
+    },
+    skillsEmptyText: {
+        fontSize: 14,
+        color: colors.textMuted,
+        lineHeight: 22,
+        fontStyle: 'italic',
+    },
+
+    /* Contact */
     contactRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingVertical: 8,
+        paddingVertical: 14,
+        borderBottomWidth: 1,
+        borderBottomColor: colors.border,
     },
-    contactText: {
-        fontSize: 16,
-        color: colors.primary,
-        marginLeft: 8,
+    contactIconWrap: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: colors.surfaceAlt,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 14,
+    },
+    contactContent: {
         flex: 1,
+        minWidth: 0,
     },
-    infoText: {
-        fontSize: 16,
-        color: colors.text,
-    },
-    mutedText: {
-        fontSize: 16,
+    contactLabel: {
+        fontSize: 11,
+        fontWeight: '600',
         color: colors.textMuted,
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+        marginBottom: 2,
     },
-    applyContainer: {
-        marginTop: 24,
-        marginBottom: 16,
+    contactValue: {
+        fontSize: 15,
+        color: colors.text,
+        fontWeight: '500',
     },
-    applyButton: {
-        borderRadius: 8,
-        elevation: 2,
-    },
-    applyButtonContent: {
-        paddingVertical: 8,
+    bottomSpacer: {
+        height: 100,
     },
 });
 

@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
-import { StatusBar, ActivityIndicator, View, Text, StyleSheet } from 'react-native';
+import React, { useEffect, useState, useRef } from 'react';
+import { StatusBar, ActivityIndicator, View, Text, StyleSheet, Easing, AppState, AppStateStatus, TouchableOpacity } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
-import { createStackNavigator } from '@react-navigation/stack';
+import { createStackNavigator, CardStyleInterpolators } from '@react-navigation/stack';
 import { Host } from 'react-native-portalize';
 import { Provider as PaperProvider } from 'react-native-paper';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -15,9 +15,11 @@ import { initNotifications, syncExpoPushTokenForCurrentUser } from './services/n
 
 // Context
 import { SavedInternshipsProvider } from './context/SavedInternshipsContext';
+import { NotificationCountProvider, useNotificationCount } from './context/NotificationCountContext';
+import { BiometricProvider, useBiometric } from './context/BiometricContext';
+import { getBiometricUnlockEnabled } from './services/biometric';
 
 // Screens
-import LaunchScreen from './screens/LaunchScreen';
 import LoginScreen from './screens/LoginScreen';
 import ForgotPasswordScreen from './screens/ForgotPasswordScreen';
 import { SetupAccountScreen } from './screens/SetupAccountScreen';
@@ -56,7 +58,6 @@ export type Post = {
 
 // Stack Param List
 export type RootStackParamList = {
-  Launch: undefined;
   Home: undefined;
   SignIn: undefined;
   ForgotPassword: { email?: string } | undefined;
@@ -68,7 +69,7 @@ export type RootStackParamList = {
   OJTTracker: { post?: Post };
   WeeklyReport: undefined;
   Notifications: undefined;
-  HelpDesk: undefined;
+  ResourceManagement: undefined;
   Settings: undefined;
   Profile: undefined;
 };
@@ -81,15 +82,65 @@ const AppInner: React.FC = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isProfileComplete, setIsProfileComplete] = useState<boolean | null>(null);
   const [mustChangePassword, setMustChangePassword] = useState<boolean | null>(null);
-  const [currentScreen, setCurrentScreen] = useState<string>('Launch');
+  const [currentScreen, setCurrentScreen] = useState<string>('SignIn');
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
+  const [awaitingBiometric, setAwaitingBiometric] = useState(false);
+  const { notificationCount, setNotificationCount } = useNotificationCount();
+  const { biometricEnabled, setAppLocked, appLocked, unlock } = useBiometric();
+  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   const navigationRef = React.useRef<any>(null);
+
+  // Fetch notification count when user is logged in (for badge on bell).
+  // Exclude hidden (deleted) notifications so the badge matches what the user sees.
+  useEffect(() => {
+    if (!auth.currentUser) {
+      setNotificationCount(0);
+      return;
+    }
+    let cancelled = false;
+    const uid = auth.currentUser.uid;
+    const notificationsRef = collection(firestore, 'notifications');
+    const hiddenRef = collection(firestore, `users/${uid}/hiddenNotifications`);
+    Promise.all([
+      getDocs(query(notificationsRef, where('userId', '==', uid))),
+      getDocs(query(notificationsRef, where('targetStudentId', '==', uid))),
+      getDocs(query(notificationsRef, where('targetType', '==', 'all'))),
+      getDocs(hiddenRef),
+    ])
+      .then(([snap1, snap2, snap3, hiddenSnap]) => {
+        if (cancelled) return;
+        const ids = new Set<string>();
+        [snap1, snap2, snap3].forEach((snap: any) => snap.docs.forEach((d: any) => ids.add(d.id)));
+        const hiddenIds = new Set((hiddenSnap as any).docs.map((d: any) => d.id));
+        const visibleCount = [...ids].filter((id) => !hiddenIds.has(id)).length;
+        setNotificationCount(visibleCount);
+      })
+      .catch(() => {
+        if (!cancelled) setNotificationCount(0);
+      });
+    return () => { cancelled = true; };
+  }, [auth.currentUser?.uid, setNotificationCount]);
 
   const { registerActivity } = useAutoLogout({
     enabled: isLoggedIn,
     inactivityMs: 30 * 60 * 1000,
     backgroundMs: 5 * 60 * 1000,
   });
+
+  // Biometric lock: when app comes to foreground and biometric is enabled, require biometric to continue
+  useEffect(() => {
+    if (!isLoggedIn || !biometricEnabled) return;
+    const sub = AppState.addEventListener('change', (nextState) => {
+      const prev = appStateRef.current;
+      appStateRef.current = nextState;
+      if (prev.match(/inactive|background/) && nextState === 'active') {
+        unlock('Unlock InternQuest').then((success) => {
+          if (!success) setAppLocked(true);
+        });
+      }
+    });
+    return () => sub.remove();
+  }, [isLoggedIn, biometricEnabled, unlock, setAppLocked]);
 
   useEffect(() => {
     // Best-effort initialization for device notifications (local + foreground display).
@@ -99,12 +150,12 @@ const AppInner: React.FC = () => {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        // Auto-login detected!
+        // Auto-login detected! We may still require biometric before showing the app.
         console.log('✅ Auto-login successful!');
         console.log('📧 User email:', user.email);
         console.log('🆔 User ID:', user.uid);
         setCurrentUserEmail(user.email || null);
-        setIsLoggedIn(true);
+        // Do NOT set isLoggedIn(true) yet – wait until after biometric check below.
 
         // Best-effort: register this device for push notifications and store token.
         // (If permission is denied / emulator / missing projectId, it just no-ops.)
@@ -190,9 +241,46 @@ const AppInner: React.FC = () => {
             const data: any = userDocAfter.data();
 
             // One-time password change gate (set after SetupAccountScreen)
-            setMustChangePassword(!!data?.mustChangePassword);
+            // Self-heal legacy / already-changed accounts:
+            // - If mustChangePassword is true but we see a passwordChangedAt timestamp
+            //   or passwordStatus.mustChangePassword === false, clear the flag.
+            let effectiveMustChangePassword = !!data?.mustChangePassword;
+            const passwordStatus = data?.passwordStatus;
+            const passwordChangedAt = data?.passwordChangedAt;
 
-            const flagComplete = !!data?.isProfileComplete || !!data?.profileStatus?.isComplete;
+            if (
+              effectiveMustChangePassword &&
+              (
+                (passwordStatus && passwordStatus.mustChangePassword === false) ||
+                !!passwordChangedAt
+              )
+            ) {
+              effectiveMustChangePassword = false;
+              try {
+                await setDoc(
+                  userRef,
+                  {
+                    mustChangePassword: false,
+                    passwordStatus: {
+                      ...(passwordStatus || {}),
+                      mustChangePassword: false,
+                    },
+                  },
+                  { merge: true }
+                );
+              } catch (e) {
+                // best-effort; don't block login if this fails
+                console.warn('App: failed to self-heal mustChangePassword flag', e);
+              }
+            }
+
+            setMustChangePassword(effectiveMustChangePassword);
+
+            const profileStatus = data?.profileStatus;
+            const flagComplete =
+              !!data?.isProfileComplete ||
+              !!profileStatus?.isComplete ||
+              !!profileStatus?.setupCompletedAt;
             const hasBasics =
               !!(data?.firstName || data?.lastName || data?.name) &&
               !!(data?.program || data?.course) &&
@@ -236,11 +324,27 @@ const AppInner: React.FC = () => {
           setIsProfileComplete(false);
           setMustChangePassword(false);
         }
+
+        // If biometric unlock is enabled, stay on biometric gate until user passes (don't go to home yet)
+        try {
+          const biometricEnabledForUnlock = await getBiometricUnlockEnabled();
+          if (biometricEnabledForUnlock) {
+            setAwaitingBiometric(true);
+            setIsLoggedIn(false);
+          } else {
+            setIsLoggedIn(true);
+            setAwaitingBiometric(false);
+          }
+        } catch (e) {
+          setIsLoggedIn(true);
+          setAwaitingBiometric(false);
+        }
       } else {
         // No user found - need to sign in
         console.log('🔓 No saved session found - showing sign in screen');
         setCurrentUserEmail(null);
         setIsLoggedIn(false);
+        setAwaitingBiometric(false);
         setIsProfileComplete(null);
         setMustChangePassword(null);
       }
@@ -254,23 +358,44 @@ const AppInner: React.FC = () => {
     setCurrentScreen(screenName);
   };
 
-  const showBottomNav = isLoggedIn && isProfileComplete && mustChangePassword !== true && !isLoading;
-  const bottomNavHeight = 60 + Math.max(insets.bottom, 0);
+  const screensWithoutNav = ['CompanyProfile', 'Profile', 'Notifications', 'WeeklyReport'];
+  const showBottomNav =
+    isLoggedIn &&
+    isProfileComplete &&
+    mustChangePassword !== true &&
+    !isLoading &&
+    !screensWithoutNav.includes(currentScreen);
+  const bottomNavHeight = 56 + Math.max(insets.bottom, 8);
 
   const renderMainContent = () => {
     if (isLoading) {
       return (
-        <Stack.Screen name="Launch">
-          {props => <LaunchScreen {...props} userEmail={currentUserEmail} />}
-        </Stack.Screen>
+        <>
+          <Stack.Screen name="SignIn">
+            {props => <LoginScreen {...props} setIsLoggedIn={setIsLoggedIn} />}
+          </Stack.Screen>
+          <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+        </>
       );
     }
 
     if (!isLoggedIn) {
+      // Biometric gate: show login screen with "Unlock with biometric" or "Use password instead"
       return (
         <>
           <Stack.Screen name="SignIn">
-            {props => <LoginScreen {...props} setIsLoggedIn={setIsLoggedIn} />}
+            {props => (
+              <LoginScreen
+                {...props}
+                setIsLoggedIn={setIsLoggedIn}
+                gateMode={awaitingBiometric}
+                onBiometricUnlock={() => {
+                  setAwaitingBiometric(false);
+                  setIsLoggedIn(true);
+                }}
+                onPasswordUnlock={() => setAwaitingBiometric(false)}
+              />
+            )}
           </Stack.Screen>
           <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
         </>
@@ -334,13 +459,13 @@ const AppInner: React.FC = () => {
           component={NotificationsScreen}
         />
         <Stack.Screen
-          name="HelpDesk"
-          // lazy-load the screen when accessed
-          component={require('./screens/HelpDeskScreen').default}
+          name="ResourceManagement"
+          component={require('./screens/ResourceManagementScreen').default}
         />
         <Stack.Screen
           name="Settings"
           component={SettingsScreen}
+          options={{ gestureEnabled: false }}
         />
         <Stack.Screen
           name="InternshipDetails"
@@ -388,7 +513,7 @@ const AppInner: React.FC = () => {
               (navigationRef.current?.getCurrentRoute?.()?.name as string | undefined) || currentScreen;
 
             const BRAND_BLUE = '#2B7FFF';
-            const blueScreens = new Set<string>(['Launch', 'SignIn', 'ForgotPassword', 'SetupAccount']);
+            const blueScreens = new Set<string>(['SignIn', 'ForgotPassword', 'SetupAccount']);
             const isBlue = blueScreens.has(routeName);
 
             return (
@@ -400,20 +525,61 @@ const AppInner: React.FC = () => {
             );
           })()}
           <View
-            style={{ flex: 1, paddingBottom: showBottomNav ? bottomNavHeight : 0 }}
+            style={{ flex: 1, paddingBottom: showBottomNav ? bottomNavHeight : 0, backgroundColor: colors.bg }}
             onStartShouldSetResponderCapture={() => {
               registerActivity();
               return false;
             }}
           >
-            <Stack.Navigator screenOptions={{ headerShown: false }}>
+            <Stack.Navigator
+              screenOptions={{
+                headerShown: false,
+                cardStyle: { backgroundColor: colors.bg },
+                cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS,
+                transitionSpec: {
+                  open: {
+                    animation: 'timing',
+                    config: {
+                      duration: 320,
+                      easing: Easing.bezier(0.25, 0.1, 0.25, 1),
+                    },
+                  },
+                  close: {
+                    animation: 'timing',
+                    config: {
+                      duration: 280,
+                      easing: Easing.bezier(0.25, 0.1, 0.25, 1),
+                    },
+                  },
+                },
+                // Disable horizontal swipe gestures (no sliding between screens)
+                gestureEnabled: false,
+              }}
+            >
               {renderMainContent()}
             </Stack.Navigator>
 
             {/* Only show bottom navbar when logged in and profile is complete */}
             {showBottomNav && (
               <View style={styles.bottomNavWrapper}>
-                <BottomNavbar currentRoute={currentScreen} />
+                <BottomNavbar currentRoute={currentScreen} notificationCount={notificationCount} />
+              </View>
+            )}
+
+            {/* Biometric lock overlay – when app is locked after returning from background */}
+            {appLocked && (
+              <View style={styles.biometricLockOverlay}>
+                <View style={styles.biometricLockCard}>
+                  <Text style={styles.biometricLockTitle}>App locked</Text>
+                  <Text style={styles.biometricLockMessage}>Use your fingerprint or face to unlock.</Text>
+                  <TouchableOpacity
+                    style={styles.biometricLockButton}
+                    onPress={() => unlock('Unlock InternQuest')}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.biometricLockButtonText}>Unlock with biometric</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             )}
           </View>
@@ -427,7 +593,11 @@ const AppInner: React.FC = () => {
 const App: React.FC = () => {
   return (
     <SafeAreaProvider>
-      <AppInner />
+      <NotificationCountProvider>
+        <BiometricProvider>
+          <AppInner />
+        </BiometricProvider>
+      </NotificationCountProvider>
     </SafeAreaProvider>
   );
 };
@@ -439,6 +609,45 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     zIndex: 100,
+    backgroundColor: '#FFFFFF',
+  },
+  biometricLockOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  biometricLockCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 20,
+    padding: 28,
+    margin: 24,
+    minWidth: 280,
+    alignItems: 'center',
+  },
+  biometricLockTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 10,
+  },
+  biometricLockMessage: {
+    fontSize: 15,
+    color: colors.textMuted,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  biometricLockButton: {
+    backgroundColor: colors.primary,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+  },
+  biometricLockButtonText: {
+    color: colors.onPrimary,
+    fontSize: 16,
+    fontWeight: '700',
   },
 });
 

@@ -632,6 +632,7 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
                   <Icon name="email-outline" size={16} color={colors.textMuted} />
                 </View>
               </View>
+              <Text style={styles.emailNote}>If you have any problems with your email, please contact your adviser.</Text>
 
               <Text style={styles.label}>First name</Text>
               <TextInput
@@ -1185,6 +1186,14 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: colors.textMuted,
+  },
+  emailNote: {
+    marginTop: 4,
+    marginBottom: 4,
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textMuted,
+    fontStyle: 'italic',
   },
   label: {
     fontSize: 12,

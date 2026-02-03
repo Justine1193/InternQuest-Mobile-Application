@@ -22,6 +22,7 @@ import { Linking } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { LinearGradient } from 'expo-linear-gradient';
 import OJTChecklistGenerator from '../services/ojtChecklistGenerator';
 import { colors, radii, shadows } from '../ui/theme';
 import { Screen } from '../ui/components/Screen';
@@ -58,6 +59,7 @@ const RequirementsChecklistScreen: React.FC = () => {
     const [uploading, setUploading] = useState(false);
     const [progress, setProgress] = useState(0);
     const [refreshing, setRefreshing] = useState(false);
+    const [filter, setFilter] = useState<'all' | 'required' | 'completed' | 'pending'>('all');
     // Default to using Cloud Storage for requirement files to avoid Firestore size limits
     const [storeMode, setStoreMode] = useState<'storage' | 'firestore'>('storage');
 
@@ -115,6 +117,13 @@ const RequirementsChecklistScreen: React.FC = () => {
         setRefreshing(false);
     };
 
+    const filteredRequirements = requirements.filter((r) => {
+        if (filter === 'required') return r.isRequired;
+        if (filter === 'completed') return r.status === 'completed';
+        if (filter === 'pending') return r.status !== 'completed';
+        return true;
+    });
+
     const loadRequirements = async () => {
         if (!auth.currentUser) return;
 
@@ -136,11 +145,12 @@ const RequirementsChecklistScreen: React.FC = () => {
                     const t = normalizeKey(target.title);
                     const aliases: string[] = [];
 
-                    // known legacy titles -> new titles
+                    // known legacy titles -> new titles (exact mappings only)
                     if (t.includes('notarized parental consent')) {
                         aliases.push(normalizeKey('Parent/Guardian Consent Form'));
                     }
-                    if (t.includes('proof of insurance')) {
+                    if (t.includes('proof of insurance') && !t.includes('enrollment')) {
+                        // Explicitly exclude "proof of enrollment" from matching "proof of insurance"
                         aliases.push(normalizeKey('Insurance Certificate'));
                     }
                     if (t.includes('curriculum vitae')) {
@@ -149,32 +159,71 @@ const RequirementsChecklistScreen: React.FC = () => {
                     if (t.includes('memorandum of agreement') || t === 'moa') {
                         aliases.push(normalizeKey('MOA (Memorandum of Agreement)'));
                     }
-                    if (t.includes('proof of enrollment')) {
+                    if (t.includes('proof of enrollment') && !t.includes('insurance')) {
+                        // Explicitly exclude "proof of insurance" from matching "proof of enrollment"
                         aliases.push(normalizeKey('Academic Records'));
                     }
 
                     const candidates = [t, ...aliases];
+                    
+                    // First pass: exact matches only
                     for (const r of existing) {
                         const rt = normalizeKey(String(r?.title || ''));
                         if (!rt) continue;
-                        if (candidates.includes(rt)) return r;
-                        // allow partial match as last resort
-                        if (rt.includes(t) || t.includes(rt)) return r;
+                        // Exact match or known alias match
+                        if (candidates.includes(rt)) {
+                            return r;
+                        }
                     }
+                    
+                    // Second pass: strict partial matching (only if both contain significant unique words)
+                    // This prevents "COM" from matching "Insurance" incorrectly
+                    const targetWords = t.split(' ').filter(w => w.length > 3); // Only words > 3 chars
+                    const targetUniqueWords = targetWords.filter(w => 
+                        !['proof', 'of', 'certificate', 'certification', 'form', 'document'].includes(w)
+                    );
+                    
+                    for (const r of existing) {
+                        const rt = normalizeKey(String(r?.title || ''));
+                        if (!rt) continue;
+                        
+                        // Skip if already tried exact match
+                        if (candidates.includes(rt)) continue;
+                        
+                        const existingWords = rt.split(' ').filter(w => w.length > 3);
+                        const existingUniqueWords = existingWords.filter(w => 
+                            !['proof', 'of', 'certificate', 'certification', 'form', 'document'].includes(w)
+                        );
+                        
+                        // Require at least 2 unique matching words (not common words like "proof", "of")
+                        const matchingUniqueWords = targetUniqueWords.filter(w => existingUniqueWords.includes(w));
+                        
+                        // Special case: prevent "COM" from matching "Insurance"
+                        const hasCom = t.includes('com') || rt.includes('com');
+                        const hasInsurance = t.includes('insurance') || rt.includes('insurance');
+                        if (hasCom && hasInsurance) {
+                            // Both mention COM and Insurance - likely different requirements
+                            continue;
+                        }
+                        
+                        // Only match if we have significant unique word overlap (at least 2 words)
+                        if (matchingUniqueWords.length >= 2) {
+                            return r;
+                        }
+                    }
+                    
                     return null;
                 };
 
                 // Migrate: replace the requirement list with the new one, carrying over existing uploads/status where possible.
                 const mergedFromDefaults: Requirement[] = defaultReqs.map((d) => {
                     const match = findMatch(d, savedRequirements);
-                    if (!match) return d;
+                    if (!match) {
+                        return d;
+                    }
+                    
                     const uploadedFiles = Array.isArray(match.uploadedFiles) ? match.uploadedFiles : [];
                     const status = match.status || (uploadedFiles.length > 0 ? 'completed' : 'pending');
-                    
-                    // Debug: log approval status for each requirement
-                    console.log(`📋 Requirement: ${d.title}`);
-                    console.log(`   Approval Status: ${match.approvalStatus || 'not set'}`);
-                    console.log(`   Files: ${uploadedFiles.length}`);
                     
                     return {
                         ...d,
@@ -208,7 +257,7 @@ const RequirementsChecklistScreen: React.FC = () => {
                     const snap = await getDocs(query(collection(firestore, 'helpDeskFiles')));
                     snap.forEach((d: any) => helpDeskDocs.push({ id: d.id, ...(d.data() as any) }));
                 } catch (e) {
-                    console.warn('RequirementsChecklist: failed to load helpDeskFiles for admin-provided docs', e);
+                    // Silent error handling
                 }
 
                 const pickTemplateForRequirement = (reqTitle: string): any | null => {
@@ -266,19 +315,15 @@ const RequirementsChecklistScreen: React.FC = () => {
                         // The document contains all approvals as fields
                         const data = userApprovalsSnap.data();
                         approvalData = data || {};
-                        console.log(`📋 Approvals loaded for user:`, approvalData);
-                    } else {
-                        console.log('📋 No approvals document found for user');
                     }
                 } catch (e) {
-                    console.warn('RequirementsChecklist: failed to load requirement_approvals', e);
+                    // Silent error handling
                 }
 
                 // Merge approval statuses with requirements
                 const mergedWithApprovals = mergedWithAdminFiles.map(req => {
                     const titleKey = normalizeKey(req.title);
                     const titleLower = req.title.toLowerCase();
-                    console.log(`🔍 Checking requirement: "${req.title}" (normalized: "${titleKey}")`);
                     
                     let approval: any = null;
                     let matchedKey = '';
@@ -292,7 +337,6 @@ const RequirementsChecklistScreen: React.FC = () => {
                         if (normalizedKey === titleKey || key === req.title) {
                             approval = value;
                             matchedKey = key;
-                            console.log(`  ✅ EXACT MATCH for "${req.title}" with key "${key}"`);
                             break;
                         }
                         
@@ -301,7 +345,6 @@ const RequirementsChecklistScreen: React.FC = () => {
                         if (titleLower.includes(keyLower)) {
                             approval = value;
                             matchedKey = key;
-                            console.log(`  ✅ CONTAINS MATCH: "${req.title}" contains "${key}"`);
                             break;
                         }
                         
@@ -309,11 +352,10 @@ const RequirementsChecklistScreen: React.FC = () => {
                         if (titleKey.includes(normalizedKey)) {
                             approval = value;
                             matchedKey = key;
-                            console.log(`  ✅ NORMALIZED CONTAINS: "${titleKey}" contains "${normalizedKey}"`);
                             break;
                         }
                         
-                        // Strategy 3: Check if requirement title contains approval key words
+                        // Strategy 4: Check if requirement title contains approval key words
                         // e.g., "Notarized Parental Consent" matches "Parent/Guardian Consent Form"
                         const keyWords = normalizedKey.split(' ').filter(w => w.length > 3);
                         const titleWords = titleKey.split(' ').filter(w => w.length > 3);
@@ -322,7 +364,6 @@ const RequirementsChecklistScreen: React.FC = () => {
                         if (commonWords.length >= 2) {
                             approval = value;
                             matchedKey = key;
-                            console.log(`  ✅ WORD MATCH for "${req.title}" with key "${key}" (common: ${commonWords.join(', ')})`);
                             break;
                         }
                     }
@@ -337,11 +378,16 @@ const RequirementsChecklistScreen: React.FC = () => {
                             approvalStatus = 'rejected';
                         }
                         
-                        console.log(`✅ Setting approvalStatus for ${req.title}: ${approvalStatus} (original status: ${status}, matched with: ${matchedKey})`);
+                        // If requirement is rejected, clear uploaded files so student can re-upload
+                        const shouldClearFiles = approvalStatus === 'rejected';
+                        const uploadedFiles = shouldClearFiles ? [] : req.uploadedFiles;
+                        const requirementStatus = shouldClearFiles ? 'pending' : req.status;
                         
                         return {
                             ...req,
                             approvalStatus,
+                            uploadedFiles,
+                            status: requirementStatus,
                             rejectionReason: (approval.reason as string) || req.rejectionReason,
                             adviserNotes: (approval.notes as string) || req.adviserNotes,
                             reviewedBy: (approval.reviewedBy as string) || req.reviewedBy,
@@ -349,12 +395,11 @@ const RequirementsChecklistScreen: React.FC = () => {
                         };
                     }
                     
-                    console.log(`  ❌ No approval found for "${req.title}"`);
                     return req;
                 });
 
                 // Normalize statuses: if there are no uploadedFiles, ensure status is 'pending'
-                const normalized = mergedWithApprovals.map(r => {
+                let normalized = mergedWithApprovals.map(r => {
                     const uploadedFiles = Array.isArray(r.uploadedFiles) ? r.uploadedFiles : [];
                     let status = r.status || (uploadedFiles.length > 0 ? 'completed' : 'pending');
                     if (!uploadedFiles || uploadedFiles.length === 0) status = 'pending';
@@ -367,19 +412,73 @@ const RequirementsChecklistScreen: React.FC = () => {
                     }
                     return { ...r, uploadedFiles, status };
                 });
+                
+                // Cleanup: Detect and fix cases where different requirements incorrectly share the same files
+                // This can happen if findMatch incorrectly matched requirements
+                const fileGroups = new Map<string, Requirement[]>();
+                normalized.forEach(req => {
+                    if (req.uploadedFiles && req.uploadedFiles.length > 0) {
+                        // Create a signature from file URLs/names to detect duplicates
+                        const fileSig = JSON.stringify(req.uploadedFiles.map((f: any) => f.url || f.name || f.downloadUrl).sort());
+                        if (!fileGroups.has(fileSig)) {
+                            fileGroups.set(fileSig, []);
+                        }
+                        fileGroups.get(fileSig)!.push(req);
+                    }
+                });
+                
+                // If multiple different requirements share identical files, clear files from requirements that shouldn't have them
+                fileGroups.forEach((reqs, fileSig) => {
+                    if (reqs.length > 1) {
+                        const titles = reqs.map(r => normalizeKey(r.title));
+                        // Check if these are actually different requirements (not just duplicates)
+                        const uniqueTitles = new Set(titles);
+                        if (uniqueTitles.size > 1) {
+                            // Keep files only for the requirement that best matches based on file path/name
+                            // For now, we'll keep files for the first requirement and clear others
+                            // This is a safety measure - ideally findMatch should prevent this
+                            const keepReq = reqs[0];
+                            const clearReqs = reqs.slice(1);
+                            
+                            normalized = normalized.map(req => {
+                                if (clearReqs.some(r => r.id === req.id)) {
+                                    return { ...req, uploadedFiles: [], status: 'pending' };
+                                }
+                                return req;
+                            });
+                        }
+                    }
+                });
+                
                 setRequirements(normalized as any);
                 calculateProgress(normalized as any);
 
                 // Persist migrated list back to the user doc (best-effort)
+                // Always save if files were cleared due to rejection or if there's a title mismatch
                 try {
                     const currentTitles = (savedRequirements || []).map((r: any) => String(r?.title || '')).filter(Boolean);
                     const desiredTitles = getDefaultRequirements().map(r => r.title);
                     const titleMismatch = currentTitles.length !== desiredTitles.length || currentTitles.some((t: string) => !desiredTitles.includes(t));
-                    if (titleMismatch) {
-                        await setDoc(doc(firestore, 'users', auth.currentUser.uid), { requirements: normalized }, { merge: true });
+                    
+                    // Check if any requirements had files cleared due to rejection
+                    const hasRejectedWithClearedFiles = normalized.some((req: any) => {
+                        const originalReq = savedRequirements.find((r: any) => {
+                            const rt = normalizeKey(String(r?.title || ''));
+                            const reqt = normalizeKey(req.title);
+                            return rt === reqt || rt.includes(reqt) || reqt.includes(rt);
+                        });
+                        return req.approvalStatus === 'rejected' && 
+                               originalReq && 
+                               Array.isArray(originalReq.uploadedFiles) && 
+                               originalReq.uploadedFiles.length > 0 &&
+                               (!req.uploadedFiles || req.uploadedFiles.length === 0);
+                    });
+                    
+                    if (titleMismatch || hasRejectedWithClearedFiles) {
+                        await setDoc(doc(firestore, 'users', auth.currentUser.uid), { requirements: sanitizeForFirestore(normalized) }, { merge: true });
                     }
                 } catch (e) {
-                    console.warn('RequirementsChecklist: failed to persist migrated requirements list', e);
+                    // Silent error handling
                 }
 
                 // Auto-transition to hired when all REQUIRED requirements are approved.
@@ -416,7 +515,7 @@ const RequirementsChecklistScreen: React.FC = () => {
                             });
                         }
                     } catch (checklistErr) {
-                        console.warn('RequirementsChecklist: failed to generate OJT Completion Checklist', checklistErr);
+                        // Silent error handling
                     }
 
                     const alreadyHired = data.status === 'hired';
@@ -442,12 +541,12 @@ const RequirementsChecklistScreen: React.FC = () => {
                                 }, { merge: true });
                             }
                         } catch (appErr) {
-                            console.warn('RequirementsChecklist: failed to update application status to approved', appErr);
+                            // Silent error handling
                         }
 
                     }
                 } catch (e) {
-                    console.warn('RequirementsChecklist: auto-hired check failed', e);
+                    // Silent error handling
                 }
             } else {
                 const defaultRequirements = getDefaultRequirements();
@@ -455,7 +554,6 @@ const RequirementsChecklistScreen: React.FC = () => {
                 calculateProgress(defaultRequirements);
             }
         } catch (error) {
-            console.error('Error loading requirements:', error);
             const defaultRequirements = getDefaultRequirements();
             setRequirements(defaultRequirements);
             calculateProgress(defaultRequirements);
@@ -553,22 +651,18 @@ const RequirementsChecklistScreen: React.FC = () => {
         // Save to Firestore
         if (auth.currentUser) {
             try {
-                console.log('handleStatusChange: updating requirements for user', auth.currentUser.uid, { requirementId, newStatus });
                 await updateDoc(doc(firestore, 'users', auth.currentUser.uid), {
                     requirements: sanitizeForFirestore(updatedRequirements),
                 });
-                console.log('handleStatusChange: requirements update succeeded');
             } catch (error: any) {
-                console.error('Error updating requirements:', error);
                 Alert.alert('Save error', `Failed to save requirements: ${error?.message || String(error)}`);
                 // Diagnostic: write the error to the user's document so you can inspect it in the console / server side.
                 try {
                     await setDoc(doc(firestore, 'users', auth.currentUser.uid), {
                         lastRequirementsSyncError: { time: new Date().toISOString(), message: error?.message || String(error) }
                     }, { merge: true });
-                    console.log('handleStatusChange: wrote lastRequirementsSyncError to user doc');
                 } catch (dbgErr) {
-                    console.error('handleStatusChange: failed to write diagnostic info to user doc:', dbgErr);
+                    // Silent error handling
                 }
             }
         }
@@ -620,12 +714,11 @@ const RequirementsChecklistScreen: React.FC = () => {
                 });
                 fileMeta.adminDocId = adminDocRef.id;
             } catch (adminErr) {
-                console.error('Failed to write admin_files record:', adminErr);
+                // Silent error handling
             }
 
             return fileMeta;
         } catch (err) {
-            console.error('Storage upload error (helper):', err);
             throw err;
         }
     };
@@ -690,18 +783,16 @@ const RequirementsChecklistScreen: React.FC = () => {
                     setRequirements(updatedRequirements);
                     if (auth.currentUser) {
                         try {
-                            console.log('handleUploadFile: updating user requirements (firestore-only) for', auth.currentUser.uid);
                             await updateDoc(doc(firestore, 'users', auth.currentUser.uid), {
                                 requirements: sanitizeForFirestore(updatedRequirements),
                             });
-                            console.log('handleUploadFile: update requirements succeeded (firestore-only)');
                         } catch (error: any) {
-                            console.error('handleUploadFile: failed to update requirements after firestore upload:', error);
                             Alert.alert('Save error', `Failed to update your requirements in Firestore: ${error?.message || String(error)}`);
                             try {
                                 await setDoc(doc(firestore, 'users', auth.currentUser.uid), { lastRequirementsSyncError: { time: new Date().toISOString(), message: error?.message || String(error) } }, { merge: true });
-                                console.log('handleUploadFile: wrote diagnostic to user doc');
-                            } catch (dbgErr) { console.error('handleUploadFile: debug write failed', dbgErr); }
+                            } catch (dbgErr) {
+                                // Silent error handling
+                            }
                         }
                     }
 
@@ -711,7 +802,6 @@ const RequirementsChecklistScreen: React.FC = () => {
                     setUploading(false);
                     return;
                 } catch (fsErr) {
-                    console.error('Firestore store error:', fsErr);
                     Alert.alert('Error', 'Failed to store file in Firestore. Try Storage mode.');
                     setUploading(false);
                     return;
@@ -749,18 +839,16 @@ const RequirementsChecklistScreen: React.FC = () => {
 
                     if (auth.currentUser) {
                         try {
-                            console.log('handleUploadFile: updating user requirements (storage) for', auth.currentUser.uid);
                             await updateDoc(doc(firestore, 'users', auth.currentUser.uid), {
                                 requirements: sanitizeForFirestore(updatedRequirements),
                             });
-                            console.log('handleUploadFile: update requirements succeeded (storage)');
                         } catch (error: any) {
-                            console.error('handleUploadFile: failed to update requirements after storage upload:', error);
                             Alert.alert('Save error', `Failed to update your requirements in Firestore: ${error?.message || String(error)}`);
                             try {
                                 await setDoc(doc(firestore, 'users', auth.currentUser.uid), { lastRequirementsSyncError: { time: new Date().toISOString(), message: error?.message || String(error) } }, { merge: true });
-                                console.log('handleUploadFile: wrote diagnostic to user doc');
-                            } catch (dbgErr) { console.error('handleUploadFile: debug write failed', dbgErr); }
+                            } catch (dbgErr) {
+                                // Silent error handling
+                            }
                         }
                     }
 
@@ -770,14 +858,12 @@ const RequirementsChecklistScreen: React.FC = () => {
                     setUploading(false);
                     return;
                 } catch (storageErr) {
-                    console.error('Storage upload error (handleUploadFile):', storageErr);
                     Alert.alert('Error', 'Failed to upload file to Storage. Please try again.');
                     setUploading(false);
                     return;
                 }
             }
         } catch (error) {
-            console.error('Error uploading file:', error);
             Alert.alert('Error', 'Failed to upload file. Please try again.');
         } finally {
             setUploading(false);
@@ -842,7 +928,6 @@ const RequirementsChecklistScreen: React.FC = () => {
                 try {
                     return await getDownloadURL(storageRef(storage, candidate));
                 } catch (e) {
-                    console.warn('Failed to resolve signature download URL:', candidate, e);
                     return undefined;
                 }
             };
@@ -866,14 +951,12 @@ const RequirementsChecklistScreen: React.FC = () => {
                         const localPath = `${FileSystem.cacheDirectory}sig_${Date.now()}.${ext}`;
                         const dl = await FileSystem.downloadAsync(candidate, localPath);
                         if ((dl as any)?.status && (dl as any).status !== 200) {
-                            console.warn('Signature download returned non-200:', (dl as any).status);
                             return candidate;
                         }
 
                         const base64 = await FileSystem.readAsStringAsync(dl.uri, { encoding: FileSystem.EncodingType.Base64 });
                         return `data:${mime};base64,${base64}`;
                     } catch (e) {
-                        console.warn('Failed to embed signature image as data URI:', e);
                         return candidate;
                     }
                 }
@@ -903,7 +986,7 @@ const RequirementsChecklistScreen: React.FC = () => {
                                 coordinatorSignatureUrl = await resolveSignatureUrl(sigData.downloadUrl || sigData.storagePath);
                             }
                         } catch (e) {
-                            console.warn('No signature in teacher_signatures for coordinator:', e);
+                            // Silent error handling
                         }
                         
                         // Fallback to user document signature
@@ -930,7 +1013,7 @@ const RequirementsChecklistScreen: React.FC = () => {
                                     adviserSignatureUrl = await resolveSignatureUrl(sigData.downloadUrl || sigData.storagePath);
                                 }
                             } catch (e) {
-                                console.warn('No signature in teacher_signatures for adviser:', e);
+                                // Silent error handling
                             }
                             
                             // Fallback to user document signature
@@ -942,7 +1025,7 @@ const RequirementsChecklistScreen: React.FC = () => {
                             adviserSignatureUrl = await embedImageAsDataUriIfNeeded(adviserSignatureUrl);
                         }
                     } catch (e) {
-                        console.warn('Failed to fetch assigned adviser:', e);
+                        // Silent error handling
                     }
                 } else {
                     // Fall back to finding any super_admin
@@ -960,7 +1043,7 @@ const RequirementsChecklistScreen: React.FC = () => {
                                     adviserSignatureUrl = await resolveSignatureUrl(sigData.downloadUrl || sigData.storagePath);
                                 }
                             } catch (e) {
-                                console.warn('No signature in teacher_signatures for super_admin:', e);
+                                // Silent error handling
                             }
                             
                             // Fallback to user document signature
@@ -975,7 +1058,7 @@ const RequirementsChecklistScreen: React.FC = () => {
                     }
                 }
             } catch (e) {
-                console.warn('Failed to fetch coordinator/adviser signatures:', e);
+                // Silent error handling
             }
 
             // Prepare checklist data
@@ -1029,7 +1112,7 @@ const RequirementsChecklistScreen: React.FC = () => {
                 uploadedUrl = await getDownloadURL(sRef);
                 uploadedPath = remotePath;
             } catch (uploadErr) {
-                console.warn('OJT Checklist generated, but upload failed:', uploadErr);
+                // Silent error handling
             }
 
             // Store in Firestore
@@ -1047,11 +1130,9 @@ const RequirementsChecklistScreen: React.FC = () => {
                         }
                     }
                 }, { merge: true });
-
-                console.log('OJT Completion Checklist generated and saved:', uploadedUrl || pdfUri);
             }
         } catch (error) {
-            console.error('Error generating OJT Checklist:', error);
+            // Silent error handling
         }
     };
 
@@ -1075,11 +1156,8 @@ const RequirementsChecklistScreen: React.FC = () => {
                                 const deleteObjectFn = storageModule.deleteObject;
                                 if (deleteObjectFn) {
                                     await deleteObjectFn(sRef);
-                                } else {
-                                    console.warn('deleteObject not available in storage module');
                                 }
                             } catch (e) {
-                                console.error('Failed to delete storage object:', e);
                                 // Write diagnostic to user doc if permission error
                                 const errCode = typeof e === 'object' && e && 'code' in e ? (e as any).code : undefined;
                                 if (errCode === 'storage/unauthorized' || errCode === 'storage/unknown') {
@@ -1087,7 +1165,9 @@ const RequirementsChecklistScreen: React.FC = () => {
                                         if (auth.currentUser) {
                                             await setDoc(doc(firestore, 'users', auth.currentUser.uid), { lastStorageDeleteError: { time: new Date().toISOString(), message: String(e) } }, { merge: true });
                                         }
-                                    } catch (dbg) { console.error('Failed to write storage delete diagnostic:', dbg); }
+                                    } catch (dbg) {
+                                        // Silent error handling
+                                    }
                                 }
                             }
                         }
@@ -1097,14 +1177,15 @@ const RequirementsChecklistScreen: React.FC = () => {
                             try {
                                 await deleteDoc(doc(firestore, 'admin_files', fileAny.adminDocId));
                             } catch (e) {
-                                console.error('Failed to delete admin_files doc:', e);
                                 const errCode = typeof e === 'object' && e && 'code' in e ? (e as any).code : undefined;
                                 if (errCode === 'permission-denied') {
                                     try {
                                         if (auth.currentUser) {
                                             await setDoc(doc(firestore, 'users', auth.currentUser.uid), { lastAdminFilesDeleteError: { time: new Date().toISOString(), message: String(e) } }, { merge: true });
                                         }
-                                    } catch (dbg) { console.error('Failed to write admin_files delete diagnostic:', dbg); }
+                                    } catch (dbg) {
+                                        // Silent error handling
+                                    }
                                 }
                             }
                         } else if (fileAny && fileAny.path) {
@@ -1113,26 +1194,28 @@ const RequirementsChecklistScreen: React.FC = () => {
                                 const snap = await getDocs(q);
                                 for (const d of snap.docs) {
                                     try { await deleteDoc(d.ref); } catch (ee) {
-                                        console.error('Failed to delete admin_files by path:', ee);
                                         const errCode = typeof ee === 'object' && ee && 'code' in ee ? (ee as any).code : undefined;
                                         if (errCode === 'permission-denied') {
                                             try {
                                                 if (auth.currentUser) {
                                                     await setDoc(doc(firestore, 'users', auth.currentUser.uid), { lastAdminFilesDeleteError: { time: new Date().toISOString(), message: String(ee) } }, { merge: true });
                                                 }
-                                            } catch (dbg) { console.error('Failed to write admin_files delete diagnostic:', dbg); }
+                                            } catch (dbg) {
+                                                // Silent error handling
+                                            }
                                         }
                                     }
                                 }
                             } catch (e) {
-                                console.error('Failed to query/delete admin_files by path:', e);
                                 const errCode = typeof e === 'object' && e && 'code' in e ? (e as any).code : undefined;
                                 if (errCode === 'permission-denied') {
                                     try {
                                         if (auth.currentUser) {
                                             await setDoc(doc(firestore, 'users', auth.currentUser.uid), { lastAdminFilesDeleteError: { time: new Date().toISOString(), message: String(e) } }, { merge: true });
                                         }
-                                    } catch (dbg) { console.error('Failed to write admin_files delete diagnostic:', dbg); }
+                                    } catch (dbg) {
+                                        // Silent error handling
+                                    }
                                 }
                             }
                         }
@@ -1157,17 +1240,17 @@ const RequirementsChecklistScreen: React.FC = () => {
                                     requirements: sanitizeForFirestore(updatedRequirements),
                                 });
                             } catch (e: any) {
-                                console.error('Failed to update user doc after file removal:', e);
                                 Alert.alert('Save error', `Failed to update your requirements in Firestore: ${e?.message || String(e)}`);
                                 try {
                                     await setDoc(doc(firestore, 'users', auth.currentUser.uid), { lastRequirementsSyncError: { time: new Date().toISOString(), message: e?.message || String(e) } }, { merge: true });
-                                } catch (dbgErr) { console.error('removeUploadedFile: debug write failed', dbgErr); }
+                                } catch (dbgErr) {
+                                    // Silent error handling
+                                }
                             }
                         }
 
                         Alert.alert('Removed', 'File removed successfully.');
                     } catch (err) {
-                        console.error('Error removing uploaded file:', err);
                         Alert.alert('Error', 'Failed to remove file.');
                     }
                 }
@@ -1176,23 +1259,27 @@ const RequirementsChecklistScreen: React.FC = () => {
     };
 
     return (
-        <Screen contentContainerStyle={{ paddingHorizontal: 0, paddingTop: 0 }}>
+        <Screen style={{ backgroundColor: colors.white }} contentContainerStyle={{ paddingHorizontal: 0, paddingTop: 0 }}>
 
-            {/* Header */}
-            <View style={styles.headerWrap}>
-                <View style={styles.headerInner}>
-                    <View style={styles.headerAccent} />
-                    <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                        <Ionicons name="arrow-back" size={24} color={colors.onPrimary} />
-                    </TouchableOpacity>
-                    <View style={{ flex: 1, paddingLeft: 8 }}>
-                        <Text style={styles.headerKicker}>OJT</Text>
-                        <Text style={styles.headerTitle}>Requirements Checklist</Text>
-                        <Text style={styles.headerSubtitle}>Upload files, track approvals, and generate your completion checklist.</Text>
+            {/* Hero header */}
+            <LinearGradient
+                colors={['#4F46E5', '#6366F1', '#818CF8']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.heroContainer}
+            >
+                <View style={styles.heroCard}>
+                    <View style={styles.heroTitleRow}>
+                        <Ionicons name="checkbox" size={26} color={colors.onPrimary} style={styles.heroIcon} />
+                        <Text style={styles.heroTitle}>Requirements Checklist</Text>
                     </View>
+                    <Text style={styles.heroSubtitle}>
+                        Upload documents, track approvals, and complete your OJT requirements.
+                    </Text>
                 </View>
-            </View>
+            </LinearGradient>
 
+            {/* Filters + content */}
             <ScrollView 
                 style={styles.scrollView} 
                 showsVerticalScrollIndicator={false}
@@ -1206,10 +1293,16 @@ const RequirementsChecklistScreen: React.FC = () => {
                 }
             >
                 {/* Progress Section */}
+                <Text style={styles.sectionTitle}>Your progress</Text>
                 <Card style={styles.progressCard}>
                     <Card.Content>
                         <View style={styles.progressHeader}>
-                            <Text style={styles.progressTitle}>Overall Progress</Text>
+                            <View>
+                                <Text style={styles.progressTitle}>Overall progress</Text>
+                                <Text style={styles.progressSubtext}>
+                                    {requirements.filter(r => r.status === 'completed' && r.isRequired).length} of {requirements.filter(r => r.isRequired).length} required items completed
+                                </Text>
+                            </View>
                             <Text style={styles.progressPercentage}>{Math.round(progress * 100)}%</Text>
                         </View>
                         <ProgressBar
@@ -1217,14 +1310,62 @@ const RequirementsChecklistScreen: React.FC = () => {
                             color={colors.success}
                             style={styles.progressBar}
                         />
-                        <Text style={styles.progressSubtext}>
-                            {requirements.filter(r => r.status === 'completed' && r.isRequired).length} of {requirements.filter(r => r.isRequired).length} required items completed
-                        </Text>
                     </Card.Content>
                 </Card>
 
+                {/* Filter chips */}
+                <View style={styles.filterRow}>
+                    <Chip
+                        selected={filter === 'all'}
+                        onPress={() => setFilter('all')}
+                        style={[styles.filterChip, filter === 'all' && styles.filterChipSelected]}
+                        textStyle={filter === 'all' ? styles.filterChipTextSelected : styles.filterChipText}
+                    >
+                        All
+                    </Chip>
+                    <Chip
+                        selected={filter === 'required'}
+                        onPress={() => setFilter('required')}
+                        style={[styles.filterChip, filter === 'required' && styles.filterChipSelected]}
+                        textStyle={filter === 'required' ? styles.filterChipTextSelected : styles.filterChipText}
+                    >
+                        Required
+                    </Chip>
+                    <Chip
+                        selected={filter === 'completed'}
+                        onPress={() => setFilter('completed')}
+                        style={[styles.filterChip, filter === 'completed' && styles.filterChipSelected]}
+                        textStyle={filter === 'completed' ? styles.filterChipTextSelected : styles.filterChipText}
+                    >
+                        Completed
+                    </Chip>
+                    <Chip
+                        selected={filter === 'pending'}
+                        onPress={() => setFilter('pending')}
+                        style={[styles.filterChip, filter === 'pending' && styles.filterChipSelected]}
+                        textStyle={filter === 'pending' ? styles.filterChipTextSelected : styles.filterChipText}
+                    >
+                        Pending
+                    </Chip>
+                </View>
+
                 {/* Requirements List */}
-                {requirements.map((requirement) => (
+                <Text style={styles.sectionTitle}>Requirements</Text>
+                {filteredRequirements.length === 0 ? (
+                    <View style={styles.emptyState}>
+                        <Ionicons name="folder-open-outline" size={48} color={colors.textSubtle} style={styles.emptyStateIcon} />
+                        <Text style={styles.emptyStateTitle}>
+                            {filter === 'all' ? 'No requirements yet' : `No ${filter} items`}
+                        </Text>
+                        <Text style={styles.emptyStateText}>
+                            {filter === 'completed'
+                                ? 'Complete and upload documents to see them here.'
+                                : filter === 'pending'
+                                ? 'All required items are done. Great job!'
+                                : 'Requirements will appear here. Pull to refresh if needed.'}
+                        </Text>
+                    </View>
+                ) : filteredRequirements.map((requirement) => (
                     <Card key={requirement.id} style={styles.requirementCard}>
                         <Card.Content>
                             <View style={styles.requirementHeader}>
@@ -1281,7 +1422,7 @@ const RequirementsChecklistScreen: React.FC = () => {
                                                     </TouchableOpacity>
                                                     {!fileAny?.providedByAdmin ? (
                                                         <TouchableOpacity onPress={() => removeUploadedFile(requirement.id, fileAny, index)} style={styles.deleteButton}>
-                                                            <Ionicons name="trash" size={18} color={colors.danger} />
+                                                            <Ionicons name="trash-outline" size={18} color="#DC2626" />
                                                         </TouchableOpacity>
                                                     ) : null}
                                                 </View>
@@ -1426,7 +1567,70 @@ const RequirementsChecklistScreen: React.FC = () => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: colors.bg,
+        backgroundColor: colors.white,
+    },
+    heroContainer: {
+        paddingTop: 12,
+        paddingBottom: 16,
+        paddingHorizontal: 16,
+    },
+    heroCard: {
+        paddingVertical: 16,
+        paddingHorizontal: 4,
+    },
+    heroTitleRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    heroIcon: {
+        marginRight: 10,
+    },
+    heroTitle: {
+        color: colors.onPrimary,
+        fontSize: 22,
+        fontWeight: '800',
+        letterSpacing: 0.3,
+        flex: 1,
+    },
+    heroSubtitle: {
+        color: 'rgba(255,255,255,0.9)',
+        fontSize: 14,
+        lineHeight: 20,
+        maxWidth: '95%',
+        marginTop: 8,
+    },
+    sectionTitle: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: colors.text,
+        marginBottom: 10,
+        marginTop: 4,
+    },
+    emptyState: {
+        paddingVertical: 32,
+        paddingHorizontal: 24,
+        alignItems: 'center',
+        backgroundColor: colors.surface,
+        borderRadius: radii.lg,
+        borderWidth: 1,
+        borderColor: colors.border,
+    },
+    emptyStateIcon: {
+        marginBottom: 12,
+        opacity: 0.7,
+    },
+    emptyStateTitle: {
+        fontSize: 17,
+        fontWeight: '700',
+        color: colors.text,
+        marginBottom: 6,
+        textAlign: 'center',
+    },
+    emptyStateText: {
+        fontSize: 14,
+        color: colors.textMuted,
+        textAlign: 'center',
+        lineHeight: 20,
     },
     headerWrap: { backgroundColor: 'transparent' },
     headerInner: {
@@ -1438,7 +1642,7 @@ const styles = StyleSheet.create({
         paddingTop: 44,
         paddingBottom: 18,
         flexDirection: 'row',
-        alignItems: 'flex-start',
+        alignItems: 'center',
         overflow: 'hidden',
     },
     headerAccent: {
@@ -1451,8 +1655,32 @@ const styles = StyleSheet.create({
         borderRadius: 80,
         transform: [{ rotate: '18deg' }],
     },
-    backButton: {
-        padding: 8,
+    headerAvatarWrap: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        overflow: 'hidden',
+        marginRight: 10,
+    },
+    headerAvatar: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+    },
+    headerAvatarPlaceholder: {
+        backgroundColor: colors.primarySoft,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    headerAvatarText: {
+        color: colors.onPrimary,
+        fontWeight: '700',
+        fontSize: 18,
+    },
+    headerTextBlock: {
+        flex: 1,
+        paddingLeft: 4,
+        paddingRight: 8,
     },
     headerKicker: {
         color: colors.onPrimaryMuted,
@@ -1507,6 +1735,28 @@ const styles = StyleSheet.create({
     progressSubtext: {
         fontSize: 14,
         color: colors.textMuted,
+    },
+    filterRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        marginBottom: 12,
+    },
+    filterChip: {
+        marginRight: 8,
+        marginBottom: 8,
+        backgroundColor: colors.surfaceAlt,
+    },
+    filterChipSelected: {
+        backgroundColor: colors.primarySoft,
+    },
+    filterChipText: {
+        fontSize: 12,
+        color: colors.textMuted,
+    },
+    filterChipTextSelected: {
+        fontSize: 12,
+        color: colors.primary,
+        fontWeight: '600',
     },
     requirementCard: {
         marginBottom: 16,

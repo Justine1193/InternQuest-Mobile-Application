@@ -9,7 +9,7 @@ import {
   Alert,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import { EmailAuthProvider, reauthenticateWithCredential, signOut, updatePassword } from 'firebase/auth';
+import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
 import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { auth, firestore } from '../firebase/config';
 import { colors, radii, shadows, spacing } from '../ui/theme';
@@ -114,21 +114,7 @@ const ForceChangePasswordScreen: React.FC<Props> = ({ navigation, onPasswordChan
       } else if (e?.code === 'auth/too-many-requests') {
         msg = 'Too many attempts. Please try again later.';
       } else if (e?.code === 'auth/requires-recent-login') {
-        Alert.alert(
-          'Sign in required',
-          'For security reasons, please sign in again, then change your password.',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Sign Out',
-              style: 'destructive',
-              onPress: async () => {
-                try { await signOut(auth); } catch (_) { /* ignore */ }
-              },
-            },
-          ]
-        );
-        msg = 'Please sign in again to change your password.';
+        msg = 'For security reasons, please sign in again, then change your password.';
       } else if (e?.message) {
         msg = e.message;
       }
@@ -257,30 +243,6 @@ const ForceChangePasswordScreen: React.FC<Props> = ({ navigation, onPasswordChan
           ) : (
             <Text style={styles.primaryButtonText}>Save new password</Text>
           )}
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.secondaryButton}
-          onPress={() => {
-            Alert.alert(
-              'Sign out?',
-              'You must change your password to continue. Signing out will bring you back to the sign-in screen.',
-              [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                  text: 'Sign Out',
-                  style: 'destructive',
-                  onPress: async () => {
-                    try { await signOut(auth); } catch (_) { /* ignore */ }
-                  },
-                },
-              ]
-            );
-          }}
-          disabled={loading}
-          activeOpacity={0.9}
-        >
-          <Text style={styles.secondaryButtonText}>Sign out</Text>
         </TouchableOpacity>
 
         <Text style={styles.helperText}>
@@ -418,21 +380,6 @@ const styles = StyleSheet.create({
     color: colors.onPrimary,
     fontSize: 14,
     fontWeight: '900',
-  },
-  secondaryButton: {
-    marginTop: spacing.md,
-    height: 48,
-    borderRadius: 999,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surfaceAlt,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  secondaryButtonText: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: '800',
   },
   errorBox: {
     flexDirection: 'row',

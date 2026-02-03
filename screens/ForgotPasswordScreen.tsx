@@ -44,11 +44,6 @@ export default function ForgotPasswordScreen() {
       const emailTrimmed = value.trim().toLowerCase();
       await sendPasswordResetEmail(auth, emailTrimmed);
       setSentTo(emailTrimmed);
-
-      Alert.alert(
-        'Reset link sent',
-        `We sent a password reset link to ${emailTrimmed}.\n\nIf you don’t see it within a few minutes, please check your Spam email.`
-      );
     } catch (e: any) {
       const code = e?.code ?? '';
       const friendly =
@@ -130,15 +125,20 @@ export default function ForgotPasswordScreen() {
             </TouchableOpacity>
 
             <Text style={styles.note}>
-              If you don’t see the email within a few minutes, please check your Spam email.
+              If you don’t see the email within a few minutes, please check your Spam folder. If you have any problems with the email, please contact your adviser.
             </Text>
 
             {sentTo ? (
               <View style={styles.successWrap}>
-                <Icon name="check-circle" size={18} color="#16a34a" />
-                <Text style={styles.successText} numberOfLines={2}>
-                  Reset link sent to {sentTo}
-                </Text>
+                <View style={styles.successIconCircle}>
+                  <Icon name="check" size={16} color={colors.onPrimary} />
+                </View>
+                <View style={styles.successTextContainer}>
+                  <Text style={styles.successTitle}>Reset link sent</Text>
+                  <Text style={styles.successText} numberOfLines={2}>
+                    We sent a password reset link to {sentTo}.
+                  </Text>
+                </View>
               </View>
             ) : null}
           </View>
@@ -309,15 +309,37 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   successWrap: {
-    marginTop: 12,
+    marginTop: 14,
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: 'rgba(22,163,74,0.06)',
+    borderRadius: radii.lg,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(22,163,74,0.35)',
+  },
+  successIconCircle: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#16a34a',
+    alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    marginRight: 10,
+  },
+  successTextContainer: {
+    flex: 1,
+  },
+  successTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 2,
   },
   successText: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '500',
     color: 'rgba(11,43,52,0.75)',
   },
 });

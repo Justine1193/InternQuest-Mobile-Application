@@ -176,6 +176,7 @@ exports.createUserAccount = onRequest(async (req, res) => {
       lastName: lastName || '',
       role: useRole,
       createdAt: FieldValue.serverTimestamp(),
+      createdByUid: decoded.uid,
     }, { merge: true });
 
     return res.status(200).json({ uid: user.uid, role: useRole });

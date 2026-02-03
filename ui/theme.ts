@@ -2,7 +2,7 @@ import { DefaultTheme as NavigationDefaultTheme } from '@react-navigation/native
 import { MD3LightTheme } from 'react-native-paper';
 
 export const colors = {
-  bg: '#F3F5FF',
+  bg: '#FFFFFF',
   surface: '#FFFFFF',
   surfaceAlt: '#F7F9FF',
 

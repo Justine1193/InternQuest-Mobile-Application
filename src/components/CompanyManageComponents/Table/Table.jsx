@@ -60,6 +60,7 @@ const Table = ({
   onRowClick,
   onClearFilters,
   onAddCompany,
+  isReadOnly = false,
 }) => {
   const getSortClass = (key) => {
     if (!sortConfig || sortConfig.key !== key) return 'sortable';
@@ -71,6 +72,7 @@ const Table = ({
       onSort(key);
     }
   };
+
   return (
     <div className="table-container">
       <table>
@@ -123,13 +125,14 @@ const Table = ({
             >
               MOA Expiration
             </th>
-            <th className="kebab-cell"></th>
+            <th>MOA File</th>
+            {!isReadOnly && <th className="kebab-cell"></th>}
           </tr>
         </thead>
         <tbody>
           {data.length === 0 ? (
             <tr>
-              <td colSpan={selectionMode ? 8 : 7} style={{ padding: 0, border: 'none' }}>
+              <td colSpan={isReadOnly ? (selectionMode ? 9 : 8) : (selectionMode ? 10 : 9)} style={{ padding: 0, border: 'none' }}>
                 <EmptyState
                   type={onClearFilters ? "search" : "document"}
                   title={onClearFilters ? "No companies found" : "No companies yet"}
@@ -152,7 +155,7 @@ const Table = ({
                 onEdit={onEdit}
                 onDelete={onDelete}
                 isSelected={selectedItems.includes(row.id)}
-                onSelect={() => onSelectItem(row.id)}
+                onSelect={() => onSelectItem && onSelectItem(row.id)}
                 selectionMode={selectionMode}
                 openMenuId={openMenuId}
                 setOpenMenuId={setOpenMenuId}
@@ -168,6 +171,7 @@ const Table = ({
                 handleDeleteSingle={handleDeleteSingle}
                 isDeleting={isDeleting}
                 onRowClick={onRowClick}
+                isReadOnly={isReadOnly}
               />
             ))
           )}

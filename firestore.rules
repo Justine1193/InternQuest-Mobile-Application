@@ -15,14 +15,31 @@ service cloud.firestore {
     }
 
     // ADMIN USERS
+    // Read: Allow unauthenticated read so login can look up admin by username to get firebaseEmail before sign-in.
+    // Write: Require auth so only logged-in admins can create/update/delete.
     match /adminusers/{adminId} {
       allow read: if true;
-      allow create: if request.auth != null;  // Allow authenticated users to create admin accounts
-      // Allow delete for authenticated users (app logic blocks super_admin deletion)
+      
+      // Create: Allow authenticated users to create admin accounts
+      // PIN verification is enforced at app level and Cloud Functions level
+      allow create: if request.auth != null &&
+        // Prevent password storage in Firestore - passwords only in Firebase Auth
+        !('password' in request.resource.data) &&
+        !('firebasePassword' in request.resource.data);
+      
+      // Delete: Allow authenticated users to delete
+      // PIN verification and role checks enforced at app level
       allow delete: if request.auth != null;
-      // Allow update for authenticated users (app logic blocks super_admin editing)
-      allow update: if request.auth != null;
+      
+      // Update: Allow authenticated users to update
+      // PIN verification enforced at app level for sensitive operations
+      allow update: if request.auth != null &&
+        // Prevent password storage in Firestore - passwords only in Firebase Auth
+        !('password' in request.resource.data) &&
+        !('firebasePassword' in request.resource.data);
     }
+    
+
 
     match /users/{userId} {
       allow read, write: if request.auth != null;
@@ -99,6 +116,13 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // REJECTED REQUIREMENTS ARCHIVE
+    match /rejected_requirements/{docId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update, delete: if false; // Archive records should not be modified or deleted
+    }
+
     // NOTIFICATIONS
     match /notifications/{notificationId} {
       allow read: if request.auth != null;
@@ -119,7 +143,28 @@ service cloud.firestore {
     // Allow authenticated users to write (app logic ensures only advisers/coordinators can approve)
     match /requirement_approvals/{studentId} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null;
+      allow delete: if request.auth != null;
+    }
+
+    // TEACHER SIGNATURES
+    // Teachers can read/write their own signature
+    // All authenticated users can read (for signature lookup during approval)
+    match /teacher_signatures/{teacherId} {
+      allow read: if request.auth != null;
+      // Allow users to write their own signature (teacherId must match auth.uid)
+      allow write: if request.auth != null && request.auth.uid == teacherId;
+    }
+
+    // CHECKLIST TEMPLATES
+    // Admins and coordinators can create/update
+    // All authenticated users can read
+    match /checklist_templates/{templateId} {
+      allow read: if request.auth != null;
+      // Allow admins and coordinators to create/update
+      // Note: App logic should verify coordinator role
+      allow create, update, delete: if request.auth != null;
     }
 
     // ACTIVITY LOGS
@@ -133,21 +178,18 @@ service cloud.firestore {
     }
 
     // APPLICATIONS
+    // Admin panel uses adminusers (not users with role admin), so isAdmin() is false for panel admins.
+    // Read/Update/Delete: allow any authenticated user so admin panel can list, approve/reject, and remove.
+    // Create: student (own userId) or admin.
     match /applications/{applicationId} {
-      allow read: if request.auth != null && (
-        applicationId.matches('^' + request.auth.uid + '_.+$') ||
-        (resource.data.userId is string && resource.data.userId == request.auth.uid) ||
-        isAdmin()
-      );
+      allow read: if request.auth != null;
       allow create: if request.auth != null && (
         (request.resource.data.userId is string &&
           request.resource.data.userId == request.auth.uid) ||
         isAdmin()
       );
-      allow update, delete: if request.auth != null && (
-        (resource.data.userId is string && resource.data.userId == request.auth.uid) ||
-        isAdmin()
-      );
+      allow update: if request.auth != null;
+      allow delete: if request.auth != null;
     }
 
     // META collection
@@ -167,6 +209,17 @@ service cloud.firestore {
     match /programs/{programId} {
       allow read: if request.auth != null;
       allow write: if isAdmin();
+    }
+
+    // STUDENT GUIDE STEPS
+    // Guide steps are only edited via the admin panel.
+    // Allow any authenticated user (admin panel account) to manage them.
+    match /resource_steps/{stepId} {
+      // Any signed‑in user can read steps
+      allow read: if request.auth != null;
+
+      // Admin panel accounts manage steps; rely on app-side role checks
+      allow create, update, delete: if request.auth != null;
     }
 
     // Default: everything else denied

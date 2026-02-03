@@ -33,12 +33,14 @@ import { downloadCSV, prepareCompaniesForExport } from "../../utils/exportUtils.
 import { readCSVFile, parseCSV, convertCSVToCompanies } from "../../utils/importUtils.js";
 import { activityLoggers } from "../../utils/activityLogger.js";
 import { checkMoaExpiration } from "../../utils/moaUtils.js";
-import { IoDownloadOutline, IoCloudUploadOutline } from "react-icons/io5";
+import { IoDownloadOutline, IoCloudUploadOutline, IoBusinessOutline, IoCheckmarkCircleOutline, IoWarningOutline, IoAlertCircleOutline, IoAddOutline, IoTrashOutline } from "react-icons/io5";
 import logger from "../../utils/logger.js";
 import Footer from "../Footer/Footer.jsx";
+import { getAdminRole, ROLES, isAdviserOnly } from "../../utils/auth.js";
 
 // --- Company Dashboard Main Component ---
 const Dashboard = () => {
+  const isAdviser = isAdviserOnly();
   // --- State declarations ---
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
@@ -54,7 +56,10 @@ const Dashboard = () => {
     moa: true, // MOA is now required
     moaValidityYears: "",
     moaStartDate: "",
-    modeOfWork: [],
+    moaFileUrl: "",
+    moaFileName: "",
+    moaStoragePath: "",
+    modeOfWork: "",
     contactPersonName: "",
     contactPersonEmail: "",
     contactPersonPhone: "",
@@ -135,15 +140,16 @@ const Dashboard = () => {
             )
           : true;
         const matchesModeOfWork = filterValues.modeOfWork
-          ? Array.isArray(row.modeOfWork) &&
-            row.modeOfWork.includes(filterValues.modeOfWork)
+          ? (Array.isArray(row.modeOfWork) 
+              ? row.modeOfWork.includes(filterValues.modeOfWork)
+              : row.modeOfWork === filterValues.modeOfWork)
           : true;
         
         // MOA Expiration Status filter
         const matchesMoaExpiration = filterValues.moaExpirationStatus
           ? (() => {
               if (row.moa !== "Yes" || !row.moaExpirationDate) {
-                return filterValues.moaExpirationStatus === "No MOA";
+                return false;
               }
               try {
                 const expirationDate = new Date(row.moaExpirationDate);
@@ -502,49 +508,101 @@ const Dashboard = () => {
           }
         }}
         title="Confirm Logout"
-        message="Are you sure you want to logout? Any unsaved changes will be lost."
+        message="Are you sure you want to logout?"
         confirmText="Logout"
         cancelText="Cancel"
         type="warning"
       />
       <div className="dashboard-content">
-        <DashboardOverview
-          stats={overviewStats}
-          showNotifications={false}
-        />
-        <div className="table-container">
-          <h2>Manage Companies</h2>
-          {/* MOA Expiration Alert Banner */}
+        {/* Page Header */}
+        <div className="company-page-header">
+          <h1>{isAdviser ? "View Companies" : "Manage Companies"}</h1>
+          <p>{isAdviser ? "View partner companies and their MOA status" : "View and manage partner companies and their MOA status"}</p>
+        </div>
+
+        {/* Stats Cards */}
+        <div className="iq-stats-wrapper">
+          <div className="iq-stats-grid">
+            <div className="iq-stat-card iq-stat--info">
+              <div className="iq-stat-icon-wrapper" aria-hidden="true">
+                <IoBusinessOutline className="iq-stat-icon" />
+              </div>
+              <div className="iq-stat-content">
+                <div className="iq-stat-value">{overviewStats.totalCompanies || 0}</div>
+                <div className="iq-stat-label">Total Companies</div>
+              </div>
+            </div>
+            <div className="iq-stat-card iq-stat--success">
+              <div className="iq-stat-icon-wrapper" aria-hidden="true">
+                <IoCheckmarkCircleOutline className="iq-stat-icon" />
+              </div>
+              <div className="iq-stat-content">
+                <div className="iq-stat-value">{overviewStats.moaValid || 0}</div>
+                <div className="iq-stat-label">Active MOA</div>
+              </div>
+            </div>
+            <div className="iq-stat-card iq-stat--warning">
+              <div className="iq-stat-icon-wrapper" aria-hidden="true">
+                <IoWarningOutline className="iq-stat-icon" />
+              </div>
+              <div className="iq-stat-content">
+                <div className="iq-stat-value">{overviewStats.moaExpiringSoon || 0}</div>
+                <div className="iq-stat-label">Expiring Soon</div>
+              </div>
+            </div>
+            <div className="iq-stat-card iq-stat--danger">
+              <div className="iq-stat-icon-wrapper" aria-hidden="true">
+                <IoAlertCircleOutline className="iq-stat-icon" />
+              </div>
+              <div className="iq-stat-content">
+                <div className="iq-stat-value">{overviewStats.moaExpired || 0}</div>
+                <div className="iq-stat-label">Expired MOA</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Table Section */}
+        <div className="table-section">
+          {/* Alert Banners */}
           {overviewStats.moaExpired > 0 && (
             <div className="moa-alert-banner expired">
+              <IoAlertCircleOutline className="alert-icon" />
               <div className="alert-content">
-                <strong>⚠️ {overviewStats.moaExpired} company{overviewStats.moaExpired !== 1 ? 'ies' : 'y'} with expired MOA{overviewStats.moaExpired !== 1 ? 's' : ''}</strong>
-                <span>These companies cannot be used for student assignments. Please renew their MOAs.</span>
+                <strong>{overviewStats.moaExpired} expired MOA{overviewStats.moaExpired !== 1 ? 's' : ''}</strong>
+                <span>These companies need MOA renewal before use</span>
               </div>
             </div>
           )}
           {overviewStats.moaExpiringSoon > 0 && overviewStats.moaExpired === 0 && (
             <div className="moa-alert-banner expiring">
+              <IoWarningOutline className="alert-icon" />
               <div className="alert-content">
-                <strong>⚠️ {overviewStats.moaExpiringSoon} company{overviewStats.moaExpiringSoon !== 1 ? 'ies' : 'y'} with MOA{overviewStats.moaExpiringSoon !== 1 ? 's' : ''} expiring soon</strong>
-                <span>Please renew these MOAs before they expire to avoid restrictions.</span>
+                <strong>{overviewStats.moaExpiringSoon} MOA{overviewStats.moaExpiringSoon !== 1 ? 's' : ''} expiring soon</strong>
+                <span>Renew before expiration to avoid restrictions</span>
               </div>
             </div>
           )}
-          <SearchBar 
-            onSearch={setSearchQuery} 
-            onFilter={setFilterValues} 
-            filterValues={filterValues}
-            type="company"
-          />
+
+          {/* Search Bar */}
+          <div className="search-filter-area">
+            <SearchBar 
+              onSearch={setSearchQuery} 
+              onFilter={setFilterValues} 
+              filterValues={filterValues}
+              type="company"
+            />
+          </div>
+
+          {/* Table */}
           {isLoading && tableData.length === 0 ? (
-            <SkeletonLoader type="table" rows={8} columns={11} />
+            <SkeletonLoader type="table" rows={8} columns={9} />
           ) : (
             <Table
               data={currentItems}
               sortConfig={sortConfig}
               onSort={handleSort}
-              onEdit={(company) =>
+              onEdit={!isAdviser ? (company) =>
               dashboardHandlers.handleEdit(
                 company,
                 setFormData,
@@ -554,8 +612,8 @@ const Dashboard = () => {
                 setIsModalOpen,
                 setFields
               )
-            }
-            onDelete={(id) =>
+            : undefined}
+            onDelete={!isAdviser ? (id) =>
               dashboardHandlers.handleDeleteSingle(
                 id,
                 setIsDeleting,
@@ -563,23 +621,23 @@ const Dashboard = () => {
                 setSelectedItems,
                 setError
               )
-            }
+            : undefined}
             selectedItems={selectedItems}
-            onSelectItem={(id) =>
+            onSelectItem={!isAdviser ? (id) =>
               dashboardHandlers.handleSelectItem(
                 id,
                 selectedItems,
                 setSelectedItems
               )
-            }
-            onSelectAll={(e) => {
+            : undefined}
+            onSelectAll={!isAdviser ? (e) => {
               if (e.target.checked) {
                 setSelectedItems(currentItems.map((item) => item.id));
               } else {
                 setSelectedItems([]);
               }
-            }}
-            selectionMode={selectionMode}
+            } : undefined}
+            selectionMode={!isAdviser && selectionMode}
             openMenuId={openMenuId}
             setOpenMenuId={setOpenMenuId}
             selectedRowId={selectedRowId}
@@ -598,125 +656,156 @@ const Dashboard = () => {
               setIsDetailModalOpen(true);
             }}
             onClearFilters={handleClearAllFilters}
-            onAddCompany={() => setIsModalOpen(true)}
+            onAddCompany={!isAdviser ? () => setIsModalOpen(true) : undefined}
+            isReadOnly={isAdviser}
           />
           )}
+
+          {/* Pagination */}
           <div className="pagination">
             <button
               onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
               disabled={currentPage === 1}
               className="pagination-arrow"
+              aria-label="Previous page"
             >
-              &lt;
+              ‹
             </button>
             {[...Array(totalPages)].map((_, index) => (
               <button
                 key={index + 1}
                 onClick={() => setCurrentPage(index + 1)}
-                className={`pagination-number ${
-                  currentPage === index + 1 ? "active" : ""
-                }`}
+                className={`pagination-number ${currentPage === index + 1 ? "active" : ""}`}
               >
                 {index + 1}
               </button>
             ))}
             <button
-              onClick={() =>
-                setCurrentPage((prev) => Math.min(prev + 1, totalPages))
-              }
+              onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
               disabled={currentPage === totalPages}
               className="pagination-arrow"
+              aria-label="Next page"
             >
-              &gt;
+              ›
             </button>
           </div>
-          <div className="pagination-info">
-            Showing {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, sortedData.length)} of {sortedData.length}
+          <div className="pagination-info-wrapper">
+            <div className="pagination-info">
+              Showing {indexOfFirstItem + 1}–{Math.min(indexOfLastItem, sortedData.length)} companies
+            </div>
+            <div className="pagination-items-per-page">
+              <label htmlFor="items-per-page">Show:</label>
+              <select
+                id="items-per-page"
+                value={itemsPerPage}
+                onChange={(e) => {
+                  setItemsPerPage(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="items-per-page-select"
+                aria-label="Items per page"
+              >
+                <option value="5">5</option>
+                <option value="8">8</option>
+                <option value="10">10</option>
+                <option value="20">20</option>
+                <option value="50">50</option>
+              </select>
+              <span className="items-per-page-label">per page</span>
+            </div>
           </div>
-          <div className="table-actions">
-            <input
-              type="file"
-              accept=".csv"
-              ref={fileInputRef}
-              onChange={handleImportCompanies}
-              style={{ display: 'none' }}
-              disabled={isImporting}
-            />
-            <button
-              className="import-btn table-action-btn"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isImporting}
-              title="Import companies from CSV"
-            >
-              <IoCloudUploadOutline style={{ marginRight: "0.5rem" }} />
-              {isImporting ? `Importing... (${importProgress.current}/${importProgress.total})` : "Import CSV"}
-            </button>
-            <button
-              className="export-btn table-action-btn"
-              onClick={() => {
-                try {
-                  const exportData = prepareCompaniesForExport(filteredData);
-                  downloadCSV(exportData, `companies_export_${new Date().toISOString().split('T')[0]}`);
-                  activityLoggers.exportData("companies", exportData.length);
-                  success(`Exported ${exportData.length} companies successfully`);
-                } catch (err) {
-                  logger.error("Export error:", err);
-                  showError("Failed to export data. Please try again.");
-                }
-              }}
-              title="Export companies to CSV"
-            >
-              <IoDownloadOutline style={{ marginRight: "0.5rem" }} />
-              Export CSV
-            </button>
-            <button
-              className="add-entry table-action-btn"
-              onClick={() => {
-                setIsEditMode(false);
-                setIsModalOpen(true);
-                setFormData({
-                  companyName: "",
-                  description: "",
-                  website: "",
-                  field: "",
-                  address: "",
-                  email: "",
-                  skills: "",
-                  moa: true, // MOA is now required
-                  moaValidityYears: "",
-                  modeOfWork: [],
-                });
-                setSkills([]);
-                setFields([]);
-              }}
-            >
-              Add Entry
-            </button>
-            {selectionMode && selectedItems.length > 0 && (
-              <div style={{ margin: "1rem 0" }}>
-                <button
-                  className="delete table-action-btn"
-                  onClick={() => dashboardHandlers.handleDelete(setShowConfirm)}
-                  disabled={isDeleting}
-                >
-                  {isDeleting
-                    ? "Deleting..."
-                    : `Delete (${selectedItems.length})`}
-                </button>
-                <button
-                  className="cancel-action table-action-btn"
-                  onClick={() => {
-                    setSelectionMode(false);
-                    setSelectedItems([]);
-                    setOpenMenuId(null);
-                  }}
-                  style={{ marginLeft: "1rem" }}
-                >
-                  Cancel
-                </button>
-              </div>
-            )}
-          </div>
+
+          {/* Action Buttons */}
+          {!isAdviser && (
+            <div className="table-actions">
+              {selectionMode && selectedItems.length > 0 && (
+                <div className="selection-actions">
+                  <span>{selectedItems.length} selected</span>
+                  <button
+                    className="delete table-action-btn"
+                    onClick={() => dashboardHandlers.handleDelete(setShowConfirm)}
+                    disabled={isDeleting}
+                  >
+                    <IoTrashOutline />
+                    {isDeleting ? "Deleting..." : "Delete"}
+                  </button>
+                  <button
+                    className="cancel-action table-action-btn"
+                    onClick={() => {
+                      setSelectionMode(false);
+                      setSelectedItems([]);
+                      setOpenMenuId(null);
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+              <input
+                type="file"
+                accept=".csv"
+                ref={fileInputRef}
+                onChange={handleImportCompanies}
+                style={{ display: 'none' }}
+                disabled={isImporting}
+              />
+              <button
+                className="import-btn table-action-btn"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isImporting}
+                title="Import companies from CSV"
+              >
+                <IoCloudUploadOutline />
+                {isImporting ? `${importProgress.current}/${importProgress.total}` : "Import"}
+              </button>
+              <button
+                className="export-btn table-action-btn"
+                onClick={() => {
+                  try {
+                    const exportData = prepareCompaniesForExport(filteredData);
+                    downloadCSV(exportData, `companies_export_${new Date().toISOString().split('T')[0]}`);
+                    activityLoggers.exportData("companies", exportData.length);
+                    success(`Exported ${exportData.length} companies successfully`);
+                  } catch (err) {
+                    logger.error("Export error:", err);
+                    showError("Failed to export data. Please try again.");
+                  }
+                }}
+                title="Export companies to CSV"
+              >
+                <IoDownloadOutline />
+                Export
+              </button>
+              <button
+                className="add-entry table-action-btn"
+                onClick={() => {
+                  setIsEditMode(false);
+                  setIsModalOpen(true);
+                  setFormData({
+                    companyName: "",
+                    description: "",
+                    website: "",
+                    field: "",
+                    address: "",
+                    email: "",
+                    skills: "",
+                    moa: true,
+                    moaValidityYears: "",
+                    moaStartDate: "",
+                    moaFileUrl: "",
+                    moaFileName: "",
+                    moaStoragePath: "",
+                    modeOfWork: [],
+                  });
+                  setSkills([]);
+                  setFields([]);
+                }}
+              >
+                <IoAddOutline />
+                Add Company
+              </button>
+            </div>
+          )}
         </div>
       </div>
       {isModalOpen && (

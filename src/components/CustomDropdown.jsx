@@ -69,20 +69,28 @@ function CustomDropdown({ options, value, onChange }) {
           role="listbox"
           aria-label="Available options"
         >
-          {options.map((option) => (
-            <div
-              key={option}
-              className={`custom-dropdown-option${
-                value === option ? " selected" : ""
-              }`}
-              onClick={() => handleOptionClick(option)}
-              role="option"
-              aria-selected={value === option}
-              tabIndex={-1}
-            >
-              {option}
-            </div>
-          ))}
+          {options.map((option) => {
+            const isSelected = value === option || (!value && option === options[0]);
+            return (
+              <div
+                key={option}
+                className={`custom-dropdown-option${
+                  isSelected ? " selected" : ""
+                }`}
+                onClick={() => handleOptionClick(option)}
+                role="option"
+                aria-selected={isSelected}
+                tabIndex={-1}
+              >
+                {option}
+                {isSelected && (
+                  <span className="custom-dropdown-checkmark" aria-hidden="true">
+                    ✓
+                  </span>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

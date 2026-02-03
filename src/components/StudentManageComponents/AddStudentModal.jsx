@@ -1,5 +1,5 @@
 /**
- * AddStudentModal - Modal for creating a new student account with fixed password
+ * AddStudentModal - Modal for creating a new student account with a temp password
  */
 
 import React, { useState, useEffect } from "react";
@@ -10,8 +10,38 @@ import { doc, getDoc } from "firebase/firestore";
 import { loadColleges } from "../../utils/collegeUtils";
 import "./AddStudentModal.css";
 
-// Fixed password for all student accounts
-const FIXED_STUDENT_PASSWORD = "Student@123"; // Change this to your desired fixed password
+const formatStudentId = (value) => {
+  const digitsOnly = value.replace(/\D/g, "").slice(0, 10);
+  const part1 = digitsOnly.slice(0, 2);
+  const part2 = digitsOnly.slice(2, 7);
+  const part3 = digitsOnly.slice(7, 10);
+  if (part3) return `${part1}-${part2}-${part3}`;
+  if (part2) return `${part1}-${part2}`;
+  return part1;
+};
+
+const EMAIL_DOMAIN = "neu.edu.ph";
+
+const formatInstitutionalEmail = (value, previousValue = "") => {
+  if (!value) return "";
+  const trimmed = value.trim();
+  const atIndex = trimmed.indexOf("@");
+  
+  // If no @ found, return as is
+  if (atIndex === -1) return trimmed;
+
+  const localPart = trimmed.slice(0, atIndex);
+  
+  // If user just typed @ (wasn't in previous value) and there's no domain yet, auto-suggest
+  const previousHadAt = previousValue && previousValue.includes("@");
+  if (!previousHadAt && atIndex === trimmed.length - 1 && localPart) {
+    // User just typed @, auto-suggest the domain
+    return `${localPart}@${EMAIL_DOMAIN}`;
+  }
+  
+  // Otherwise, allow user to edit freely
+  return trimmed;
+};
 
 const AddStudentModal = ({
   isOpen,
@@ -21,7 +51,6 @@ const AddStudentModal = ({
   defaultCollege = null,
 }) => {
   const [formData, setFormData] = useState({
-    studentNumber: "",
     studentId: "",
     firstName: "",
     lastName: "",
@@ -45,10 +74,21 @@ const AddStudentModal = ({
   useEffect(() => {
     const loadCollegesData = async () => {
       try {
-        // Load colleges
+        // Load colleges first to get college code to name mapping
         const colleges = await loadColleges();
         const collegeNames = colleges.map((c) => c.college_name);
         setCollegeOptions(collegeNames);
+
+        // Create a mapping from college_code to college_name
+        const collegeCodeToNameMap = {};
+        colleges.forEach((college) => {
+          if (college.college_code && college.college_name) {
+            // Map both lowercase and original case
+            collegeCodeToNameMap[college.college_code.toLowerCase()] =
+              college.college_name;
+            collegeCodeToNameMap[college.college_code] = college.college_name;
+          }
+        });
 
         // Load program codes from meta/program_code
         const programCodeDocRef = doc(db, "meta", "program_code");
@@ -58,7 +98,7 @@ const AddStudentModal = ({
           const codesByCollegeMap = {};
           let allProgramCodes = [];
 
-          // Check if data is organized by college (college names as keys, arrays as values)
+          // Check if data is organized by college (arrays as values)
           const isCollegeOrganized = Object.keys(codeData).some((key) => {
             const value = codeData[key];
             return (
@@ -69,14 +109,59 @@ const AddStudentModal = ({
           });
 
           if (isCollegeOrganized) {
-            // Structure: { "College Name": ["BSIT", "BSCS", ...] }
-            Object.keys(codeData).forEach((collegeName) => {
-              const codes = codeData[collegeName];
+            // Structure could be:
+            // 1. { "cics": ["BSIT", "BSCS", ...], "cba": ["BSA", ...], ... } - keys are college codes
+            // 2. { "College of Engineering & Architecture": ["BSARCH", ...], ... } - keys are full college names
+            Object.keys(codeData).forEach((collegeKey) => {
+              const codes = codeData[collegeKey];
               if (Array.isArray(codes)) {
                 const processedCodes = codes
                   .filter((c) => typeof c === "string" && c.trim().length > 0)
                   .map((c) => c.trim().toUpperCase())
                   .sort((a, b) => a.localeCompare(b));
+
+                // Check if the key is a college code (short, lowercase) or a full college name
+                // College codes are typically 2-5 characters, lowercase
+                const isCollegeCode =
+                  collegeKey.length <= 5 &&
+                  collegeKey === collegeKey.toLowerCase();
+
+                let collegeName;
+                if (isCollegeCode) {
+                  // Key is a college code, try to map to college name
+                  collegeName =
+                    collegeCodeToNameMap[collegeKey.toLowerCase()] ||
+                    collegeCodeToNameMap[collegeKey] ||
+                    collegeKey; // Fallback to the key itself if not found
+                } else {
+                  // Key is already a full college name (may contain &)
+                  collegeName = collegeKey;
+
+                  // Also create a normalized version for matching (handle & variations)
+                  // Store both the original and normalized versions
+                  const normalizedName = collegeName.toLowerCase().trim();
+
+                  // If this college name isn't in our college options, add it
+                  if (!collegeNames.includes(collegeName)) {
+                    // Try to find a matching college name (handling & variations)
+                    const matchingCollege = colleges.find((c) => {
+                      const cName = c.college_name || "";
+                      // Normalize both names for comparison (handle & and "and")
+                      const normalize = (str) =>
+                        str
+                          .toLowerCase()
+                          .replace(/&/g, "and")
+                          .replace(/\s+/g, " ")
+                          .trim();
+                      return normalize(cName) === normalize(collegeName);
+                    });
+
+                    if (matchingCollege && matchingCollege.college_name) {
+                      // Use the exact name from colleges collection
+                      collegeName = matchingCollege.college_name;
+                    }
+                  }
+                }
 
                 codesByCollegeMap[collegeName] = processedCodes;
                 allProgramCodes = allProgramCodes.concat(processedCodes);
@@ -101,14 +186,22 @@ const AddStudentModal = ({
             a.localeCompare(b)
           );
 
+          console.log("Loaded program codes by college:", codesByCollegeMap);
+          console.log("College code to name map:", collegeCodeToNameMap);
+          console.log("All program codes:", allProgramCodes);
+
           setProgramCodesByCollege(codesByCollegeMap);
           setProgramCodeOptions(allProgramCodes);
+          // Initialize filteredProgramCodes with all codes
+          setFilteredProgramCodes(allProgramCodes);
         } else {
           setProgramCodeOptions([]);
+          setFilteredProgramCodes([]);
         }
       } catch (err) {
         console.error("Error loading program codes:", err);
         setProgramCodeOptions([]);
+        setFilteredProgramCodes([]);
       }
     };
 
@@ -116,6 +209,55 @@ const AddStudentModal = ({
       loadCollegesData();
     }
   }, [isOpen]);
+
+  // Helper function to normalize college names for matching (handles & variations)
+  const normalizeCollegeName = (name) => {
+    if (!name) return "";
+    return name
+      .toLowerCase()
+      .replace(/&/g, "and") // Replace & with "and"
+      .replace(/\s+/g, " ") // Normalize whitespace
+      .trim();
+  };
+
+  // Helper function to get program codes for a specific college
+  const getProgramCodesForCollege = (collegeName) => {
+    if (!collegeName || !collegeName.trim()) {
+      // Return all program codes if no college selected
+      const allCodes = Object.values(programCodesByCollege).flat();
+      return [...new Set(allCodes)].sort((a, b) => a.localeCompare(b));
+    }
+
+    // Try exact match first
+    if (programCodesByCollege[collegeName]) {
+      console.log(
+        `Found program codes for college "${collegeName}":`,
+        programCodesByCollege[collegeName]
+      );
+      return programCodesByCollege[collegeName];
+    }
+
+    // Try case-insensitive match
+    const normalizedInput = normalizeCollegeName(collegeName);
+    const matchingKey = Object.keys(programCodesByCollege).find(
+      (key) => normalizeCollegeName(key) === normalizedInput
+    );
+
+    if (matchingKey) {
+      console.log(
+        `Found program codes for college "${collegeName}" (matched key: "${matchingKey}"):`,
+        programCodesByCollege[matchingKey]
+      );
+      return programCodesByCollege[matchingKey];
+    }
+
+    // If no match found, return empty array (college has no program codes)
+    console.warn(
+      `No program codes found for college "${collegeName}". Available college keys:`,
+      Object.keys(programCodesByCollege)
+    );
+    return [];
+  };
 
   // Auto-fill college when defaultCollege is provided
   useEffect(() => {
@@ -125,6 +267,12 @@ const AddStudentModal = ({
         ...prev,
         college: defaultCollege,
       }));
+      // Update program codes for the default college
+      const availableCodes = getProgramCodesForCollege(defaultCollege);
+      if (availableCodes.length > 0) {
+        setProgramCodeOptions(availableCodes);
+        setFilteredProgramCodes(availableCodes);
+      }
     } else if (isOpen && !defaultCollege) {
       // Clear college if defaultCollege is not provided
       setFormData((prev) => ({
@@ -133,6 +281,39 @@ const AddStudentModal = ({
       }));
     }
   }, [isOpen, defaultCollege]);
+
+  // Update program codes when college changes
+  useEffect(() => {
+    if (formData.college && formData.college.trim()) {
+      const availableCodes = getProgramCodesForCollege(formData.college);
+      setProgramCodeOptions(availableCodes);
+      setFilteredProgramCodes(availableCodes);
+
+      // Clear program code if it doesn't belong to the new college
+      if (formData.sectionProgram) {
+        const codeExists = availableCodes.some(
+          (code) => code.toUpperCase() === formData.sectionProgram.toUpperCase()
+        );
+        if (!codeExists && availableCodes.length > 0) {
+          setFormData((prev) => ({
+            ...prev,
+            sectionProgram: "",
+          }));
+        }
+      }
+    } else {
+      // No college selected, show all program codes
+      // Reset to all codes (this will be set when data loads)
+      if (Object.keys(programCodesByCollege).length > 0) {
+        const allCodes = Object.values(programCodesByCollege).flat();
+        const uniqueCodes = [...new Set(allCodes)].sort((a, b) =>
+          a.localeCompare(b)
+        );
+        setProgramCodeOptions(uniqueCodes);
+        setFilteredProgramCodes(uniqueCodes);
+      }
+    }
+  }, [formData.college]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -169,23 +350,24 @@ const AddStudentModal = ({
     if (name === "college") {
       const searchValue = value.trim();
       if (searchValue.length > 0) {
-        const searchLower = searchValue.toLowerCase();
+        // Normalize search term (handle & variations)
+        const normalizedSearch = normalizeCollegeName(searchValue);
 
         // Filter colleges by name
         const filtered = collegeOptions
           .map((college) => {
-            const collegeLower = college.toLowerCase();
+            const normalizedCollege = normalizeCollegeName(college);
             let score = 0;
             let matched = false;
 
             // Exact match
-            if (collegeLower === searchLower) {
+            if (normalizedCollege === normalizedSearch) {
               score = 0;
               matched = true;
-            } else if (collegeLower.startsWith(searchLower)) {
+            } else if (normalizedCollege.startsWith(normalizedSearch)) {
               score = 1; // Starts with
               matched = true;
-            } else if (collegeLower.includes(searchLower)) {
+            } else if (normalizedCollege.includes(normalizedSearch)) {
               score = 2; // Contains
               matched = true;
             }
@@ -205,9 +387,28 @@ const AddStudentModal = ({
 
         setFilteredColleges(filtered);
         setShowCollegeSuggestions(true);
+
+        // Check if the entered value matches a college exactly, then update program codes
+        const exactMatch = collegeOptions.find(
+          (college) => normalizeCollegeName(college) === normalizedSearch
+        );
+        if (exactMatch) {
+          const availableCodes = getProgramCodesForCollege(exactMatch);
+          setProgramCodeOptions(availableCodes);
+          setFilteredProgramCodes(availableCodes);
+        }
       } else {
         setFilteredColleges(collegeOptions);
         setShowCollegeSuggestions(true);
+        // Reset to all program codes when college is cleared
+        if (Object.keys(programCodesByCollege).length > 0) {
+          const allCodes = Object.values(programCodesByCollege).flat();
+          const uniqueCodes = [...new Set(allCodes)].sort((a, b) =>
+            a.localeCompare(b)
+          );
+          setProgramCodeOptions(uniqueCodes);
+          setFilteredProgramCodes(uniqueCodes);
+        }
       }
     }
 
@@ -224,7 +425,8 @@ const AddStudentModal = ({
       // Clear error when user starts typing
       if (
         errors.sectionProgram &&
-        errors.sectionProgram.includes("not found")
+        (errors.sectionProgram.includes("not found") ||
+          errors.sectionProgram.includes("does not belong"))
       ) {
         setErrors((prev) => ({
           ...prev,
@@ -232,11 +434,22 @@ const AddStudentModal = ({
         }));
       }
 
+      // Get available program codes based on selected college
+      const availableCodes =
+        formData.college && formData.college.trim()
+          ? getProgramCodesForCollege(formData.college)
+          : programCodeOptions;
+
+      console.log("Program code change - available codes:", availableCodes);
+      console.log("Program code options:", programCodeOptions);
+      console.log("Selected college:", formData.college);
+
       if (searchValue.length > 0) {
         const searchUpper = searchValue.toUpperCase();
 
-        // Filter and sort by relevance (same logic as program field)
-        const filtered = programCodeOptions
+        // Filter and sort by relevance (only from available codes for selected college)
+        const filtered = availableCodes
+          .filter((code) => code && typeof code === "string") // Safety check
           .map((code) => {
             const codeUpper = code.toUpperCase();
             let score = 0;
@@ -275,23 +488,57 @@ const AddStudentModal = ({
           })
           .map((item) => item.code);
 
+        console.log("Filtered program codes:", filtered);
         setFilteredProgramCodes(filtered);
-        setShowProgramCodeSuggestions(true);
+        setShowProgramCodeSuggestions(filtered.length > 0);
       } else {
-        // When empty, show all options
-        setFilteredProgramCodes(programCodeOptions);
-        setShowProgramCodeSuggestions(true);
+        // When empty, show available options for selected college
+        console.log(
+          "Empty search - showing all available codes:",
+          availableCodes
+        );
+        setFilteredProgramCodes(availableCodes);
+        setShowProgramCodeSuggestions(availableCodes.length > 0);
       }
     }
   };
 
   const handleCollegeSelect = (college) => {
+    const currentProgramCode = formData.sectionProgram;
+    const availableCodes = getProgramCodesForCollege(college);
+
+    // Clear program code if it doesn't belong to the selected college
+    let newProgramCode = currentProgramCode;
+    if (currentProgramCode && availableCodes.length > 0) {
+      const codeExists = availableCodes.some(
+        (code) => code.toUpperCase() === currentProgramCode.toUpperCase()
+      );
+      if (!codeExists) {
+        newProgramCode = ""; // Clear if doesn't belong to new college
+        setErrors((prev) => ({
+          ...prev,
+          sectionProgram:
+            "Program code does not belong to selected college. Please select a new program code.",
+        }));
+      }
+    }
+
     setFormData((prev) => ({
       ...prev,
       college: college,
+      sectionProgram: newProgramCode,
     }));
     setShowCollegeSuggestions(false);
     setFilteredColleges([]);
+
+    // Update filtered program codes based on selected college
+    if (availableCodes.length > 0) {
+      setProgramCodeOptions(availableCodes);
+      setFilteredProgramCodes(availableCodes);
+    } else {
+      setProgramCodeOptions([]);
+      setFilteredProgramCodes([]);
+    }
   };
 
   const handleCollegeBlur = () => {
@@ -305,23 +552,23 @@ const AddStudentModal = ({
     if (collegeOptions.length > 0) {
       // If there's already text, filter it; otherwise show all options
       if (formData.college && formData.college.trim().length > 0) {
-        // Re-apply filtering with current value
-        const searchLower = formData.college.toLowerCase();
+        // Re-apply filtering with current value (normalized to handle &)
+        const normalizedSearch = normalizeCollegeName(formData.college);
 
         const filtered = collegeOptions
           .map((college) => {
-            const collegeLower = college.toLowerCase();
+            const normalizedCollege = normalizeCollegeName(college);
             let score = 0;
             let matched = false;
 
             // Check college name match
-            if (collegeLower === searchLower) {
+            if (normalizedCollege === normalizedSearch) {
               score = 0;
               matched = true;
-            } else if (collegeLower.startsWith(searchLower)) {
+            } else if (normalizedCollege.startsWith(normalizedSearch)) {
               score = 1;
               matched = true;
-            } else if (collegeLower.includes(searchLower)) {
+            } else if (normalizedCollege.includes(normalizedSearch)) {
               score = 2;
               matched = true;
             }
@@ -366,36 +613,71 @@ const AddStudentModal = ({
         formData.sectionProgram.trim().length > 0
       ) {
         const enteredCode = formData.sectionProgram.toUpperCase().trim();
-        const codeExists = programCodeOptions.some(
-          (code) => code.toUpperCase() === enteredCode
-        );
-        if (!codeExists) {
-          setErrors((prev) => ({
-            ...prev,
-            sectionProgram:
-              "Program code not found. Please select from the dropdown.",
-          }));
+
+        // If college is selected, check if code belongs to that college
+        if (formData.college && formData.college.trim()) {
+          const availableCodes = getProgramCodesForCollege(formData.college);
+          const codeExists = availableCodes.some(
+            (code) => code.toUpperCase() === enteredCode
+          );
+          if (!codeExists) {
+            setErrors((prev) => ({
+              ...prev,
+              sectionProgram:
+                "Program code does not belong to selected college. Please select a program code from the dropdown.",
+            }));
+          } else {
+            // Clear error if code is valid
+            setErrors((prev) => ({
+              ...prev,
+              sectionProgram: "",
+            }));
+          }
         } else {
-          // Clear error if code is valid
-          setErrors((prev) => ({
-            ...prev,
-            sectionProgram: "",
-          }));
+          // No college selected, check against all program codes
+          const codeExists = programCodeOptions.some(
+            (code) => code.toUpperCase() === enteredCode
+          );
+          if (!codeExists) {
+            setErrors((prev) => ({
+              ...prev,
+              sectionProgram:
+                "Program code not found. Please select from the dropdown.",
+            }));
+          } else {
+            // Clear error if code is valid
+            setErrors((prev) => ({
+              ...prev,
+              sectionProgram: "",
+            }));
+          }
         }
       }
     }, 200);
   };
 
   const handleProgramCodeFocus = () => {
-    if (programCodeOptions.length > 0) {
-      // If there's already text, filter it; otherwise show all options
+    // Get available program codes based on selected college
+    const availableCodes = formData.college
+      ? getProgramCodesForCollege(formData.college)
+      : programCodeOptions;
+
+    console.log("Program code focus - available codes:", availableCodes);
+    console.log("Selected college:", formData.college);
+    console.log(
+      "Program codes by college keys:",
+      Object.keys(programCodesByCollege)
+    );
+
+    if (availableCodes.length > 0) {
+      // If there's already text, filter it; otherwise show all available options
       if (
         formData.sectionProgram &&
         formData.sectionProgram.trim().length > 0
       ) {
         // Re-apply filtering with current value
         const searchUpper = formData.sectionProgram.toUpperCase();
-        const filtered = programCodeOptions
+        const filtered = availableCodes
           .map((code) => {
             const codeUpper = code.toUpperCase();
             let score = 0;
@@ -427,23 +709,40 @@ const AddStudentModal = ({
           .map((item) => item.code);
         setFilteredProgramCodes(filtered);
       } else {
-        // Show all options when empty
-        setFilteredProgramCodes(programCodeOptions);
+        // Show all available options for selected college when empty
+        setFilteredProgramCodes(availableCodes);
       }
       setShowProgramCodeSuggestions(true);
+    } else {
+      // No codes available - show all if no college selected, or empty if college selected
+      if (!formData.college || !formData.college.trim()) {
+        // No college selected, show all program codes
+        setFilteredProgramCodes(programCodeOptions);
+        setShowProgramCodeSuggestions(programCodeOptions.length > 0);
+      } else {
+        // College selected but no program codes available
+        console.warn(
+          `No program codes available for college: ${formData.college}`
+        );
+        setFilteredProgramCodes([]);
+        setShowProgramCodeSuggestions(false);
+      }
     }
   };
 
   const validateForm = () => {
     const newErrors = {};
 
-    const studentIdValue =
-      formData.studentNumber.trim() || formData.studentId.trim();
+    const studentIdValue = formData.studentId.trim();
     if (!studentIdValue) {
-      newErrors.studentNumber = "Student ID is required";
-    } else if (!/^[A-Za-z0-9-]+$/.test(studentIdValue)) {
-      newErrors.studentNumber =
-        "Student ID can only contain letters, numbers, and hyphens";
+      newErrors.studentId = "Student ID is required";
+    } else {
+      // Perfect format: XX-XXXXX-XXX (2 digits, dash, 5 digits, dash, 3 digits)
+      const perfectFormatRegex = /^\d{2}-\d{5}-\d{3}$/;
+      if (!perfectFormatRegex.test(studentIdValue)) {
+        newErrors.studentId =
+          "Student ID must be in format: XX-XXXXX-XXX (e.g., 12-12345-678)";
+      }
     }
     if (!formData.firstName.trim()) {
       newErrors.firstName = "First name is required";
@@ -459,12 +758,26 @@ const AddStudentModal = ({
     } else {
       // Check if the entered program code exists in the available options
       const enteredCode = formData.sectionProgram.toUpperCase().trim();
-      const codeExists = programCodeOptions.some(
-        (code) => code.toUpperCase() === enteredCode
-      );
-      if (!codeExists) {
-        newErrors.sectionProgram =
-          "Program code not found. Please select from the dropdown.";
+
+      // If college is selected, validate against college-specific codes
+      if (formData.college && formData.college.trim()) {
+        const availableCodes = getProgramCodesForCollege(formData.college);
+        const codeExists = availableCodes.some(
+          (code) => code.toUpperCase() === enteredCode
+        );
+        if (!codeExists) {
+          newErrors.sectionProgram =
+            "Program code does not belong to selected college. Please select a program code from the dropdown.";
+        }
+      } else {
+        // No college selected, check against all program codes
+        const codeExists = programCodeOptions.some(
+          (code) => code.toUpperCase() === enteredCode
+        );
+        if (!codeExists) {
+          newErrors.sectionProgram =
+            "Program code not found. Please select from the dropdown.";
+        }
       }
     }
     if (!formData.sectionNumber.trim()) {
@@ -485,10 +798,10 @@ const AddStudentModal = ({
         newErrors.email = "Please enter a valid email address";
       } else {
         // Check if email is from .edu.ph domain only
-        const emailDomain = formData.email.trim().split('@')[1]?.toLowerCase();
-        
-        if (!emailDomain?.endsWith('.edu.ph')) {
-          newErrors.email = "Please enter an institutional email address ending with .edu.ph (e.g., student@university.edu.ph)";
+        const emailDomain = formData.email.trim().split("@")[1]?.toLowerCase();
+        if (!emailDomain?.endsWith(".edu.ph")) {
+          newErrors.email =
+            "Please enter an institutional email address ending with .edu.ph (e.g., student@university.edu.ph)";
         }
       }
     }
@@ -500,26 +813,25 @@ const AddStudentModal = ({
   const handleSubmit = (e) => {
     e.preventDefault();
     if (validateForm()) {
-      const studentIdValue =
-        formData.studentNumber.trim() || formData.studentId.trim();
+      const studentIdValue = formData.studentId.trim();
+      // Password is the same as Student ID
+      const passwordToUse = studentIdValue;
       // Combine section components into format: [Year][Program]-[Section] (all uppercase)
       const section = `${formData.sectionYear.trim()}${formData.sectionProgram
         .trim()
         .toUpperCase()}-${formData.sectionNumber.trim().toUpperCase()}`;
       onSubmit({
         ...formData,
-        studentNumber: studentIdValue,
-        studentId: studentIdValue, // Save to both fields for compatibility
+        studentId: studentIdValue,
         email: formData.email.trim(), // Required for contact purposes
         section: section,
-        password: FIXED_STUDENT_PASSWORD,
+        password: passwordToUse,
       });
     }
   };
 
   const handleClose = () => {
     setFormData({
-      studentNumber: "",
       studentId: "",
       firstName: "",
       lastName: "",
@@ -552,54 +864,94 @@ const AddStudentModal = ({
         <div className="add-student-modal-body">
           <div className="password-notice">
             <p>
-              <strong>Note:</strong> All student accounts will be created with a
-              fixed password.
-            </p>
-            <p className="password-display">
-              Default Password: <code>{FIXED_STUDENT_PASSWORD}</code>
+              <strong>Note:</strong> The default password for each student account is their <strong>Student ID</strong>.
             </p>
             <p className="password-warning">
               Students should change their password after first login.
             </p>
-            <p className="login-info" style={{ 
-              marginTop: "0.75rem", 
-              padding: "0.75rem", 
-              background: "#e3f2fd", 
-              borderRadius: "6px",
-              fontSize: "0.9rem",
-              color: "#1976d2"
-            }}>
-              <strong>Login Information:</strong> Students will log in using their <strong>Student ID</strong> and the temporary password shown above.
+            <p
+              className="login-info"
+              style={{
+                marginTop: "0.75rem",
+                padding: "0.75rem",
+                background: "#e3f2fd",
+                borderRadius: "6px",
+                fontSize: "0.9rem",
+                color: "#1976d2",
+              }}
+            >
+              <strong>Login Information:</strong> Students will log in using
+              their <strong>Student ID</strong> as both username and password.
+            </p>
+            <p
+              style={{
+                marginTop: "0.5rem",
+                fontSize: "0.85rem",
+                color: "#666",
+              }}
+            >
+              The institutional email is for school records and notifications only.
             </p>
           </div>
 
           <form onSubmit={handleSubmit}>
             <div className="form-group">
-              <label htmlFor="studentNumber">
+              <label htmlFor="studentId">
                 Student ID <span className="required">*</span>
               </label>
               <input
                 type="text"
-                id="studentNumber"
-                name="studentNumber"
-                value={formData.studentNumber || formData.studentId}
+                id="studentId"
+                name="studentId"
+                value={formData.studentId}
                 onChange={(e) => {
-                  handleChange(e);
-                  // Also update studentId for compatibility
+                  const formattedValue = formatStudentId(e.target.value);
                   setFormData((prev) => ({
                     ...prev,
-                    studentId: e.target.value,
+                    studentId: formattedValue,
                   }));
+                  // Clear error when user starts typing
+                  if (errors.studentId) {
+                    setErrors((prev) => ({ ...prev, studentId: "" }));
+                  }
                 }}
-                className={errors.studentNumber ? "error" : (formData.studentNumber || formData.studentId) && !errors.studentNumber ? "success" : ""}
-                placeholder="e.g., 22-13425-754"
+                onBlur={() => {
+                  // Validate on blur
+                  const studentIdValue = formData.studentId.trim();
+                  if (studentIdValue) {
+                    const perfectFormatRegex = /^\d{2}-\d{5}-\d{3}$/;
+                    if (!perfectFormatRegex.test(studentIdValue)) {
+                      setErrors((prev) => ({
+                        ...prev,
+                        studentId:
+                          "Student ID must be in format: XX-XXXXX-XXX (e.g., 12-12345-678)",
+                      }));
+                    } else {
+                      setErrors((prev) => ({ ...prev, studentId: "" }));
+                    }
+                  }
+                }}
+                className={
+                  errors.studentId
+                    ? "error"
+                    : formData.studentId && !errors.studentId
+                    ? "success"
+                    : ""
+                }
+                placeholder="e.g., 12-12345-678"
+                maxLength={12}
               />
-              {errors.studentNumber && (
-                <span className="error-message">{errors.studentNumber}</span>
+              {errors.studentId && (
+                <span className="error-message">{errors.studentId}</span>
               )}
-              {(formData.studentNumber || formData.studentId) && !errors.studentNumber && (
-                <span className="success-message">✓ Valid Student ID</span>
-              )}
+              {formData.studentId && !errors.studentId && (
+                  <span className="success-message">
+                    <span style={{ color: "#2e7d32", marginRight: "4px" }}>
+                      ✓
+                    </span>
+                    Valid Student ID
+                  </span>
+                )}
               <small
                 style={{
                   color: "#666",
@@ -608,7 +960,8 @@ const AddStudentModal = ({
                   display: "block",
                 }}
               >
-                This will be used for login to the mobile app.
+                Format: XX-XXXXX-XXX (e.g., 12-12345-678). This will be used for
+                login to the mobile app.
               </small>
             </div>
             <div className="form-row">
@@ -622,7 +975,13 @@ const AddStudentModal = ({
                   name="firstName"
                   value={formData.firstName}
                   onChange={handleChange}
-                  className={errors.firstName ? "error" : formData.firstName && !errors.firstName ? "success" : ""}
+                  className={
+                    errors.firstName
+                      ? "error"
+                      : formData.firstName && !errors.firstName
+                      ? "success"
+                      : ""
+                  }
                   placeholder="Enter first name"
                 />
                 {errors.firstName && (
@@ -643,7 +1002,13 @@ const AddStudentModal = ({
                   name="lastName"
                   value={formData.lastName}
                   onChange={handleChange}
-                  className={errors.lastName ? "error" : formData.lastName && !errors.lastName ? "success" : ""}
+                  className={
+                    errors.lastName
+                      ? "error"
+                      : formData.lastName && !errors.lastName
+                      ? "success"
+                      : ""
+                  }
                   placeholder="Enter last name"
                 />
                 {errors.lastName && (
@@ -664,8 +1029,27 @@ const AddStudentModal = ({
                 id="email"
                 name="email"
                 value={formData.email}
-                onChange={handleChange}
-                className={errors.email ? "error" : formData.email && !errors.email ? "success" : ""}
+                onChange={(e) => {
+                  const previousEmail = formData.email;
+                  const formattedEmail = formatInstitutionalEmail(
+                    e.target.value,
+                    previousEmail
+                  );
+                  setFormData((prev) => ({
+                    ...prev,
+                    email: formattedEmail,
+                  }));
+                  if (errors.email) {
+                    setErrors((prev) => ({ ...prev, email: "" }));
+                  }
+                }}
+                className={
+                  errors.email
+                    ? "error"
+                    : formData.email && !errors.email
+                    ? "success"
+                    : ""
+                }
                 placeholder="Enter institutional email (e.g., student@university.edu.ph)"
                 required
               />
@@ -673,7 +1057,9 @@ const AddStudentModal = ({
                 <span className="error-message">{errors.email}</span>
               )}
               {formData.email && !errors.email && (
-                <span className="success-message">✓ Valid institutional email</span>
+                <span className="success-message">
+                  ✓ Valid institutional email
+                </span>
               )}
             </div>
 
@@ -720,8 +1106,7 @@ const AddStudentModal = ({
                     autoComplete="off"
                   />
                   {showProgramCodeSuggestions &&
-                    filteredProgramCodes.length > 0 &&
-                    programCodeOptions.length > 0 && (
+                    filteredProgramCodes.length > 0 && (
                       <div className="program-code-suggestions-dropdown">
                         {filteredProgramCodes.map((code) => (
                           <div

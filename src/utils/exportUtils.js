@@ -130,7 +130,7 @@ export const prepareCompaniesForExport = (companies) => {
  */
 export const prepareStudentsForExport = (students) => {
   return students.map((student) => {
-    const studentIdValue = student.studentNumber || student.studentId || "";
+    const studentIdValue = student.studentId || "";
     return {
       "Student ID": studentIdValue,
       "Document ID": student.id || "",

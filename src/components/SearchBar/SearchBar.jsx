@@ -5,7 +5,7 @@ import "./SearchBar.css";
 import FilterDropdown from "../FilterDropdown/FilterDropdown";
 import { useSuggestionFields } from "../dashboardUtils";
 
-const SearchBar = ({ onSearch, onFilter, type = "company", filterValues = {}, searchInputRef = null }) => {
+const SearchBar = ({ onSearch, onFilter, type = "company", filterValues = {}, searchInputRef = null, sectionSuggestions = [] }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilter, setShowFilter] = useState(false);
   const [pendingFilterValues, setPendingFilterValues] = useState({
@@ -38,15 +38,26 @@ const SearchBar = ({ onSearch, onFilter, type = "company", filterValues = {}, se
   };
 
   const handleFilterReset = () => {
-    const reset = {
-      field: "",
-      modeOfWork: "",
-      moaExpirationStatus: "",
-      program: "",
-      hired: "",
-      locationPreference: "",
-      approvedRequirement: "",
-    };
+    const reset = type === "student" 
+      ? {
+          field: "",
+          modeOfWork: "",
+          moaExpirationStatus: "",
+          program: "",
+          section: "",
+          hired: "",
+          locationPreference: "",
+          approvedRequirement: "",
+        }
+      : {
+          field: "",
+          modeOfWork: "",
+          moaExpirationStatus: "",
+          program: "",
+          hired: "",
+          locationPreference: "",
+          approvedRequirement: "",
+        };
     setPendingFilterValues(reset);
     onFilter(reset);
     setShowFilter(false);
@@ -119,6 +130,7 @@ const SearchBar = ({ onSearch, onFilter, type = "company", filterValues = {}, se
               onApply={handleFilterApply}
               onReset={handleFilterReset}
               fieldSuggestions={fieldSuggestions}
+              sectionSuggestions={sectionSuggestions}
               type={type}
             />
           )}

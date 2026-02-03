@@ -10,16 +10,48 @@
  * <StudentRequirementModal open={open} student={student} onClose={handleClose} />
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import PropTypes from "prop-types";
-import { IoCloseOutline } from "react-icons/io5";
-import { storage, db } from "../../../firebase";
-import { ref, getDownloadURL, listAll, getMetadata } from "firebase/storage";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import {
+  IoCloseOutline,
+  IoDocumentTextOutline,
+  IoDownloadOutline,
+} from "react-icons/io5";
+import { storage, db, auth, functions } from "../../../firebase";
+import {
+  ref,
+  getDownloadURL,
+  listAll,
+  getMetadata,
+  deleteObject,
+  uploadBytes,
+} from "firebase/storage";
+import {
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  collection,
+  addDoc,
+  query,
+  where,
+  orderBy,
+  getDocs,
+  limit,
+} from "firebase/firestore";
+// import { httpsCallable } from "firebase/functions"; // Removed - PDF function disabled
 import { getAdminRole, hasAnyRole, ROLES } from "../../utils/auth";
+import { useToast } from "../../hooks/useToast";
+import ToastContainer from "../Toast/ToastContainer";
 import "./StudentRequirementModal.css";
 
-const StudentRequirementModal = ({ open, student, onClose }) => {
+const StudentRequirementModal = ({
+  open,
+  student,
+  onClose,
+  onRequirementUpdated,
+}) => {
+  const { toasts, success, error: showError, removeToast } = useToast();
   const [viewingFile, setViewingFile] = useState(null);
   const [viewingFileName, setViewingFileName] = useState("");
   const [profilePictureUrl, setProfilePictureUrl] = useState(null);
@@ -30,10 +62,73 @@ const StudentRequirementModal = ({ open, student, onClose }) => {
   const [approvalStatuses, setApprovalStatuses] = useState({}); // { requirementType: { status, reviewedBy, reviewedAt } }
   const [isLoadingApprovals, setIsLoadingApprovals] = useState(false);
   const [updatingRequirement, setUpdatingRequirement] = useState(null); // Track which requirement is being updated
-  // Denial modal state
-  const [showDenialModal, setShowDenialModal] = useState(false);
-  const [denialRequirementType, setDenialRequirementType] = useState(null);
-  const [denialReason, setDenialReason] = useState("");
+  // Rejection modal state
+  const [showRejectionModal, setShowRejectionModal] = useState(false);
+  const [rejectionRequirementType, setRejectionRequirementType] =
+    useState(null);
+  const [rejectionReason, setRejectionReason] = useState("");
+  // Approval confirmation modal state
+  const [showApprovalConfirmModal, setShowApprovalConfirmModal] =
+    useState(false);
+  const [approvalRequirementType, setApprovalRequirementType] = useState(null);
+  const [creatorInfo, setCreatorInfo] = useState(null); // { username, role, createdAt }
+  const [currentSignature, setCurrentSignature] = useState(null); // Current signature for preview
+  const [popupMessage, setPopupMessage] = useState(null); // { type: 'success' | 'error', message: string }
+
+  // Fetch creator information from student document or activity logs
+  useEffect(() => {
+    const fetchCreatorInfo = async () => {
+      if (!student?.id) {
+        setCreatorInfo(null);
+        return;
+      }
+
+      try {
+        // First, check if student has createdBy field (preferred method)
+        if (student.createdBy && typeof student.createdBy === "object") {
+          setCreatorInfo({
+            username: student.createdBy.username || "Unknown",
+            role: student.createdBy.role || "Unknown",
+            createdAt: student.createdAt || null,
+          });
+          return;
+        }
+
+        // Fallback: Query activity logs for the first "create_student" action for this student
+        const activityLogsRef = collection(db, "activity_logs");
+        const q = query(
+          activityLogsRef,
+          where("action", "==", "create_student"),
+          where("entityId", "==", student.id),
+          orderBy("timestamp", "asc"),
+          limit(1)
+        );
+
+        const querySnapshot = await getDocs(q);
+        if (!querySnapshot.empty) {
+          const activityDoc = querySnapshot.docs[0];
+          const activityData = activityDoc.data();
+          setCreatorInfo({
+            username: activityData.adminUsername || "Unknown",
+            role: activityData.adminRole || "Unknown",
+            createdAt:
+              activityData.createdAt ||
+              activityData.timestamp?.toDate?.()?.toISOString() ||
+              null,
+          });
+        } else {
+          setCreatorInfo(null);
+        }
+      } catch (error) {
+        console.error("Error fetching creator info:", error);
+        setCreatorInfo(null);
+      }
+    };
+
+    if (open && student?.id) {
+      fetchCreatorInfo();
+    }
+  }, [open, student?.id, student?.createdBy, student?.createdAt]);
 
   // Check if current user can approve requirements (adviser or coordinator)
   const canApproveRequirements = () => {
@@ -41,7 +136,7 @@ const StudentRequirementModal = ({ open, student, onClose }) => {
     return hasAnyRole([ROLES.ADVISER, ROLES.COORDINATOR, ROLES.SUPER_ADMIN]);
   };
 
-  // Fetch files from Storage when modal opens
+  // Fetch files from Storage when modal opens - OPTIMIZED for speed
   useEffect(() => {
     const fetchStorageFiles = async () => {
       if (!open || !student || !student.id) {
@@ -51,101 +146,77 @@ const StudentRequirementModal = ({ open, student, onClose }) => {
 
       setIsLoadingStorageFiles(true);
       try {
-        // List all folders in the user's requirements folder
         // Path structure: requirements/{userId}/{folderName}/{fileName}
         const storagePath = `requirements/${student.id}`;
-        console.log("📂 Fetching files from Storage path:", storagePath);
         const requirementsRef = ref(storage, storagePath);
         const folderList = await listAll(requirementsRef);
 
-        console.log(
-          `📁 Found ${folderList.prefixes.length} folder(s) in Storage`
-        );
-
-        // Map folder names to requirement types
+        // Map folder names to requirement types (STRICT MAPPING - no ambiguous matches)
         const folderMapping = {
-          "moa-memorandum-of-agreement": "MOA (Memorandum of Agreement)",
-          "parent-guardian-consent-form": "Parent/Guardian Consent Form",
+          "proof-of-enrollment-com": "Proof of Enrollment (COM)",
+          "parent-guardian-consent-form": "Notarized Parental Consent",
           "medical-certificate": "Medical Certificate",
-          "resume-cv": "Resume",
-          "police-clearance": "Clearance",
-          "academic-records": "Academic Records",
-          "cover-letter": "Cover Letter",
-          "insurance-certificate": "Insurance Certificate",
+          "psychological-test-certification":
+            "Psychological Test Certification",
+          "proof-of-insurance": "Proof of Insurance",
+          "ojt-orientation": "OJT Orientation",
+          "moa-memorandum-of-agreement": "Memorandum of Agreement (MOA)",
+          "resume-cv": "Curriculum Vitae",
+          "curriculum-vitae": "Curriculum Vitae",
+          resume: "Curriculum Vitae",
+          cv: "Curriculum Vitae",
+          // Legacy mappings for backward compatibility (but these should not conflict)
+          "insurance-certificate": "Proof of Insurance",
+          // Explicitly map any variations to prevent confusion
+          enrollment: "Proof of Enrollment (COM)",
+          com: "Proof of Enrollment (COM)",
         };
 
-        // Fetch files from each folder
-        const allFiles = [];
-        for (const folderPrefix of folderList.prefixes) {
+        // OPTIMIZATION: Fetch all folders in PARALLEL instead of sequentially
+        const folderPromises = folderList.prefixes.map(async (folderPrefix) => {
           const folderName = folderPrefix.name;
-          console.log(`📂 Checking folder: ${folderName}`);
-
           try {
             const folderFiles = await listAll(folderPrefix);
-            console.log(
-              `  📄 Found ${folderFiles.items.length} file(s) in ${folderName}`
-            );
 
-            // Get download URLs and metadata for each file in this folder
+            // Get download URLs for all files in this folder in parallel
             const filesWithUrls = await Promise.all(
               folderFiles.items.map(async (itemRef) => {
                 try {
-                  const [downloadURL, metadata] = await Promise.all([
-                    getDownloadURL(itemRef),
-                    getMetadata(itemRef),
-                  ]);
+                  // Only fetch download URL first (faster), skip metadata initially
+                  const downloadURL = await getDownloadURL(itemRef);
 
-                  const fileData = {
+                  return {
                     name: itemRef.name,
                     fullPath: itemRef.fullPath,
                     folderName: folderName,
                     requirementType: folderMapping[folderName] || folderName,
                     downloadURL,
-                    size: metadata.size,
-                    contentType: metadata.contentType,
-                    timeCreated: metadata.timeCreated,
-                    updated: metadata.updated,
+                    // Metadata will be fetched lazily when needed
+                    size: null,
+                    contentType:
+                      itemRef.name.split(".").pop()?.toLowerCase() || "unknown",
+                    timeCreated: null,
+                    updated: null,
                   };
-
-                  console.log("✅ File data:", {
-                    name: fileData.name,
-                    folder: fileData.folderName,
-                    requirementType: fileData.requirementType,
-                    size: `${(fileData.size / 1024).toFixed(2)} KB`,
-                    path: fileData.fullPath,
-                  });
-
-                  return fileData;
                 } catch (error) {
-                  console.warn(
-                    `❌ Failed to get URL for ${itemRef.name}:`,
-                    error
-                  );
                   return null;
                 }
               })
             );
 
-            // Filter out null values and add to allFiles
-            const validFiles = filesWithUrls.filter((file) => file !== null);
-            allFiles.push(...validFiles);
+            return filesWithUrls.filter((file) => file !== null);
           } catch (error) {
-            console.warn(
-              `❌ Error fetching files from folder ${folderName}:`,
-              error
-            );
+            return [];
           }
-        }
+        });
 
-        console.log(
-          `✅ Successfully loaded ${allFiles.length} file(s) from Storage`
-        );
-        console.log("📋 All files data:", allFiles);
+        // Wait for all folders to be processed in parallel
+        const allFolderResults = await Promise.all(folderPromises);
+        const allFiles = allFolderResults.flat();
+
         setStorageFiles(allFiles);
       } catch (error) {
-        // If folder doesn't exist or no files, that's okay
         if (error.code === "storage/object-not-found") {
-          console.log("No requirements folder found in Storage");
           setStorageFiles([]);
         } else {
           console.error("Error fetching Storage files:", error);
@@ -213,7 +284,17 @@ const StudentRequirementModal = ({ open, student, onClose }) => {
           );
           return;
         } catch (e) {
-          // Silently continue if file doesn't exist
+          // Silently continue if file doesn't exist (404 is expected)
+          // Only log if it's not a "not found" error
+          if (
+            e.code !== "storage/object-not-found" &&
+            e.code !== "storage/unauthorized"
+          ) {
+            console.warn(
+              `Error checking profile picture ${fileName}:`,
+              e.message
+            );
+          }
           continue;
         }
       }
@@ -244,7 +325,7 @@ const StudentRequirementModal = ({ open, student, onClose }) => {
       try {
         const approvalRef = doc(db, "requirement_approvals", student.id);
         const approvalSnap = await getDoc(approvalRef);
-        
+
         if (approvalSnap.exists()) {
           setApprovalStatuses(approvalSnap.data());
         } else {
@@ -260,6 +341,40 @@ const StudentRequirementModal = ({ open, student, onClose }) => {
 
     fetchApprovalStatuses();
   }, [open, student?.id]);
+
+  // Fetch current signature for preview
+  useEffect(() => {
+    const fetchCurrentSignature = async () => {
+      if (!open || !auth.currentUser) {
+        setCurrentSignature(null);
+        return;
+      }
+
+      try {
+        const signatureRef = doc(
+          db,
+          "teacher_signatures",
+          auth.currentUser.uid
+        );
+        const signatureSnap = await getDoc(signatureRef);
+
+        if (signatureSnap.exists()) {
+          const data = signatureSnap.data();
+          setCurrentSignature({
+            downloadUrl: data.downloadUrl,
+            uploadedAt: data.uploadedAt,
+          });
+        } else {
+          setCurrentSignature(null);
+        }
+      } catch (error) {
+        console.error("Error fetching signature:", error);
+        setCurrentSignature(null);
+      }
+    };
+
+    fetchCurrentSignature();
+  }, [open]);
 
   if (!open || !student) return null;
 
@@ -295,28 +410,38 @@ const StudentRequirementModal = ({ open, student, onClose }) => {
 
     // Check for common requirement types
     if (nameLower.includes("moa") || nameLower.includes("memorandum")) {
-      return "MOA (Memorandum of Agreement)";
+      return "Memorandum of Agreement (MOA)";
     }
-    if (nameLower.includes("resume") || nameLower.includes("cv")) {
-      return "Resume";
+    if (
+      nameLower.includes("resume") ||
+      nameLower.includes("cv") ||
+      nameLower.includes("curriculum vitae")
+    ) {
+      return "Curriculum Vitae";
     }
-    if (nameLower.includes("clearance") || nameLower.includes("barangay")) {
-      return "Clearance";
+    if (nameLower.includes("enrollment") || nameLower.includes("com")) {
+      return "Proof of Enrollment (COM)";
     }
-    if (nameLower.includes("waiver") || nameLower.includes("consent")) {
-      return "Waiver";
+    if (
+      nameLower.includes("parent") ||
+      nameLower.includes("guardian") ||
+      nameLower.includes("consent")
+    ) {
+      return "Notarized Parental Consent";
     }
     if (nameLower.includes("medical") || nameLower.includes("health")) {
       return "Medical Certificate";
     }
-    if (nameLower.includes("parent") || nameLower.includes("guardian")) {
-      return "Parent/Guardian Consent";
+    if (nameLower.includes("psychological") || nameLower.includes("psych")) {
+      return "Psychological Test Certification";
     }
-    if (nameLower.includes("application") || nameLower.includes("form")) {
-      return "Application Form";
+    // Only detect as Proof of Insurance if BOTH "proof" AND "insurance" are present
+    // This prevents company insurance documents from being misidentified
+    if (nameLower.includes("proof") && nameLower.includes("insurance")) {
+      return "Proof of Insurance";
     }
-    if (nameLower.includes("transcript") || nameLower.includes("grades")) {
-      return "Transcript of Records";
+    if (nameLower.includes("ojt") && nameLower.includes("orientation")) {
+      return "OJT Orientation";
     }
     if (nameLower.includes("certificate") || nameLower.includes("cert")) {
       return "Certificate";
@@ -394,74 +519,525 @@ const StudentRequirementModal = ({ open, student, onClose }) => {
     }
   };
 
-  // Handle accepting a requirement
-  const handleAcceptRequirement = async (requirementType) => {
+  // Handle opening approval confirmation modal
+  const handleApproveRequirementClick = (requirementType) => {
     if (!student?.id || !canApproveRequirements()) return;
+    setApprovalRequirementType(requirementType);
+    setShowApprovalConfirmModal(true);
+  };
 
-    setUpdatingRequirement(requirementType);
+  // Handle closing approval confirmation modal
+  const handleCloseApprovalConfirmModal = () => {
+    setShowApprovalConfirmModal(false);
+    setApprovalRequirementType(null);
+  };
+
+  // Handle approving a requirement (called after confirmation)
+  const handleAcceptRequirement = async () => {
+    if (!student?.id || !approvalRequirementType || !canApproveRequirements())
+      return;
+
+    // Verify user is authenticated
+    if (!auth.currentUser) {
+      showError("You must be logged in to approve requirements.");
+      handleCloseApprovalConfirmModal();
+      return;
+    }
+
+    setShowApprovalConfirmModal(false);
+    setUpdatingRequirement(approvalRequirementType);
+    const requirementType = approvalRequirementType;
+    setApprovalRequirementType(null);
     try {
+      // Save approval without PDF generation
+      const approvalDate = new Date().toISOString();
+
+      // Save approval without signed PDF URL
       const approvalRef = doc(db, "requirement_approvals", student.id);
-      const currentData = approvalStatuses || {};
-      
+
+      // Get current document data if it exists
+      let currentData = approvalStatuses || {};
+      let documentExists = false;
+
+      try {
+        const currentDoc = await getDoc(approvalRef);
+        if (currentDoc.exists()) {
+          currentData = currentDoc.data();
+          documentExists = true;
+        }
+      } catch (getError) {
+        // If document doesn't exist, start with empty object
+        console.log("Document doesn't exist yet, will create new one");
+      }
+
       const updateData = {
         ...currentData,
         [requirementType]: {
           status: "accepted",
           reviewedBy: getAdminRole(),
-          reviewedAt: new Date().toISOString(),
+          reviewedAt: approvalDate,
+          // signedPdfUrl and signedPdfPath removed - PDF function disabled
         },
       };
 
-      await setDoc(approvalRef, updateData, { merge: true });
+      // Use setDoc with merge to create or update
+      // This works for both creating new documents and updating existing ones
+      if (documentExists) {
+        // Document exists, use updateDoc for better permission handling
+        await updateDoc(approvalRef, {
+          [requirementType]: {
+            status: "accepted",
+            reviewedBy: getAdminRole(),
+            reviewedAt: approvalDate,
+          },
+        });
+        // Update local state with merged data
+        setApprovalStatuses(updateData);
+      } else {
+        // Document doesn't exist, use setDoc to create
+        await setDoc(approvalRef, updateData);
+        setApprovalStatuses(updateData);
+      }
+
       setApprovalStatuses(updateData);
+
+      // Send notification to student
+      const studentName =
+        `${student.firstName || ""} ${student.lastName || ""}`.trim() ||
+        "Student";
+      const notificationMessage = `${studentName}, your ${requirementType} has been approved.`;
+
+      try {
+        const notificationData = {
+          message: notificationMessage,
+          timestamp: new Date().toISOString(),
+          read: false,
+          userId: student.id || null, // Student's ID so they can see the notification
+          targetType: "student",
+          targetStudentId: student.id,
+          targetStudentName: studentName,
+          sentBy: auth.currentUser?.uid || null, // Track who sent it (admin)
+        };
+
+        await addDoc(collection(db, "notifications"), notificationData);
+      } catch (notifError) {
+        console.error("Error sending notification:", notifError);
+        // Don't fail the approval if notification fails
+      }
+
+      // Show success toast
+      success(
+        `${requirementType} approved successfully! ${studentName} has been notified.`
+      );
+
+      // Show popup message in modal
+      setPopupMessage({
+        type: "success",
+        message: `${requirementType} approved successfully! ${studentName} has been notified.`,
+      });
+
+      // Auto-hide popup after 5 seconds
+      setTimeout(() => {
+        setPopupMessage(null);
+      }, 5000);
+
+      // Notify parent component that requirement was updated
+      if (onRequirementUpdated) {
+        onRequirementUpdated(student.id, requirementType, "accepted");
+      }
     } catch (error) {
-      console.error("Error accepting requirement:", error);
-      alert("Failed to accept requirement. Please try again.");
+      console.error("Error approving requirement:", error);
+      console.error("Error details:", {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        stack: error.stack,
+        studentId: student?.id,
+        requirementType: requirementType,
+        currentUser: auth.currentUser?.uid,
+        isAuthenticated: !!auth.currentUser,
+      });
+
+      // Show error toast with more helpful message
+      const errorMessage =
+        error.code === "permission-denied"
+          ? "Permission denied. Please make sure you are logged in and have the correct permissions. If the issue persists, contact your administrator."
+          : `Failed to approve requirement: ${
+              error.message || error.code || "Please try again."
+            }`;
+
+      showError(errorMessage);
+
+      // Show popup message in modal
+      setPopupMessage({
+        type: "error",
+        message: errorMessage,
+      });
+
+      // Auto-hide popup after 5 seconds
+      setTimeout(() => {
+        setPopupMessage(null);
+      }, 5000);
     } finally {
       setUpdatingRequirement(null);
     }
   };
 
-  // Handle opening denial modal
-  const handleDenyRequirement = (requirementType) => {
+  // Handle opening rejection modal
+  const handleRejectRequirement = (requirementType) => {
     if (!student?.id || !canApproveRequirements()) return;
-    setDenialRequirementType(requirementType);
-    setDenialReason("");
-    setShowDenialModal(true);
+    setRejectionRequirementType(requirementType);
+    setRejectionReason("");
+    setShowRejectionModal(true);
   };
 
-  // Handle closing denial modal
-  const handleCloseDenialModal = () => {
-    setShowDenialModal(false);
-    setDenialRequirementType(null);
-    setDenialReason("");
+  // Handle closing rejection modal
+  const handleCloseRejectionModal = () => {
+    setShowRejectionModal(false);
+    setRejectionRequirementType(null);
+    setRejectionReason("");
   };
 
-  // Handle submitting denial
-  const handleSubmitDenial = async () => {
-    if (!student?.id || !denialRequirementType || !canApproveRequirements()) return;
+  // Handle submitting rejection
+  const handleSubmitRejection = async () => {
+    if (!student?.id || !rejectionRequirementType || !canApproveRequirements())
+      return;
 
-    setUpdatingRequirement(denialRequirementType);
+    // Verify user is authenticated
+    if (!auth.currentUser) {
+      showError("You must be logged in to reject requirements.");
+      return;
+    }
+
+    setUpdatingRequirement(rejectionRequirementType);
     try {
       const approvalRef = doc(db, "requirement_approvals", student.id);
-      const currentData = approvalStatuses || {};
-      
+
+      // Get current document data if it exists
+      let currentData = approvalStatuses || {};
+      let documentExists = false;
+
+      try {
+        const currentDoc = await getDoc(approvalRef);
+        if (currentDoc.exists()) {
+          currentData = currentDoc.data();
+          documentExists = true;
+        }
+      } catch (getError) {
+        // If document doesn't exist, start with empty object
+        console.log("Document doesn't exist yet, will create new one");
+      }
+
       const updateData = {
         ...currentData,
-        [denialRequirementType]: {
+        [rejectionRequirementType]: {
           status: "denied",
           reviewedBy: getAdminRole(),
           reviewedAt: new Date().toISOString(),
-          reason: denialReason.trim() || "",
+          reason: rejectionReason.trim() || "",
         },
       };
 
-      await setDoc(approvalRef, updateData, { merge: true });
-      setApprovalStatuses(updateData);
-      handleCloseDenialModal();
+      // Use setDoc with merge to create or update
+      // This works for both creating new documents and updating existing ones
+      if (documentExists) {
+        // Document exists, use updateDoc for better permission handling
+        await updateDoc(approvalRef, {
+          [rejectionRequirementType]: {
+            status: "denied",
+            reviewedBy: getAdminRole(),
+            reviewedAt: new Date().toISOString(),
+            reason: rejectionReason.trim() || "",
+          },
+        });
+        // Update local state with merged data
+        setApprovalStatuses(updateData);
+      } else {
+        // Document doesn't exist, use setDoc to create
+        await setDoc(approvalRef, updateData);
+        setApprovalStatuses(updateData);
+      }
+
+      // Delete files from Firebase Storage for this requirement
+      try {
+        // Map requirement type to folder name
+        const requirementToFolderMap = {
+          "Proof of Enrollment (COM)": "proof-of-enrollment-com",
+          "Notarized Parental Consent": "parent-guardian-consent-form",
+          "Medical Certificate": "medical-certificate",
+          "Psychological Test Certification":
+            "psychological-test-certification",
+          "Proof of Insurance": "proof-of-insurance",
+          "Memorandum of Agreement (MOA)": "moa-memorandum-of-agreement",
+          "Curriculum Vitae": "resume-cv",
+          Resume: "resume-cv",
+          CV: "resume-cv",
+          "Resume/CV": "resume-cv",
+        };
+
+        // Get folder name for this requirement
+        let folderName = requirementToFolderMap[rejectionRequirementType];
+
+        // If no exact match, try to find by keywords
+        if (!folderName) {
+          const reqLower = rejectionRequirementType.toLowerCase();
+          if (reqLower.includes("enrollment") || reqLower.includes("com")) {
+            folderName = "proof-of-enrollment-com";
+          } else if (
+            reqLower.includes("parent") ||
+            reqLower.includes("consent")
+          ) {
+            folderName = "parent-guardian-consent-form";
+          } else if (reqLower.includes("medical")) {
+            folderName = "medical-certificate";
+          } else if (reqLower.includes("psychological")) {
+            folderName = "psychological-test-certification";
+          } else if (reqLower.includes("insurance")) {
+            folderName = "proof-of-insurance";
+          } else if (
+            reqLower.includes("moa") ||
+            reqLower.includes("memorandum") ||
+            reqLower.includes("agreement")
+          ) {
+            folderName = "moa-memorandum-of-agreement";
+          } else if (
+            reqLower.includes("resume") ||
+            reqLower.includes("cv") ||
+            reqLower.includes("curriculum") ||
+            reqLower.includes("vitae")
+          ) {
+            folderName = "resume-cv";
+          }
+        }
+
+        if (folderName) {
+          const storagePath = `requirements/${student.id}/${folderName}`;
+          const folderRef = ref(storage, storagePath);
+
+          try {
+            // List all files in the folder
+            const folderFiles = await listAll(folderRef);
+
+            // Archive and delete each file
+            const archiveAndDeletePromises = folderFiles.items.map(
+              async (fileRef) => {
+                try {
+                  // Get file metadata and download URL before deleting
+                  const [downloadURL, metadata] = await Promise.all([
+                    getDownloadURL(fileRef),
+                    getMetadata(fileRef),
+                  ]);
+
+                  // Download the file
+                  const response = await fetch(downloadURL);
+                  const blob = await response.blob();
+
+                  // Archive path: archive/rejected_requirements/{studentId}/{requirementType}/{timestamp}-{filename}
+                  const timestamp = Date.now();
+                  const safeRequirementType = rejectionRequirementType.replace(
+                    /[^a-zA-Z0-9]/g,
+                    "_"
+                  );
+                  const archivePath = `archive/rejected_requirements/${student.id}/${safeRequirementType}/${timestamp}-${fileRef.name}`;
+                  const archiveRef = ref(storage, archivePath);
+
+                  // Upload to archive location
+                  await uploadBytes(archiveRef, blob, {
+                    contentType:
+                      metadata.contentType || "application/octet-stream",
+                  });
+
+                  const archiveURL = await getDownloadURL(archiveRef);
+
+                  // Save archive metadata to Firestore
+                  await addDoc(collection(db, "rejected_requirements"), {
+                    studentId: student.id,
+                    studentName:
+                      `${student.firstName || ""} ${
+                        student.lastName || ""
+                      }`.trim() || "Unknown",
+                    requirementType: rejectionRequirementType,
+                    fileName: fileRef.name,
+                    originalPath: fileRef.fullPath,
+                    archivePath: archivePath,
+                    archiveURL: archiveURL,
+                    fileSize: metadata.size,
+                    contentType: metadata.contentType,
+                    rejectedAt: new Date().toISOString(),
+                    rejectedBy: getAdminRole(),
+                    rejectionReason: rejectionReason.trim() || "",
+                    originalUploadedAt: metadata.timeCreated || null,
+                  });
+
+                  console.log(
+                    `✅ Archived file: ${fileRef.name} to ${archivePath}`
+                  );
+
+                  // Now delete the original file
+                  await deleteObject(fileRef);
+                  console.log(`✅ Deleted file: ${fileRef.name}`);
+                } catch (error) {
+                  console.warn(
+                    `⚠️ Failed to archive/delete file ${fileRef.name}:`,
+                    error
+                  );
+                  // Try to delete anyway even if archive failed
+                  try {
+                    await deleteObject(fileRef);
+                  } catch (deleteError) {
+                    console.warn(
+                      `⚠️ Failed to delete file ${fileRef.name}:`,
+                      deleteError
+                    );
+                  }
+                }
+              }
+            );
+
+            await Promise.all(archiveAndDeletePromises);
+            console.log(
+              `✅ Archived and deleted ${folderFiles.items.length} file(s) from ${folderName} folder`
+            );
+
+            // Refresh storage files list to update UI
+            const storagePathRoot = `requirements/${student.id}`;
+            const requirementsRef = ref(storage, storagePathRoot);
+            const folderList = await listAll(requirementsRef);
+
+            const folderMapping = {
+              "proof-of-enrollment-com": "Proof of Enrollment (COM)",
+              "parent-guardian-consent-form": "Notarized Parental Consent",
+              "medical-certificate": "Medical Certificate",
+              "psychological-test-certification":
+                "Psychological Test Certification",
+              "proof-of-insurance": "Proof of Insurance",
+              "ojt-orientation": "OJT Orientation",
+              "moa-memorandum-of-agreement": "Memorandum of Agreement (MOA)",
+              "resume-cv": "Curriculum Vitae",
+              "curriculum-vitae": "Curriculum Vitae",
+              resume: "Curriculum Vitae",
+              cv: "Curriculum Vitae",
+              "insurance-certificate": "Proof of Insurance",
+            };
+
+            const allFiles = [];
+            for (const folderPrefix of folderList.prefixes) {
+              const folderNameItem = folderPrefix.name;
+              try {
+                const folderFiles = await listAll(folderPrefix);
+                const filesWithUrls = await Promise.all(
+                  folderFiles.items.map(async (itemRef) => {
+                    try {
+                      const [downloadURL, metadata] = await Promise.all([
+                        getDownloadURL(itemRef),
+                        getMetadata(itemRef),
+                      ]);
+                      return {
+                        name: itemRef.name,
+                        fullPath: itemRef.fullPath,
+                        folderName: folderNameItem,
+                        requirementType:
+                          folderMapping[folderNameItem] || folderNameItem,
+                        downloadURL,
+                        size: metadata.size,
+                        contentType: metadata.contentType,
+                        timeCreated: metadata.timeCreated,
+                        updated: metadata.updated,
+                      };
+                    } catch (error) {
+                      return null;
+                    }
+                  })
+                );
+                allFiles.push(...filesWithUrls.filter((file) => file !== null));
+              } catch (error) {
+                console.warn(
+                  `Error fetching files from ${folderNameItem}:`,
+                  error
+                );
+              }
+            }
+            setStorageFiles(allFiles);
+          } catch (listError) {
+            if (listError.code !== "storage/object-not-found") {
+              console.warn(
+                `⚠️ Error listing files in ${folderName} folder:`,
+                listError
+              );
+            }
+          }
+        }
+      } catch (storageError) {
+        console.warn(
+          "⚠️ Error deleting files from Storage (non-critical):",
+          storageError
+        );
+      }
+
+      // Notify parent component that requirement was updated
+      if (onRequirementUpdated) {
+        onRequirementUpdated(student.id, rejectionRequirementType, "denied");
+      }
+
+      // Send notification to student
+      const studentName =
+        `${student.firstName || ""} ${student.lastName || ""}`.trim() ||
+        "Student";
+      const reasonText = rejectionReason.trim()
+        ? ` Reason: ${rejectionReason.trim()}`
+        : "";
+      const notificationMessage = `${studentName}, your ${rejectionRequirementType} has been rejected.${reasonText}`;
+
+      try {
+        const notificationData = {
+          message: notificationMessage,
+          timestamp: new Date().toISOString(),
+          read: false,
+          userId: student.id || null, // Student's ID so they can see the notification
+          targetType: "student",
+          targetStudentId: student.id,
+          targetStudentName: studentName,
+          sentBy: auth.currentUser?.uid || null, // Track who sent it (admin)
+        };
+
+        await addDoc(collection(db, "notifications"), notificationData);
+      } catch (notifError) {
+        console.error("Error sending notification:", notifError);
+        // Don't fail the rejection if notification fails
+      }
+
+      handleCloseRejectionModal();
+
+      // Show success toast
+      success(
+        `${rejectionRequirementType} rejected. ${studentName} has been notified.`
+      );
+
+      // Show popup message in modal
+      setPopupMessage({
+        type: "success",
+        message: `${rejectionRequirementType} rejected. ${studentName} has been notified.`,
+      });
+
+      // Auto-hide popup after 5 seconds
+      setTimeout(() => {
+        setPopupMessage(null);
+      }, 5000);
     } catch (error) {
-      console.error("Error denying requirement:", error);
-      alert("Failed to deny requirement. Please try again.");
+      console.error("Error rejecting requirement:", error);
+      const errorMessage = "Failed to reject requirement. Please try again.";
+      showError(errorMessage);
+
+      // Show popup message in modal
+      setPopupMessage({
+        type: "error",
+        message: errorMessage,
+      });
+
+      // Auto-hide popup after 5 seconds
+      setTimeout(() => {
+        setPopupMessage(null);
+      }, 5000);
     } finally {
       setUpdatingRequirement(null);
     }
@@ -473,474 +1049,898 @@ const StudentRequirementModal = ({ open, student, onClose }) => {
   };
 
   return (
-    <div className="student-requirement-modal-backdrop" onClick={onClose}>
-      <div
-        className="student-requirement-modal"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="student-requirement-modal-header">
-          <h2>Student Files</h2>
-          <button
-            className="close-btn"
-            onClick={onClose}
-            aria-label="Close modal"
-          >
-            <IoCloseOutline />
-          </button>
-        </div>
-
-        <div className="student-requirement-modal-content">
-          <div className="student-info-section">
-            <div className="student-profile-header">
-              {profilePictureUrl ? (
-                <img
-                  src={profilePictureUrl}
-                  alt={`${student.firstName} ${student.lastName}`}
-                  className="student-modal-profile-picture clickable"
-                  onClick={() => setShowProfileModal(true)}
-                  onError={() => setProfilePictureError(true)}
-                  title="Click to view full size"
-                />
-              ) : (
-                <div
-                  className="student-modal-profile-picture-placeholder"
-                  title="No profile picture"
-                >
-                  {student.firstName?.[0]?.toUpperCase() || "?"}
-                  {student.lastName?.[0]?.toUpperCase() || ""}
-                </div>
-              )}
-              <div className="student-info-text">
-                <h3>
-                  {student.firstName} {student.lastName}
-                </h3>
-                <p className="student-email">{student.email || "N/A"}</p>
-                <div className="student-additional-info">
-                  {student.studentNumber || student.studentId ? (
-                    <p className="student-id">
-                      <strong>Student ID:</strong> {student.studentNumber || student.studentId}
-                    </p>
-                  ) : null}
-                  {student.section ? (
-                    <p className="student-section">
-                      <strong>Section:</strong> {student.section}
-                    </p>
-                  ) : null}
-                </div>
-              </div>
+    <>
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+      <div className="student-requirement-modal-backdrop" onClick={onClose}>
+        <div
+          className="student-requirement-modal"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="student-requirement-modal-header">
+            <div className="modal-header-content">
+              <h2>Student Files</h2>
+              <p className="modal-subtitle">
+                View and manage student documents
+              </p>
             </div>
-          </div>
-
-          {/* Profile Picture Modal */}
-          {showProfileModal && profilePictureUrl && (
-            <div
-              className="profile-picture-modal-backdrop"
-              onClick={() => setShowProfileModal(false)}
+            <button
+              className="close-btn"
+              onClick={onClose}
+              aria-label="Close modal"
             >
-              <div
-                className="profile-picture-modal-content"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <button
-                  className="profile-picture-modal-close"
-                  onClick={() => setShowProfileModal(false)}
-                  aria-label="Close"
-                >
-                  ×
-                </button>
-                <img
-                  src={profilePictureUrl}
-                  alt={`${student.firstName} ${student.lastName}`}
-                  className="profile-picture-modal-image"
-                />
-                <p className="profile-picture-modal-name">
-                  {student.firstName} {student.lastName}
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* Required Documents Section */}
-          <div className="requirement-section">
-            <h3>Required Documents</h3>
-            {isLoadingStorageFiles ? (
-              <div className="loading-requirements">
-                <p>Loading files from Storage...</p>
-              </div>
-            ) : (
-              <div className="document-list">
-                {[
-                  {
-                    type: "MOA (Memorandum of Agreement)",
-                    description:
-                      "Signed agreement between your school and the company.",
-                    keywords: ["moa", "memorandum", "agreement"],
-                    folderName: "moa-memorandum-of-agreement",
-                  },
-                  {
-                    type: "Parent/Guardian Consent Form",
-                    description: "Signed consent form from parent or guardian.",
-                    keywords: ["parent", "guardian", "consent"],
-                    folderName: "parent-guardian-consent-form",
-                  },
-                  {
-                    type: "Medical Certificate",
-                    description: "Medical clearance from a licensed physician.",
-                    keywords: ["medical", "health", "clearance", "certificate"],
-                    folderName: "medical-certificate",
-                  },
-                  {
-                    type: "Resume",
-                    description: "Updated resume or curriculum vitae.",
-                    keywords: ["resume", "cv", "curriculum"],
-                    folderName: "resume-cv",
-                  },
-                  {
-                    type: "Clearance",
-                    description: "Barangay or community clearance certificate.",
-                    keywords: ["clearance", "barangay"],
-                    folderName: "police-clearance",
-                  },
-                  {
-                    type: "Academic Records",
-                    description: "Transcript of records or academic documents.",
-                    keywords: ["academic", "transcript", "records", "grades"],
-                    folderName: "academic-records",
-                  },
-                  {
-                    type: "Cover Letter",
-                    description: "Cover letter for internship application.",
-                    keywords: ["cover", "letter"],
-                    folderName: "cover-letter",
-                  },
-                  {
-                    type: "Insurance Certificate",
-                    description: "Insurance certificate or proof of coverage.",
-                    keywords: ["insurance", "certificate"],
-                    folderName: "insurance-certificate",
-                  },
-                ].map((requirement, index) => {
-                  // Find matching file from Storage by folder name first
-                  let matchingFile = storageFiles.find(
-                    (file) => file.folderName === requirement.folderName
-                  );
-
-                  // If no match by folder name, try requirementType matching
-                  if (!matchingFile) {
-                    matchingFile = storageFiles.find(
-                      (file) => file.requirementType === requirement.type
-                    );
-                  }
-
-                  // If still no match, try keyword matching as fallback
-                  if (!matchingFile) {
-                    matchingFile = storageFiles.find((file) => {
-                      const fileName = file.name.toLowerCase();
-                      const folderName = file.folderName?.toLowerCase() || "";
-                      const matches =
-                        requirement.keywords.some((keyword) =>
-                          fileName.includes(keyword.toLowerCase())
-                        ) ||
-                        requirement.keywords.some((keyword) =>
-                          folderName.includes(keyword.toLowerCase())
-                        );
-                      if (matches) {
-                        console.log(
-                          `✅ Matched "${file.name}" (from ${file.folderName}) to "${requirement.type}"`
-                        );
-                      }
-                      return matches;
-                    });
-                  } else {
-                    console.log(
-                      `✅ Matched file from folder "${matchingFile.folderName}" to "${requirement.type}"`
-                    );
-                  }
-
-                  // Debug: Log if no match found
-                  if (!matchingFile && storageFiles.length > 0) {
-                    console.log(
-                      `❌ No match for "${requirement.type}". Available files:`,
-                      storageFiles.map((f) => ({
-                        name: f.name,
-                        folder: f.folderName,
-                        type: f.requirementType,
-                      }))
-                    );
-                  }
-
-                  const approvalStatus = getApprovalStatus(requirement.type);
-                  const isUpdating = updatingRequirement === requirement.type;
-                  
-                  // Determine display status
-                  let status = matchingFile ? "Submitted" : "Pending";
-                  let statusColor = matchingFile ? "#43a047" : "#fb8c00";
-                  
-                  if (approvalStatus) {
-                    if (approvalStatus.status === "accepted") {
-                      status = "Accepted";
-                      statusColor = "#2e7d32";
-                    } else if (approvalStatus.status === "denied") {
-                      status = "Denied";
-                      statusColor = "#d32f2f";
-                    }
-                  }
-
-                  return (
-                    <div key={index} className="document-item">
-                      <div className="document-info">
-                        <div className="document-header">
-                          <span className="document-name">
-                            {requirement.type}
-                          </span>
-                          <span
-                            className="document-status"
-                            style={{
-                              color: statusColor,
-                              backgroundColor: "#f5f5f5",
-                            }}
-                          >
-                            {status}
-                          </span>
-                        </div>
-                        <p className="document-description">
-                          {requirement.description}
-                        </p>
-                        {approvalStatus?.reason && (
-                          <p className="denial-reason" style={{ 
-                            color: "#d32f2f", 
-                            fontSize: "0.85rem", 
-                            marginTop: "0.5rem",
-                            fontStyle: "italic"
-                          }}>
-                            Denial reason: {approvalStatus.reason}
-                          </p>
-                        )}
-                        {approvalStatus?.reviewedBy && (
-                          <p className="review-info" style={{ 
-                            color: "#666", 
-                            fontSize: "0.8rem", 
-                            marginTop: "0.25rem"
-                          }}>
-                            Reviewed by {approvalStatus.reviewedBy} on{" "}
-                            {new Date(approvalStatus.reviewedAt).toLocaleDateString()}
-                          </p>
-                        )}
-                      </div>
-                      {matchingFile ? (
-                        <div className="document-files">
-                          <button
-                            onClick={(e) =>
-                              handleFileClick(
-                                e,
-                                matchingFile.downloadURL,
-                                matchingFile.name
-                              )
-                            }
-                            className="document-link"
-                            title={`View ${matchingFile.name}`}
-                          >
-                            📄 {matchingFile.name}
-                          </button>
-                          {canApproveRequirements() && !approvalStatus && (
-                            <div className="approval-actions">
-                              <button
-                                onClick={() => handleAcceptRequirement(requirement.type)}
-                                className="approve-btn"
-                                disabled={isUpdating}
-                                title="Accept this requirement"
-                              >
-                                {isUpdating ? "..." : "✓ Accept"}
-                              </button>
-                              <button
-                                onClick={() => handleDenyRequirement(requirement.type)}
-                                className="deny-btn"
-                                disabled={isUpdating}
-                                title="Deny this requirement"
-                              >
-                                {isUpdating ? "..." : "✗ Deny"}
-                              </button>
-                            </div>
-                          )}
-                          {canApproveRequirements() && approvalStatus && (
-                            <div className="approval-actions">
-                              <button
-                                onClick={() => handleAcceptRequirement(requirement.type)}
-                                className={`approve-btn ${approvalStatus.status === "accepted" ? "active" : ""}`}
-                                disabled={isUpdating}
-                                title="Accept this requirement"
-                              >
-                                {isUpdating ? "..." : "✓ Accept"}
-                              </button>
-                              <button
-                                onClick={() => handleDenyRequirement(requirement.type)}
-                                className={`deny-btn ${approvalStatus.status === "denied" ? "active" : ""}`}
-                                disabled={isUpdating}
-                                title="Deny this requirement"
-                              >
-                                {isUpdating ? "..." : "✗ Deny"}
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <div
-                          className="document-files"
-                          style={{
-                            color: "#999",
-                            fontSize: "0.9rem",
-                            fontStyle: "italic",
-                          }}
-                        >
-                          No files uploaded
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+              <IoCloseOutline />
+            </button>
           </div>
-        </div>
 
-        <div className="student-requirement-modal-actions">
-          <button className="close-modal-btn" onClick={onClose}>
-            Close
-          </button>
-        </div>
-      </div>
-
-      {/* Denial Reason Modal */}
-      {showDenialModal && (
-        <div className="denial-modal-backdrop" onClick={handleCloseDenialModal}>
-          <div
-            className="denial-modal"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="denial-modal-header">
-              <h3>Deny Requirement</h3>
+          {/* Popup Message Banner */}
+          {popupMessage && (
+            <div className={`student-modal-popup-message ${popupMessage.type}`}>
+              <div className="popup-message-content">
+                <span className="popup-icon">
+                  {popupMessage.type === "success" ? "✓" : "✗"}
+                </span>
+                <span className="popup-text">{popupMessage.message}</span>
+              </div>
               <button
-                className="denial-modal-close"
-                onClick={handleCloseDenialModal}
-                aria-label="Close modal"
+                className="popup-close-btn"
+                onClick={() => setPopupMessage(null)}
+                aria-label="Close message"
               >
                 <IoCloseOutline />
               </button>
             </div>
-            <div className="denial-modal-content">
-              <p className="denial-modal-question">
-                Please provide a reason for denying this requirement:
-              </p>
-              <p className="denial-modal-requirement">
-                <strong>Requirement:</strong> {denialRequirementType}
-              </p>
-              <textarea
-                className="denial-reason-input"
-                placeholder="Enter denial reason (optional but recommended)..."
-                value={denialReason}
-                onChange={(e) => setDenialReason(e.target.value)}
-                rows={5}
-                maxLength={500}
-              />
-              <div className="denial-modal-char-count">
-                {denialReason.length}/500 characters
+          )}
+
+          <div className="student-requirement-modal-content">
+            {/* Student Profile Card */}
+            <div className="student-profile-card">
+              <div className="profile-card-header">
+                <div className="profile-avatar-section">
+                  {profilePictureUrl ? (
+                    <img
+                      src={profilePictureUrl}
+                      alt={`${student.firstName} ${student.lastName}`}
+                      className="student-modal-profile-picture clickable"
+                      onClick={() => setShowProfileModal(true)}
+                      onError={() => setProfilePictureError(true)}
+                      title="Click to view full size"
+                    />
+                  ) : (
+                    <div
+                      className="student-modal-profile-picture-placeholder"
+                      title="No profile picture"
+                    >
+                      {student.firstName?.[0]?.toUpperCase() || "?"}
+                      {student.lastName?.[0]?.toUpperCase() || ""}
+                    </div>
+                  )}
+                  <div className="profile-main-info">
+                    <h3 className="student-name">
+                      {student.firstName} {student.lastName}
+                    </h3>
+                    <p className="student-id-display">
+                      {student.studentId || "No ID"}
+                    </p>
+                    <div className="student-status-badges">
+                      {student.status === "hired" ? (
+                        <span className="status-badge hired">Hired</span>
+                      ) : (
+                        <span className="status-badge not-hired">
+                          Not Hired
+                        </span>
+                      )}
+                      {student.section && (
+                        <span className="status-badge section">
+                          {student.section}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                {creatorInfo && (
+                  <div className="profile-meta">
+                    <span className="meta-label">Added by</span>
+                    <span className="meta-value">{creatorInfo.username}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Student Details Grid */}
+              <div className="student-details-grid">
+                <div className="detail-item">
+                  <span className="detail-icon">📧</span>
+                  <div className="detail-content">
+                    <span className="detail-label">Email</span>
+                    <span className="detail-value">
+                      {student.email &&
+                      !student.email.includes("@student.internquest.local") ? (
+                        student.email
+                      ) : (
+                        <span className="empty-value">Not set</span>
+                      )}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="detail-item">
+                  <span className="detail-icon">📱</span>
+                  <div className="detail-content">
+                    <span className="detail-label">Contact</span>
+                    <span className="detail-value">
+                      {student.contact || (
+                        <span className="empty-value">Not set</span>
+                      )}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="detail-item">
+                  <span className="detail-icon">🎓</span>
+                  <div className="detail-content">
+                    <span className="detail-label">Program</span>
+                    <span className="detail-value">
+                      {student.program || (
+                        <span className="empty-value">Not set</span>
+                      )}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="detail-item">
+                  <span className="detail-icon">🏫</span>
+                  <div className="detail-content">
+                    <span className="detail-label">College</span>
+                    <span className="detail-value">
+                      {student.college || (
+                        <span className="empty-value">Not set</span>
+                      )}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="detail-item">
+                  <span className="detail-icon">🕒</span>
+                  <div className="detail-content">
+                    <span className="detail-label">Created At</span>
+                    <span className="detail-value">
+                      {student.createdAt ? (
+                        (() => {
+                          try {
+                            const date = new Date(student.createdAt);
+                            return date.toLocaleString();
+                          } catch (e) {
+                            return (
+                              <span className="empty-value">Invalid date</span>
+                            );
+                          }
+                        })()
+                      ) : (
+                        <span className="empty-value">Not set</span>
+                      )}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="detail-item">
+                  <span className="detail-icon">💼</span>
+                  <div className="detail-content">
+                    <span className="detail-label">Field</span>
+                    <span className="detail-value">
+                      {student.field ? (
+                        <span className="field-tag">{student.field}</span>
+                      ) : (
+                        <span className="empty-value">Not set</span>
+                      )}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="detail-item">
+                  <span className="detail-icon">🏢</span>
+                  <div className="detail-content">
+                    <span className="detail-label">Company</span>
+                    <span className="detail-value">
+                      {student.company ||
+                        student.companyName ||
+                        student.selectedCompany || (
+                          <span className="empty-value">Not assigned</span>
+                        )}
+                    </span>
+                  </div>
+                </div>
+
+                {(student.applicationDate ||
+                  student.companyApplicationDate ||
+                  student.appliedDate ||
+                  student.selectedCompanyDate ||
+                  (student.selectedCompany ||
+                  student.company ||
+                  student.companyName
+                    ? student.createdAt
+                    : null)) && (
+                  <div className="detail-item">
+                    <span className="detail-icon">📅</span>
+                    <div className="detail-content">
+                      <span className="detail-label">Application Date</span>
+                      <span className="detail-value">
+                        {(() => {
+                          const applicationDate =
+                            student.applicationDate ||
+                            student.companyApplicationDate ||
+                            student.appliedDate ||
+                            student.selectedCompanyDate ||
+                            (student.selectedCompany ||
+                            student.company ||
+                            student.companyName
+                              ? student.createdAt
+                              : null);
+
+                          if (applicationDate) {
+                            try {
+                              const date = new Date(applicationDate);
+                              return date.toLocaleDateString("en-US", {
+                                year: "numeric",
+                                month: "long",
+                                day: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              });
+                            } catch (e) {
+                              return (
+                                <span className="empty-value">
+                                  Invalid date
+                                </span>
+                              );
+                            }
+                          }
+                          return <span className="empty-value">Not set</span>;
+                        })()}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {student.skills &&
+                  Array.isArray(student.skills) &&
+                  student.skills.length > 0 && (
+                    <div className="detail-item full-width">
+                      <span className="detail-icon">🛠️</span>
+                      <div className="detail-content">
+                        <span className="detail-label">Skills</span>
+                        <div className="skills-list">
+                          {student.skills.slice(0, 5).map((skill, index) => (
+                            <span key={index} className="skill-tag">
+                              {typeof skill === "object"
+                                ? skill.id ||
+                                  skill.name ||
+                                  JSON.stringify(skill)
+                                : skill}
+                            </span>
+                          ))}
+                          {student.skills.length > 5 && (
+                            <span className="skill-tag more">
+                              +{student.skills.length - 5} more
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
               </div>
             </div>
-            <div className="denial-modal-actions">
-              <button
-                className="denial-cancel-btn"
-                onClick={handleCloseDenialModal}
-                disabled={updatingRequirement === denialRequirementType}
+
+            {/* Profile Picture Modal */}
+            {showProfileModal && profilePictureUrl && (
+              <div
+                className="profile-picture-modal-backdrop"
+                onClick={() => setShowProfileModal(false)}
               >
-                Cancel
-              </button>
-              <button
-                className="denial-submit-btn"
-                onClick={handleSubmitDenial}
-                disabled={updatingRequirement === denialRequirementType}
-              >
-                {updatingRequirement === denialRequirementType ? "Submitting..." : "Submit Denial"}
-              </button>
+                <div
+                  className="profile-picture-modal-content"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <button
+                    className="profile-picture-modal-close"
+                    onClick={() => setShowProfileModal(false)}
+                    aria-label="Close"
+                  >
+                    ×
+                  </button>
+                  <img
+                    src={profilePictureUrl}
+                    alt={`${student.firstName} ${student.lastName}`}
+                    className="profile-picture-modal-image"
+                  />
+                  <p className="profile-picture-modal-name">
+                    {student.firstName} {student.lastName}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Required Documents Section */}
+            <div className="documents-section">
+              <div className="section-header">
+                <div className="section-title-group">
+                  <h3 className="section-title">
+                    <IoDocumentTextOutline className="section-icon" />
+                    Required Documents
+                  </h3>
+                  <p className="section-subtitle">
+                    Upload and manage student requirements
+                  </p>
+                </div>
+                <div className="documents-progress">
+                  {(() => {
+                    const REQUIRED_FOLDERS = new Set([
+                      "proof-of-enrollment-com",
+                      "parent-guardian-consent-form",
+                      "medical-certificate",
+                      "psychological-test-certification",
+                      "proof-of-insurance",
+                      "moa-memorandum-of-agreement",
+                      "resume-cv",
+                    ]);
+                    const submittedFolderNames = new Set(
+                      (storageFiles || [])
+                        .map((f) => f.folderName)
+                        .filter(
+                          (n) =>
+                            typeof n === "string" && REQUIRED_FOLDERS.has(n)
+                        )
+                    );
+                    const submittedCount = submittedFolderNames.size;
+                    return (
+                      <span className="progress-text">
+                        {submittedCount} / 7 submitted
+                      </span>
+                    );
+                  })()}
+                  <div className="progress-bar">
+                    {(() => {
+                      const REQUIRED_FOLDERS = new Set([
+                        "proof-of-enrollment-com",
+                        "parent-guardian-consent-form",
+                        "medical-certificate",
+                        "psychological-test-certification",
+                        "proof-of-insurance",
+                        "moa-memorandum-of-agreement",
+                        "resume-cv",
+                      ]);
+                      const submittedFolderNames = new Set(
+                        (storageFiles || [])
+                          .map((f) => f.folderName)
+                          .filter(
+                            (n) =>
+                              typeof n === "string" && REQUIRED_FOLDERS.has(n)
+                          )
+                      );
+                      const submittedCount = submittedFolderNames.size;
+                      const pct = Math.min(
+                        100,
+                        Math.max(0, (submittedCount / 7) * 100)
+                      );
+                      return (
+                        <div
+                          className="progress-fill"
+                          style={{ width: `${pct}%` }}
+                        />
+                      );
+                    })()}
+                  </div>
+                </div>
+              </div>
+              <div className="requirement-section">
+                {isLoadingStorageFiles ? (
+                  <div className="loading-requirements">
+                    <div className="loading-skeleton-grid">
+                      {[1, 2, 3, 4, 5, 6, 7].map((i) => (
+                        <div key={i} className="skeleton-card">
+                          <div className="skeleton-header">
+                            <div className="skeleton-icon"></div>
+                            <div className="skeleton-title"></div>
+                          </div>
+                          <div className="skeleton-desc"></div>
+                          <div className="skeleton-status"></div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="document-list">
+                    {(() => {
+                      const REQUIRED_DOCUMENTS_LIST = [
+                        {
+                          type: "Proof of Enrollment (COM)",
+                          description:
+                            "Proof of enrollment certificate from the school.",
+                          keywords: ["enrollment", "com", "proof"],
+                          folderName: "proof-of-enrollment-com",
+                        },
+                        {
+                          type: "Notarized Parental Consent",
+                          description:
+                            "Notarized consent form from parent or guardian.",
+                          keywords: [
+                            "parent",
+                            "guardian",
+                            "consent",
+                            "notarized",
+                          ],
+                          folderName: "parent-guardian-consent-form",
+                        },
+                        {
+                          type: "Medical Certificate",
+                          description:
+                            "Medical clearance from a licensed physician.",
+                          keywords: [
+                            "medical",
+                            "health",
+                            "clearance",
+                            "certificate",
+                          ],
+                          folderName: "medical-certificate",
+                        },
+                        {
+                          type: "Psychological Test Certification",
+                          description:
+                            "Psychological test certification or clearance.",
+                          keywords: ["psychological", "test", "certification"],
+                          folderName: "psychological-test-certification",
+                        },
+                        {
+                          type: "Proof of Insurance",
+                          description:
+                            "Insurance certificate or proof of coverage.",
+                          keywords: ["insurance", "proof", "certificate"],
+                          folderName: "proof-of-insurance",
+                        },
+                        {
+                          type: "Memorandum of Agreement (MOA)",
+                          description:
+                            "Signed agreement between your school and the company.",
+                          keywords: ["moa", "memorandum", "agreement"],
+                          folderName: "moa-memorandum-of-agreement",
+                        },
+                        {
+                          type: "Curriculum Vitae",
+                          description: "Updated resume or curriculum vitae.",
+                          keywords: ["resume", "cv", "curriculum", "vitae"],
+                          folderName: "resume-cv",
+                        },
+                      ];
+
+                      // Debug: Log total requirements count
+                      if (process.env.NODE_ENV === "development") {
+                        console.log(
+                          `[StudentRequirementModal] Total requirements to display: ${REQUIRED_DOCUMENTS_LIST.length}`
+                        );
+                      }
+
+                      return REQUIRED_DOCUMENTS_LIST;
+                    })().map((requirement, index) => {
+                      // Find matching file from Storage by folder name first (STRICT MATCHING)
+                      let matchingFile = storageFiles.find(
+                        (file) => file.folderName === requirement.folderName
+                      );
+
+                      // If no match by folder name, try requirementType matching (exact match only)
+                      if (!matchingFile) {
+                        matchingFile = storageFiles.find(
+                          (file) => file.requirementType === requirement.type
+                        );
+                      }
+
+                      // Log matches for debugging
+                      if (matchingFile) {
+                        console.log(
+                          `✅ Matched file "${matchingFile.name}" from folder "${matchingFile.folderName}" to requirement "${requirement.type}"`
+                        );
+                        // Warn if folder name doesn't match expected folder
+                        if (
+                          matchingFile.folderName !== requirement.folderName
+                        ) {
+                          console.warn(
+                            `⚠️ WARNING: File "${matchingFile.name}" is in folder "${matchingFile.folderName}" but matched to requirement "${requirement.type}" (expected folder: "${requirement.folderName}"). This may indicate a file upload error.`
+                          );
+                        }
+                      }
+
+                      // Debug: Log if no match found
+                      if (!matchingFile && storageFiles.length > 0) {
+                        console.log(
+                          `❌ No match for "${requirement.type}". Available files:`,
+                          storageFiles.map((f) => ({
+                            name: f.name,
+                            folder: f.folderName,
+                            type: f.requirementType,
+                          }))
+                        );
+                      }
+
+                      const approvalStatus = getApprovalStatus(
+                        requirement.type
+                      );
+                      const isUpdating =
+                        updatingRequirement === requirement.type;
+
+                      // Determine display status
+                      // Priority: Approval status > File submission status
+                      let status = "Pending";
+                      let statusColor = "#fb8c00";
+
+                      if (approvalStatus) {
+                        if (approvalStatus.status === "accepted") {
+                          status = "Approved";
+                          statusColor = "#2e7d32";
+                        } else if (approvalStatus.status === "denied") {
+                          status = "Rejected";
+                          statusColor = "#d32f2f";
+                        } else {
+                          // If approvalStatus exists but status is not accepted/denied (e.g., pending_review)
+                          // and file exists, show as "Pending Review"
+                          status = matchingFile ? "Pending Review" : "Pending";
+                          statusColor = "#fb8c00";
+                        }
+                      } else if (matchingFile) {
+                        // File exists but no approval status yet
+                        status = "Submitted";
+                        statusColor = "#43a047";
+                      }
+
+                      return (
+                        <div
+                          key={index}
+                          className={`document-item ${
+                            matchingFile ? "has-file" : "no-file"
+                          }`}
+                        >
+                          <div className="document-info">
+                            <div className="document-header">
+                              <span className="document-name">
+                                {requirement.type}
+                              </span>
+                              <span
+                                className="document-status"
+                                style={{
+                                  color: statusColor,
+                                  backgroundColor: "#f5f5f5",
+                                }}
+                              >
+                                {status}
+                              </span>
+                            </div>
+                            <p className="document-description">
+                              {requirement.description}
+                            </p>
+                            {approvalStatus?.reason && (
+                              <p
+                                className="rejection-reason"
+                                style={{
+                                  color: "#d32f2f",
+                                  marginTop: "6px",
+                                  fontStyle: "italic",
+                                }}
+                              >
+                                Rejection reason: {approvalStatus.reason}
+                              </p>
+                            )}
+                            {approvalStatus?.reviewedBy && (
+                              <p className="review-info">
+                                Reviewed by {approvalStatus.reviewedBy} on{" "}
+                                {new Date(
+                                  approvalStatus.reviewedAt
+                                ).toLocaleDateString()}
+                              </p>
+                            )}
+                          </div>
+                          {matchingFile ? (
+                            <div className="document-files">
+                              <button
+                                onClick={(e) =>
+                                  handleFileClick(
+                                    e,
+                                    matchingFile.downloadURL,
+                                    matchingFile.name
+                                  )
+                                }
+                                className="document-link"
+                                title={`View ${matchingFile.name}`}
+                              >
+                                📄 {matchingFile.name}
+                              </button>
+                              {canApproveRequirements() && !approvalStatus && (
+                                <div className="approval-actions">
+                                  <button
+                                    onClick={() =>
+                                      handleApproveRequirementClick(
+                                        requirement.type
+                                      )
+                                    }
+                                    className="approve-btn"
+                                    disabled={isUpdating}
+                                    title="Approve this requirement"
+                                  >
+                                    {isUpdating ? "..." : "✓ Approve"}
+                                  </button>
+                                  <button
+                                    onClick={() =>
+                                      handleRejectRequirement(requirement.type)
+                                    }
+                                    className="reject-btn"
+                                    disabled={isUpdating}
+                                    title="Reject this requirement"
+                                  >
+                                    {isUpdating ? "..." : "✗ Reject"}
+                                  </button>
+                                </div>
+                              )}
+                              {canApproveRequirements() && approvalStatus && (
+                                <div className="approval-actions">
+                                  <button
+                                    onClick={() =>
+                                      handleApproveRequirementClick(
+                                        requirement.type
+                                      )
+                                    }
+                                    className={`approve-btn ${
+                                      approvalStatus.status === "accepted"
+                                        ? "active"
+                                        : ""
+                                    }`}
+                                    disabled={isUpdating}
+                                    title="Approve this requirement"
+                                  >
+                                    {isUpdating ? "..." : "✓ Approve"}
+                                  </button>
+                                  <button
+                                    onClick={() =>
+                                      handleRejectRequirement(requirement.type)
+                                    }
+                                    className={`reject-btn ${
+                                      approvalStatus.status === "denied"
+                                        ? "active"
+                                        : ""
+                                    }`}
+                                    disabled={isUpdating}
+                                    title="Reject this requirement"
+                                  >
+                                    {isUpdating ? "..." : "✗ Reject"}
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <div
+                              className="document-files"
+                              style={{
+                                color: "#94a3b8",
+                                fontSize: "0.85rem",
+                                fontStyle: "italic",
+                                padding: "8px 0",
+                              }}
+                            >
+                              No files uploaded
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      )}
 
-      {/* File Viewer Modal */}
-      {viewingFile && (
-        <div className="file-viewer-backdrop" onClick={closeFileViewer}>
+          <div className="student-requirement-modal-actions">
+            <button className="close-modal-btn" onClick={onClose}>
+              Close
+            </button>
+          </div>
+        </div>
+
+        {/* Rejection Reason Modal */}
+        {showRejectionModal && (
           <div
-            className="file-viewer-modal"
-            onClick={(e) => e.stopPropagation()}
+            className="rejection-modal-backdrop"
+            onClick={handleCloseRejectionModal}
           >
-            <div className="file-viewer-header">
-              <h3>{viewingFileName}</h3>
-              <div className="file-viewer-header-actions">
+            <div
+              className="rejection-modal"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="rejection-modal-header">
+                <h3>Reject Requirement</h3>
                 <button
-                  className="file-download-header-btn"
-                  onClick={(e) =>
-                    handleDownload(e, viewingFile, viewingFileName)
-                  }
-                  title="Download file"
+                  className="rejection-modal-close"
+                  onClick={handleCloseRejectionModal}
+                  aria-label="Close modal"
                 >
-                  ⬇️ Download
-                </button>
-                <button className="file-viewer-close" onClick={closeFileViewer}>
                   <IoCloseOutline />
                 </button>
               </div>
-            </div>
-            <div className="file-viewer-content">
-              {getFileType(viewingFile) === "pdf" ? (
-                <iframe
-                  src={viewingFile}
-                  className="file-viewer-iframe"
-                  title={viewingFileName}
+              <div className="rejection-modal-content">
+                <p className="rejection-modal-question">
+                  Please provide a reason for rejecting this requirement.
+                </p>
+                <p className="rejection-modal-requirement">
+                  <strong>Requirement:</strong> {rejectionRequirementType}
+                </p>
+                <textarea
+                  className="rejection-reason-input"
+                  placeholder="Enter rejection reason (optional but recommended)..."
+                  value={rejectionReason}
+                  onChange={(e) => setRejectionReason(e.target.value)}
+                  rows={5}
+                  maxLength={500}
                 />
-              ) : getFileType(viewingFile) === "image" ? (
-                <div className="file-viewer-image-container">
-                  <img
-                    src={viewingFile}
-                    alt={viewingFileName}
-                    className="file-viewer-image"
-                    onError={(e) => {
-                      e.target.style.display = "none";
-                      e.target.nextSibling.style.display = "block";
-                    }}
-                  />
-                  <div
-                    className="file-viewer-image-error"
-                    style={{ display: "none" }}
+                <div className="rejection-modal-char-count">
+                  {rejectionReason.length}/500 characters
+                </div>
+              </div>
+              <div className="rejection-modal-actions">
+                <button
+                  className="rejection-cancel-btn"
+                  onClick={handleCloseRejectionModal}
+                  disabled={updatingRequirement === rejectionRequirementType}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="rejection-submit-btn"
+                  onClick={handleSubmitRejection}
+                  disabled={updatingRequirement === rejectionRequirementType}
+                >
+                  {updatingRequirement === rejectionRequirementType
+                    ? "Submitting..."
+                    : "Submit Rejection"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Approval Confirmation Modal */}
+        {showApprovalConfirmModal && (
+          <div
+            className="rejection-modal-backdrop"
+            onClick={handleCloseApprovalConfirmModal}
+          >
+            <div
+              className="rejection-modal"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="rejection-modal-header">
+                <h3>Confirm Approval</h3>
+                <button
+                  className="rejection-modal-close"
+                  onClick={handleCloseApprovalConfirmModal}
+                  aria-label="Close modal"
+                >
+                  <IoCloseOutline />
+                </button>
+              </div>
+              <div className="rejection-modal-content">
+                <p className="rejection-modal-question">
+                  Are you sure you want to approve this requirement?
+                </p>
+                <p className="rejection-modal-requirement">
+                  <strong>Requirement:</strong> {approvalRequirementType}
+                </p>
+                <p
+                  style={{
+                    color: "#666",
+                    fontSize: "0.9rem",
+                    marginTop: "1rem",
+                  }}
+                >
+                  The student will be notified once you confirm.
+                </p>
+              </div>
+              <div className="rejection-modal-actions">
+                <button
+                  className="rejection-cancel-btn"
+                  onClick={handleCloseApprovalConfirmModal}
+                  disabled={updatingRequirement === approvalRequirementType}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="rejection-submit-btn"
+                  onClick={handleAcceptRequirement}
+                  disabled={updatingRequirement === approvalRequirementType}
+                  style={{
+                    background: "linear-gradient(135deg, #43a047, #388e3c)",
+                  }}
+                >
+                  {updatingRequirement === approvalRequirementType
+                    ? "Approving..."
+                    : "Confirm Approval"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* File Viewer Modal */}
+        {viewingFile && (
+          <div className="file-viewer-backdrop" onClick={closeFileViewer}>
+            <div
+              className="file-viewer-modal"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="file-viewer-header">
+                <h3>{viewingFileName}</h3>
+                <div className="file-viewer-header-actions">
+                  <button
+                    className="file-download-header-btn"
+                    onClick={(e) =>
+                      handleDownload(e, viewingFile, viewingFileName)
+                    }
+                    title="Download file"
                   >
-                    <p>Failed to load image</p>
+                    ⬇️ Download
+                  </button>
+                  <button
+                    className="file-viewer-close"
+                    onClick={closeFileViewer}
+                  >
+                    <IoCloseOutline />
+                  </button>
+                </div>
+              </div>
+              <div className="file-viewer-content">
+                {getFileType(viewingFile) === "pdf" ? (
+                  <iframe
+                    src={viewingFile}
+                    className="file-viewer-iframe"
+                    title={viewingFileName}
+                  />
+                ) : getFileType(viewingFile) === "image" ? (
+                  <div className="file-viewer-image-container">
+                    <img
+                      src={viewingFile}
+                      alt={viewingFileName}
+                      className="file-viewer-image"
+                      onError={(e) => {
+                        e.target.style.display = "none";
+                        e.target.nextSibling.style.display = "block";
+                      }}
+                    />
+                    <div
+                      className="file-viewer-image-error"
+                      style={{ display: "none" }}
+                    >
+                      <p>Failed to load image</p>
+                      <button
+                        onClick={(e) =>
+                          handleDownload(e, viewingFile, viewingFileName)
+                        }
+                        className="file-download-btn"
+                      >
+                        ⬇️ Download Image
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="file-viewer-unsupported">
+                    <p>This file type cannot be previewed in the browser.</p>
                     <button
                       onClick={(e) =>
                         handleDownload(e, viewingFile, viewingFileName)
                       }
                       className="file-download-btn"
                     >
-                      ⬇️ Download Image
+                      ⬇️ Download File
                     </button>
                   </div>
-                </div>
-              ) : (
-                <div className="file-viewer-unsupported">
-                  <p>This file type cannot be previewed in the browser.</p>
-                  <button
-                    onClick={(e) =>
-                      handleDownload(e, viewingFile, viewingFileName)
-                    }
-                    className="file-download-btn"
-                  >
-                    ⬇️ Download File
-                  </button>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+    </>
   );
 };
 
@@ -948,6 +1948,7 @@ StudentRequirementModal.propTypes = {
   open: PropTypes.bool.isRequired,
   student: PropTypes.object,
   onClose: PropTypes.func.isRequired,
+  onRequirementUpdated: PropTypes.func,
 };
 
 export default StudentRequirementModal;

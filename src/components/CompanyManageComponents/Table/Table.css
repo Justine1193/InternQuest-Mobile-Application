@@ -1,318 +1,529 @@
-/* Company Table Component Styles */
+/* Company Table - Clean & Compact Design */
 
-/* Table Container */
 .table-container {
-  background: #fff;
-  border-radius: 16px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-  padding: 1rem 1rem 0.5rem 1rem;
-  margin-top: 2rem;
+  background: white;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
+  margin-top: 0;
   overflow-x: auto;
   width: 100%;
-  border: 1px solid #e3f2fd;
+  max-width: 100%;
+  border: none;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
-/* Ensure table fits viewport */
 .table-container table {
-  table-layout: auto;
   width: 100%;
-  min-width: fit-content;
+  max-width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  min-width: 1200px;
 }
 
-/* Table Styles */
-table {
-  width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-  font-size: 1rem;
-  background: #fff;
-}
-
+/* Table Header - Clean */
 table th {
-  background: #f5faff;
-  color: #111;
+  background: #f9fafb;
+  color: #6b7280;
   font-weight: 600;
-  font-size: 13px;
-  border-top: none;
-  border-bottom: 2px solid #e3f2fd;
-  padding: 12px 8px;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid #e5e7eb;
+  padding: 0.65rem 0.5rem;
   text-align: left;
+  white-space: nowrap;
   position: sticky;
   top: 0;
   z-index: 10;
-  user-select: none;
-  transition: background-color 0.2s ease;
-  white-space: nowrap;
 }
 
-table th:hover {
-  background: #e8f4fd;
+table th:first-child {
+  padding-left: 1rem;
 }
 
-/* Sortable header indicator */
+table th:last-child {
+  padding-right: 1rem;
+}
+
+/* Sortable Headers */
 table th.sortable {
   cursor: pointer;
-  position: relative;
-  padding-right: 24px;
+  transition: color 0.15s ease;
+  user-select: none;
+}
+
+table th.sortable:hover {
+  color: #374151;
 }
 
 table th.sortable::after {
-  content: '↕';
-  position: absolute;
-  right: 8px;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 12px;
-  color: #999;
+  content: '';
+  display: inline-block;
+  width: 0;
+  height: 0;
+  margin-left: 4px;
+  vertical-align: middle;
+  border-left: 3px solid transparent;
+  border-right: 3px solid transparent;
+  border-top: 3px solid #d1d5db;
   opacity: 0.5;
 }
 
 table th.sortable:hover::after {
   opacity: 1;
-  color: #1976d2;
 }
 
-table th.sortable.sorted-asc::after {
-  content: '↑';
+table th.sortable.sorted-asc::after,
+table th.sortable.sorted-desc::after {
   opacity: 1;
-  color: #1976d2;
+  border-top-color: #2563eb;
 }
 
 table th.sortable.sorted-desc::after {
-  content: '↓';
-  opacity: 1;
-  color: #1976d2;
+  border-top: none;
+  border-bottom: 3px solid #2563eb;
 }
 
+/* Table Body - Clean */
 table td {
-  color: #333;
-  font-size: 13px;
-  padding: 12px 8px;
-  text-align: left;
-  border-bottom: 1px solid #f0f0f0;
-  background: transparent;
-  transition: background-color 0.2s ease;
+  padding: 0.5rem;
+  border-bottom: 1px solid #f3f4f6;
+  color: #374151;
+  font-size: 0.8rem;
+  vertical-align: middle;
+  line-height: 1.4;
 }
 
-/* Zebra striping for better readability */
-table tbody tr:nth-child(even) {
-  background-color: #fafbfc;
+table td:first-child {
+  padding-left: 1rem;
 }
 
-table tbody tr:nth-child(odd) {
-  background-color: #fff;
+table td:last-child {
+  padding-right: 1rem;
 }
 
-/* Row hover effect */
+table tbody tr {
+  transition: background-color 0.15s ease;
+}
+
 table tbody tr:hover {
-  background-color: #f0f7ff !important;
+  background-color: #f9fafb;
+}
+
+table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* Clickable Row */
+.clickable-row {
   cursor: pointer;
 }
 
-table tbody tr:hover td {
-  border-bottom-color: #e3f2fd;
+/* Selected Row */
+.selected-row {
+  background-color: #eff6ff !important;
 }
 
-/* Checkbox and Kebab Columns */
-.checkbox-cell,
-.kebab-cell {
-  width: 40px;
-  min-width: 50px;
-  max-width: 40px;
-  padding-left: 0;
-  padding-right: 0;
+/* Row Status Indicators */
+.clickable-row.moa-expiring-soon {
+  border-left: 2px solid #f59e0b;
+}
+
+.clickable-row.moa-expired {
+  border-left: 2px solid #ef4444;
+}
+
+/* ===== COLUMN WIDTHS (Fixed Layout) ===== */
+/* Total: 12% + 15% + 18% + 10% + 5% + 10% + 12% + 10% + 40px = ~92% + 40px */
+
+.checkbox-cell {
+  width: 32px !important;
   text-align: center;
-  vertical-align: middle;
+  padding: 0.5rem 0.25rem !important;
 }
 
-.select-header {
+/* Company Name - 12% */
+table th:nth-child(1),
+table td:nth-child(1) {
+  width: 12%;
+}
+
+/* Field - 15% */
+table th:nth-child(2),
+table td:nth-child(2) {
+  width: 15%;
+}
+
+/* Skills - 18% */
+table th:nth-child(3),
+table td:nth-child(3) {
+  width: 18%;
+}
+
+/* Mode of Work - 10% */
+table th:nth-child(4),
+table td:nth-child(4) {
+  width: 10%;
+}
+
+/* MOA (checkbox) - 5% */
+table th:nth-child(5),
+table td:nth-child(5) {
+  width: 5%;
+  text-align: center;
+}
+
+/* MOA Validity - 10% */
+table th:nth-child(6),
+table td:nth-child(6) {
+  width: 10%;
+}
+
+/* MOA Expiration - 12% */
+table th:nth-child(7),
+table td:nth-child(7) {
+  width: 12%;
+}
+
+/* MOA File - 10% */
+table th:nth-child(8),
+table td:nth-child(8) {
+  width: 10%;
+  text-align: center;
+}
+
+/* Actions/Kebab - Fixed 40px */
+.kebab-cell,
+table th:nth-child(9),
+table td:nth-child(9) {
+  width: 40px;
+  text-align: center;
+}
+
+/* ===== COMPANY NAME ===== */
+.company-name-cell {
+  position: relative;
+  overflow: hidden;
+}
+
+.company-name-content {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding-left: 13px;
+  gap: 0.35rem;
+  overflow: hidden;
 }
 
-.select-header input[type="checkbox"] {
-  width: 22px;
-  height: 22px;
+.company-name-text {
+  font-weight: 500;
+  color: #1f2937;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8rem;
+  display: block;
+  flex: 1;
+  min-width: 0;
+}
+
+.company-name-tooltip {
+  display: none;
+  position: absolute;
+  background: #1f2937;
+  color: white;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  z-index: 1000;
+  top: calc(100% + 4px);
+  left: 0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  pointer-events: none;
+}
+
+.company-name-tooltip::before {
+  content: '';
+  position: absolute;
+  top: -4px;
+  left: 12px;
+  width: 8px;
+  height: 8px;
+  background: #1f2937;
+  transform: rotate(45deg);
+}
+
+.company-name-content:hover .company-name-tooltip {
+  display: block;
+}
+
+/* ===== WARNING BADGE ===== */
+.moa-warning-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.moa-warning-badge.expiring-soon {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.moa-warning-badge.expired {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.moa-warning-badge .warning-icon {
+  font-size: 10px;
+}
+
+/* ===== TAGS - Compact ===== */
+.table-fields-tags,
+.table-skills-tags,
+.table-mode-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  overflow: hidden;
+}
+
+.table-field-tag {
+  display: inline-block;
+  background: #ecfdf5;
+  color: #059669;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 0.65rem;
+  font-weight: 500;
+  white-space: nowrap;
+  line-height: 1.3;
+}
+
+.table-skill-tag {
+  display: inline-block;
+  background: #f3f4f6;
+  color: #374151;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 0.65rem;
+  font-weight: 500;
+  white-space: nowrap;
+  line-height: 1.3;
+}
+
+.table-skill-tag.more-tag {
+  background: #e5e7eb;
+  color: #6b7280;
   cursor: pointer;
+}
+
+.table-skill-tag.more-tag:hover {
+  background: #d1d5db;
+}
+
+/* Mode Tags - Compact */
+.company-table-mode-tag-on-site,
+.company-table-mode-tag-onsite {
+  background: #ecfdf5;
+  color: #059669;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 0.65rem;
+  font-weight: 500;
+}
+
+.company-table-mode-tag-remote {
+  background: #eff6ff;
+  color: #2563eb;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 0.65rem;
+  font-weight: 500;
+}
+
+.company-table-mode-tag-hybrid {
+  background: #fef3c7;
+  color: #d97706;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 0.65rem;
+  font-weight: 500;
+}
+
+/* ===== CHECKBOX - Compact ===== */
+.table-checkbox {
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid #d1d5db;
+  border-radius: 3px;
+  background: white;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
   margin: 0;
 }
 
-.select-header span {
-  font-size: 14px;
+.table-checkbox:checked {
+  background: #2563eb;
+  border-color: #2563eb;
+}
+
+.table-checkbox:checked::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 3px;
+  height: 6px;
+  border: solid white;
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
+}
+
+.table-checkbox:hover {
+  border-color: #2563eb;
+}
+
+/* ===== MOA VALIDITY - Compact ===== */
+.moa-validity-cell {
+  text-align: left;
+}
+
+.moa-validity-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-size: 0.65rem;
+  font-weight: 600;
+}
+
+.moa-validity-pill-active {
+  background: #ecfdf5;
+  color: #059669;
+}
+
+.moa-validity-pill-warning {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.moa-validity-pill-muted {
+  background: #f3f4f6;
+  color: #9ca3af;
+}
+
+/* ===== MOA EXPIRATION - Compact ===== */
+.moa-expiration-cell {
+  white-space: nowrap;
+}
+
+.moa-expiration-text {
+  font-size: 0.75rem;
   font-weight: 500;
-  color: #333;
 }
 
-.selected-row {
-  background-color: #e3f2fd !important;
+.moa-expiration-text.valid {
+  color: #059669;
 }
 
-/* Column Widths and Truncation - Optimized for fit */
-/* Company Name */
-.table-container table th:nth-child(1),
-.table-container table td:nth-child(1) {
-  min-width: 140px;
-  max-width: 180px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.moa-expiration-text.expiring-soon {
+  color: #d97706;
 }
 
-/* Description */
-.table-container table th:nth-child(2),
-.table-container table td:nth-child(2) {
-  min-width: 120px;
-  max-width: 180px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.moa-expiration-text.expired {
+  color: #dc2626;
 }
 
-/* Address */
-.table-container table th:nth-child(3),
-.table-container table td:nth-child(3) {
-  min-width: 150px;
-  max-width: 200px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.moa-expiration-text.muted {
+  color: #9ca3af;
 }
 
-/* Email */
-.table-container table th:nth-child(4),
-.table-container table td:nth-child(4) {
-  min-width: 140px;
-  max-width: 180px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* Website */
-.table-container table th:nth-child(5),
-.table-container table td:nth-child(5) {
-  min-width: 120px;
-  max-width: 160px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* Field */
-.table-container table th:nth-child(6),
-.table-container table td:nth-child(6) {
-  min-width: 100px;
-  max-width: 140px;
-}
-
-/* Skills */
-.table-container table th:nth-child(7),
-.table-container table td:nth-child(7) {
-  min-width: 120px;
-  max-width: 160px;
-}
-
-/* Mode of Work */
-.table-container table th:nth-child(8),
-.table-container table td:nth-child(8) {
-  min-width: 100px;
-  max-width: 120px;
-}
-
-/* MOA Checkbox */
-.table-container table th:nth-child(9),
-.table-container table td:nth-child(9) {
-  min-width: 50px;
-  max-width: 60px;
+/* ===== MOA FILE - Styled Button ===== */
+.moa-file-cell {
   text-align: center;
 }
 
-/* MOA Validity */
-.table-container table th:nth-child(10),
-.table-container table td:nth-child(10) {
-  min-width: 120px;
-  max-width: 140px;
+.moa-file-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  color: #2563eb;
+  text-decoration: none;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  border: 1px solid #bfdbfe;
 }
 
-/* MOA Expiration */
-.table-container table th:nth-child(11),
-.table-container table td:nth-child(11) {
-  min-width: 120px;
-  max-width: 140px;
+.moa-file-btn:hover {
+  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.2);
 }
 
-/* Kebab Menu */
-.table-container table th:last-child,
-.table-container table td:last-child {
-  min-width: 50px;
-  max-width: 60px;
-  width: 60px;
-  text-align: center;
-  padding-left: 0;
-  padding-right: 0;
-  white-space: nowrap;
+.moa-file-btn:active {
+  transform: translateY(0);
 }
 
-/* Responsive Scrollbars */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+.moa-file-btn-icon {
+  font-size: 0.85rem;
 }
 
-::-webkit-scrollbar-track {
-  background: #f1f1f1;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #888;
+.moa-file-none {
+  display: inline-block;
+  padding: 4px 8px;
+  background: #f9fafb;
+  color: #9ca3af;
+  font-size: 0.65rem;
+  font-weight: 500;
   border-radius: 4px;
+  border: 1px solid #e5e7eb;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: #555;
+/* ===== SCROLLBAR ===== */
+.table-container::-webkit-scrollbar {
+  height: 5px;
 }
 
-/* Mobile Responsiveness */
+.table-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.table-container::-webkit-scrollbar-thumb {
+  background: #e5e7eb;
+  border-radius: 3px;
+}
+
+.table-container::-webkit-scrollbar-thumb:hover {
+  background: #d1d5db;
+}
+
+/* ===== RESPONSIVE ===== */
 @media (max-width: 768px) {
-  .table-container {
-    padding: 0.75rem 0.5rem;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  table {
-    font-size: 0.875rem;
-    min-width: 900px;
-  }
-
-  table th,
-  table td {
-    padding: 10px 6px;
-    font-size: 0.8rem;
-  }
-
-  table th {
-    font-size: 0.8rem;
-    padding: 12px 6px;
-  }
-}
-
-@media (max-width: 480px) {
-  .table-container {
-    padding: 0.5rem 0.25rem;
-    border-radius: 8px;
-  }
-
-  table {
-    min-width: 800px;
+  .table-container table th,
+  .table-container table td {
+    padding: 0.4rem;
     font-size: 0.75rem;
   }
 
-  table th,
-  table td {
-    padding: 8px 4px;
-    font-size: 0.75rem;
+  .table-container table th:first-child,
+  .table-container table td:first-child {
+    padding-left: 0.75rem;
+  }
+
+  .table-container table th:last-child,
+  .table-container table td:last-child {
+    padding-right: 0.75rem;
   }
 }

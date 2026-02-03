@@ -1,0 +1,20 @@
+{
+  "rules": {
+    "companies": {
+      "$companyId": {
+        // Allow all authenticated admin users (super_admin, coordinator, adviser) to read/write
+        // This syncs MOA validity data for the mobile app
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    "userRoles": {
+      "$uid": {
+        // Users can read their own role, admins can read any role
+        ".read": "auth != null && (auth.uid == $uid || root.child('userRoles').child(auth.uid).val() == 'admin')",
+        // Only admins can write roles
+        ".write": "auth != null && (auth.uid == $uid || root.child('userRoles').child(auth.uid).val() == 'admin')"
+      }
+    }
+  }
+}

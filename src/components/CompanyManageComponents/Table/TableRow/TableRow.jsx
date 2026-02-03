@@ -27,7 +27,7 @@
 
 import React, { useState } from "react";
 import PropTypes from "prop-types";
-import { IoEllipsisVertical, IoWarningOutline, IoAlertCircle } from "react-icons/io5";
+import { IoWarningOutline, IoAlertCircle, IoDocumentTextOutline } from "react-icons/io5";
 import KebabCell from "../../../KebabcellComponents/KebabCell.jsx";
 import "./TableRow.css";
 
@@ -53,6 +53,7 @@ const TableRow = ({
   handleDeleteSingle,
   isDeleting,
   onRowClick,
+  isReadOnly = false,
 }) => {
   // State for toggling skill tag expansion
   const [showAllSkills, setShowAllSkills] = useState(false);
@@ -140,7 +141,7 @@ const TableRow = ({
       className={rowClassName}
       onClick={handleRowClick}
     >
-      {selectionMode && (
+      {selectionMode ? (
         <td className="checkbox-cell">
           <input
             type="checkbox"
@@ -149,11 +150,11 @@ const TableRow = ({
             onChange={onSelect}
           />
         </td>
-      )}
+      ) : null}
       <td className="company-name-cell">
         <div className="company-name-content" title={row.companyName}>
           <span className="company-name-text">{row.companyName}</span>
-          {expirationStatus && (
+          {expirationStatus ? (
             <span 
               className={`moa-warning-badge ${expirationStatus.status}`}
               title={
@@ -168,31 +169,33 @@ const TableRow = ({
                 <IoWarningOutline className="warning-icon" />
               )}
             </span>
-          )}
+          ) : null}
           <div className="company-name-tooltip">{row.companyName}</div>
         </div>
       </td>
       <td>
         <div className="table-fields-tags">
-          {Array.isArray(row.fields) &&
-            row.fields.map((field, index) => (
-              <span key={field + index} className="table-field-tag">
-                {field}
-              </span>
-            ))}
+          {Array.isArray(row.fields) && row.fields.length > 0
+            ? row.fields.map((field, index) => (
+                <span key={field + index} className="table-field-tag">
+                  {field}
+                </span>
+              ))
+            : null}
         </div>
       </td>
       <td>
         <div className="table-skills-tags">
-          {Array.isArray(skillsToShow) &&
-            skillsToShow.map((skill, index) => (
-              <span key={skill + index} className="table-skill-tag">
-                {skill}
-              </span>
-            ))}
+          {Array.isArray(skillsToShow) && skillsToShow.length > 0
+            ? skillsToShow.map((skill, index) => (
+                <span key={skill + index} className="table-skill-tag">
+                  {skill}
+                </span>
+              ))
+            : null}
           {Array.isArray(row.skillsREq) &&
             row.skillsREq.length > 3 &&
-            !showAllSkills && (
+            !showAllSkills ? (
               <span
                 className="table-skill-tag"
                 style={{ cursor: "pointer", background: "#555" }}
@@ -200,10 +203,10 @@ const TableRow = ({
               >
                 +{row.skillsREq.length - 3} more
               </span>
-            )}
+            ) : null}
           {Array.isArray(row.skillsREq) &&
             row.skillsREq.length > 3 &&
-            showAllSkills && (
+            showAllSkills ? (
               <span
                 className="table-skill-tag"
                 style={{ cursor: "pointer", background: "#aaa", color: "#222" }}
@@ -211,12 +214,12 @@ const TableRow = ({
               >
                 Show less
               </span>
-            )}
+            ) : null}
         </div>
       </td>
       <td>
         <div className="table-mode-tags">
-          {Array.isArray(row.modeOfWork)
+          {Array.isArray(row.modeOfWork) && row.modeOfWork.length > 0
             ? row.modeOfWork.map((mode, idx) => (
                 <span
                   key={mode + idx}
@@ -227,7 +230,15 @@ const TableRow = ({
                   {mode}
                 </span>
               ))
-            : row.modeOfWork}
+            : row.modeOfWork && !Array.isArray(row.modeOfWork) ? (
+                <span
+                  className={`company-table-mode-tag-${row.modeOfWork
+                    .replace(/\s+/g, "")
+                    .toLowerCase()}`}
+                >
+                  {row.modeOfWork}
+                </span>
+              ) : null}
         </div>
       </td>
       <td>
@@ -287,25 +298,44 @@ const TableRow = ({
           );
         })()}
       </td>
-      <td className="kebab-cell">
-        <KebabCell
-          row={row}
-          openMenuId={openMenuId}
-          setOpenMenuId={setOpenMenuId}
-          selectedRowId={selectedRowId}
-          setSelectedRowId={setSelectedRowId}
-          setIsEditMode={setIsEditMode}
-          setEditCompanyId={setEditCompanyId}
-          setFormData={setFormData}
-          setSkills={setSkills}
-          setIsModalOpen={setIsModalOpen}
-          setSelectionMode={setSelectionMode}
-          setSelectedItems={setSelectedItems}
-          handleDeleteSingle={handleDeleteSingle}
-          isDeleting={isDeleting}
-          onEdit={onEdit}
-        />
+      <td className="moa-file-cell">
+        {row.moaFileUrl ? (
+          <a
+            href={row.moaFileUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="moa-file-btn"
+            onClick={(e) => e.stopPropagation()}
+            title={row.moaFileName || "View MOA Document"}
+          >
+            <IoDocumentTextOutline className="moa-file-btn-icon" />
+            <span>View</span>
+          </a>
+        ) : (
+          <span className="moa-file-none">No file</span>
+        )}
       </td>
+      {!isReadOnly ? (
+        <td className="kebab-cell">
+          <KebabCell
+            row={row}
+            openMenuId={openMenuId}
+            setOpenMenuId={setOpenMenuId}
+            selectedRowId={selectedRowId}
+            setSelectedRowId={setSelectedRowId}
+            setIsEditMode={setIsEditMode}
+            setEditCompanyId={setEditCompanyId}
+            setFormData={setFormData}
+            setSkills={setSkills}
+            setIsModalOpen={setIsModalOpen}
+            setSelectionMode={setSelectionMode}
+            setSelectedItems={setSelectedItems}
+            handleDeleteSingle={handleDeleteSingle}
+            isDeleting={isDeleting}
+            onEdit={onEdit}
+          />
+        </td>
+      ) : null}
     </tr>
   );
 };
@@ -330,6 +360,7 @@ TableRow.propTypes = {
   setSelectedItems: PropTypes.func,
   handleDeleteSingle: PropTypes.func,
   isDeleting: PropTypes.bool,
+  onRowClick: PropTypes.func,
 };
 
 export default TableRow;

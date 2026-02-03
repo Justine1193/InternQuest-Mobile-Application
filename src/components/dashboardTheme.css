@@ -108,19 +108,37 @@
 .dashboard-container {
   min-height: 100vh;
   width: 100%;
+  max-width: 100vw;
   display: flex;
   flex-direction: column;
-  background: radial-gradient(circle at top left, #f0f5ff 0, var(--iq-bg) 40%, #eef2ff 100%);
+  background: var(--iq-bg);
   color: var(--iq-text-main);
+  margin-left: 260px;
+  transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1), background var(--iq-transition-slow), color var(--iq-transition-slow);
+  overflow-x: hidden;
+  box-sizing: border-box;
+  position: relative;
+}
+
+/* Adjust for collapsed sidebar - applied via body class */
+body.sidebar-collapsed .dashboard-container {
+  margin-left: 80px;
 }
 
 .dashboard-content {
   flex: 1;
   width: 100%;
-  padding: 2rem 0;
+  max-width: 100%;
+  padding: 2rem 1.5rem;
+  background: var(--iq-bg);
+  min-width: 0;
+  box-sizing: border-box;
+  overflow-x: visible;
+  position: relative;
+  transition: background var(--iq-transition-slow);
 }
 
-/* Shared top navigation styling (Student + HelpDesk) */
+/* Shared top navigation styling (Student + Resource Management) */
 .top-nav {
   position: sticky;
   top: 0;
@@ -129,10 +147,11 @@
   justify-content: space-between;
   align-items: center;
   padding: 0.75rem 1.75rem;
-  background: rgba(255, 255, 255, 0.96);
+  background: var(--iq-surface);
   backdrop-filter: blur(10px);
-  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
-  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04);
+  border-bottom: 1px solid var(--iq-border-subtle);
+  box-shadow: var(--iq-shadow-sm);
+  transition: background var(--iq-transition-slow), border-color var(--iq-transition-slow);
 }
 
 .top-nav .nav-links .nav-link {
@@ -157,7 +176,7 @@
 /* Shared card look for dashboard sections */
 .overview-section,
 .internships-section,
-.helpdesk-section,
+.resource-management-section,
 .student-table-container,
 .table-container {
   background: var(--iq-surface);
@@ -166,7 +185,7 @@
 }
 
 .overview-section h1,
-.helpdesk-section h1,
+.resource-management-section h1,
 .table-container h2,
 .student-table-container h2 {
   color: var(--iq-text-main);
@@ -186,7 +205,7 @@
   padding: 0.5rem 1rem;
   border-radius: 999px;
   border: 1px solid var(--iq-border-subtle);
-  background: #ffffff;
+  background: var(--iq-surface);
   cursor: pointer;
   min-width: 40px;
   font-weight: 500;
@@ -472,10 +491,22 @@ textarea.input-standard.success {
   border-radius: var(--iq-radius-md);
 }
 
-/* Responsive Design */
+/* Responsive Design - Sidebar becomes top bar on mobile */
+@media (max-width: 768px) {
+  .dashboard-container {
+    margin-left: 0;
+    padding-top: 70px; /* Space for mobile top nav */
+  }
+  
+  body.sidebar-collapsed .dashboard-container {
+    margin-left: 0;
+  }
+}
+
 @media (max-width: 900px) {
   .dashboard-content {
     padding: 1.25rem 0.5rem 1.5rem 0.5rem;
+    overflow-x: visible;
   }
   
   .table-action-btn,
@@ -498,6 +529,7 @@ textarea.input-standard.success {
 @media (max-width: 600px) {
   .dashboard-content {
     padding: 1rem 0.5rem;
+    overflow-x: visible;
   }
   
   .table-action-btn,
@@ -527,4 +559,143 @@ textarea.input-standard.success {
   }
 }
 
+
+/* ================================
+   Shared Stat Cards (Activity Log style)
+   ================================ */
+.iq-stats-wrapper {
+  margin: -1.5rem 0 1.5rem 0;
+  position: relative;
+  z-index: 1;
+}
+
+.iq-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.iq-stat-card {
+  background: var(--iq-surface);
+  border-radius: 16px;
+  padding: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  box-shadow: var(--iq-shadow-soft);
+  border: 1px solid var(--iq-border-subtle);
+  transition: transform 0.25s ease, box-shadow 0.25s ease, background var(--iq-transition-slow), border-color var(--iq-transition-slow);
+  position: relative;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.iq-stat-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  background: linear-gradient(
+    180deg,
+    var(--stat-color, var(--iq-primary)) 0%,
+    var(--stat-color-dark, var(--iq-primary-dark)) 100%
+  );
+}
+
+.iq-stat-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--iq-shadow-lg);
+}
+
+.iq-stat-icon-wrapper {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(
+    135deg,
+    var(--stat-color, var(--iq-primary)) 0%,
+    var(--stat-color-dark, var(--iq-primary-dark)) 100%
+  );
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  flex-shrink: 0;
+}
+
+.iq-stat-icon {
+  font-size: 1.75rem;
+  color: #ffffff;
+}
+
+.iq-stat-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.iq-stat-value {
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--iq-text-main);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  margin-bottom: 0.25rem;
+  transition: color var(--iq-transition-slow);
+}
+
+.iq-stat-label {
+  font-size: 0.85rem;
+  color: var(--iq-text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  line-height: 1.3;
+  transition: color var(--iq-transition-slow);
+}
+
+/* Color variants */
+.iq-stat--info {
+  --stat-color: #3b82f6;
+  --stat-color-dark: #2563eb;
+}
+.iq-stat--success {
+  --stat-color: #10b981;
+  --stat-color-dark: #059669;
+}
+.iq-stat--warning {
+  --stat-color: #f59e0b;
+  --stat-color-dark: #d97706;
+}
+.iq-stat--danger {
+  --stat-color: #ef4444;
+  --stat-color-dark: #dc2626;
+}
+.iq-stat--purple {
+  --stat-color: #8b5cf6;
+  --stat-color-dark: #7c3aed;
+}
+
+@media (max-width: 768px) {
+  .iq-stats-wrapper {
+    margin: -1.25rem 0 1.25rem 0;
+  }
+  .iq-stats-grid {
+    grid-template-columns: 1fr;
+  }
+  .iq-stat-card {
+    padding: 1.25rem;
+  }
+  .iq-stat-icon-wrapper {
+    width: 50px;
+    height: 50px;
+  }
+  .iq-stat-icon {
+    font-size: 1.5rem;
+  }
+  .iq-stat-value {
+    font-size: 1.75rem;
+  }
+}
 

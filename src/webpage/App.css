@@ -1,7 +1,11 @@
 #root {
   width: 100%;
+  min-height: 100vh;
   margin: 0;
   padding: 0;
+  background-color: var(--background-color, #ffffff);
+  color: var(--text-color, #213547);
+  transition: background-color 0.35s ease, color 0.35s ease;
 }
 
 .logo {

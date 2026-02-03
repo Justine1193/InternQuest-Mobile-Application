@@ -36,7 +36,7 @@
   border: 1.5px solid #e3eafc;
   border-radius: 8px;
   font-size: 1em;
-  background: #f7fafd;
+  background: #fff;
   color: #222;
   margin-bottom: 0;
   box-sizing: border-box;
@@ -46,7 +46,7 @@
 .new-filter-input:hover,
 .new-filter-select:hover {
   border-color: #90caf9;
-  background: #f0f7ff;
+  background: #fff;
 }
 
 .new-filter-input:focus,
@@ -135,4 +135,81 @@
 .skills-dropdown-item[aria-selected="true"] {
   background-color: #e3eafc;
   color: #1976d2;
+}
+
+/* CustomDropdown styles within filter context */
+.new-filter-dropdown .custom-dropdown-selected {
+  background: #fff;
+  border: 1.5px solid #e3eafc;
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  color: #222;
+  transition: border 0.18s, box-shadow 0.18s;
+  outline: none;
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+}
+
+.new-filter-dropdown .custom-dropdown-selected:hover,
+.new-filter-dropdown .custom-dropdown-selected:focus {
+  border-color: #1976d2;
+  box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.1);
+  background: #fff;
+}
+
+/* CustomDropdown option styles within filter context */
+.new-filter-dropdown .custom-dropdown-option {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.7rem 1.2rem;
+  font-size: 1em;
+  color: #222;
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.16s, color 0.16s;
+  border: none;
+  outline: none;
+  text-align: left;
+  width: 100%;
+}
+
+.new-filter-dropdown .custom-dropdown-option:hover {
+  background: #f0f7ff;
+}
+
+.new-filter-dropdown .custom-dropdown-option.selected {
+  background: #e3f2fd;
+  color: #1976d2;
+  font-weight: 500;
+}
+
+.new-filter-dropdown .custom-dropdown-checkmark {
+  color: #1976d2;
+  font-weight: bold;
+  margin-left: 0.5rem;
+  font-size: 1.1em;
+}
+
+/* CustomDropdown container needs relative positioning */
+.new-filter-dropdown .custom-dropdown {
+  position: relative;
+}
+
+/* CustomDropdown list styles within filter context */
+.new-filter-dropdown .custom-dropdown-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: #fff;
+  border: 1.5px solid #e3eafc;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  padding: 0.2rem 0;
+  min-width: 100%;
+  overflow: hidden;
 }

@@ -1,6 +1,6 @@
 /**
  * AdminManagement - Component for managing admin accounts
- * Super Admin can create Coordinator and Adviser accounts
+ * Admin can create Coordinator and Adviser accounts
  * Coordinator can create Adviser accounts
  *
  * @component
@@ -21,19 +21,21 @@ import {
   deleteDoc,
   updateDoc,
 } from "firebase/firestore";
-import {
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-} from "firebase/auth";
+import { createUserWithEmailAndPassword } from "firebase/auth";
 import { db, auth } from "../../../firebase";
-import { attemptDeleteAuthUser } from "../../utils/authDelete";
 import {
   getAdminRole,
   canCreateCoordinator,
   canCreateAccounts,
+  getAdminCollegeCode,
+  ROLES,
 } from "../../utils/auth";
-import { loadColleges } from "../../utils/collegeUtils";
+import {
+  loadColleges,
+  loadProgramToCollegeMap,
+} from "../../utils/collegeUtils";
 import Navbar from "../Navbar/Navbar.jsx";
+import { FaRegEye, FaRegEyeSlash } from "react-icons/fa";
 import { signOut } from "firebase/auth";
 import { clearAdminSession } from "../../utils/auth";
 import { useNavigate } from "react-router-dom";
@@ -43,12 +45,33 @@ import ConfirmModal from "../ConfirmModalComponents/ConfirmModal.jsx";
 import EmptyState from "../EmptyState/EmptyState.jsx";
 import { IoShieldCheckmarkOutline } from "react-icons/io5";
 
+// Format role name for display (normalizes legacy 'super_admin' to 'admin')
+const getRoleDisplayName = (role) => {
+  if (!role) return "";
+  // Normalize legacy 'super_admin' to 'admin' for display
+  const normalizedRole = role === "super_admin" ? "admin" : role;
+  switch (normalizedRole) {
+    case ROLES.SUPER_ADMIN:
+    case "admin":
+      return "Admin";
+    case ROLES.COORDINATOR:
+    case "coordinator":
+      return "Coordinator";
+    case ROLES.ADVISER:
+    case "adviser":
+      return "Adviser";
+    default:
+      return normalizedRole || "";
+  }
+};
+
 const AdminManagement = () => {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [formData, setFormData] = useState({
+    name: "",
     username: "",
     password: "",
     email: "",
@@ -64,6 +87,7 @@ const AdminManagement = () => {
   const [programOptions, setProgramOptions] = useState([]);
   const [programCodeOptions, setProgramCodeOptions] = useState([]);
   const [programCodesByCollege, setProgramCodesByCollege] = useState({}); // Map college name to program codes
+  const [programToCollegeMap, setProgramToCollegeMap] = useState({}); // Map program code to college code
   const [sectionOptions, setSectionOptions] = useState([]);
   const [collegeOptions, setCollegeOptions] = useState([]);
   const [showProgramCodeSuggestions, setShowProgramCodeSuggestions] =
@@ -91,6 +115,21 @@ const AdminManagement = () => {
   const canCreateCoord = canCreateCoordinator();
   const canCreate = canCreateAccounts();
   const isCoordinator = currentRole === "coordinator";
+  const adminCollegeCode = getAdminCollegeCode();
+  const [showPassword, setShowPassword] = useState(false);
+
+  // Load program-to-college mapping for coordinators
+  useEffect(() => {
+    if (isCoordinator && adminCollegeCode) {
+      loadProgramToCollegeMap()
+        .then((map) => {
+          setProgramToCollegeMap(map);
+        })
+        .catch((err) => {
+          console.error("Error loading program-to-college map:", err);
+        });
+    }
+  }, [isCoordinator, adminCollegeCode]);
 
   useEffect(() => {
     document.title = "Admin Management | InternQuest Admin";
@@ -103,7 +142,13 @@ const AdminManagement = () => {
     loadSections();
     loadCollegesData();
     loadCurrentAdminProfile();
-  }, [canCreate, navigate]);
+  }, [
+    canCreate,
+    navigate,
+    isCoordinator,
+    adminCollegeCode,
+    programToCollegeMap,
+  ]);
 
   // Load current admin's profile to get their sections (for coordinators)
   const loadCurrentAdminProfile = async () => {
@@ -171,14 +216,95 @@ const AdminManagement = () => {
     formData.sections,
   ]);
 
+  // Helper function to extract program code from section string (e.g., "4BSIT-2" -> "BSIT")
+  const extractProgramCodeFromSection = (section) => {
+    if (!section || typeof section !== "string") return null;
+    // Section format: "4BSIT-2" or "2024BSIT-A"
+    // Extract the program code part (letters between year and dash/number)
+    const match = section.match(/^\d+([A-Z]+)/);
+    if (match && match[1]) {
+      return match[1].toUpperCase();
+    }
+    // Fallback: try to find program code pattern
+    const programMatch = section.match(/([A-Z]{2,})/);
+    if (programMatch && programMatch[1]) {
+      return programMatch[1].toUpperCase();
+    }
+    return null;
+  };
+
   const loadAdmins = async () => {
     try {
       const adminsRef = collection(db, "adminusers");
       const querySnapshot = await getDocs(adminsRef);
-      const adminsList = querySnapshot.docs.map((doc) => ({
+      let adminsList = querySnapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       }));
+
+      // Only admin can see admin/coordinator accounts
+      // Coordinators and advisers should NOT see admin/coordinator accounts
+      if (currentRole !== "admin" && currentRole !== "super_admin") {
+        // Filter out admin and coordinator accounts (support legacy super_admin during migration)
+        adminsList = adminsList.filter((admin) => {
+          // Hide admin and coordinator accounts
+          if (
+            admin.role === "admin" ||
+            admin.role === "super_admin" ||
+            admin.role === "coordinator"
+          ) {
+            return false;
+          }
+
+          // Only show advisers from their college (for coordinators)
+          if (isCoordinator && adminCollegeCode && admin.role === "adviser") {
+            // 1) Prefer explicit creator college (for newly created accounts)
+            if (
+              admin.createdByCollegeCode &&
+              admin.createdByCollegeCode === adminCollegeCode
+            ) {
+              return true;
+            }
+
+            // 2) Fallback: check if their sections contain programs from coordinator's college
+            // If we don't have program-to-college mapping yet, don't try to infer; show adviser
+            if (
+              !programToCollegeMap ||
+              Object.keys(programToCollegeMap).length === 0
+            ) {
+              return true;
+            }
+
+            const adminSections =
+              admin.sections || (admin.section ? [admin.section] : []);
+            if (adminSections.length === 0) {
+              // No sections: we already handled createdByCollegeCode above.
+              // Without sections, we can't infer college; safest is to hide.
+              return false;
+            }
+
+            // Check if any section's program belongs to coordinator's college
+            for (const section of adminSections) {
+              const programCode = extractProgramCodeFromSection(section);
+              if (programCode) {
+                const programCollegeCode = programToCollegeMap[programCode];
+                if (programCollegeCode === adminCollegeCode) {
+                  return true; // Found a matching program
+                }
+              }
+            }
+            return false; // No matching programs found
+          }
+
+          // For advisers, they shouldn't see any other accounts
+          if (currentRole === "adviser") {
+            return false;
+          }
+
+          return true;
+        });
+      }
+
       setAdmins(adminsList);
     } catch (err) {
       console.error("Error loading admins:", err);
@@ -187,10 +313,11 @@ const AdminManagement = () => {
 
   const handleDeleteAdmin = (admin) => {
     if (!admin || !admin.id) return;
-    if (admin.role === "super_admin") {
-      setError("Cannot delete super admin accounts.");
+    if (admin.role === "admin" || admin.role === "super_admin") {
+      setError("Cannot delete admin accounts.");
       return;
     }
+
     setPendingDeleteAdmin(admin);
     setShowDeleteModal(true);
   };
@@ -202,18 +329,6 @@ const AdminManagement = () => {
     setSuccess("");
     setDeletingId(admin.id);
     try {
-      // Attempt to delete Firebase Auth user
-      try {
-        await attemptDeleteAuthUser({
-          uid: admin.uid,
-          firebaseEmail: admin.firebaseEmail,
-          email: admin.email,
-        });
-      } catch (authError) {
-        // Log but don't fail - Firestore deletion should still proceed
-        console.warn("Could not delete Firebase Auth user:", authError);
-      }
-
       // Delete Firestore document
       await deleteDoc(doc(db, "adminusers", admin.id));
       await addDoc(collection(db, "admin_deletions"), {
@@ -244,6 +359,10 @@ const AdminManagement = () => {
 
   // Handle edit admin
   const handleEditAdmin = (admin) => {
+    editAdminAction(admin);
+  };
+
+  const editAdminAction = (admin) => {
     // Parse sections from admin data
     const sections = admin.sections || (admin.section ? [admin.section] : []);
 
@@ -268,8 +387,9 @@ const AdminManagement = () => {
     }
 
     setFormData({
+      name: admin.name || "",
       username: admin.username || "",
-      password: "", // Don't pre-fill password for security
+      password: "", // Password not stored in Firestore - managed via Firebase Auth
       email: admin.email || admin.firebaseEmail || "",
       role: admin.role || "adviser",
       sections: sections,
@@ -294,6 +414,7 @@ const AdminManagement = () => {
     setShowCreateModal(false);
     setEditingAdmin(null);
     setFormData({
+      name: "",
       username: "",
       password: "",
       email: "",
@@ -306,6 +427,7 @@ const AdminManagement = () => {
       sectionProgram: "",
       sectionNumber: "",
     });
+    setShowPassword(false);
     setError("");
     setSuccess("");
   };
@@ -963,10 +1085,13 @@ const AdminManagement = () => {
         ...prev,
         role: roleValue,
       };
-      // If coordinator is creating an adviser, auto-fill sections
+      // If coordinator is creating an adviser, auto-fill sections and college
       if (roleValue === "adviser" && isCoordinator) {
         if (currentAdminSections.length > 0) {
           newData.sections = [...currentAdminSections];
+        }
+        if (adminCollegeCode) {
+          newData.college_code = adminCollegeCode;
         }
       }
       return newData;
@@ -1006,6 +1131,31 @@ const AdminManagement = () => {
     }
   };
 
+  const openCreateModal = async () => {
+    let loadedSections = currentAdminSections;
+
+    // Ensure coordinator's profile is loaded before opening modal
+    if (isCoordinator && auth.currentUser) {
+      const profile = await loadCurrentAdminProfile();
+      loadedSections = profile.sections;
+    }
+
+    // Auto-fill sections and college when coordinator opens modal to create adviser
+    if (isCoordinator && formData.role === "adviser") {
+      setFormData((prev) => ({
+        ...prev,
+        sections:
+          loadedSections.length > 0 ? [...loadedSections] : prev.sections,
+        college_code: adminCollegeCode || prev.college_code,
+      }));
+    }
+    setShowCreateModal(true);
+
+    // Initialize filtered program codes (will be filtered by college if one is selected)
+    const availableCodes = getAvailableProgramCodes();
+    setFilteredProgramCodes(availableCodes);
+  };
+
   const handleLogout = async () => {
     try {
       await signOut(auth);
@@ -1017,7 +1167,9 @@ const AdminManagement = () => {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
+    if (e) {
+      e.preventDefault();
+    }
     setError("");
     setSuccess("");
     setIsLoading(true);
@@ -1025,7 +1177,105 @@ const AdminManagement = () => {
     try {
       const isEditing = !!editingAdmin;
 
-      // Validate role permissions (only for creating)
+      // SECURITY: Verify user is authenticated with Firebase Auth
+      if (!auth.currentUser) {
+        setError(
+          "You must be authenticated to create or edit admin accounts. Please log out and log back in."
+        );
+        setIsLoading(false);
+        return;
+      }
+
+      // SECURITY: Refresh and verify auth token is valid
+      let authToken;
+      try {
+        authToken = await auth.currentUser.getIdToken(true); // Force refresh
+        console.log("Auth token verified before account creation/edit", {
+          uid: auth.currentUser.uid,
+          email: auth.currentUser.email,
+          hasToken: !!authToken,
+        });
+      } catch (tokenError) {
+        console.error("Failed to refresh auth token:", tokenError);
+        setError(
+          "Authentication token expired or invalid. Please log out and log back in."
+        );
+        setIsLoading(false);
+        return;
+      }
+
+      // SECURITY: Verify user's role in Firestore matches their session
+      // This prevents role tampering
+      try {
+        const adminsRef = collection(db, "adminusers");
+        const currentUserQuery = query(
+          adminsRef,
+          where("firebaseEmail", "==", auth.currentUser.email)
+        );
+        const currentUserSnapshot = await getDocs(currentUserQuery);
+
+        if (currentUserSnapshot.empty) {
+          setError(
+            "Your admin account was not found in the database. Please contact support."
+          );
+          setIsLoading(false);
+          return;
+        }
+
+        const currentUserDoc = currentUserSnapshot.docs[0];
+        const currentUserData = currentUserDoc.data();
+        const currentUserRole = currentUserData.role;
+
+        // Verify the role from Firestore matches the session role
+        if (currentUserRole !== currentRole) {
+          console.warn("Role mismatch detected", {
+            sessionRole: currentRole,
+            firestoreRole: currentUserRole,
+          });
+          setError(
+            "Your account role has changed. Please log out and log back in."
+          );
+          setIsLoading(false);
+          return;
+        }
+
+        // Additional security: Verify user has permission based on their actual role
+        if (!isEditing) {
+          // Only admin can create coordinators (support legacy super_admin during migration)
+          if (
+            formData.role === "coordinator" &&
+            currentUserRole !== "admin" &&
+            currentUserRole !== "super_admin"
+          ) {
+            setError(
+              "You don't have permission to create coordinator accounts. Only admins can create coordinators."
+            );
+            setIsLoading(false);
+            return;
+          }
+
+          // Only admin and coordinators can create advisers
+          if (
+            formData.role === "adviser" &&
+            currentUserRole !== "admin" &&
+            currentUserRole !== "super_admin" &&
+            currentUserRole !== "coordinator"
+          ) {
+            setError("You don't have permission to create adviser accounts.");
+            setIsLoading(false);
+            return;
+          }
+        }
+      } catch (verifyError) {
+        console.error("Error verifying user role:", verifyError);
+        setError(
+          "Failed to verify your account permissions. Please try again or contact support."
+        );
+        setIsLoading(false);
+        return;
+      }
+
+      // Validate role permissions (only for creating) - legacy check for UI state
       if (!isEditing) {
         if (formData.role === "coordinator" && !canCreateCoord) {
           setError("You don't have permission to create coordinator accounts.");
@@ -1033,22 +1283,25 @@ const AdminManagement = () => {
           return;
         }
 
-        if (formData.role === "super_admin") {
-          setError(
-            "Cannot create super admin accounts through this interface."
-          );
+        if (formData.role === "admin" || formData.role === "super_admin") {
+          setError("Cannot create admin accounts through this interface.");
           setIsLoading(false);
           return;
         }
       }
 
       // Check if username already exists (only for creating, or if username changed)
-      // Skip this check for super_admin editing
+      // Skip this check for admin editing (support legacy super_admin during migration)
       const adminsRef = collection(db, "adminusers");
       if (
         !isEditing ||
         (formData.username !== editingAdmin.username &&
-          !(editingAdmin && editingAdmin.role === "super_admin"))
+          !(
+            editingAdmin &&
+            (editingAdmin.role === "admin" ||
+              editingAdmin.role === "admin" ||
+              editingAdmin.role === "super_admin")
+          ))
       ) {
         const usernameQuery = query(
           adminsRef,
@@ -1069,9 +1322,13 @@ const AdminManagement = () => {
       }
 
       // Use provided email or generate from username (Firebase Auth requires email)
-      // Skip email validation for super_admin editing
+      // Skip email validation for admin editing (support legacy super_admin during migration)
       const emailToUse =
-        isEditing && editingAdmin && editingAdmin.role === "super_admin"
+        isEditing &&
+        editingAdmin &&
+        (editingAdmin.role === "admin" ||
+          editingAdmin.role === "admin" ||
+          editingAdmin.role === "super_admin")
           ? editingAdmin.email || editingAdmin.firebaseEmail || ""
           : formData.email.trim() ||
             `${formData.username
@@ -1079,9 +1336,15 @@ const AdminManagement = () => {
               .toLowerCase()
               .replace(/\s+/g, "")}@admin.internquest.local`;
 
-      // Validate email format if provided (skip for super_admin editing)
+      // Validate email format if provided (skip for admin editing)
       if (
-        !(isEditing && editingAdmin && editingAdmin.role === "super_admin") &&
+        !(
+          isEditing &&
+          editingAdmin &&
+          (editingAdmin.role === "admin" ||
+            editingAdmin.role === "admin" ||
+            editingAdmin.role === "super_admin")
+        ) &&
         formData.email.trim() &&
         !formData.email.includes("@")
       ) {
@@ -1090,37 +1353,24 @@ const AdminManagement = () => {
         return;
       }
 
-      // Validate password strength (skip for super_admin editing)
-      if (
-        !(isEditing && editingAdmin && editingAdmin.role === "super_admin") &&
-        formData.password.length < 6
-      ) {
-        setError("Password must be at least 6 characters long.");
-        setIsLoading(false);
-        return;
-      }
+      // Validate password only when creating a new account
+      // Password is used for Firebase Auth, not stored in Firestore
+      if (!isEditing) {
+        if (!formData.password || formData.password.trim() === "") {
+          setError("Password is required when creating a new admin account.");
+          setIsLoading(false);
+          return;
+        }
 
-      // Store current admin's Firebase Auth credentials before creating new user
-      // (createUserWithEmailAndPassword will sign in as the new user)
-      let currentAdminEmail = null;
-      let currentAdminPassword = null;
-      if (!isEditing && auth.currentUser) {
-        // Get current admin's credentials from Firestore
-        try {
-          const currentAdminQuery = query(
-            adminsRef,
-            where("firebaseEmail", "==", auth.currentUser.email)
-          );
-          const currentAdminSnapshot = await getDocs(currentAdminQuery);
-          if (!currentAdminSnapshot.empty) {
-            const currentAdminData = currentAdminSnapshot.docs[0].data();
-            currentAdminEmail = currentAdminData.firebaseEmail;
-            currentAdminPassword = currentAdminData.firebasePassword;
-          }
-        } catch (err) {
-          console.warn("Could not retrieve current admin credentials:", err);
+        if (formData.password.length < 6) {
+          setError("Password must be at least 6 characters long.");
+          setIsLoading(false);
+          return;
         }
       }
+
+      // NOTE: We no longer store passwords in Firestore
+      // All password management is handled through Firebase Auth only
 
       // Create Firebase Auth user (only when creating a new admin, not when editing)
       let firebaseUser = null;
@@ -1149,10 +1399,15 @@ const AdminManagement = () => {
           let errorMessage = "Failed to create Firebase Auth account. ";
 
           switch (authError.code) {
-            case "auth/email-already-in-use":
+            case "auth/email-already-in-use": {
+              const roleLabel =
+                formData.role === "coordinator" ? "coordinator" : "adviser";
               errorMessage =
-                "This email is already registered in Firebase Auth. Please use a different email.";
+                `This email is already used by another account in Firebase Authentication. ` +
+                `If you are trying to give access to an existing ${roleLabel}, please do not create a new account.\n` +
+                `Ask them to use "Forgot Password" on the login page instead.`;
               break;
+            }
             case "auth/invalid-email":
               errorMessage = "Invalid email address format.";
               break;
@@ -1208,16 +1463,67 @@ const AdminManagement = () => {
         }
       }
 
-      // For super_admin editing, only update college_code and sections
+      // Check if any selected section is already assigned to another adviser/coordinator
+      if (
+        sections.length > 0 &&
+        (formData.role === "adviser" || formData.role === "coordinator")
+      ) {
+        const sectionsToAssign = sections
+          .map((s) => (s || "").toString().trim().toUpperCase())
+          .filter(Boolean);
+        if (sectionsToAssign.length > 0) {
+          const allAdminsSnap = await getDocs(collection(db, "adminusers"));
+          const currentAdminId = editingAdmin?.id || null;
+          const takenBy = {}; // section -> { name/username of other admin }
+          for (const adminDoc of allAdminsSnap.docs) {
+            if (adminDoc.id === currentAdminId) continue;
+            const data = adminDoc.data();
+            const role = data.role;
+            if (role !== "adviser" && role !== "coordinator") continue;
+            const theirSections =
+              data.sections || (data.section ? [data.section] : []);
+            const label =
+              data.name?.trim() ||
+              data.username ||
+              data.email ||
+              "Another user";
+            for (const sec of theirSections) {
+              const normalized = (sec || "").toString().trim().toUpperCase();
+              if (sectionsToAssign.includes(normalized)) {
+                takenBy[normalized] = label;
+              }
+            }
+          }
+          const takenSections = Object.keys(takenBy);
+          if (takenSections.length > 0) {
+            const list = takenSections.sort().join(", ");
+            const who = takenSections.map((s) => takenBy[s])[0];
+            setError(
+              `The following section(s) are already assigned to another adviser/coordinator: ${list}. ` +
+                (who ? `One or more are assigned to: ${who}. ` : "") +
+                "Please remove these sections or choose different ones."
+            );
+            setIsLoading(false);
+            return;
+          }
+        }
+      }
+
+      // For admin editing, only update college_code, sections, and name (support legacy super_admin during migration)
       const adminData =
-        isEditing && editingAdmin.role === "super_admin"
+        isEditing &&
+        (editingAdmin.role === "admin" ||
+          editingAdmin.role === "admin" ||
+          editingAdmin.role === "super_admin")
           ? {
+              name: (formData.name || "").trim(),
               college_code: formData.college_code || "",
               sections: sections, // Array of sections
               section: sections.length > 0 ? sections[0] : "", // Keep for backward compatibility
               updatedAt: new Date().toISOString(),
             }
           : {
+              name: (formData.name || "").trim(),
               username: formData.username,
               email: emailToUse, // Use provided email or auto-generated
               role: formData.role,
@@ -1225,28 +1531,35 @@ const AdminManagement = () => {
               sections: sections, // Array of sections
               section: sections.length > 0 ? sections[0] : "", // Keep for backward compatibility
               college_code:
-                formData.role === "coordinator" ? formData.college_code : "", // College code for coordinators
+                formData.role === "coordinator"
+                  ? formData.college_code
+                  : formData.role === "adviser"
+                  ? formData.college_code ||
+                    (isCoordinator ? adminCollegeCode : "") // From dropdown or coordinator's college
+                  : "", // Empty for other cases
               firebaseEmail: firebaseUser
                 ? emailToUse
                 : editingAdmin?.firebaseEmail || emailToUse, // Use Firebase Auth email if user was created, otherwise keep existing
-              uid: firebaseUser ? firebaseUser.uid : editingAdmin?.uid, // Use Firebase Auth UID if user was created, otherwise keep existing
               updatedAt: new Date().toISOString(),
             };
 
-      // Only add password fields if creating or if password is provided (not for super_admin editing)
+      // Only include uid if it has a valid value (Firestore doesn't allow undefined)
+      const uidValue = firebaseUser ? firebaseUser.uid : editingAdmin?.uid;
+      if (uidValue) {
+        adminData.uid = uidValue;
+      }
+
+      // Only add creation metadata when creating
+      // NOTE: Passwords are NOT stored in Firestore - only in Firebase Auth
       if (!isEditing) {
-        adminData.password = formData.password; // In production, hash this password
-        adminData.firebasePassword = formData.password;
         adminData.createdAt = new Date().toISOString();
         adminData.createdBy = currentRole;
-      } else if (
-        formData.password &&
-        !(editingAdmin && editingAdmin.role === "super_admin")
-      ) {
-        // Only update password if a new one is provided (not for super_admin)
-        adminData.password = formData.password;
-        adminData.firebasePassword = formData.password;
+        // Track creator's college for better filtering when a coordinator creates advisers
+        if (adminCollegeCode) {
+          adminData.createdByCollegeCode = adminCollegeCode;
+        }
       }
+      // Password updates are handled via Firebase Auth only, not stored in Firestore
 
       console.log("Current Firebase Auth user:", auth.currentUser?.email);
       console.log("Is authenticated:", !!auth.currentUser);
@@ -1262,61 +1575,30 @@ const AdminManagement = () => {
         console.log("Editing admin ID:", editingAdmin.id);
       }
 
-      // Check if user is authenticated before proceeding
-      if (!auth.currentUser) {
-        setError(
-          "You are not authenticated. Please log out and log back in, then try again."
-        );
-        setIsLoading(false);
-        return;
-      }
-
-      // Refresh the auth token to ensure it's valid
-      try {
-        const token = await auth.currentUser.getIdToken(true); // Force refresh
-        console.log("Auth token refreshed successfully");
-      } catch (tokenError) {
-        console.error("Failed to refresh auth token:", tokenError);
-        setError(
-          "Authentication token expired. Please log out and log back in, then try again."
-        );
-        setIsLoading(false);
-        return;
-      }
+      // Authentication checks are already performed at the beginning of handleSubmit
+      // No need to duplicate them here
 
       try {
         if (isEditing) {
           const adminRef = doc(db, "adminusers", editingAdmin.id);
           console.log("Updating document:", adminRef.path);
-          console.log("Update data:", adminData);
-          await updateDoc(adminRef, adminData);
+
+          // Remove undefined values from adminData (Firestore doesn't allow undefined)
+          const cleanAdminData = Object.fromEntries(
+            Object.entries(adminData).filter(
+              ([_, value]) => value !== undefined
+            )
+          );
+
+          console.log("Update data:", cleanAdminData);
+          await updateDoc(adminRef, cleanAdminData);
           console.log("Firestore document updated successfully");
+
+          // Editing now never changes password; use a simple success message
+          setSuccess(`Admin account updated successfully.`);
         } else {
           await addDoc(adminsRef, adminData);
           console.log("Firestore document created successfully");
-
-          // Re-authenticate as the original admin after creating new user
-          // (createUserWithEmailAndPassword signed us in as the new user)
-          if (currentAdminEmail && currentAdminPassword) {
-            try {
-              await signOut(auth);
-              await signInWithEmailAndPassword(
-                auth,
-                currentAdminEmail,
-                currentAdminPassword
-              );
-              console.log("Re-authenticated as original admin");
-            } catch (reauthError) {
-              console.error(
-                "Failed to re-authenticate as original admin:",
-                reauthError
-              );
-              // Don't fail the operation, but warn the user
-              setError(
-                "Admin account created, but you may need to log out and log back in."
-              );
-            }
-          }
         }
       } catch (firestoreError) {
         console.error("Firestore error:", firestoreError);
@@ -1344,10 +1626,15 @@ const AdminManagement = () => {
 
       setSuccess(
         isEditing
-          ? `Successfully updated ${formData.role} account: ${formData.username}`
-          : `Successfully created ${formData.role} account: ${formData.username}`
+          ? `Successfully updated ${getRoleDisplayName(
+              formData.role
+            )} account: ${formData.username}`
+          : `Successfully created ${getRoleDisplayName(
+              formData.role
+            )} account: ${formData.username}`
       );
       setFormData({
+        name: "",
         username: "",
         password: "",
         email: "",
@@ -1379,11 +1666,17 @@ const AdminManagement = () => {
       <Navbar onLogout={handleLogout} />
       <div className="admin-management-container">
         <div className="admin-management-header">
-          <h1>Admin Account Management</h1>
-          <p className="role-indicator">Current Role: {currentRole}</p>
+          <h1>User & Role Management</h1>
+          <p className="role-indicator">
+            {currentRole === "admin" || currentRole === "super_admin"
+              ? "Admin"
+              : currentRole === "coordinator"
+              ? "OJT Coordinator"
+              : "OJT Adviser"}
+          </p>
         </div>
 
-        {error && (
+        {error && !showCreateModal && (
           <div className="error-message" role="alert">
             {error}
           </div>
@@ -1400,29 +1693,7 @@ const AdminManagement = () => {
             type="button"
             className="create-admin-btn"
             onClick={async () => {
-              let loadedSections = currentAdminSections;
-
-              // Ensure coordinator's profile is loaded before opening modal
-              if (isCoordinator && auth.currentUser) {
-                const profile = await loadCurrentAdminProfile();
-                loadedSections = profile.sections;
-              }
-
-              // Auto-fill sections when coordinator opens modal to create adviser
-              if (isCoordinator && formData.role === "adviser") {
-                setFormData((prev) => ({
-                  ...prev,
-                  sections:
-                    loadedSections.length > 0
-                      ? [...loadedSections]
-                      : prev.sections,
-                }));
-              }
-              setShowCreateModal(true);
-
-              // Initialize filtered program codes (will be filtered by college if one is selected)
-              const availableCodes = getAvailableProgramCodes();
-              setFilteredProgramCodes(availableCodes);
+              await openCreateModal();
             }}
           >
             + Create New Coordinator/Adviser Account
@@ -1439,8 +1710,10 @@ const AdminManagement = () => {
               <div className="create-admin-modal-header">
                 <h2>
                   {editingAdmin
-                    ? editingAdmin.role === "super_admin"
-                      ? "Edit Super Admin Account"
+                    ? editingAdmin.role === "admin" ||
+                      editingAdmin.role === "admin" ||
+                      editingAdmin.role === "super_admin"
+                      ? "Edit Admin Account"
                       : "Edit Coordinator/Adviser Account"
                     : "Create New Coordinator/Adviser Account"}
                 </h2>
@@ -1453,7 +1726,40 @@ const AdminManagement = () => {
                   ×
                 </button>
               </div>
+              {error && (
+                <div className="error-message" role="alert">
+                  {error}
+                </div>
+              )}
               <form onSubmit={handleSubmit} className="admin-form">
+                <div className="form-group">
+                  <label htmlFor="modal-name">Name</label>
+                  <input
+                    type="text"
+                    id="modal-name"
+                    name="name"
+                    value={formData.name}
+                    onChange={handleChange}
+                    placeholder="Full name"
+                    disabled={
+                      editingAdmin &&
+                      (editingAdmin.role === "admin" ||
+                        editingAdmin.role === "admin" ||
+                        editingAdmin.role === "super_admin")
+                    }
+                    readOnly={
+                      editingAdmin &&
+                      (editingAdmin.role === "admin" ||
+                        editingAdmin.role === "admin" ||
+                        editingAdmin.role === "super_admin")
+                    }
+                  />
+                  <small className="form-help">
+                    Display name for the account; used for profile icon
+                    initials.
+                  </small>
+                </div>
+
                 <div className="form-group">
                   <label htmlFor="modal-username">Username</label>
                   <input
@@ -1465,10 +1771,16 @@ const AdminManagement = () => {
                     required
                     placeholder="Enter username"
                     disabled={
-                      editingAdmin && editingAdmin.role === "super_admin"
+                      editingAdmin &&
+                      (editingAdmin.role === "admin" ||
+                        editingAdmin.role === "admin" ||
+                        editingAdmin.role === "super_admin")
                     }
                     readOnly={
-                      editingAdmin && editingAdmin.role === "super_admin"
+                      editingAdmin &&
+                      (editingAdmin.role === "admin" ||
+                        editingAdmin.role === "admin" ||
+                        editingAdmin.role === "super_admin")
                     }
                   />
                 </div>
@@ -1484,44 +1796,51 @@ const AdminManagement = () => {
                     required
                     placeholder="Enter email address"
                     disabled={
-                      editingAdmin && editingAdmin.role === "super_admin"
+                      editingAdmin &&
+                      (editingAdmin.role === "admin" ||
+                        editingAdmin.role === "admin" ||
+                        editingAdmin.role === "super_admin")
                     }
                     readOnly={
-                      editingAdmin && editingAdmin.role === "super_admin"
+                      editingAdmin &&
+                      (editingAdmin.role === "admin" ||
+                        editingAdmin.role === "admin" ||
+                        editingAdmin.role === "super_admin")
                     }
                   />
                 </div>
 
-                <div className="form-group">
-                  <label htmlFor="modal-password">
-                    Password{" "}
-                    {editingAdmin && (
-                      <span className="optional">
-                        (Leave blank to keep current password)
-                      </span>
-                    )}
-                  </label>
-                  <input
-                    type="password"
-                    id="modal-password"
-                    name="password"
-                    value={formData.password}
-                    onChange={handleChange}
-                    required={!editingAdmin}
-                    placeholder={
-                      editingAdmin
-                        ? "Leave blank to keep current password"
-                        : "Enter password"
-                    }
-                    minLength="6"
-                    disabled={
-                      editingAdmin && editingAdmin.role === "super_admin"
-                    }
-                    readOnly={
-                      editingAdmin && editingAdmin.role === "super_admin"
-                    }
-                  />
-                </div>
+                {!editingAdmin && (
+                  <div className="form-group">
+                    <label htmlFor="modal-password">Password</label>
+                    <div className="password-input-wrapper">
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        id="modal-password"
+                        name="password"
+                        value={formData.password}
+                        onChange={handleChange}
+                        required
+                        placeholder="Enter password (min 6 characters)"
+                        minLength="6"
+                      />
+                      <button
+                        type="button"
+                        className="password-toggle"
+                        onClick={() => setShowPassword((prev) => !prev)}
+                        aria-label={
+                          showPassword ? "Hide password" : "Show password"
+                        }
+                      >
+                        {showPassword ? <FaRegEyeSlash /> : <FaRegEye />}
+                      </button>
+                    </div>
+                    <small className="form-help">
+                      Password is stored securely in Firebase Authentication
+                      only, not in the database.
+                    </small>
+                  </div>
+                )}
 
                 <div className="form-group role-autocomplete-container">
                   <label htmlFor="modal-role">Role</label>
@@ -1529,12 +1848,18 @@ const AdminManagement = () => {
                     style={{
                       position: "relative",
                       cursor:
-                        editingAdmin && editingAdmin.role === "super_admin"
+                        editingAdmin &&
+                        (editingAdmin.role === "admin" ||
+                          editingAdmin.role === "admin" ||
+                          editingAdmin.role === "super_admin")
                           ? "not-allowed"
                           : "pointer",
                     }}
                     onClick={
-                      editingAdmin && editingAdmin.role === "super_admin"
+                      editingAdmin &&
+                      (editingAdmin.role === "admin" ||
+                        editingAdmin.role === "admin" ||
+                        editingAdmin.role === "super_admin")
                         ? undefined
                         : handleRoleFocus
                     }
@@ -1544,7 +1869,22 @@ const AdminManagement = () => {
                       id="modal-role"
                       name="role"
                       value={
-                        formData.role === "adviser"
+                        editingAdmin &&
+                        (editingAdmin.role === "admin" ||
+                          editingAdmin.role === "admin" ||
+                          editingAdmin.role === "super_admin")
+                          ? (() => {
+                              const hasCoordinatorAttributes =
+                                editingAdmin.college_code ||
+                                (editingAdmin.sections &&
+                                  Array.isArray(editingAdmin.sections) &&
+                                  editingAdmin.sections.length > 0) ||
+                                editingAdmin.section;
+                              return hasCoordinatorAttributes
+                                ? "Admin/Coordinator"
+                                : "Admin";
+                            })()
+                          : formData.role === "adviser"
                           ? "OJT Adviser"
                           : formData.role === "coordinator"
                           ? "OJT Coordinator"
@@ -1558,7 +1898,19 @@ const AdminManagement = () => {
                       autoComplete="off"
                       readOnly
                       style={{ cursor: "pointer" }}
+                      className="role-input-with-icon"
                     />
+                    <span className="role-dropdown-icon" aria-hidden="true">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="12"
+                        height="12"
+                        viewBox="0 0 12 12"
+                        fill="none"
+                      >
+                        <path d="M6 9L1 4h10z" fill="currentColor" />
+                      </svg>
+                    </span>
                     {showRoleSuggestions && (
                       <div className="role-suggestions-dropdown">
                         {canCreateCoord && (
@@ -1587,8 +1939,13 @@ const AdminManagement = () => {
                   </small>
                 </div>
 
+                {/* College field for coordinators, advisers, and when editing admin */}
                 {(formData.role === "coordinator" ||
-                  (editingAdmin && editingAdmin.role === "super_admin")) && (
+                  formData.role === "adviser" ||
+                  (editingAdmin &&
+                    (editingAdmin.role === "admin" ||
+                      editingAdmin.role === "admin" ||
+                      editingAdmin.role === "super_admin"))) && (
                   <div className="form-group">
                     <label htmlFor="modal-college">College</label>
                     <select
@@ -1596,8 +1953,14 @@ const AdminManagement = () => {
                       name="college_code"
                       value={formData.college_code}
                       onChange={handleChange}
-                      required={formData.role === "coordinator"}
-                      disabled={isLoading}
+                      required={
+                        formData.role === "coordinator" ||
+                        formData.role === "adviser"
+                      }
+                      disabled={
+                        isLoading ||
+                        (formData.role === "adviser" && isCoordinator)
+                      }
                     >
                       <option value="">Select a college</option>
                       {collegeOptions.map((college, index) => (
@@ -1612,8 +1975,13 @@ const AdminManagement = () => {
                       ))}
                     </select>
                     <small className="form-help">
-                      {editingAdmin && editingAdmin.role === "super_admin"
-                        ? "Super admin college assignment"
+                      {editingAdmin &&
+                      (editingAdmin.role === "admin" ||
+                        editingAdmin.role === "admin" ||
+                        editingAdmin.role === "super_admin")
+                        ? "Admin college assignment"
+                        : formData.role === "adviser" && isCoordinator
+                        ? "Adviser is assigned to your college. Sections must belong to programs in this college."
                         : "Coordinators can only see students from programs in their assigned college"}
                     </small>
                   </div>
@@ -1621,7 +1989,10 @@ const AdminManagement = () => {
 
                 {(formData.role === "adviser" ||
                   formData.role === "coordinator" ||
-                  (editingAdmin && editingAdmin.role === "super_admin")) && (
+                  (editingAdmin &&
+                    (editingAdmin.role === "admin" ||
+                      editingAdmin.role === "admin" ||
+                      editingAdmin.role === "super_admin"))) && (
                   <div className="form-group">
                     <label>Section</label>
                     <div className="section-input-group">
@@ -1832,7 +2203,7 @@ const AdminManagement = () => {
 
         <div className="admin-management-content">
           <div className="admins-list">
-            <h2>Existing Admin Accounts</h2>
+            <h2>Existing User Accounts</h2>
 
             {/* Search and Filter Bar */}
             <div className="admin-search-filter-bar">
@@ -1840,7 +2211,7 @@ const AdminManagement = () => {
                 <input
                   type="text"
                   className="admin-search-input"
-                  placeholder="Search by username, email, or role..."
+                  placeholder="Search by name, username, email, or role..."
                   value={searchQuery}
                   onChange={(e) => {
                     setSearchQuery(e.target.value);
@@ -1872,7 +2243,7 @@ const AdminManagement = () => {
                   }}
                 >
                   <option value="">All Roles</option>
-                  <option value="super_admin">Super Admin</option>
+                  <option value="admin">Admin</option>
                   <option value="coordinator">OJT Coordinator</option>
                   <option value="adviser">OJT Adviser</option>
                 </select>
@@ -1911,7 +2282,10 @@ const AdminManagement = () => {
             </div>
 
             {isLoading ? (
-              <LoadingSpinner />
+              <LoadingSpinner
+                isLoading={isLoading}
+                message="Loading admins..."
+              />
             ) : (
               (() => {
                 // Filter admins based on search and filters
@@ -1919,6 +2293,9 @@ const AdminManagement = () => {
                   // Search filter
                   const matchesSearch =
                     !searchQuery ||
+                    admin.name
+                      ?.toLowerCase()
+                      .includes(searchQuery.toLowerCase()) ||
                     admin.username
                       ?.toLowerCase()
                       .includes(searchQuery.toLowerCase()) ||
@@ -1958,12 +2335,14 @@ const AdminManagement = () => {
                       <table>
                         <thead>
                           <tr>
+                            <th>Name</th>
                             <th>Username</th>
                             <th>Email</th>
                             <th>Role</th>
                             <th>College</th>
                             <th>Section</th>
                             <th>Created At</th>
+                            <th>Created By</th>
                             <th>Actions</th>
                           </tr>
                         </thead>
@@ -1971,7 +2350,7 @@ const AdminManagement = () => {
                           {filteredAdmins.length === 0 ? (
                             <tr>
                               <td
-                                colSpan="7"
+                                colSpan="9"
                                 style={{ padding: 0, border: "none" }}
                               >
                                 <EmptyState
@@ -1982,13 +2361,13 @@ const AdminManagement = () => {
                                   }
                                   title={
                                     searchQuery || filterRole || filterCollege
-                                      ? "No admin accounts match your filters"
-                                      : "No admin accounts found"
+                                      ? "No user accounts match your filters"
+                                      : "No user accounts found"
                                   }
                                   message={
                                     searchQuery || filterRole || filterCollege
-                                      ? "Try adjusting your search criteria or filters to find admin accounts. You can also clear all filters to see all accounts."
-                                      : "Get started by creating your first admin account. Use the 'Create New Coordinator/Adviser Account' button above."
+                                      ? "Try adjusting your search criteria or filters to find user accounts. You can also clear all filters to see all accounts."
+                                      : "Get started by creating your first user account. Use the 'Create New Coordinator/Adviser Account' button above."
                                   }
                                   icon={IoShieldCheckmarkOutline}
                                   actionLabel={
@@ -2012,6 +2391,13 @@ const AdminManagement = () => {
                           ) : (
                             paginatedAdmins.map((admin) => (
                               <tr key={admin.id}>
+                                <td>
+                                  <span className="admin-name-text">
+                                    {admin.name?.trim() ||
+                                      admin.username ||
+                                      "—"}
+                                  </span>
+                                </td>
                                 <td>{admin.username}</td>
                                 <td>
                                   {admin.email &&
@@ -2032,15 +2418,39 @@ const AdminManagement = () => {
                                   )}
                                 </td>
                                 <td>
-                                  <span
-                                    className={`role-badge role-${admin.role}`}
-                                  >
-                                    {admin.role === "super_admin"
-                                      ? "Super Admin"
-                                      : admin.role === "coordinator"
-                                      ? "OJT Coordinator"
-                                      : "OJT Adviser"}
-                                  </span>
+                                  {(() => {
+                                    // Check if admin also has coordinator attributes (support legacy super_admin during migration)
+                                    const isAdminRole =
+                                      admin.role === "admin" ||
+                                      admin.role === "super_admin";
+                                    const isAdminWithCoordinator =
+                                      isAdminRole &&
+                                      (admin.college_code ||
+                                        (admin.sections &&
+                                          Array.isArray(admin.sections) &&
+                                          admin.sections.length > 0) ||
+                                        admin.section);
+
+                                    return (
+                                      <span
+                                        className={`role-badge role-${
+                                          isAdminRole ? "admin" : admin.role
+                                        } ${
+                                          isAdminWithCoordinator
+                                            ? "role-admin-coordinator"
+                                            : ""
+                                        }`}
+                                      >
+                                        {isAdminRole
+                                          ? isAdminWithCoordinator
+                                            ? "Admin/Coordinator"
+                                            : "Admin"
+                                          : admin.role === "coordinator"
+                                          ? "OJT Coordinator"
+                                          : "OJT Adviser"}
+                                      </span>
+                                    );
+                                  })()}
                                 </td>
                                 <td>
                                   {admin.college_code
@@ -2069,13 +2479,26 @@ const AdminManagement = () => {
                                     : "N/A"}
                                 </td>
                                 <td>
+                                  {admin.createdBy
+                                    ? admin.createdBy === "admin" ||
+                                      admin.createdBy === "super_admin"
+                                      ? "Admin"
+                                      : admin.createdBy === "coordinator"
+                                      ? "OJT Coordinator"
+                                      : admin.createdBy === "adviser"
+                                      ? "OJT Adviser"
+                                      : admin.createdBy
+                                    : "N/A"}
+                                </td>
+                                <td>
                                   <div className="admin-actions-buttons">
                                     <button
                                       className="edit-admin-btn"
                                       onClick={() => handleEditAdmin(admin)}
                                       title={
+                                        admin.role === "admin" ||
                                         admin.role === "super_admin"
-                                          ? "Edit super admin (only college and section can be changed)"
+                                          ? "Edit admin (only college and section can be changed)"
                                           : "Edit admin"
                                       }
                                       aria-label={`Edit admin ${
@@ -2083,22 +2506,28 @@ const AdminManagement = () => {
                                       }`}
                                     >
                                       <IoPencilOutline />
+                                      <span className="admin-action-label">
+                                        Edit
+                                      </span>
                                     </button>
                                     <button
                                       className="delete-admin-btn"
                                       onClick={() => handleDeleteAdmin(admin)}
                                       disabled={
                                         deletingId === admin.id ||
+                                        admin.role === "admin" ||
                                         admin.role === "super_admin"
                                       }
                                       title={
+                                        admin.role === "admin" ||
                                         admin.role === "super_admin"
-                                          ? "Cannot delete super admin"
+                                          ? "Cannot delete admin"
                                           : "Delete admin"
                                       }
                                       aria-label={
+                                        admin.role === "admin" ||
                                         admin.role === "super_admin"
-                                          ? "Cannot delete super admin"
+                                          ? "Cannot delete admin"
                                           : `Delete admin ${
                                               admin.username || ""
                                             }`
@@ -2107,7 +2536,12 @@ const AdminManagement = () => {
                                       {deletingId === admin.id ? (
                                         "..."
                                       ) : (
-                                        <IoTrashOutline />
+                                        <>
+                                          <IoTrashOutline />
+                                          <span className="admin-action-label">
+                                            Delete
+                                          </span>
+                                        </>
                                       )}
                                     </button>
                                   </div>
@@ -2127,7 +2561,10 @@ const AdminManagement = () => {
                             <span className="pagination-text">
                               Showing <strong>{indexOfFirstItem + 1}</strong> to{" "}
                               <strong>
-                                {Math.min(indexOfLastItem, filteredAdmins.length)}
+                                {Math.min(
+                                  indexOfLastItem,
+                                  filteredAdmins.length
+                                )}
                               </strong>{" "}
                               of <strong>{filteredAdmins.length}</strong> admin
                               {filteredAdmins.length !== 1 ? "s" : ""}
@@ -2150,7 +2587,9 @@ const AdminManagement = () => {
                               <option value="20">20</option>
                               <option value="50">50</option>
                             </select>
-                            <span className="items-per-page-label">per page</span>
+                            <span className="items-per-page-label">
+                              per page
+                            </span>
                           </div>
                         </div>
                         {totalPages > 0 && (
@@ -2182,7 +2621,9 @@ const AdminManagement = () => {
                                     }`}
                                     onClick={() => setCurrentPage(page)}
                                     aria-label={`Go to page ${page}`}
-                                    aria-current={currentPage === page ? "page" : undefined}
+                                    aria-current={
+                                      currentPage === page ? "page" : undefined
+                                    }
                                   >
                                     {page}
                                   </button>
@@ -2232,7 +2673,9 @@ const AdminManagement = () => {
           message={
             pendingDeleteAdmin
               ? `Delete admin "${pendingDeleteAdmin.username || "account"}"${
-                  pendingDeleteAdmin.role ? ` (${pendingDeleteAdmin.role})` : ""
+                  pendingDeleteAdmin.role
+                    ? ` (${getRoleDisplayName(pendingDeleteAdmin.role)})`
+                    : ""
                 }?\nThis will remove their admin record and add an entry to deletion history.`
               : ""
           }

@@ -384,7 +384,6 @@ const DashboardOverview = ({
                                       ? `${student.firstName} ${
                                           student.lastName
                                         } (${
-                                          student.studentNumber ||
                                           student.studentId
                                         })`
                                       : "";
@@ -431,11 +430,7 @@ const DashboardOverview = ({
                                 const query = studentSearchQuery.toLowerCase();
                                 const fullName =
                                   `${student.firstName} ${student.lastName}`.toLowerCase();
-                                const studentId = (
-                                  student.studentNumber ||
-                                  student.studentId ||
-                                  ""
-                                ).toLowerCase();
+                                const studentId = (student.studentId || "").toLowerCase();
                                 const section = (
                                   student.section || ""
                                 ).toLowerCase();
@@ -464,8 +459,7 @@ const DashboardOverview = ({
                                     {student.firstName} {student.lastName}
                                   </div>
                                   <div className="dropdown-item-details">
-                                    {student.studentNumber || student.studentId}{" "}
-                                    - {student.section}
+                                    {student.studentId} - {student.section}
                                   </div>
                                 </div>
                               ))}
@@ -474,11 +468,7 @@ const DashboardOverview = ({
                               const query = studentSearchQuery.toLowerCase();
                               const fullName =
                                 `${student.firstName} ${student.lastName}`.toLowerCase();
-                              const studentId = (
-                                student.studentNumber ||
-                                student.studentId ||
-                                ""
-                              ).toLowerCase();
+                              const studentId = (student.studentId || "").toLowerCase();
                               const section = (
                                 student.section || ""
                               ).toLowerCase();

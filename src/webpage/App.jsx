@@ -22,13 +22,17 @@ const PlatformData = lazy(() => import("../components/PlatformData/PlatformData.
 
 // Loading fallback component
 const PageLoader = () => (
-  <div style={{ 
-    display: 'flex', 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    minHeight: '100vh',
-    background: '#f7f9fb'
-  }}>
+  <div
+    className="page-loader"
+    style={{
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      minHeight: '100vh',
+      background: 'var(--iq-bg, var(--background-color, #f7f9fb))',
+      color: 'var(--iq-text-main, var(--text-color, #213547))',
+    }}
+  >
     <LoadingSpinner isLoading={true} message="Loading page..." />
   </div>
 );
@@ -149,7 +153,7 @@ function App() {
           <Route
             path="/platform-data"
             element={
-              <ProtectedRoute allowedRoles={[ROLES.SUPER_ADMIN, ROLES.COORDINATOR]}>
+              <ProtectedRoute allowedRoles={[ROLES.SUPER_ADMIN]}>
                 <PlatformData />
               </ProtectedRoute>
             }

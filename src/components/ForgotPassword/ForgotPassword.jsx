@@ -232,7 +232,11 @@ const ForgotPassword = () => {
 
             <div
               className="instruction-text"
-              style={{ marginTop: "20px", borderTop: "1px solid #eee", paddingTop: "14px" }}
+              style={{
+                marginTop: "20px",
+                borderTop: "1px solid #eee",
+                paddingTop: "14px",
+              }}
             >
               <h3 style={{ marginBottom: "6px" }}>For Advisers</h3>
               <p style={{ fontSize: "14px", marginBottom: "10px" }}>
@@ -248,11 +252,13 @@ const ForgotPassword = () => {
                 password for you.
               </p>
 
-              <h3 style={{ marginBottom: "6px" }}>For Admin / Higher Coordinator</h3>
+              <h3 style={{ marginBottom: "6px" }}>
+                For Admin / Higher Coordinator
+              </h3>
               <p style={{ fontSize: "14px" }}>
                 If you are an admin or higher coordinator and cannot sign in,
-                please contact the system owner or super admin so they can reset
-                your password.
+                please contact the system owner or another admin so they can
+                reset your password.
               </p>
             </div>
 
@@ -269,4 +275,3 @@ const ForgotPassword = () => {
 };
 
 export default ForgotPassword;
-

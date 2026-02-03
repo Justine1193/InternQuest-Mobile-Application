@@ -27,13 +27,17 @@ body.sidebar-collapsed .admin-management-page {
 }
 
 .admin-management-header::before {
-  content: '';
+  content: "";
   position: absolute;
   top: 0;
   right: 0;
   width: 400px;
   height: 400px;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0%, transparent 70%);
+  background: radial-gradient(
+    circle,
+    rgba(255, 255, 255, 0.1) 0%,
+    transparent 70%
+  );
   transform: translate(30%, -30%);
   pointer-events: none;
 }
@@ -260,7 +264,12 @@ body.sidebar-collapsed .admin-management-page {
 .admins-table table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 900px;
+  min-width: 980px;
+}
+
+.admin-name-text {
+  color: #374151;
+  font-weight: 500;
 }
 
 .admins-table thead {
@@ -310,13 +319,13 @@ body.sidebar-collapsed .admin-management-page {
   white-space: nowrap;
 }
 
-.role-super_admin {
+.role-admin {
   background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
   color: #1d4ed8;
 }
 
 /* Style for admin with coordinator role */
-.role-super_admin.role-super-admin-coordinator {
+.role-admin.role-admin-coordinator {
   background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
   color: #92400e;
 }
@@ -521,8 +530,12 @@ body.sidebar-collapsed .admin-management-page {
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes slideUp {

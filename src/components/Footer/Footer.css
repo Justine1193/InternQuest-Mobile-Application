@@ -2,8 +2,8 @@
 
 .app-footer {
   width: 100%;
-  background: #f8f9fa;
-  border-top: 1px solid #e0e0e0;
+  background: var(--iq-bg-secondary, #f8f9fa);
+  border-top: 1px solid var(--iq-border-subtle, #e0e0e0);
   padding: 1rem 0;
   display: flex;
   justify-content: center;
@@ -11,8 +11,9 @@
   position: relative;
   bottom: 0;
   font-size: 15px;
-  color: #888;
+  color: var(--iq-text-muted, #64748b);
   z-index: 10;
+  transition: background 0.35s ease, color 0.35s ease, border-color 0.35s ease;
 }
 
 .footer-content {

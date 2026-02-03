@@ -21,7 +21,7 @@ import Navbar from "../Navbar/Navbar.jsx";
 import Footer from "../Footer/Footer.jsx";
 import { signOut } from "firebase/auth";
 import { auth } from "../../../firebase.js";
-import { clearAdminSession } from "../../utils/auth";
+import { clearAdminSession, ROLES } from "../../utils/auth";
 import { useNavigate } from "react-router-dom";
 import "./ActivityLogViewer.css";
 import {
@@ -36,6 +36,26 @@ import {
 } from "react-icons/io5";
 
 const PAGE_SIZE = 20;
+
+// Format role name for display (normalizes legacy 'super_admin' to 'admin')
+const getRoleDisplayName = (role) => {
+  if (!role) return "unknown";
+  // Normalize legacy 'super_admin' to 'admin' for display
+  const normalizedRole = role === "super_admin" ? "admin" : role;
+  switch (normalizedRole) {
+    case ROLES.SUPER_ADMIN:
+    case "admin":
+      return "Admin";
+    case ROLES.COORDINATOR:
+    case "coordinator":
+      return "Coordinator";
+    case ROLES.ADVISER:
+    case "adviser":
+      return "Adviser";
+    default:
+      return normalizedRole || "unknown";
+  }
+};
 
 const ActivityLogViewer = () => {
   const [activities, setActivities] = useState([]);
@@ -163,36 +183,39 @@ const ActivityLogViewer = () => {
         date = timestamp.toDate();
       } else if (timestamp instanceof Date) {
         date = timestamp;
-      } else if (typeof timestamp === 'string' || typeof timestamp === 'number') {
+      } else if (
+        typeof timestamp === "string" ||
+        typeof timestamp === "number"
+      ) {
         date = new Date(timestamp);
       } else {
         return "Unknown time";
       }
-      
+
       if (isNaN(date.getTime())) return "Unknown time";
-      
+
       const now = new Date();
       const diffInSeconds = Math.floor((now - date) / 1000);
-      
+
       if (diffInSeconds < 60) return "Just now";
       if (diffInSeconds < 3600) {
         const minutes = Math.floor(diffInSeconds / 60);
-        return `${minutes} minute${minutes !== 1 ? 's' : ''} ago`;
+        return `${minutes} minute${minutes !== 1 ? "s" : ""} ago`;
       }
       if (diffInSeconds < 86400) {
         const hours = Math.floor(diffInSeconds / 3600);
-        return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
+        return `${hours} hour${hours !== 1 ? "s" : ""} ago`;
       }
       if (diffInSeconds < 604800) {
         const days = Math.floor(diffInSeconds / 86400);
-        return `${days} day${days !== 1 ? 's' : ''} ago`;
+        return `${days} day${days !== 1 ? "s" : ""} ago`;
       }
-      return date.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
-        hour: '2-digit',
-        minute: '2-digit'
+      return date.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: date.getFullYear() !== now.getFullYear() ? "numeric" : undefined,
+        hour: "2-digit",
+        minute: "2-digit",
       });
     } catch (e) {
       return "Unknown time";
@@ -201,15 +224,15 @@ const ActivityLogViewer = () => {
 
   const getStats = () => {
     const total = activities.length;
-    const success = activities.filter(a => a.status === "success").length;
-    const errors = activities.filter(a => a.status === "error").length;
+    const success = activities.filter((a) => a.status === "success").length;
+    const errors = activities.filter((a) => a.status === "error").length;
     return { total, success, errors };
   };
 
   const filteredActivities = activities.filter((activity) => {
     // Filter by status
     if (filter !== "all" && activity.status !== filter) return false;
-    
+
     // Filter by search query
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
@@ -218,17 +241,18 @@ const ActivityLogViewer = () => {
       const adminUsername = (activity.adminUsername || "").toLowerCase();
       const adminRole = (activity.adminRole || "").toLowerCase();
       const entityId = (activity.entityId || "").toLowerCase();
-      
+
       return (
         action.includes(query) ||
         entityType.includes(query) ||
         adminUsername.includes(query) ||
         adminRole.includes(query) ||
         entityId.includes(query) ||
-        (activity.details && JSON.stringify(activity.details).toLowerCase().includes(query))
+        (activity.details &&
+          JSON.stringify(activity.details).toLowerCase().includes(query))
       );
     }
-    
+
     return true;
   });
 
@@ -237,7 +261,10 @@ const ActivityLogViewer = () => {
     setCurrentPage(1);
   }, [filter, searchQuery]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredActivities.length / PAGE_SIZE));
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredActivities.length / PAGE_SIZE)
+  );
   const pageStart = (currentPage - 1) * PAGE_SIZE;
   const pageEnd = pageStart + PAGE_SIZE;
   const visibleActivities = filteredActivities.slice(pageStart, pageEnd);
@@ -413,9 +440,14 @@ const ActivityLogViewer = () => {
                 : activity.timestamp
                 ? activity.timestamp.toDate()
                 : null;
-              
+
               return (
-                <div key={activity.id} className={`activity-item activity-${activity.status || 'info'}`}>
+                <div
+                  key={activity.id}
+                  className={`activity-item activity-${
+                    activity.status || "info"
+                  }`}
+                >
                   <div className="activity-icon-wrapper">
                     {getActionIcon(activity.status)}
                   </div>
@@ -440,8 +472,12 @@ const ActivityLogViewer = () => {
                       <div className="activity-meta">
                         <span className="activity-admin">
                           <IoPersonOutline />
-                          <span className="admin-name">{activity.adminUsername || "Unknown"}</span>
-                          <span className="admin-role">({activity.adminRole || "unknown"})</span>
+                          <span className="admin-name">
+                            {activity.adminUsername || "Unknown"}
+                          </span>
+                          <span className="admin-role">
+                            ({getRoleDisplayName(activity.adminRole)})
+                          </span>
                         </span>
                         {activity.entityId && (
                           <span className="activity-entity-id">
@@ -454,7 +490,10 @@ const ActivityLogViewer = () => {
                           <div className="activity-details-content">
                             {Object.entries(activity.details).map(
                               ([key, value]) => (
-                                <span key={key} className="activity-detail-item">
+                                <span
+                                  key={key}
+                                  className="activity-detail-item"
+                                >
                                   <strong>{key}:</strong> {String(value)}
                                 </span>
                               )
@@ -466,12 +505,12 @@ const ActivityLogViewer = () => {
                       <div className="activity-footer">
                         <span className="activity-full-time">
                           <IoCalendarOutline />
-                          {timestamp.toLocaleString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            year: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
+                          {timestamp.toLocaleString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
                           })}
                         </span>
                       </div>
@@ -488,16 +527,25 @@ const ActivityLogViewer = () => {
           <div className="activity-pagination">
             <div className="activity-pagination-left">
               <span className="activity-pagination-info">
-                Showing {Math.min(pageStart + 1, filteredActivities.length)}–{Math.min(pageEnd, filteredActivities.length)} of {filteredActivities.length}
+                Showing {Math.min(pageStart + 1, filteredActivities.length)}–
+                {Math.min(pageEnd, filteredActivities.length)} of{" "}
+                {filteredActivities.length}
               </span>
               {hasMore && (
-                <span className="activity-pagination-badge" title="More logs available to load">
+                <span
+                  className="activity-pagination-badge"
+                  title="More logs available to load"
+                >
                   More available
                 </span>
               )}
             </div>
 
-            <div className="activity-pagination-controls" role="navigation" aria-label="Activity log pages">
+            <div
+              className="activity-pagination-controls"
+              role="navigation"
+              aria-label="Activity log pages"
+            >
               <button
                 type="button"
                 className="activity-page-btn"
@@ -512,7 +560,11 @@ const ActivityLogViewer = () => {
                 {getPageButtons().map((item) => {
                   if (typeof item === "string" && item.startsWith("ellipsis")) {
                     return (
-                      <span key={item} className="activity-page-ellipsis" aria-hidden="true">
+                      <span
+                        key={item}
+                        className="activity-page-ellipsis"
+                        aria-hidden="true"
+                      >
                         …
                       </span>
                     );
@@ -523,7 +575,9 @@ const ActivityLogViewer = () => {
                     <button
                       key={page}
                       type="button"
-                      className={`activity-page-btn ${isActive ? "active" : ""}`}
+                      className={`activity-page-btn ${
+                        isActive ? "active" : ""
+                      }`}
                       onClick={() => setCurrentPage(page)}
                       disabled={isLoading}
                       aria-current={isActive ? "page" : undefined}
@@ -539,9 +593,15 @@ const ActivityLogViewer = () => {
                 className="activity-page-btn"
                 onClick={handleNextPage}
                 disabled={(!hasMore && currentPage >= totalPages) || isLoading}
-                aria-label={hasMore ? "Next page (loads more if needed)" : "Next page"}
+                aria-label={
+                  hasMore ? "Next page (loads more if needed)" : "Next page"
+                }
               >
-                {isLoading ? <span className="spinner-small" aria-hidden="true"></span> : "›"}
+                {isLoading ? (
+                  <span className="spinner-small" aria-hidden="true"></span>
+                ) : (
+                  "›"
+                )}
               </button>
             </div>
           </div>

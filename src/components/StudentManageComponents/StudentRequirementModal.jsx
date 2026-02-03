@@ -151,12 +151,13 @@ const StudentRequirementModal = ({
         const requirementsRef = ref(storage, storagePath);
         const folderList = await listAll(requirementsRef);
 
-        // Map folder names to requirement types
+        // Map folder names to requirement types (STRICT MAPPING - no ambiguous matches)
         const folderMapping = {
           "proof-of-enrollment-com": "Proof of Enrollment (COM)",
           "parent-guardian-consent-form": "Notarized Parental Consent",
           "medical-certificate": "Medical Certificate",
-          "psychological-test-certification": "Psychological Test Certification",
+          "psychological-test-certification":
+            "Psychological Test Certification",
           "proof-of-insurance": "Proof of Insurance",
           "ojt-orientation": "OJT Orientation",
           "moa-memorandum-of-agreement": "Memorandum of Agreement (MOA)",
@@ -164,7 +165,11 @@ const StudentRequirementModal = ({
           "curriculum-vitae": "Curriculum Vitae",
           resume: "Curriculum Vitae",
           cv: "Curriculum Vitae",
+          // Legacy mappings for backward compatibility (but these should not conflict)
           "insurance-certificate": "Proof of Insurance",
+          // Explicitly map any variations to prevent confusion
+          enrollment: "Proof of Enrollment (COM)",
+          com: "Proof of Enrollment (COM)",
         };
 
         // OPTIMIZATION: Fetch all folders in PARALLEL instead of sequentially
@@ -172,14 +177,14 @@ const StudentRequirementModal = ({
           const folderName = folderPrefix.name;
           try {
             const folderFiles = await listAll(folderPrefix);
-            
+
             // Get download URLs for all files in this folder in parallel
             const filesWithUrls = await Promise.all(
               folderFiles.items.map(async (itemRef) => {
                 try {
                   // Only fetch download URL first (faster), skip metadata initially
                   const downloadURL = await getDownloadURL(itemRef);
-                  
+
                   return {
                     name: itemRef.name,
                     fullPath: itemRef.fullPath,
@@ -188,7 +193,8 @@ const StudentRequirementModal = ({
                     downloadURL,
                     // Metadata will be fetched lazily when needed
                     size: null,
-                    contentType: itemRef.name.split('.').pop()?.toLowerCase() || 'unknown',
+                    contentType:
+                      itemRef.name.split(".").pop()?.toLowerCase() || "unknown",
                     timeCreated: null,
                     updated: null,
                   };
@@ -197,7 +203,7 @@ const StudentRequirementModal = ({
                 }
               })
             );
-            
+
             return filesWithUrls.filter((file) => file !== null);
           } catch (error) {
             return [];
@@ -207,7 +213,7 @@ const StudentRequirementModal = ({
         // Wait for all folders to be processed in parallel
         const allFolderResults = await Promise.all(folderPromises);
         const allFiles = allFolderResults.flat();
-        
+
         setStorageFiles(allFiles);
       } catch (error) {
         if (error.code === "storage/object-not-found") {
@@ -429,10 +435,9 @@ const StudentRequirementModal = ({
     if (nameLower.includes("psychological") || nameLower.includes("psych")) {
       return "Psychological Test Certification";
     }
-    if (
-      nameLower.includes("insurance") ||
-      (nameLower.includes("proof") && nameLower.includes("insurance"))
-    ) {
+    // Only detect as Proof of Insurance if BOTH "proof" AND "insurance" are present
+    // This prevents company insurance documents from being misidentified
+    if (nameLower.includes("proof") && nameLower.includes("insurance")) {
       return "Proof of Insurance";
     }
     if (nameLower.includes("ojt") && nameLower.includes("orientation")) {
@@ -607,10 +612,11 @@ const StudentRequirementModal = ({
           message: notificationMessage,
           timestamp: new Date().toISOString(),
           read: false,
-          userId: auth.currentUser?.uid || null,
+          userId: student.id || null, // Student's ID so they can see the notification
           targetType: "student",
           targetStudentId: student.id,
           targetStudentName: studentName,
+          sentBy: auth.currentUser?.uid || null, // Track who sent it (admin)
         };
 
         await addDoc(collection(db, "notifications"), notificationData);
@@ -987,10 +993,11 @@ const StudentRequirementModal = ({
           message: notificationMessage,
           timestamp: new Date().toISOString(),
           read: false,
-          userId: auth.currentUser?.uid || null,
+          userId: student.id || null, // Student's ID so they can see the notification
           targetType: "student",
           targetStudentId: student.id,
           targetStudentName: studentName,
+          sentBy: auth.currentUser?.uid || null, // Track who sent it (admin)
         };
 
         await addDoc(collection(db, "notifications"), notificationData);
@@ -1052,7 +1059,9 @@ const StudentRequirementModal = ({
           <div className="student-requirement-modal-header">
             <div className="modal-header-content">
               <h2>Student Files</h2>
-              <p className="modal-subtitle">View and manage student documents</p>
+              <p className="modal-subtitle">
+                View and manage student documents
+              </p>
             </div>
             <button
               className="close-btn"
@@ -1116,10 +1125,14 @@ const StudentRequirementModal = ({
                       {student.status === "hired" ? (
                         <span className="status-badge hired">Hired</span>
                       ) : (
-                        <span className="status-badge not-hired">Not Hired</span>
+                        <span className="status-badge not-hired">
+                          Not Hired
+                        </span>
                       )}
                       {student.section && (
-                        <span className="status-badge section">{student.section}</span>
+                        <span className="status-badge section">
+                          {student.section}
+                        </span>
                       )}
                     </div>
                   </div>
@@ -1139,9 +1152,12 @@ const StudentRequirementModal = ({
                   <div className="detail-content">
                     <span className="detail-label">Email</span>
                     <span className="detail-value">
-                      {student.email && !student.email.includes("@student.internquest.local") 
-                        ? student.email 
-                        : <span className="empty-value">Not set</span>}
+                      {student.email &&
+                      !student.email.includes("@student.internquest.local") ? (
+                        student.email
+                      ) : (
+                        <span className="empty-value">Not set</span>
+                      )}
                     </span>
                   </div>
                 </div>
@@ -1151,7 +1167,9 @@ const StudentRequirementModal = ({
                   <div className="detail-content">
                     <span className="detail-label">Contact</span>
                     <span className="detail-value">
-                      {student.contact || <span className="empty-value">Not set</span>}
+                      {student.contact || (
+                        <span className="empty-value">Not set</span>
+                      )}
                     </span>
                   </div>
                 </div>
@@ -1161,7 +1179,9 @@ const StudentRequirementModal = ({
                   <div className="detail-content">
                     <span className="detail-label">Program</span>
                     <span className="detail-value">
-                      {student.program || <span className="empty-value">Not set</span>}
+                      {student.program || (
+                        <span className="empty-value">Not set</span>
+                      )}
                     </span>
                   </div>
                 </div>
@@ -1171,7 +1191,9 @@ const StudentRequirementModal = ({
                   <div className="detail-content">
                     <span className="detail-label">College</span>
                     <span className="detail-value">
-                      {student.college || <span className="empty-value">Not set</span>}
+                      {student.college || (
+                        <span className="empty-value">Not set</span>
+                      )}
                     </span>
                   </div>
                 </div>
@@ -1187,7 +1209,9 @@ const StudentRequirementModal = ({
                             const date = new Date(student.createdAt);
                             return date.toLocaleString();
                           } catch (e) {
-                            return <span className="empty-value">Invalid date</span>;
+                            return (
+                              <span className="empty-value">Invalid date</span>
+                            );
                           }
                         })()
                       ) : (
@@ -1216,39 +1240,57 @@ const StudentRequirementModal = ({
                   <div className="detail-content">
                     <span className="detail-label">Company</span>
                     <span className="detail-value">
-                      {student.company || student.companyName || student.selectedCompany || (
-                        <span className="empty-value">Not assigned</span>
-                      )}
+                      {student.company ||
+                        student.companyName ||
+                        student.selectedCompany || (
+                          <span className="empty-value">Not assigned</span>
+                        )}
                     </span>
                   </div>
                 </div>
 
-                {(student.applicationDate || student.companyApplicationDate || student.appliedDate || student.selectedCompanyDate || (student.selectedCompany || student.company || student.companyName ? student.createdAt : null)) && (
+                {(student.applicationDate ||
+                  student.companyApplicationDate ||
+                  student.appliedDate ||
+                  student.selectedCompanyDate ||
+                  (student.selectedCompany ||
+                  student.company ||
+                  student.companyName
+                    ? student.createdAt
+                    : null)) && (
                   <div className="detail-item">
                     <span className="detail-icon">📅</span>
                     <div className="detail-content">
                       <span className="detail-label">Application Date</span>
                       <span className="detail-value">
                         {(() => {
-                          const applicationDate = 
-                            student.applicationDate || 
-                            student.companyApplicationDate || 
-                            student.appliedDate || 
+                          const applicationDate =
+                            student.applicationDate ||
+                            student.companyApplicationDate ||
+                            student.appliedDate ||
                             student.selectedCompanyDate ||
-                            (student.selectedCompany || student.company || student.companyName ? student.createdAt : null);
-                          
+                            (student.selectedCompany ||
+                            student.company ||
+                            student.companyName
+                              ? student.createdAt
+                              : null);
+
                           if (applicationDate) {
                             try {
                               const date = new Date(applicationDate);
-                              return date.toLocaleDateString('en-US', {
-                                year: 'numeric',
-                                month: 'long',
-                                day: 'numeric',
-                                hour: '2-digit',
-                                minute: '2-digit'
+                              return date.toLocaleDateString("en-US", {
+                                year: "numeric",
+                                month: "long",
+                                day: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
                               });
                             } catch (e) {
-                              return <span className="empty-value">Invalid date</span>;
+                              return (
+                                <span className="empty-value">
+                                  Invalid date
+                                </span>
+                              );
                             }
                           }
                           return <span className="empty-value">Not set</span>;
@@ -1258,24 +1300,32 @@ const StudentRequirementModal = ({
                   </div>
                 )}
 
-                {student.skills && Array.isArray(student.skills) && student.skills.length > 0 && (
-                  <div className="detail-item full-width">
-                    <span className="detail-icon">🛠️</span>
-                    <div className="detail-content">
-                      <span className="detail-label">Skills</span>
-                      <div className="skills-list">
-                        {student.skills.slice(0, 5).map((skill, index) => (
-                          <span key={index} className="skill-tag">
-                            {typeof skill === 'object' ? (skill.id || skill.name || JSON.stringify(skill)) : skill}
-                          </span>
-                        ))}
-                        {student.skills.length > 5 && (
-                          <span className="skill-tag more">+{student.skills.length - 5} more</span>
-                        )}
+                {student.skills &&
+                  Array.isArray(student.skills) &&
+                  student.skills.length > 0 && (
+                    <div className="detail-item full-width">
+                      <span className="detail-icon">🛠️</span>
+                      <div className="detail-content">
+                        <span className="detail-label">Skills</span>
+                        <div className="skills-list">
+                          {student.skills.slice(0, 5).map((skill, index) => (
+                            <span key={index} className="skill-tag">
+                              {typeof skill === "object"
+                                ? skill.id ||
+                                  skill.name ||
+                                  JSON.stringify(skill)
+                                : skill}
+                            </span>
+                          ))}
+                          {student.skills.length > 5 && (
+                            <span className="skill-tag more">
+                              +{student.skills.length - 5} more
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
+                  )}
               </div>
             </div>
 
@@ -1316,7 +1366,9 @@ const StudentRequirementModal = ({
                     <IoDocumentTextOutline className="section-icon" />
                     Required Documents
                   </h3>
-                  <p className="section-subtitle">Upload and manage student requirements</p>
+                  <p className="section-subtitle">
+                    Upload and manage student requirements
+                  </p>
                 </div>
                 <div className="documents-progress">
                   {(() => {
@@ -1332,7 +1384,10 @@ const StudentRequirementModal = ({
                     const submittedFolderNames = new Set(
                       (storageFiles || [])
                         .map((f) => f.folderName)
-                        .filter((n) => typeof n === "string" && REQUIRED_FOLDERS.has(n))
+                        .filter(
+                          (n) =>
+                            typeof n === "string" && REQUIRED_FOLDERS.has(n)
+                        )
                     );
                     const submittedCount = submittedFolderNames.size;
                     return (
@@ -1355,10 +1410,16 @@ const StudentRequirementModal = ({
                       const submittedFolderNames = new Set(
                         (storageFiles || [])
                           .map((f) => f.folderName)
-                          .filter((n) => typeof n === "string" && REQUIRED_FOLDERS.has(n))
+                          .filter(
+                            (n) =>
+                              typeof n === "string" && REQUIRED_FOLDERS.has(n)
+                          )
                       );
                       const submittedCount = submittedFolderNames.size;
-                      const pct = Math.min(100, Math.max(0, (submittedCount / 7) * 100));
+                      const pct = Math.min(
+                        100,
+                        Math.max(0, (submittedCount / 7) * 100)
+                      );
                       return (
                         <div
                           className="progress-fill"
@@ -1458,42 +1519,31 @@ const StudentRequirementModal = ({
 
                       return REQUIRED_DOCUMENTS_LIST;
                     })().map((requirement, index) => {
-                      // Find matching file from Storage by folder name first
+                      // Find matching file from Storage by folder name first (STRICT MATCHING)
                       let matchingFile = storageFiles.find(
                         (file) => file.folderName === requirement.folderName
                       );
 
-                      // If no match by folder name, try requirementType matching
+                      // If no match by folder name, try requirementType matching (exact match only)
                       if (!matchingFile) {
                         matchingFile = storageFiles.find(
                           (file) => file.requirementType === requirement.type
                         );
                       }
 
-                      // If still no match, try keyword matching as fallback
-                      if (!matchingFile) {
-                        matchingFile = storageFiles.find((file) => {
-                          const fileName = file.name.toLowerCase();
-                          const folderName =
-                            file.folderName?.toLowerCase() || "";
-                          const matches =
-                            requirement.keywords.some((keyword) =>
-                              fileName.includes(keyword.toLowerCase())
-                            ) ||
-                            requirement.keywords.some((keyword) =>
-                              folderName.includes(keyword.toLowerCase())
-                            );
-                          if (matches) {
-                            console.log(
-                              `✅ Matched "${file.name}" (from ${file.folderName}) to "${requirement.type}"`
-                            );
-                          }
-                          return matches;
-                        });
-                      } else {
+                      // Log matches for debugging
+                      if (matchingFile) {
                         console.log(
-                          `✅ Matched file from folder "${matchingFile.folderName}" to "${requirement.type}"`
+                          `✅ Matched file "${matchingFile.name}" from folder "${matchingFile.folderName}" to requirement "${requirement.type}"`
                         );
+                        // Warn if folder name doesn't match expected folder
+                        if (
+                          matchingFile.folderName !== requirement.folderName
+                        ) {
+                          console.warn(
+                            `⚠️ WARNING: File "${matchingFile.name}" is in folder "${matchingFile.folderName}" but matched to requirement "${requirement.type}" (expected folder: "${requirement.folderName}"). This may indicate a file upload error.`
+                          );
+                        }
                       }
 
                       // Debug: Log if no match found
@@ -1539,7 +1589,12 @@ const StudentRequirementModal = ({
                       }
 
                       return (
-                        <div key={index} className={`document-item ${matchingFile ? 'has-file' : 'no-file'}`}>
+                        <div
+                          key={index}
+                          className={`document-item ${
+                            matchingFile ? "has-file" : "no-file"
+                          }`}
+                        >
                           <div className="document-info">
                             <div className="document-header">
                               <span className="document-name">
@@ -1675,7 +1730,6 @@ const StudentRequirementModal = ({
                 )}
               </div>
             </div>
-
           </div>
 
           <div className="student-requirement-modal-actions">

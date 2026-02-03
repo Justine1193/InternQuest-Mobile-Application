@@ -2,9 +2,9 @@
 
 .deleted-records-page {
   min-height: 100vh;
-  background: #f8fafc;
+  background: var(--iq-bg, #f8fafc);
   margin-left: 260px;
-  transition: margin-left 0.3s ease;
+  transition: margin-left 0.3s ease, background 0.3s ease;
 }
 
 body.sidebar-collapsed .deleted-records-page {

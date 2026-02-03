@@ -2,20 +2,21 @@
 
 /* Table Section Wrapper */
 .student-table-section {
-  background: white;
+  background: var(--iq-surface);
   border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--iq-shadow-sm);
   overflow: hidden;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--iq-border-subtle);
   width: 80%;
   margin-left: auto;
   margin-right: auto;
   margin-top: 1.5rem;
+  transition: background 0.35s ease, border-color 0.35s ease, box-shadow 0.35s ease;
 }
 
 /* Table Container */
 .student-table-container {
-  background: white;
+  background: var(--iq-surface);
   border-radius: 0;
   box-shadow: none;
   padding: 0;
@@ -26,6 +27,7 @@
   border: none;
   min-width: 0;
   box-sizing: border-box;
+  transition: background 0.35s ease;
 }
 
 .student-table-container table {
@@ -38,19 +40,20 @@
 
 /* Table Header - Clean */
 .student-table-container table th {
-  background: #f9fafb;
-  color: #6b7280;
+  background: var(--iq-bg-secondary);
+  color: var(--iq-text-muted);
   font-weight: 600;
   font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--iq-border-subtle);
   padding: 0.65rem 0.5rem;
   text-align: left;
   white-space: nowrap;
   position: sticky;
   top: 0;
   z-index: 10;
+  transition: background 0.35s ease, color 0.35s ease, border-color 0.35s ease;
 }
 
 .student-table-container table th:first-child {
@@ -69,7 +72,7 @@
 }
 
 .student-table-container table th.sortable:hover {
-  color: #374151;
+  color: var(--iq-text-secondary);
 }
 
 .student-table-container table th.sortable::after {
@@ -81,7 +84,7 @@
   vertical-align: middle;
   border-left: 3px solid transparent;
   border-right: 3px solid transparent;
-  border-top: 3px solid #d1d5db;
+  border-top: 3px solid var(--iq-border);
   opacity: 0.5;
 }
 
@@ -92,22 +95,23 @@
 .student-table-container table th.sortable.sorted-asc::after,
 .student-table-container table th.sortable.sorted-desc::after {
   opacity: 1;
-  border-top-color: #2563eb;
+  border-top-color: var(--iq-primary);
 }
 
 .student-table-container table th.sortable.sorted-desc::after {
   border-top: none;
-  border-bottom: 3px solid #2563eb;
+  border-bottom: 3px solid var(--iq-primary);
 }
 
 /* Table Body - Clean */
 .student-table-container table td {
   padding: 0.5rem;
-  border-bottom: 1px solid #f3f4f6;
-  color: #374151;
+  border-bottom: 1px solid var(--iq-border-subtle);
+  color: var(--iq-text-secondary);
   font-size: 0.8rem;
   vertical-align: middle;
   line-height: 1.4;
+  transition: background 0.2s ease, color 0.35s ease, border-color 0.35s ease;
 }
 
 .student-table-container table td:first-child {
@@ -123,7 +127,7 @@
 }
 
 .student-table-container table tbody tr:hover {
-  background-color: #f9fafb;
+  background-color: var(--iq-surface-hover);
 }
 
 .student-table-container table tbody tr:last-child td {
@@ -132,7 +136,7 @@
 
 /* Selected Row */
 .student-selected-row {
-  background-color: #eff6ff !important;
+  background-color: var(--iq-primary-soft) !important;
 }
 
 /* ===== COLUMN WIDTHS (Fixed Layout) ===== */
@@ -274,12 +278,12 @@
 }
 
 .student-table-container::-webkit-scrollbar-thumb {
-  background: #e5e7eb;
+  background: var(--iq-border-subtle);
   border-radius: 3px;
 }
 
 .student-table-container::-webkit-scrollbar-thumb:hover {
-  background: #d1d5db;
+  background: var(--iq-border);
 }
 
 /* ===== RESPONSIVE ===== */

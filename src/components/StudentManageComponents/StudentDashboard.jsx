@@ -29,6 +29,7 @@ import {
   setDoc,
   onSnapshot,
   where,
+  serverTimestamp,
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL, listAll } from "firebase/storage";
 import { storage } from "../../../firebase.js";
@@ -53,6 +54,9 @@ import {
   IoPersonOutline,
   IoSchoolOutline,
   IoCalendarOutline,
+  IoImageOutline,
+  IoAttachOutline,
+  IoCloseCircleOutline,
 } from "react-icons/io5";
 import logo from "../../assets/InternQuest_Logo.png";
 import { signOut, createUserWithEmailAndPassword } from "firebase/auth";
@@ -382,7 +386,7 @@ const StudentDashboard = () => {
     let isMounted = true; // Track if component is still mounted
 
     const fetchAdminProfile = async () => {
-      // Fetch for advisers, coordinators, and super admins
+      // Fetch for advisers, coordinators, and admins
       if (!adminId) return;
       try {
         const adminRef = doc(db, "adminusers", adminId);
@@ -585,29 +589,42 @@ const StudentDashboard = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [notificationText, setNotificationText] = useState("");
-  const [notificationType, setNotificationType] = useState("all"); // "all", "student", "section"
+  const [notificationSubject, setNotificationSubject] = useState("");
+  const [notificationFile, setNotificationFile] = useState(null);
+  const [notificationFilePreview, setNotificationFilePreview] = useState(null);
+  const notificationMessageRef = useRef(null);
+  const [notificationHtmlContent, setNotificationHtmlContent] = useState("");
+  // Only admin can send to "all"; coordinators and advisers default to "section"
+  const [notificationType, setNotificationType] = useState(() =>
+    getAdminRole() === ROLES.SUPER_ADMIN ? "all" : "section"
+  );
   const [selectedNotificationStudents, setSelectedNotificationStudents] =
     useState([]); // Array of student IDs
   const [selectedNotificationSection, setSelectedNotificationSection] =
     useState("");
 
-  // Set default notification type for advisers when adminSection is loaded
+  // Set default notification type: only admin can use "all"; coordinators and advisers use "section"
   useEffect(() => {
     if (isAdviser && adminSection) {
       // If adviser has a section, default to "section" and auto-select their section
-      const adminSectionsArray = Array.isArray(adminSection) ? adminSection : [adminSection];
+      const adminSectionsArray = Array.isArray(adminSection)
+        ? adminSection
+        : [adminSection];
       if (notificationType === "all") {
         setNotificationType("section");
       }
       if (adminSectionsArray.length === 1 && !selectedNotificationSection) {
         setSelectedNotificationSection(adminSectionsArray[0]);
       }
-    } else if (!isAdviser && notificationType === "section") {
-      // Reset to "all" for non-advisers if they somehow have "section" selected
-      setNotificationType("all");
+    } else if (
+      currentRole === ROLES.COORDINATOR &&
+      notificationType === "all"
+    ) {
+      // Coordinators cannot send to "all" (admin only); default to "section"
+      setNotificationType("section");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdviser, adminSection]);
+  }, [isAdviser, adminSection, currentRole]);
   const [studentSearchQuery, setStudentSearchQuery] = useState("");
   const [showStudentDropdown, setShowStudentDropdown] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
@@ -624,6 +641,10 @@ const StudentDashboard = () => {
     useState(false);
   const [notificationToDelete, setNotificationToDelete] = useState(null);
   const [isDeletingNotifications, setIsDeletingNotifications] = useState(false);
+  const [selectedNotificationForView, setSelectedNotificationForView] =
+    useState(null);
+  const [showNotificationDetailModal, setShowNotificationDetailModal] =
+    useState(false);
   const [messageHistorySearchQuery, setMessageHistorySearchQuery] =
     useState("");
   const [messageHistoryFilterSection, setMessageHistoryFilterSection] =
@@ -656,11 +677,32 @@ const StudentDashboard = () => {
     approvedRequirement: "",
     section: "",
   });
-  // View mode: 'all', 'pending', or 'notifications'
+  // View mode: 'all', 'pending', 'applications', or 'notifications'
   const [viewMode, setViewMode] = useState("all");
   const [pendingStudentsWithRequirements, setPendingStudentsWithRequirements] =
     useState([]);
   const [isLoadingPendingStudents, setIsLoadingPendingStudents] =
+    useState(false);
+  const [applicationsList, setApplicationsList] = useState([]);
+  const [isLoadingApplications, setIsLoadingApplications] = useState(false);
+  const [updatingApplicationId, setUpdatingApplicationId] = useState(null);
+  const [applicationsPage, setApplicationsPage] = useState(1);
+  const [applicationsPageSize, setApplicationsPageSize] = useState(10);
+  const [applicationsSearchQuery, setApplicationsSearchQuery] = useState("");
+  const [applicationsStatusFilter, setApplicationsStatusFilter] =
+    useState("all");
+  const [applicationsSectionFilter, setApplicationsSectionFilter] =
+    useState("");
+  const [selectedApplication, setSelectedApplication] = useState(null);
+  const [showApplicationDetailModal, setShowApplicationDetailModal] =
+    useState(false);
+  const [applicationToRemove, setApplicationToRemove] = useState(null);
+  const [showRemoveApplicationConfirm, setShowRemoveApplicationConfirm] =
+    useState(false);
+  const [isRemovingApplication, setIsRemovingApplication] = useState(false);
+  const [applicationStatusConfirm, setApplicationStatusConfirm] =
+    useState(null); // { app, action: 'accept' | 'reject' }
+  const [showApplicationStatusConfirm, setShowApplicationStatusConfirm] =
     useState(false);
   const [requirementApprovals, setRequirementApprovals] = useState({}); // { studentId: { requirementType: { status, ... } } }
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
@@ -764,7 +806,9 @@ const StudentDashboard = () => {
         // Adviser: scope by section(s)
         if (currentRole === ROLES.ADVISER) {
           if (!adminSection) return [];
-          const sections = Array.isArray(adminSection) ? adminSection : [adminSection];
+          const sections = Array.isArray(adminSection)
+            ? adminSection
+            : [adminSection];
           const sectionSet = new Set(
             sections
               .filter((s) => typeof s === "string" && s.trim())
@@ -798,7 +842,9 @@ const StudentDashboard = () => {
             );
           }
 
-          let allowedPrograms = Array.isArray(adminPrograms) ? adminPrograms : [];
+          let allowedPrograms = Array.isArray(adminPrograms)
+            ? adminPrograms
+            : [];
           if (allowedPrograms.length === 0 && adminCollegeCode) {
             allowedPrograms = Object.entries(programToCollegeMap)
               .filter(([, code]) => code === adminCollegeCode)
@@ -818,11 +864,13 @@ const StudentDashboard = () => {
           });
         }
 
-        // Super admin / others: all students
+        // Admin / others: all students
         return students;
       })();
 
-      const unapprovedStudents = scopedStudents.filter((student) => student.status !== true);
+      const unapprovedStudents = scopedStudents.filter(
+        (student) => student.status !== true
+      );
 
       // Check each unapproved student for requirements
       for (const student of unapprovedStudents) {
@@ -983,6 +1031,326 @@ const StudentDashboard = () => {
     }
   }, [viewMode, students.length, fetchPendingStudentsWithRequirements]);
 
+  // Helper: get time in ms from Firestore appliedAt/approvedAt (Timestamp, string, or number)
+  const getApplicationTime = (val) => {
+    if (val == null) return 0;
+    if (typeof val === "string") return new Date(val).getTime();
+    if (typeof val === "number") return val;
+    if (val && typeof val.toDate === "function") return val.toDate().getTime();
+    return 0;
+  };
+
+  // Fetch company applications (for Applications tab) — uses Firestore applications collection
+  const fetchApplications = useCallback(async () => {
+    try {
+      setIsLoadingApplications(true);
+      const applicationsRef = collection(db, "applications");
+      const snapshot = await getDocs(applicationsRef);
+      const list = snapshot.docs.map((d) => ({
+        id: d.id,
+        ...d.data(),
+      }));
+      list.sort((a, b) => {
+        const tA = getApplicationTime(
+          a.appliedAt || a.createdAt || a.timestamp
+        );
+        const tB = getApplicationTime(
+          b.appliedAt || b.createdAt || b.timestamp
+        );
+        return tB - tA;
+      });
+      setApplicationsList(list);
+    } catch (err) {
+      logger.error("Error fetching applications:", err);
+      showError("Failed to load applications. Please try again.");
+    } finally {
+      setIsLoadingApplications(false);
+    }
+  }, [showError]);
+
+  useEffect(() => {
+    if (viewMode === "applications") {
+      fetchApplications();
+    }
+  }, [viewMode, fetchApplications]);
+
+  // Applications search & filter: resolve display fields then filter
+  const applicationsFiltered = useMemo(() => {
+    const q = (applicationsSearchQuery || "").trim().toLowerCase();
+    const statusFilter = (applicationsStatusFilter || "all").toLowerCase();
+    const sectionFilter = (applicationsSectionFilter || "")
+      .trim()
+      .toLowerCase();
+    return applicationsList.filter((app) => {
+      const student = students.find((s) => s.id === app.userId);
+      const studentName = (
+        app.userProfile?.name ||
+        app.userProfile?.email ||
+        (student
+          ? `${student.firstName || ""} ${student.lastName || ""}`.trim() ||
+            student.email
+          : null) ||
+        app.studentName ||
+        ""
+      )
+        .toString()
+        .toLowerCase();
+      const studentIdDisplay = (
+        student?.studentId ??
+        app.userProfile?.studentId ??
+        ""
+      )
+        .toString()
+        .toLowerCase();
+      const sectionDisplay = (
+        student?.section ??
+        app.userProfile?.section ??
+        ""
+      )
+        .toString()
+        .toLowerCase();
+      const companyName = (app.companyName || app.companyId || "")
+        .toString()
+        .toLowerCase();
+      const status = (app.status || "pending").toLowerCase();
+      if (
+        q &&
+        !studentName.includes(q) &&
+        !studentIdDisplay.includes(q) &&
+        !sectionDisplay.includes(q) &&
+        !companyName.includes(q)
+      )
+        return false;
+      if (statusFilter !== "all" && status !== statusFilter) return false;
+      if (sectionFilter && sectionDisplay !== sectionFilter) return false;
+      return true;
+    });
+  }, [
+    applicationsList,
+    students,
+    applicationsSearchQuery,
+    applicationsStatusFilter,
+    applicationsSectionFilter,
+  ]);
+
+  // Applications pagination (on filtered list)
+  const applicationsTotalPages = Math.max(
+    1,
+    Math.ceil(applicationsFiltered.length / applicationsPageSize)
+  );
+  const applicationsPaginated = useMemo(() => {
+    const start = (applicationsPage - 1) * applicationsPageSize;
+    return applicationsFiltered.slice(start, start + applicationsPageSize);
+  }, [applicationsFiltered, applicationsPage, applicationsPageSize]);
+
+  useEffect(() => {
+    if (applicationsPage > applicationsTotalPages) {
+      setApplicationsPage(applicationsTotalPages);
+    }
+  }, [
+    applicationsFiltered.length,
+    applicationsPageSize,
+    applicationsPage,
+    applicationsTotalPages,
+  ]);
+
+  // Unique sections from applications (for section filter dropdown)
+  const applicationsSections = useMemo(() => {
+    const set = new Set();
+    applicationsList.forEach((app) => {
+      const student = students.find((s) => s.id === app.userId);
+      const section = (
+        student?.section ??
+        app.userProfile?.section ??
+        ""
+      ).trim();
+      if (section) set.add(section);
+    });
+    return Array.from(set).sort();
+  }, [applicationsList, students]);
+
+  const openApplicationDetail = (app) => {
+    setSelectedApplication(app);
+    setShowApplicationDetailModal(true);
+  };
+
+  const closeApplicationDetailModal = () => {
+    setShowApplicationDetailModal(false);
+    setSelectedApplication(null);
+  };
+
+  // Send a notification to the student when their application is accepted, denied, or removed
+  const sendApplicationStatusNotification = async (app, status) => {
+    if (!app?.userId) return;
+    const student = students.find((s) => s.id === app.userId);
+    const studentName =
+      app.userProfile?.name?.trim() ||
+      app.userProfile?.email ||
+      (student
+        ? `${student.firstName || ""} ${student.lastName || ""}`.trim() ||
+          student.email
+        : null) ||
+      "Student";
+    const companyName = app.companyName || app.companyId || "the company";
+    const subject =
+      status === "accepted"
+        ? `Application Accepted – ${companyName}`
+        : status === "denied"
+        ? `Application Denied – ${companyName}`
+        : `Application Removed – ${companyName}`;
+    const message =
+      status === "accepted"
+        ? `Your application to ${companyName} has been accepted.`
+        : status === "denied"
+        ? `Your application to ${companyName} was denied.`
+        : `Your application to ${companyName} was removed.`;
+    const notificationData = {
+      subject,
+      message,
+      timestamp: new Date().toISOString(),
+      read: false,
+      userId: auth.currentUser?.uid || null,
+      targetType: "student",
+      targetStudentId: app.userId,
+      targetStudentName: studentName,
+      targetStudentIds: [app.userId],
+      targetStudentNames: [studentName],
+    };
+    try {
+      await addDoc(collection(db, "notifications"), notificationData);
+    } catch (notifErr) {
+      logger.error("Failed to send application status notification:", notifErr);
+    }
+  };
+
+  const handleAcceptApplication = async (applicationId) => {
+    const app = applicationsList.find((a) => a.id === applicationId);
+    if (!app) {
+      showError("Application not found. Please refresh and try again.");
+      return;
+    }
+    const currentStatus = (app.status || "pending").toLowerCase();
+    if (currentStatus !== "pending") {
+      showError("Only pending applications can be approved.");
+      return;
+    }
+    try {
+      setUpdatingApplicationId(applicationId);
+      const appRef = doc(db, "applications", applicationId);
+      await updateDoc(appRef, {
+        status: "approved",
+        approvedAt: serverTimestamp(),
+      });
+      setApplicationsList((prev) =>
+        prev.map((a) =>
+          a.id === applicationId ? { ...a, status: "approved" } : a
+        )
+      );
+      if (selectedApplication?.id === applicationId) {
+        setSelectedApplication((prev) =>
+          prev ? { ...prev, status: "approved" } : null
+        );
+      }
+      await sendApplicationStatusNotification(app, "accepted");
+      success("Application approved.");
+    } catch (err) {
+      logger.error("Error accepting application:", err);
+      showError("Failed to approve application. Please try again.");
+    } finally {
+      setUpdatingApplicationId(null);
+    }
+  };
+
+  const openApplicationStatusConfirm = (app, action) => {
+    setApplicationStatusConfirm({ app, action });
+    setShowApplicationStatusConfirm(true);
+  };
+
+  const cancelApplicationStatusConfirm = () => {
+    setShowApplicationStatusConfirm(false);
+    setApplicationStatusConfirm(null);
+  };
+
+  const handleConfirmApplicationStatus = async () => {
+    if (!applicationStatusConfirm?.app || !applicationStatusConfirm.action) {
+      return;
+    }
+    const { app, action } = applicationStatusConfirm;
+    setShowApplicationStatusConfirm(false);
+    setApplicationStatusConfirm(null);
+    if (action === "accept") {
+      await handleAcceptApplication(app.id);
+    } else if (action === "reject") {
+      await handleRejectApplication(app.id);
+    }
+  };
+
+  const handleRejectApplication = async (applicationId) => {
+    const app = applicationsList.find((a) => a.id === applicationId);
+    if (!app) {
+      showError("Application not found. Please refresh and try again.");
+      return;
+    }
+    const currentStatus = (app.status || "pending").toLowerCase();
+    if (currentStatus !== "pending") {
+      showError("Only pending applications can be denied.");
+      return;
+    }
+    try {
+      setUpdatingApplicationId(applicationId);
+      const appRef = doc(db, "applications", applicationId);
+      // Optionally mark as rejected for audit, then remove
+      await updateDoc(appRef, {
+        status: "rejected",
+      });
+      await deleteDoc(appRef);
+      setApplicationsList((prev) => prev.filter((a) => a.id !== applicationId));
+      if (selectedApplication?.id === applicationId) {
+        closeApplicationDetailModal();
+      }
+      await sendApplicationStatusNotification(app, "denied");
+      success("Application rejected and removed.");
+    } catch (err) {
+      logger.error("Error rejecting application:", err);
+      showError("Failed to reject application. Please try again.");
+    } finally {
+      setUpdatingApplicationId(null);
+    }
+  };
+
+  const openRemoveApplicationConfirm = (app) => {
+    setApplicationToRemove(app);
+    setShowRemoveApplicationConfirm(true);
+  };
+
+  const cancelRemoveApplication = () => {
+    setShowRemoveApplicationConfirm(false);
+    setApplicationToRemove(null);
+  };
+
+  const handleRemoveApplication = async () => {
+    if (!applicationToRemove) return;
+    const applicationId = applicationToRemove.id;
+    const app = applicationToRemove;
+    try {
+      setIsRemovingApplication(true);
+      await deleteDoc(doc(db, "applications", applicationId));
+      setApplicationsList((prev) => prev.filter((a) => a.id !== applicationId));
+      if (selectedApplication?.id === applicationId) {
+        closeApplicationDetailModal();
+      }
+      setShowRemoveApplicationConfirm(false);
+      setApplicationToRemove(null);
+      await sendApplicationStatusNotification(app, "removed");
+      success("Application removed.");
+    } catch (err) {
+      logger.error("Error removing application:", err);
+      showError("Failed to remove application. Please try again.");
+    } finally {
+      setIsRemovingApplication(false);
+    }
+  };
+
   // List of all required documents (sorted in display order)
   const REQUIRED_DOCUMENTS = [
     "Proof of Enrollment (COM)",
@@ -1011,8 +1379,8 @@ const StudentDashboard = () => {
         "moa-memorandum-of-agreement": "Memorandum of Agreement (MOA)",
         "resume-cv": "Curriculum Vitae",
         "curriculum-vitae": "Curriculum Vitae",
-        "resume": "Curriculum Vitae",
-        "cv": "Curriculum Vitae",
+        resume: "Curriculum Vitae",
+        cv: "Curriculum Vitae",
         // Legacy mappings for backward compatibility
         "insurance-certificate": "Proof of Insurance",
         com: "Proof of Enrollment (COM)",
@@ -1027,24 +1395,28 @@ const StudentDashboard = () => {
         if (folderFiles.items.length > 0) {
           // First try exact mapping
           let requirementType = folderMapping[folderName];
-          
+
           // If no exact match, try keyword matching for CV/Resume
           if (!requirementType) {
             const folderNameLower = folderName.toLowerCase();
-            if (folderNameLower.includes("resume") || 
-                folderNameLower.includes("cv") || 
-                folderNameLower.includes("curriculum") || 
-                folderNameLower.includes("vitae")) {
+            if (
+              folderNameLower.includes("resume") ||
+              folderNameLower.includes("cv") ||
+              folderNameLower.includes("curriculum") ||
+              folderNameLower.includes("vitae")
+            ) {
               requirementType = "Curriculum Vitae";
-            } else if (folderNameLower.includes("moa") || 
-                       folderNameLower.includes("memorandum") || 
-                       folderNameLower.includes("agreement")) {
+            } else if (
+              folderNameLower.includes("moa") ||
+              folderNameLower.includes("memorandum") ||
+              folderNameLower.includes("agreement")
+            ) {
               requirementType = "Memorandum of Agreement (MOA)";
             } else {
               requirementType = folderName; // Fallback to folder name
             }
           }
-          
+
           // Only add if not already in the array
           if (!submittedRequirements.includes(requirementType)) {
             submittedRequirements.push(requirementType);
@@ -1194,7 +1566,9 @@ const StudentDashboard = () => {
       // Adviser: scope by section(s)
       if (currentRole === ROLES.ADVISER) {
         if (!adminSection) return [];
-        const sections = Array.isArray(adminSection) ? adminSection : [adminSection];
+        const sections = Array.isArray(adminSection)
+          ? adminSection
+          : [adminSection];
         const sectionSet = new Set(
           sections
             .filter((s) => typeof s === "string" && s.trim())
@@ -1409,11 +1783,30 @@ const StudentDashboard = () => {
     }
   }, [notificationType]);
 
+  // Remove file from notification
+  const handleRemoveNotificationFile = () => {
+    setNotificationFile(null);
+    setNotificationFilePreview(null);
+  };
+
+  // Handle content change in message editor
+  const handleMessageContentChange = () => {
+    if (notificationMessageRef.current) {
+      setNotificationHtmlContent(notificationMessageRef.current.innerHTML);
+      // Also update plain text version for backward compatibility
+      setNotificationText(
+        notificationMessageRef.current.innerText ||
+          notificationMessageRef.current.textContent
+      );
+    }
+  };
+
   // Handles sending a notification to Firestore
   const [isSendingNotification, setIsSendingNotification] = useState(false);
   const [showNotificationSuccess, setShowNotificationSuccess] = useState(false);
   const [sentNotifications, setSentNotifications] = useState([]);
   const [showNotificationsList, setShowNotificationsList] = useState(false);
+  const [showMessageHistoryModal, setShowMessageHistoryModal] = useState(false);
   const [currentNotificationPage, setCurrentNotificationPage] = useState(1);
   const [notificationsPerPage] = useState(5);
   const MAX_NOTIFICATIONS = 20; // Maximum notifications to keep (auto-delete older ones)
@@ -1646,7 +2039,26 @@ const StudentDashboard = () => {
   ]);
 
   const handleSendNotification = async () => {
-    if (!notificationText.trim() || isSendingNotification) return;
+    // Check if message has content (either text or HTML)
+    const hasContent =
+      notificationMessageRef.current?.innerText?.trim() ||
+      notificationMessageRef.current?.textContent?.trim() ||
+      notificationText.trim() ||
+      notificationHtmlContent.trim();
+
+    if (!hasContent || isSendingNotification) return;
+
+    // Only admin can send to "All Students" (every college & section)
+    if (
+      notificationType === "all" &&
+      currentRole !== ROLES.SUPER_ADMIN &&
+      currentRole !== "super_admin"
+    ) {
+      showError(
+        "Only Admin can send to all students (every college and section). Use Specific Section or Specific Student."
+      );
+      return;
+    }
 
     // For advisers, validate they can only notify their section/students
     if (isAdviser) {
@@ -1654,32 +2066,41 @@ const StudentDashboard = () => {
         showError("You must be assigned to a section to send notifications");
         return;
       }
-      
-      const adminSectionsArray = Array.isArray(adminSection) ? adminSection : [adminSection];
-      
+
+      const adminSectionsArray = Array.isArray(adminSection)
+        ? adminSection
+        : [adminSection];
+
       if (notificationType === "all") {
-        showError("Advisers can only notify their assigned section or students in their section");
+        showError(
+          "Advisers can only notify their assigned section or students in their section"
+        );
         return;
       }
-      
+
       if (notificationType === "section") {
-        if (!selectedNotificationSection || !adminSectionsArray.includes(selectedNotificationSection)) {
+        if (
+          !selectedNotificationSection ||
+          !adminSectionsArray.includes(selectedNotificationSection)
+        ) {
           showError("You can only notify your assigned section");
           return;
         }
       }
-      
+
       if (notificationType === "student") {
         if (selectedNotificationStudents.length === 0) {
           return; // Will be caught by validation below
         }
-        
+
         // Validate all selected students are in the adviser's section
-        const invalidStudents = selectedNotificationStudents.filter((studentId) => {
-          const student = baseStudents.find((s) => s.id === studentId);
-          return !student || !adminSectionsArray.includes(student.section);
-        });
-        
+        const invalidStudents = selectedNotificationStudents.filter(
+          (studentId) => {
+            const student = baseStudents.find((s) => s.id === studentId);
+            return !student || !adminSectionsArray.includes(student.section);
+          }
+        );
+
         if (invalidStudents.length > 0) {
           showError("You can only notify students in your assigned section");
           return;
@@ -1703,14 +2124,94 @@ const StudentDashboard = () => {
       // Get current user ID for tracking who sent the notification
       const userId = auth.currentUser?.uid || null;
 
-      // Prepare notification data
+      // Upload file if one is selected
+      let fileUrl = null;
+      let fileName = null;
+      let fileType = null;
+
+      if (notificationFile) {
+        setNotificationFileUploading(true);
+        try {
+          const timestamp = Date.now();
+          const safeFileName = notificationFile.name.replace(
+            /[^a-zA-Z0-9.-]/g,
+            "_"
+          );
+          const storagePath = `notifications/${timestamp}-${safeFileName}`;
+          const storageRef = ref(storage, storagePath);
+
+          // Upload file to Firebase Storage
+          await uploadBytes(storageRef, notificationFile);
+
+          // Get download URL
+          fileUrl = await getDownloadURL(storageRef);
+          fileName = notificationFile.name;
+          fileType = notificationFile.type;
+        } catch (fileError) {
+          console.error("Error uploading file:", fileError);
+          showError("Failed to upload file. Please try again.");
+          setIsSendingNotification(false);
+          setNotificationFileUploading(false);
+          return;
+        } finally {
+          setNotificationFileUploading(false);
+        }
+      }
+
+      // Get HTML content from contentEditable div
+      const messageHtml = notificationMessageRef.current?.innerHTML || "";
+      const messageText =
+        notificationMessageRef.current?.innerText ||
+        notificationMessageRef.current?.textContent ||
+        notificationText;
+
+      // Extract image URLs from HTML for mobile app compatibility
+      const imageUrls = [];
+      if (messageHtml) {
+        const tempDiv = document.createElement("div");
+        tempDiv.innerHTML = messageHtml;
+        const images = tempDiv.querySelectorAll("img");
+        images.forEach((img) => {
+          if (img.src && !imageUrls.includes(img.src)) {
+            imageUrls.push(img.src);
+          }
+        });
+      }
+
+      // Append image indicator to plain text message for mobile app
+      let finalMessageText = messageText;
+      if (imageUrls.length > 0) {
+        finalMessageText += `\n\n[${imageUrls.length} image${
+          imageUrls.length > 1 ? "s" : ""
+        } attached]`;
+      }
+
+      // Prepare notification data (Firestore does not accept undefined; omit optional fields or use valid values)
       const notificationData = {
-        message: notificationText,
+        subject: notificationSubject.trim() || "",
+        message: finalMessageText, // Plain text for search/compatibility (includes image count)
         timestamp: new Date().toISOString(),
         read: false,
         userId: userId,
         targetType: notificationType,
       };
+      if (messageHtml && messageHtml.trim()) {
+        notificationData.messageHtml = messageHtml.trim();
+      }
+      if (imageUrls.length > 0) {
+        notificationData.images = imageUrls;
+        notificationData.imageUrls = imageUrls;
+        notificationData.hasImages = true;
+        notificationData.imageCount = imageUrls.length;
+        notificationData.firstImageUrl = imageUrls[0];
+      }
+
+      // Add file information if file was uploaded (for backward compatibility)
+      if (fileUrl) {
+        notificationData.fileUrl = fileUrl;
+        notificationData.fileName = fileName;
+        notificationData.fileType = fileType;
+      }
 
       // Add target information for private notifications
       if (
@@ -1740,16 +2241,20 @@ const StudentDashboard = () => {
       await addDoc(collection(db, "notifications"), notificationData);
 
       // Auto-delete old notifications if limit exceeded (keep only most recent MAX_NOTIFICATIONS)
+      // Only delete notifications created by the current user (rules allow delete only for own docs)
       const allNotificationsQuery = query(
         collection(db, "notifications"),
         orderBy("timestamp", "desc")
       );
       const allNotificationsSnapshot = await getDocs(allNotificationsQuery);
       const allNotifications = allNotificationsSnapshot.docs;
+      const myUid = auth.currentUser?.uid;
+      const myNotifications = myUid
+        ? allNotifications.filter((d) => d.data().userId === myUid)
+        : [];
 
-      // If we have more than MAX_NOTIFICATIONS, delete the oldest ones
-      if (allNotifications.length > MAX_NOTIFICATIONS) {
-        const notificationsToDelete = allNotifications.slice(MAX_NOTIFICATIONS);
+      if (myNotifications.length > MAX_NOTIFICATIONS) {
+        const notificationsToDelete = myNotifications.slice(MAX_NOTIFICATIONS);
         const deletePromises = notificationsToDelete.map((docSnapshot) =>
           deleteDoc(doc(db, "notifications", docSnapshot.id))
         );
@@ -1775,12 +2280,25 @@ const StudentDashboard = () => {
 
       // Reset form
       setNotificationText("");
-      // For advisers, reset to "section", for others reset to "all"
-      setNotificationType(isAdviser && adminSection ? "section" : "all");
+      setNotificationSubject("");
+      setNotificationHtmlContent("");
+      setNotificationFile(null);
+      setNotificationFilePreview(null);
+      if (notificationMessageRef.current) {
+        notificationMessageRef.current.innerHTML = "";
+      }
+      // Only admin resets to "all"; coordinators and advisers reset to "section"
+      setNotificationType(
+        currentRole === ROLES.SUPER_ADMIN || currentRole === "super_admin"
+          ? "all"
+          : "section"
+      );
       setSelectedNotificationStudents([]);
       // For advisers, auto-select their section if they have one
       if (isAdviser && adminSection) {
-        const adminSectionsArray = Array.isArray(adminSection) ? adminSection : [adminSection];
+        const adminSectionsArray = Array.isArray(adminSection)
+          ? adminSection
+          : [adminSection];
         if (adminSectionsArray.length === 1) {
           setSelectedNotificationSection(adminSectionsArray[0]);
         } else {
@@ -1857,7 +2375,7 @@ const StudentDashboard = () => {
       });
     }
 
-    // Super admin: show all students
+    // Admin: show all students
     return students;
   }, [
     students,
@@ -1871,7 +2389,7 @@ const StudentDashboard = () => {
 
   // Keep "Total Students" stat scoped by role:
   // - adviser/coordinator: only students they can access (usually their section/college)
-  // - super_admin: overall total
+  // - admin: overall total
   useEffect(() => {
     const isScopedRole =
       currentRole === ROLES.ADVISER || currentRole === ROLES.COORDINATOR;
@@ -1888,7 +2406,9 @@ const StudentDashboard = () => {
     const sections = new Set();
     if (isAdviser && adminSection) {
       // For advisers, only show their assigned sections
-      const adminSectionsArray = Array.isArray(adminSection) ? adminSection : [adminSection];
+      const adminSectionsArray = Array.isArray(adminSection)
+        ? adminSection
+        : [adminSection];
       adminSectionsArray.forEach((section) => {
         if (section) sections.add(section);
       });
@@ -1924,22 +2444,17 @@ const StudentDashboard = () => {
       const matchesSearch =
         (!q ? true : false) ||
         (typeof student.firstName === "string" &&
-          student.firstName
-            .toLowerCase()
-            .includes(q)) ||
+          student.firstName.toLowerCase().includes(q)) ||
         (typeof student.lastName === "string" &&
-          student.lastName
-            .toLowerCase()
-            .includes(q)) ||
+          student.lastName.toLowerCase().includes(q)) ||
         (typeof student.studentId === "string" &&
           student.studentId.toLowerCase().includes(q)) ||
         (typeof student.program === "string" &&
-          student.program
-            .toLowerCase()
-            .includes(q)) ||
+          student.program.toLowerCase().includes(q)) ||
         (typeof student.section === "string" &&
           student.section.toLowerCase().includes(q)) ||
-        (typeof student.email === "string" && student.email.toLowerCase().includes(q));
+        (typeof student.email === "string" &&
+          student.email.toLowerCase().includes(q));
       const matchesProgram = activeFilterValues.program
         ? typeof student.program === "string" &&
           student.program
@@ -2432,12 +2947,16 @@ const StudentDashboard = () => {
   };
 
   // Handle requirement update callback - force refresh of approvals
-  const handleRequirementUpdated = async (studentId, requirementType, status) => {
+  const handleRequirementUpdated = async (
+    studentId,
+    requirementType,
+    status
+  ) => {
     // Force a refresh by re-fetching the approval document immediately
     try {
       const approvalRef = doc(db, "requirement_approvals", studentId);
       const approvalDoc = await getDoc(approvalRef);
-      
+
       if (approvalDoc.exists()) {
         const approvalData = approvalDoc.data();
         // Update the requirementApprovals state directly for immediate UI update
@@ -2445,11 +2964,13 @@ const StudentDashboard = () => {
           ...prev,
           [studentId]: approvalData,
         }));
-        
+
         // Log for debugging
-        if (process.env.NODE_ENV === 'development') {
-          console.log(`[Requirement Updated] Student: ${studentId}, Type: ${requirementType}, Status: ${status}`);
-          console.log('Approval data:', approvalData);
+        if (process.env.NODE_ENV === "development") {
+          console.log(
+            `[Requirement Updated] Student: ${studentId}, Type: ${requirementType}, Status: ${status}`
+          );
+          console.log("Approval data:", approvalData);
         }
       } else {
         // If document doesn't exist, remove it from state
@@ -2766,12 +3287,18 @@ const StudentDashboard = () => {
                 <IoPeopleOutline className="iq-stat-icon" />
               </div>
               <div className="iq-stat-content">
-                <div className="iq-stat-value">{overviewStats.totalStudents || 0}</div>
+                <div className="iq-stat-value">
+                  {overviewStats.totalStudents || 0}
+                </div>
                 <div className="iq-stat-label">
-                  {currentRole === ROLES.SUPER_ADMIN
+                  {currentRole === ROLES.SUPER_ADMIN ||
+                  currentRole === "super_admin"
                     ? "Total Students"
                     : currentRole === ROLES.COORDINATOR
-                    ? adminSection && (Array.isArray(adminSection) ? adminSection.length > 0 : true)
+                    ? adminSection &&
+                      (Array.isArray(adminSection)
+                        ? adminSection.length > 0
+                        : true)
                       ? "Students (Your Sections)"
                       : adminCollegeCode
                       ? "Students (Your College)"
@@ -2787,7 +3314,9 @@ const StudentDashboard = () => {
                 <IoTimeOutline className="iq-stat-icon" />
               </div>
               <div className="iq-stat-content">
-                <div className="iq-stat-value">{overviewStats.pendingRequirements || 0}</div>
+                <div className="iq-stat-value">
+                  {overviewStats.pendingRequirements || 0}
+                </div>
                 <div className="iq-stat-label">Pending Review</div>
               </div>
             </div>
@@ -2796,7 +3325,9 @@ const StudentDashboard = () => {
                 <IoCheckmarkCircle className="iq-stat-icon" />
               </div>
               <div className="iq-stat-content">
-                <div className="iq-stat-value">{overviewStats.hiredStudents || 0}</div>
+                <div className="iq-stat-value">
+                  {overviewStats.hiredStudents || 0}
+                </div>
                 <div className="iq-stat-label">Hired Students</div>
               </div>
             </div>
@@ -2815,7 +3346,8 @@ const StudentDashboard = () => {
                   }`}
                   onClick={() => setViewMode("all")}
                 >
-                  All Students
+                  <IoPeopleOutline className="view-mode-tab-icon" />
+                  <span>All Student</span>
                 </button>
                 <button
                   className={`view-mode-tab ${
@@ -2823,10 +3355,32 @@ const StudentDashboard = () => {
                   }`}
                   onClick={() => setViewMode("pending")}
                 >
-                  Pending Requirements
+                  <IoTimeOutline className="view-mode-tab-icon" />
+                  <span>Pending Requirements</span>
                   {pendingStudentsWithRequirements.length > 0 && (
                     <span className="pending-badge">
                       {pendingStudentsWithRequirements.length}
+                    </span>
+                  )}
+                </button>
+                <button
+                  className={`view-mode-tab ${
+                    viewMode === "applications" ? "active" : ""
+                  }`}
+                  onClick={() => setViewMode("applications")}
+                >
+                  <IoDocumentTextOutline className="view-mode-tab-icon" />
+                  <span>Applications</span>
+                  {applicationsList.filter(
+                    (a) => (a.status || "pending").toLowerCase() === "pending"
+                  ).length > 0 && (
+                    <span className="pending-badge">
+                      {
+                        applicationsList.filter(
+                          (a) =>
+                            (a.status || "pending").toLowerCase() === "pending"
+                        ).length
+                      }
                     </span>
                   )}
                 </button>
@@ -2860,13 +3414,11 @@ const StudentDashboard = () => {
                   </div>
                   <button
                     className="toggle-notifications-btn"
-                    onClick={() => setShowNotificationsList(!showNotificationsList)}
-                    aria-label={
-                      showNotificationsList ? "Hide messages" : "View messages"
-                    }
+                    onClick={() => setShowMessageHistoryModal(true)}
+                    aria-label="View message history"
                   >
                     <IoNotificationsOutline />
-                    {showNotificationsList ? "Hide" : "View"} Messages
+                    View Message History
                     {sentNotifications.length > 0 && (
                       <span className="notification-count-badge">
                         {sentNotifications.length}
@@ -2894,7 +3446,12 @@ const StudentDashboard = () => {
                         className="notification-type-select"
                         disabled={isSendingNotification}
                       >
-                        {!isAdviser && <option value="all">All Students</option>}
+                        {(currentRole === ROLES.SUPER_ADMIN ||
+                          currentRole === "super_admin") && (
+                          <option value="all">
+                            All Students (every college & section)
+                          </option>
+                        )}
                         <option value="student">Specific Student</option>
                         <option value="section">Specific Section</option>
                       </select>
@@ -2947,7 +3504,9 @@ const StudentDashboard = () => {
                             <button
                               type="button"
                               className="clear-all-students"
-                              onClick={() => setSelectedNotificationStudents([])}
+                              onClick={() =>
+                                setSelectedNotificationStudents([])
+                              }
                               disabled={isSendingNotification}
                             >
                               Clear All
@@ -2995,16 +3554,27 @@ const StudentDashboard = () => {
                                 .filter((student) => {
                                   // For advisers, only show students in their section
                                   if (isAdviser && adminSection) {
-                                    const adminSectionsArray = Array.isArray(adminSection) ? adminSection : [adminSection];
-                                    if (!adminSectionsArray.includes(student.section)) {
+                                    const adminSectionsArray = Array.isArray(
+                                      adminSection
+                                    )
+                                      ? adminSection
+                                      : [adminSection];
+                                    if (
+                                      !adminSectionsArray.includes(
+                                        student.section
+                                      )
+                                    ) {
                                       return false;
                                     }
                                   }
                                   if (!studentSearchQuery.trim()) return true;
-                                  const query = studentSearchQuery.toLowerCase();
+                                  const query =
+                                    studentSearchQuery.toLowerCase();
                                   const fullName =
                                     `${student.firstName} ${student.lastName}`.toLowerCase();
-                                  const studentId = (student.studentId || "").toLowerCase();
+                                  const studentId = (
+                                    student.studentId || ""
+                                  ).toLowerCase();
                                   const section = (
                                     student.section || ""
                                   ).toLowerCase();
@@ -3056,7 +3626,8 @@ const StudentDashboard = () => {
                                           {student.firstName} {student.lastName}
                                         </div>
                                         <div className="dropdown-item-details">
-                                          {student.studentId} - {student.section}
+                                          {student.studentId} -{" "}
+                                          {student.section}
                                         </div>
                                       </div>
                                     </div>
@@ -3067,7 +3638,9 @@ const StudentDashboard = () => {
                                 const query = studentSearchQuery.toLowerCase();
                                 const fullName =
                                   `${student.firstName} ${student.lastName}`.toLowerCase();
-                                const studentId = (student.studentId || "").toLowerCase();
+                                const studentId = (
+                                  student.studentId || ""
+                                ).toLowerCase();
                                 const section = (
                                   student.section || ""
                                 ).toLowerCase();
@@ -3116,26 +3689,44 @@ const StudentDashboard = () => {
 
                     <div className="notification-input-wrapper">
                       <label
+                        htmlFor="notification-subject-input"
+                        className="notification-input-label"
+                      >
+                        <IoDocumentTextOutline className="label-icon" />
+                        Subject:
+                      </label>
+                      <input
+                        type="text"
+                        id="notification-subject-input"
+                        placeholder="Subject"
+                        value={notificationSubject}
+                        onChange={(e) => setNotificationSubject(e.target.value)}
+                        className="notification-input"
+                        disabled={isSendingNotification}
+                        style={{ marginBottom: "1rem" }}
+                      />
+                    </div>
+
+                    <div className="notification-input-wrapper">
+                      <label
                         htmlFor="notification-message-input"
                         className="notification-input-label"
                       >
                         <IoDocumentTextOutline className="label-icon" />
                         Message:
                       </label>
-                      <input
-                        type="text"
+                      <div
+                        ref={notificationMessageRef}
+                        contentEditable={!isSendingNotification}
                         id="notification-message-input"
-                        placeholder="Type your notification message here..."
-                        value={notificationText}
-                        onChange={(e) => setNotificationText(e.target.value)}
-                        onKeyPress={(e) => {
-                          if (e.key === "Enter" && !isSendingNotification) {
-                            handleSendNotification();
-                          }
-                        }}
-                        className="notification-input"
-                        disabled={isSendingNotification}
+                        className="notification-message-editor"
+                        onInput={handleMessageContentChange}
+                        data-placeholder="Type your notification message here..."
+                        suppressContentEditableWarning={true}
                       />
+                    </div>
+
+                    <div className="notification-input-wrapper">
                       <button
                         className={`send-notification-btn ${
                           isSendingNotification ? "sending" : ""
@@ -3143,7 +3734,12 @@ const StudentDashboard = () => {
                         onClick={handleSendNotification}
                         disabled={
                           isSendingNotification ||
-                          !notificationText.trim() ||
+                          !(
+                            notificationMessageRef.current?.innerText?.trim() ||
+                            notificationMessageRef.current?.textContent?.trim() ||
+                            notificationText.trim() ||
+                            notificationHtmlContent.trim()
+                          ) ||
                           (notificationType === "student" &&
                             selectedNotificationStudents.length === 0) ||
                           (notificationType === "section" &&
@@ -3170,264 +3766,394 @@ const StudentDashboard = () => {
                       </div>
                     )}
                   </div>
+                </div>
+              </div>
+            )}
+            {viewMode === "applications" && (
+              <div className="applications-section">
+                <div className="applications-section-header">
+                  <div className="applications-header-content">
+                    <div className="applications-header-icon">
+                      <IoDocumentTextOutline />
+                    </div>
+                    <div>
+                      <h3 className="applications-section-title">
+                        Company Applications
+                      </h3>
+                      <p className="applications-section-description">
+                        Search, filter, and review student applications. Click a
+                        row to view full details.
+                      </p>
+                    </div>
+                  </div>
+                </div>
 
-                  {/* Notifications History */}
-                  {showNotificationsList && (
-                    <div className="notifications-history">
-                      <div className="notifications-history-header">
-                        <h3>
-                          <IoNotificationsOutline />
-                          Message History
-                        </h3>
-                        <span className="notifications-total">
-                          {filteredNotifications.length} message
-                          {filteredNotifications.length !== 1 ? "s" : ""}
-                        </span>
-                      </div>
-
-                      {/* Search Bar, Filters, and Delete All Button */}
-                      {sentNotifications.length > 0 && (
-                        <div
-                          className="message-history-controls"
-                          style={{
-                            display: "flex",
-                            gap: "1rem",
-                            alignItems: "center",
-                            marginBottom: "1rem",
-                            flexWrap: "wrap",
+                {/* Search & Filter toolbar */}
+                {!isLoadingApplications && applicationsList.length > 0 && (
+                  <div className="applications-toolbar">
+                    <div className="applications-search-wrap">
+                      <IoSearchOutline className="applications-search-icon" />
+                      <input
+                        type="text"
+                        placeholder="Search by student, ID, section, or company..."
+                        value={applicationsSearchQuery}
+                        onChange={(e) => {
+                          setApplicationsSearchQuery(e.target.value);
+                          setApplicationsPage(1);
+                        }}
+                        className="applications-search-input"
+                        aria-label="Search applications"
+                      />
+                      {applicationsSearchQuery && (
+                        <button
+                          type="button"
+                          className="applications-search-clear"
+                          onClick={() => {
+                            setApplicationsSearchQuery("");
+                            setApplicationsPage(1);
                           }}
+                          aria-label="Clear search"
                         >
-                          <div
-                            style={{
-                              position: "relative",
-                              flex: "1",
-                              minWidth: "200px",
-                            }}
-                          >
-                            <IoSearchOutline
-                              style={{
-                                position: "absolute",
-                                left: "0.75rem",
-                                top: "50%",
-                                transform: "translateY(-50%)",
-                                color: "#9ca3af",
-                                fontSize: "1.1rem",
-                              }}
-                            />
-                            <input
-                              type="text"
-                              placeholder="Search messages..."
-                              value={messageHistorySearchQuery}
-                              onChange={(e) =>
-                                setMessageHistorySearchQuery(e.target.value)
-                              }
-                              style={{
-                                width: "100%",
-                                padding: "0.625rem 0.75rem 0.625rem 2.5rem",
-                                border: "1px solid #d1d5db",
-                                borderRadius: "8px",
-                                fontSize: "0.9rem",
-                              }}
-                            />
-                          </div>
-                          <select
-                            value={messageHistoryFilterStudent}
-                            onChange={(e) =>
-                              setMessageHistoryFilterStudent(e.target.value)
-                            }
-                            style={{
-                              padding: "0.625rem 0.75rem",
-                              border: "1px solid #d1d5db",
-                              borderRadius: "8px",
-                              fontSize: "0.9rem",
-                              minWidth: "150px",
-                            }}
-                          >
-                            <option value="">All Students</option>
-                            {notificationStudents.map((student) => (
-                              <option key={student.id} value={student.id}>
-                                {student.name}
-                              </option>
-                            ))}
-                          </select>
-                          <button
-                            onClick={handleDeleteAllNotifications}
-                            disabled={isDeletingNotifications}
-                            style={{
-                              padding: "0.625rem 1rem",
-                              background: "#dc2626",
-                              color: "white",
-                              border: "none",
-                              borderRadius: "8px",
-                              cursor: "pointer",
-                              fontSize: "0.9rem",
-                              fontWeight: "500",
-                            }}
-                          >
-                            {isDeletingNotifications
-                              ? "Deleting..."
-                              : "Delete All"}
-                          </button>
-                        </div>
-                      )}
-
-                      {/* Notifications List */}
-                      <div className="notifications-list">
-                        {filteredNotifications.length === 0 ? (
-                          <div className="notifications-empty-state">
-                            <div className="empty-state-icon">
-                              <IoNotificationsOutline />
-                            </div>
-                            <h3 className="empty-state-title">
-                              {sentNotifications.length === 0
-                                ? "No messages sent yet"
-                                : "No messages found"}
-                            </h3>
-                            <p className="empty-state-description">
-                              {sentNotifications.length === 0
-                                ? "Start sending notifications to students to see them here."
-                                : "Try adjusting your search or filter criteria."}
-                            </p>
-                          </div>
-                        ) : (
-                          filteredNotifications
-                            .slice(
-                              (currentNotificationPage - 1) * notificationsPerPage,
-                              currentNotificationPage * notificationsPerPage
-                            )
-                            .map((notification) => {
-                              const notificationDate = new Date(notification.timestamp);
-                              const formattedDate = notificationDate.toLocaleDateString('en-US', {
-                                month: 'short',
-                                day: 'numeric',
-                                year: 'numeric'
-                              });
-                              const formattedTime = notificationDate.toLocaleTimeString('en-US', {
-                                hour: '2-digit',
-                                minute: '2-digit'
-                              });
-
-                              return (
-                                <div
-                                  key={notification.id}
-                                  className="notification-item"
-                                >
-                                  <div className="notification-item-left-border"></div>
-                                  <div className="notification-item-content">
-                                    <div className="notification-item-header">
-                                      <div className="notification-item-meta">
-                                        <span className="notification-item-recipient">
-                                          {notification.targetType === "all" ? (
-                                            <span className="recipient-badge recipient-all">
-                                              <IoPeopleOutline />
-                                              All Students
-                                            </span>
-                                          ) : notification.targetType === "student" ? (
-                                            <span className="recipient-badge recipient-student">
-                                              <IoPersonOutline />
-                                              {notification.targetStudentName || "Specific Student"}
-                                            </span>
-                                          ) : (
-                                            <span className="recipient-badge recipient-section">
-                                              <IoSchoolOutline />
-                                              Section: {notification.targetSection}
-                                            </span>
-                                          )}
-                                        </span>
-                                        <span className="notification-item-date">
-                                          <IoCalendarOutline />
-                                          {formattedDate} • {formattedTime}
-                                        </span>
-                                      </div>
-                                    </div>
-                                    <div className="notification-item-message">
-                                      {notification.message}
-                                    </div>
-                                  </div>
-                                  <button
-                                    className="notification-delete-btn"
-                                    onClick={() =>
-                                      handleDeleteNotification(notification.id)
-                                    }
-                                    disabled={isDeletingNotifications}
-                                    aria-label="Delete notification"
-                                    title="Delete message"
-                                  >
-                                    <IoTrashOutline />
-                                  </button>
-                                </div>
-                              );
-                            })
-                        )}
-                      </div>
-
-                      {/* Pagination */}
-                      {notificationTotalPages > 1 && (
-                        <div className="notification-pagination">
-                          <button
-                            onClick={() =>
-                              setCurrentNotificationPage((prev) =>
-                                Math.max(1, prev - 1)
-                              )
-                            }
-                            disabled={currentNotificationPage === 1}
-                            className="pagination-btn"
-                          >
-                            ‹
-                          </button>
-                          {[...Array(notificationTotalPages)].map((_, index) => {
-                            const page = index + 1;
-                            if (
-                              page === 1 ||
-                              page === notificationTotalPages ||
-                              (page >= currentNotificationPage - 1 &&
-                                page <= currentNotificationPage + 1)
-                            ) {
-                              return (
-                                <button
-                                  key={page}
-                                  className={`pagination-btn ${
-                                    currentNotificationPage === page
-                                      ? "active"
-                                      : ""
-                                  }`}
-                                  onClick={() =>
-                                    setCurrentNotificationPage(page)
-                                  }
-                                >
-                                  {page}
-                                </button>
-                              );
-                            } else if (
-                              page === currentNotificationPage - 2 ||
-                              page === currentNotificationPage + 2
-                            ) {
-                              return (
-                                <span key={page} className="pagination-ellipsis">
-                                  ...
-                                </span>
-                              );
-                            }
-                            return null;
-                          })}
-                          <button
-                            onClick={() =>
-                              setCurrentNotificationPage((prev) =>
-                                Math.min(notificationTotalPages, prev + 1)
-                              )
-                            }
-                            disabled={
-                              currentNotificationPage === notificationTotalPages
-                            }
-                            className="pagination-btn"
-                          >
-                            ›
-                          </button>
-                        </div>
+                          <IoCloseOutline />
+                        </button>
                       )}
                     </div>
-                  )}
-                </div>
+                    <div className="applications-filters">
+                      <div className="applications-filter-group">
+                        <IoFilterOutline className="applications-filter-icon" />
+                        <select
+                          value={applicationsStatusFilter}
+                          onChange={(e) => {
+                            setApplicationsStatusFilter(e.target.value);
+                            setApplicationsPage(1);
+                          }}
+                          className="applications-filter-select"
+                          aria-label="Filter by status"
+                        >
+                          <option value="all">All status</option>
+                          <option value="pending">Pending</option>
+                          <option value="approved">Approved</option>
+                          <option value="rejected">Rejected</option>
+                        </select>
+                      </div>
+                      {applicationsSections.length > 0 && (
+                        <select
+                          value={applicationsSectionFilter}
+                          onChange={(e) => {
+                            setApplicationsSectionFilter(e.target.value);
+                            setApplicationsPage(1);
+                          }}
+                          className="applications-filter-select"
+                          aria-label="Filter by section"
+                        >
+                          <option value="">All sections</option>
+                          {applicationsSections.map((sec) => (
+                            <option key={sec} value={sec}>
+                              {sec}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                      {(applicationsSearchQuery ||
+                        applicationsStatusFilter !== "all" ||
+                        applicationsSectionFilter) && (
+                        <button
+                          type="button"
+                          className="applications-filter-clear"
+                          onClick={() => {
+                            setApplicationsSearchQuery("");
+                            setApplicationsStatusFilter("all");
+                            setApplicationsSectionFilter("");
+                            setApplicationsPage(1);
+                          }}
+                        >
+                          <IoCloseOutline /> Clear filters
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {isLoadingApplications ? (
+                  <div className="applications-loading">
+                    <LoadingSpinner message="Loading applications..." />
+                  </div>
+                ) : applicationsList.length === 0 ? (
+                  <div className="applications-empty">
+                    <IoDocumentTextOutline className="applications-empty-icon" />
+                    <p className="applications-empty-message">
+                      No applications yet.
+                    </p>
+                    <p className="applications-empty-hint">
+                      Student applications to companies will appear here for
+                      review.
+                    </p>
+                  </div>
+                ) : applicationsFiltered.length === 0 ? (
+                  <div className="applications-empty applications-empty-filtered">
+                    <IoSearchOutline className="applications-empty-icon" />
+                    <p className="applications-empty-message">
+                      No applications match your search or filters.
+                    </p>
+                    <p className="applications-empty-hint">
+                      Try adjusting your search or clear filters.
+                    </p>
+                    <button
+                      type="button"
+                      className="applications-empty-clear-btn"
+                      onClick={() => {
+                        setApplicationsSearchQuery("");
+                        setApplicationsStatusFilter("all");
+                        setApplicationsSectionFilter("");
+                        setApplicationsPage(1);
+                      }}
+                    >
+                      Clear all filters
+                    </button>
+                  </div>
+                ) : (
+                  <div className="applications-table-card">
+                    <div className="applications-table-wrapper">
+                      <table
+                        className="applications-table"
+                        aria-label="Company applications"
+                      >
+                        <thead>
+                          <tr>
+                            <th>Student ID</th>
+                            <th>Student</th>
+                            <th>Section</th>
+                            <th>Company</th>
+                            <th>Status</th>
+                            <th>Date</th>
+                            <th>Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {applicationsPaginated.map((app) => {
+                            const profileName = app.userProfile?.name?.trim();
+                            const profileEmail = app.userProfile?.email;
+                            const student = students.find(
+                              (s) => s.id === app.userId
+                            );
+                            const studentName =
+                              profileName ||
+                              profileEmail ||
+                              (student
+                                ? `${student.firstName || ""} ${
+                                    student.lastName || ""
+                                  }`.trim() || student.email
+                                : null) ||
+                              app.studentName ||
+                              app.userId ||
+                              "—";
+                            const studentIdDisplay =
+                              student?.studentId ??
+                              app.userProfile?.studentId ??
+                              "—";
+                            const sectionDisplay =
+                              student?.section ??
+                              app.userProfile?.section ??
+                              "—";
+                            const companyName =
+                              app.companyName || app.companyId || "—";
+                            const status = (
+                              app.status || "pending"
+                            ).toLowerCase();
+                            const dateVal =
+                              app.appliedAt || app.createdAt || app.timestamp;
+                            const dateStr = dateVal
+                              ? (() => {
+                                  const t = getApplicationTime(dateVal);
+                                  if (!t) return "—";
+                                  return new Date(t).toLocaleDateString(
+                                    "en-US",
+                                    {
+                                      month: "short",
+                                      day: "numeric",
+                                      year: "numeric",
+                                    }
+                                  );
+                                })()
+                              : "—";
+                            const isPending = status === "pending";
+                            const isUpdating = updatingApplicationId === app.id;
+                            const statusLabel =
+                              status === "approved" || status === "accepted"
+                                ? "Approved"
+                                : status === "rejected"
+                                ? "Rejected"
+                                : "Pending";
+                            return (
+                              <tr
+                                key={app.id}
+                                className={`applications-row applications-row-clickable status-${status}`}
+                                onClick={() => openApplicationDetail(app)}
+                                role="button"
+                                tabIndex={0}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter" || e.key === " ") {
+                                    e.preventDefault();
+                                    openApplicationDetail(app);
+                                  }
+                                }}
+                                aria-label={`View details for ${studentName}, ${companyName}`}
+                              >
+                                <td>{studentIdDisplay}</td>
+                                <td>{studentName}</td>
+                                <td>{sectionDisplay}</td>
+                                <td>{companyName}</td>
+                                <td>
+                                  <span
+                                    className={`application-status-badge status-${status}`}
+                                  >
+                                    {statusLabel}
+                                  </span>
+                                </td>
+                                <td>{dateStr}</td>
+                                <td onClick={(e) => e.stopPropagation()}>
+                                  <div className="applications-actions">
+                                    {isPending ? (
+                                      <>
+                                        <button
+                                          type="button"
+                                          className="application-btn accept-btn"
+                                          onClick={() =>
+                                            openApplicationStatusConfirm(
+                                              app,
+                                              "accept"
+                                            )
+                                          }
+                                          disabled={isUpdating}
+                                          aria-label="Accept application"
+                                        >
+                                          {isUpdating ? (
+                                            <span className="spinner-small" />
+                                          ) : (
+                                            <>
+                                              <IoCheckmarkCircle /> Accept
+                                            </>
+                                          )}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="application-btn reject-btn"
+                                          onClick={() =>
+                                            openApplicationStatusConfirm(
+                                              app,
+                                              "reject"
+                                            )
+                                          }
+                                          disabled={isUpdating}
+                                          aria-label="Reject application"
+                                        >
+                                          Reject
+                                        </button>
+                                      </>
+                                    ) : (
+                                      <span className="applications-no-action">
+                                        —
+                                      </span>
+                                    )}
+                                    <button
+                                      type="button"
+                                      className="application-btn remove-btn"
+                                      onClick={() =>
+                                        openRemoveApplicationConfirm(app)
+                                      }
+                                      disabled={isRemovingApplication}
+                                      aria-label="Remove application"
+                                      title="Remove application"
+                                    >
+                                      <IoTrashOutline /> Remove
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div className="applications-pagination-wrapper">
+                      <div className="pagination applications-pagination">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setApplicationsPage((p) => Math.max(1, p - 1))
+                          }
+                          disabled={applicationsPage === 1}
+                          className="pagination-arrow"
+                          aria-label="Previous page"
+                        >
+                          &lt;
+                        </button>
+                        {[...Array(applicationsTotalPages)].map((_, index) => (
+                          <button
+                            key={index + 1}
+                            type="button"
+                            onClick={() => setApplicationsPage(index + 1)}
+                            className={`pagination-number ${
+                              applicationsPage === index + 1 ? "active" : ""
+                            }`}
+                          >
+                            {index + 1}
+                          </button>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setApplicationsPage((p) =>
+                              Math.min(applicationsTotalPages, p + 1)
+                            )
+                          }
+                          disabled={applicationsPage === applicationsTotalPages}
+                          className="pagination-arrow"
+                          aria-label="Next page"
+                        >
+                          &gt;
+                        </button>
+                      </div>
+                      <div className="pagination-info-wrapper">
+                        <div className="pagination-info">
+                          Showing{" "}
+                          {applicationsFiltered.length === 0
+                            ? "0"
+                            : (applicationsPage - 1) * applicationsPageSize + 1}
+                          –
+                          {Math.min(
+                            applicationsPage * applicationsPageSize,
+                            applicationsFiltered.length
+                          )}{" "}
+                          of {applicationsFiltered.length} application
+                          {applicationsFiltered.length !== 1 ? "s" : ""}
+                        </div>
+                        <div className="pagination-items-per-page">
+                          <label htmlFor="applications-items-per-page">
+                            Show:
+                          </label>
+                          <select
+                            id="applications-items-per-page"
+                            value={applicationsPageSize}
+                            onChange={(e) => {
+                              setApplicationsPageSize(Number(e.target.value));
+                              setApplicationsPage(1);
+                            }}
+                            className="items-per-page-select"
+                            aria-label="Applications per page"
+                          >
+                            <option value={5}>5</option>
+                            <option value={10}>10</option>
+                            <option value={15}>15</option>
+                            <option value={20}>20</option>
+                            <option value={50}>50</option>
+                          </select>
+                          <span className="items-per-page-label">per page</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
             {viewMode === "pending" && (
@@ -3512,7 +4238,7 @@ const StudentDashboard = () => {
               </div>
             )}
             {/* Filter Chips */}
-            {activeFilterChips.length > 0 && (
+            {viewMode !== "applications" && activeFilterChips.length > 0 && (
               <div className="filter-chips-container">
                 <div className="filter-chips">
                   <IoFilterOutline className="filter-icon" />
@@ -3646,7 +4372,7 @@ const StudentDashboard = () => {
               </div>
             )}
 
-            {viewMode !== "notifications" && (
+            {viewMode !== "notifications" && viewMode !== "applications" && (
               <div
                 style={{
                   display: "flex",
@@ -3664,7 +4390,9 @@ const StudentDashboard = () => {
                         : setFilterValues
                     }
                     filterValues={
-                      viewMode === "pending" ? pendingFilterValues : filterValues
+                      viewMode === "pending"
+                        ? pendingFilterValues
+                        : filterValues
                     }
                     type="student"
                     searchInputRef={searchInputRef}
@@ -3673,7 +4401,7 @@ const StudentDashboard = () => {
                 </div>
               </div>
             )}
-            {viewMode !== "notifications" && (
+            {viewMode !== "notifications" && viewMode !== "applications" && (
               <>
                 {viewMode === "pending" && isLoadingPendingStudents ? (
                   <SkeletonLoader type="table" rows={8} columns={13} />
@@ -3681,177 +4409,191 @@ const StudentDashboard = () => {
                   <SkeletonLoader type="table" rows={8} columns={13} />
                 ) : (
                   <StudentTable
-                data={currentItems.map((item) => ({
-                  ...item,
-                  submittedRequirements:
-                    studentSubmittedRequirements[item.id] || [],
-                }))}
-                selectionMode={selectionMode && !isAdviser}
-                selectedItems={selectedItems}
-                setSelectedItems={setSelectedItems}
-                openMenuId={openMenuId}
-                setOpenMenuId={setOpenMenuId}
-                selectedRowId={selectedRowId}
-                setSelectedRowId={setSelectedRowId}
-                handleDeleteSingle={handleDeleteSingle}
-                handleAcceptStudent={handleAcceptStudent}
-                isDeleting={isDeleting}
-                setSelectionMode={setSelectionMode}
-                isAdviser={isAdviser}
-                requirementApprovals={requirementApprovals}
-                sortConfig={sortConfig}
-                onSort={handleSort}
-                onSelectAll={(e) => {
-                  if (e.target.checked) {
-                    setSelectedItems(currentItems.map((item) => item.id));
-                  } else {
-                    setSelectedItems([]);
-                  }
-                }}
-                onSelectItem={handleSelectItem}
-                onDelete={handleDelete}
-                onRowClick={handleRowClick}
-                onClearFilters={handleClearAllFilters}
-                onAddStudent={() => setShowAddStudentModal(true)}
-              />
-            )}
-            <div className="pagination">
-              <button
-                onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-                disabled={currentPage === 1}
-                className="pagination-arrow"
-              >
-                &lt;
-              </button>
-              {[...Array(totalPages)].map((_, index) => (
-                <button
-                  key={index + 1}
-                  onClick={() => setCurrentPage(index + 1)}
-                  className={`pagination-number ${
-                    currentPage === index + 1 ? "active" : ""
-                  }`}
-                >
-                  {index + 1}
-                </button>
-              ))}
-              <button
-                onClick={() =>
-                  setCurrentPage((prev) => Math.min(prev + 1, totalPages))
-                }
-                disabled={currentPage === totalPages}
-                className="pagination-arrow"
-              >
-                &gt;
-              </button>
-            </div>
-            <div className="pagination-info-wrapper">
-              <div className="pagination-info">
-                Showing {indexOfFirstItem + 1}-
-                {Math.min(indexOfLastItem, sortedData.length)} students
-              </div>
-              <div className="pagination-items-per-page">
-                <label htmlFor="items-per-page">Show:</label>
-                <select
-                  id="items-per-page"
-                  value={itemsPerPage}
-                  onChange={(e) => {
-                    setItemsPerPage(Number(e.target.value));
-                    setCurrentPage(1);
-                  }}
-                  className="items-per-page-select"
-                  aria-label="Items per page"
-                >
-                  <option value="5">5</option>
-                  <option value="8">8</option>
-                  <option value="10">10</option>
-                  <option value="20">20</option>
-                  <option value="50">50</option>
-                </select>
-                <span className="items-per-page-label">per page</span>
-              </div>
-            </div>
-            {/* Action Buttons */}
-            <div className="table-actions">
-              <input
-                type="file"
-                accept=".csv"
-                ref={fileInputRef}
-                onChange={handleImportStudents}
-                style={{ display: "none" }}
-                disabled={isImporting}
-              />
-              <button
-                className="import-btn table-action-btn"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isImporting}
-                title="Import students from CSV"
-              >
-                <IoCloudUploadOutline />
-                {isImporting
-                  ? `${importProgress.current}/${importProgress.total}`
-                  : "Import"}
-              </button>
-              <button
-                className="export-btn table-action-btn"
-                onClick={() => {
-                  try {
-                    const exportData = prepareStudentsForExport(filteredData);
-                    downloadCSV(
-                      exportData,
-                      `students_export_${
-                        new Date().toISOString().split("T")[0]
-                      }`
-                    );
-                    activityLoggers.exportData("students", exportData.length);
-                    success(
-                      `Exported ${exportData.length} students successfully`
-                    );
-                  } catch (err) {
-                    logger.error("Export error:", err);
-                    showError("Failed to export data. Please try again.");
-                  }
-                }}
-                title="Export students to CSV"
-              >
-                <IoDownloadOutline />
-                Export
-              </button>
-              <button
-                className="add-student-btn table-action-btn"
-                onClick={() => setShowAddStudentModal(true)}
-                title="Add new student"
-              >
-                <IoAddOutline />
-                Add Student
-              </button>
-            </div>
-            {selectionMode && selectedItems.length > 0 && !isAdviser && (
-              <div className="table-actions">
-                <Tooltip
-                  content={`Delete ${selectedItems.length} selected student(s)`}
-                >
+                    data={currentItems.map((item) => ({
+                      ...item,
+                      submittedRequirements:
+                        studentSubmittedRequirements[item.id] || [],
+                    }))}
+                    selectionMode={selectionMode && !isAdviser}
+                    selectedItems={selectedItems}
+                    setSelectedItems={setSelectedItems}
+                    openMenuId={openMenuId}
+                    setOpenMenuId={setOpenMenuId}
+                    selectedRowId={selectedRowId}
+                    setSelectedRowId={setSelectedRowId}
+                    handleDeleteSingle={handleDeleteSingle}
+                    handleAcceptStudent={handleAcceptStudent}
+                    isDeleting={isDeleting}
+                    setSelectionMode={setSelectionMode}
+                    isAdviser={isAdviser}
+                    requirementApprovals={requirementApprovals}
+                    sortConfig={sortConfig}
+                    onSort={handleSort}
+                    onSelectAll={(e) => {
+                      if (e.target.checked) {
+                        setSelectedItems(currentItems.map((item) => item.id));
+                      } else {
+                        setSelectedItems([]);
+                      }
+                    }}
+                    onSelectItem={handleSelectItem}
+                    onDelete={handleDelete}
+                    onRowClick={handleRowClick}
+                    onClearFilters={handleClearAllFilters}
+                    onAddStudent={() => setShowAddStudentModal(true)}
+                  />
+                )}
+                {viewMode !== "applications" &&
+                  viewMode !== "notifications" && (
+                    <>
+                      <div className="pagination">
+                        <button
+                          onClick={() =>
+                            setCurrentPage((prev) => Math.max(prev - 1, 1))
+                          }
+                          disabled={currentPage === 1}
+                          className="pagination-arrow"
+                        >
+                          &lt;
+                        </button>
+                        {[...Array(totalPages)].map((_, index) => (
+                          <button
+                            key={index + 1}
+                            onClick={() => setCurrentPage(index + 1)}
+                            className={`pagination-number ${
+                              currentPage === index + 1 ? "active" : ""
+                            }`}
+                          >
+                            {index + 1}
+                          </button>
+                        ))}
+                        <button
+                          onClick={() =>
+                            setCurrentPage((prev) =>
+                              Math.min(prev + 1, totalPages)
+                            )
+                          }
+                          disabled={currentPage === totalPages}
+                          className="pagination-arrow"
+                        >
+                          &gt;
+                        </button>
+                      </div>
+                      <div className="pagination-info-wrapper">
+                        <div className="pagination-info">
+                          Showing {indexOfFirstItem + 1}-
+                          {Math.min(indexOfLastItem, sortedData.length)}{" "}
+                          students
+                        </div>
+                        <div className="pagination-items-per-page">
+                          <label htmlFor="items-per-page">Show:</label>
+                          <select
+                            id="items-per-page"
+                            value={itemsPerPage}
+                            onChange={(e) => {
+                              setItemsPerPage(Number(e.target.value));
+                              setCurrentPage(1);
+                            }}
+                            className="items-per-page-select"
+                            aria-label="Items per page"
+                          >
+                            <option value="5">5</option>
+                            <option value="8">8</option>
+                            <option value="10">10</option>
+                            <option value="20">20</option>
+                            <option value="50">50</option>
+                          </select>
+                          <span className="items-per-page-label">per page</span>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                {/* Action Buttons */}
+                <div className="table-actions">
+                  <input
+                    type="file"
+                    accept=".csv"
+                    ref={fileInputRef}
+                    onChange={handleImportStudents}
+                    style={{ display: "none" }}
+                    disabled={isImporting}
+                  />
                   <button
-                    className="delete table-action-btn"
-                    onClick={handleDelete}
-                    disabled={isDeleting}
+                    className="import-btn table-action-btn"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isImporting}
+                    title="Import students from CSV"
                   >
-                    {isDeleting
-                      ? "Deleting..."
-                      : `Delete (${selectedItems.length})`}
+                    <IoCloudUploadOutline />
+                    {isImporting
+                      ? `${importProgress.current}/${importProgress.total}`
+                      : "Import"}
                   </button>
-                </Tooltip>
-                <button
-                  className="cancel-action table-action-btn"
-                  onClick={() => {
-                    setSelectionMode(false);
-                    setSelectedItems([]);
-                    setOpenMenuId(null);
-                  }}
-                >
-                  Cancel
-                </button>
-              </div>
-            )}
+                  <button
+                    className="export-btn table-action-btn"
+                    onClick={() => {
+                      try {
+                        const exportData =
+                          prepareStudentsForExport(filteredData);
+                        downloadCSV(
+                          exportData,
+                          `students_export_${
+                            new Date().toISOString().split("T")[0]
+                          }`
+                        );
+                        activityLoggers.exportData(
+                          "students",
+                          exportData.length
+                        );
+                        success(
+                          `Exported ${exportData.length} students successfully`
+                        );
+                      } catch (err) {
+                        logger.error("Export error:", err);
+                        showError("Failed to export data. Please try again.");
+                      }
+                    }}
+                    title="Export students to CSV"
+                  >
+                    <IoDownloadOutline />
+                    Export
+                  </button>
+                  <button
+                    className="add-student-btn table-action-btn"
+                    onClick={() => setShowAddStudentModal(true)}
+                    title="Add new student"
+                  >
+                    <IoAddOutline />
+                    Add Student
+                  </button>
+                </div>
+                {selectionMode && selectedItems.length > 0 && !isAdviser && (
+                  <div className="table-actions">
+                    <Tooltip
+                      content={`Delete ${selectedItems.length} selected student(s)`}
+                    >
+                      <button
+                        className="delete table-action-btn"
+                        onClick={handleDelete}
+                        disabled={isDeleting}
+                      >
+                        {isDeleting
+                          ? "Deleting..."
+                          : `Delete (${selectedItems.length})`}
+                      </button>
+                    </Tooltip>
+                    <button
+                      className="cancel-action table-action-btn"
+                      onClick={() => {
+                        setSelectionMode(false);
+                        setSelectedItems([]);
+                        setOpenMenuId(null);
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -3902,6 +4644,840 @@ const StudentDashboard = () => {
         isLoading={isCreatingStudent}
         defaultCollege={adminCollegeName}
       />
+
+      {/* Message History Modal */}
+      {showMessageHistoryModal && (
+        <div
+          className="message-history-modal-backdrop"
+          onClick={() => setShowMessageHistoryModal(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="message-history-modal-title"
+        >
+          <div
+            className="message-history-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="message-history-modal-header">
+              <div className="message-history-modal-header-content">
+                <div className="message-history-modal-icon">
+                  <IoNotificationsOutline />
+                </div>
+                <div>
+                  <h2
+                    id="message-history-modal-title"
+                    className="message-history-modal-title"
+                  >
+                    Message History
+                  </h2>
+                  <p className="message-history-modal-subtitle">
+                    View and manage all sent notifications
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="message-history-modal-close-btn"
+                onClick={() => setShowMessageHistoryModal(false)}
+                aria-label="Close"
+              >
+                <IoCloseOutline />
+              </button>
+            </div>
+
+            <div className="message-history-modal-body">
+              {/* Search Bar, Filters, and Delete All Button */}
+              {sentNotifications.length > 0 && (
+                <div className="message-history-modal-controls">
+                  <div className="message-history-search-wrap">
+                    <IoSearchOutline className="message-history-search-icon" />
+                    <input
+                      type="text"
+                      placeholder="Search messages..."
+                      value={messageHistorySearchQuery}
+                      onChange={(e) =>
+                        setMessageHistorySearchQuery(e.target.value)
+                      }
+                      className="message-history-search-input"
+                      aria-label="Search messages"
+                    />
+                    {messageHistorySearchQuery && (
+                      <button
+                        type="button"
+                        className="message-history-search-clear"
+                        onClick={() => setMessageHistorySearchQuery("")}
+                        aria-label="Clear search"
+                      >
+                        <IoCloseOutline />
+                      </button>
+                    )}
+                  </div>
+                  <div className="message-history-filters">
+                    <select
+                      value={messageHistoryFilterStudent}
+                      onChange={(e) =>
+                        setMessageHistoryFilterStudent(e.target.value)
+                      }
+                      className="message-history-filter-select"
+                      aria-label="Filter by student"
+                    >
+                      <option value="">All Students</option>
+                      {notificationStudents.map((student) => (
+                        <option key={student.id} value={student.id}>
+                          {student.name}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowDeleteAllConfirm(true);
+                      }}
+                      disabled={isDeletingNotifications}
+                      className="message-history-delete-all-btn"
+                    >
+                      {isDeletingNotifications ? (
+                        <>
+                          <span className="spinner-small" /> Deleting...
+                        </>
+                      ) : (
+                        <>
+                          <IoTrashOutline /> Delete All
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Notifications List */}
+              <div className="message-history-list">
+                {filteredNotifications.length === 0 ? (
+                  <div className="message-history-empty-state">
+                    <div className="message-history-empty-icon">
+                      <IoNotificationsOutline />
+                    </div>
+                    <h3 className="message-history-empty-title">
+                      {sentNotifications.length === 0
+                        ? "No messages sent yet"
+                        : "No messages found"}
+                    </h3>
+                    <p className="message-history-empty-description">
+                      {sentNotifications.length === 0
+                        ? "Start sending notifications to students to see them here."
+                        : "Try adjusting your search or filter criteria."}
+                    </p>
+                    {(messageHistorySearchQuery ||
+                      messageHistoryFilterStudent) && (
+                      <button
+                        type="button"
+                        className="message-history-empty-clear-btn"
+                        onClick={() => {
+                          setMessageHistorySearchQuery("");
+                          setMessageHistoryFilterStudent("");
+                        }}
+                      >
+                        Clear filters
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  filteredNotifications
+                    .slice(
+                      (currentNotificationPage - 1) * notificationsPerPage,
+                      currentNotificationPage * notificationsPerPage
+                    )
+                    .map((notification) => {
+                      const notificationDate = new Date(notification.timestamp);
+                      const formattedDate = notificationDate.toLocaleDateString(
+                        "en-US",
+                        {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        }
+                      );
+                      const formattedTime = notificationDate.toLocaleTimeString(
+                        "en-US",
+                        {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        }
+                      );
+
+                      return (
+                        <div
+                          key={notification.id}
+                          className="message-history-item"
+                        >
+                          <div className="message-history-item-left-border"></div>
+                          <div className="message-history-item-content">
+                            <div className="message-history-item-header">
+                              <div className="message-history-item-meta">
+                                <span className="message-history-item-recipient">
+                                  {notification.targetType === "all" ? (
+                                    <span className="recipient-badge recipient-all">
+                                      <IoPeopleOutline />
+                                      All Students
+                                    </span>
+                                  ) : notification.targetType === "student" ? (
+                                    <span className="recipient-badge recipient-student">
+                                      <IoPersonOutline />
+                                      {notification.targetStudentName ||
+                                        "Specific Student"}
+                                    </span>
+                                  ) : (
+                                    <span className="recipient-badge recipient-section">
+                                      <IoSchoolOutline />
+                                      Section: {notification.targetSection}
+                                    </span>
+                                  )}
+                                </span>
+                                {notification.subject && (
+                                  <span
+                                    className="message-history-item-subject"
+                                    onClick={() => {
+                                      setSelectedNotificationForView(
+                                        notification
+                                      );
+                                      setShowNotificationDetailModal(true);
+                                    }}
+                                    style={{ cursor: "pointer" }}
+                                    title="Click to view full notification"
+                                  >
+                                    <strong>{notification.subject}</strong>
+                                  </span>
+                                )}
+                                <span className="message-history-item-date">
+                                  <IoCalendarOutline />
+                                  {formattedDate} • {formattedTime}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="message-history-item-message">
+                              {notification.messageHtml ? (
+                                <div
+                                  className="notification-message-html"
+                                  dangerouslySetInnerHTML={{
+                                    __html: notification.messageHtml,
+                                  }}
+                                />
+                              ) : (
+                                <div className="notification-message-text">
+                                  {notification.message}
+                                </div>
+                              )}
+                            </div>
+                            {notification.fileUrl && (
+                              <div className="message-history-item-file">
+                                {notification.fileType?.startsWith("image/") ? (
+                                  <div className="notification-file-display">
+                                    <img
+                                      src={notification.fileUrl}
+                                      alt={
+                                        notification.fileName || "Attachment"
+                                      }
+                                      className="notification-attached-image"
+                                      onClick={() =>
+                                        window.open(
+                                          notification.fileUrl,
+                                          "_blank"
+                                        )
+                                      }
+                                    />
+                                    <a
+                                      href={notification.fileUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="notification-file-link"
+                                    >
+                                      <IoImageOutline /> View Image
+                                    </a>
+                                  </div>
+                                ) : (
+                                  <a
+                                    href={notification.fileUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="notification-file-link"
+                                  >
+                                    <IoAttachOutline />
+                                    {notification.fileName ||
+                                      "Download Attachment"}
+                                  </a>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            className="message-history-item-delete-btn"
+                            onClick={() =>
+                              handleDeleteNotification(notification.id)
+                            }
+                            disabled={isDeletingNotifications}
+                            aria-label="Delete notification"
+                            title="Delete message"
+                          >
+                            <IoTrashOutline />
+                          </button>
+                        </div>
+                      );
+                    })
+                )}
+              </div>
+
+              {/* Pagination */}
+              {notificationTotalPages > 1 && (
+                <div className="message-history-pagination">
+                  <div className="message-history-pagination-info">
+                    Showing{" "}
+                    {filteredNotifications.length === 0
+                      ? 0
+                      : (currentNotificationPage - 1) * notificationsPerPage +
+                        1}
+                    –
+                    {Math.min(
+                      currentNotificationPage * notificationsPerPage,
+                      filteredNotifications.length
+                    )}{" "}
+                    of {filteredNotifications.length} messages
+                  </div>
+                  <div className="message-history-pagination-controls">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setCurrentNotificationPage((prev) =>
+                          Math.max(1, prev - 1)
+                        )
+                      }
+                      disabled={currentNotificationPage === 1}
+                      className="message-history-pagination-btn"
+                    >
+                      ‹
+                    </button>
+                    {[...Array(notificationTotalPages)].map((_, index) => {
+                      const page = index + 1;
+                      if (
+                        page === 1 ||
+                        page === notificationTotalPages ||
+                        (page >= currentNotificationPage - 1 &&
+                          page <= currentNotificationPage + 1)
+                      ) {
+                        return (
+                          <button
+                            key={page}
+                            type="button"
+                            className={`message-history-pagination-btn ${
+                              currentNotificationPage === page ? "active" : ""
+                            }`}
+                            onClick={() => setCurrentNotificationPage(page)}
+                          >
+                            {page}
+                          </button>
+                        );
+                      } else if (
+                        page === currentNotificationPage - 2 ||
+                        page === currentNotificationPage + 2
+                      ) {
+                        return (
+                          <span
+                            key={page}
+                            className="message-history-pagination-ellipsis"
+                          >
+                            ...
+                          </span>
+                        );
+                      }
+                      return null;
+                    })}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setCurrentNotificationPage((prev) =>
+                          Math.min(notificationTotalPages, prev + 1)
+                        )
+                      }
+                      disabled={
+                        currentNotificationPage === notificationTotalPages
+                      }
+                      className="message-history-pagination-btn"
+                    >
+                      ›
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Notification Detail Modal */}
+      {showNotificationDetailModal && selectedNotificationForView && (
+        <div
+          className="notification-detail-modal-backdrop"
+          onClick={() => {
+            setShowNotificationDetailModal(false);
+            setSelectedNotificationForView(null);
+          }}
+        >
+          <div
+            className="notification-detail-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="notification-detail-modal-header">
+              <h3>{selectedNotificationForView.subject || "Notification"}</h3>
+              <button
+                type="button"
+                className="notification-detail-close-btn"
+                onClick={() => {
+                  setShowNotificationDetailModal(false);
+                  setSelectedNotificationForView(null);
+                }}
+                aria-label="Close modal"
+              >
+                <IoCloseOutline />
+              </button>
+            </div>
+            <div className="notification-detail-modal-content">
+              {/* Recipient Info */}
+              <div className="notification-detail-recipient">
+                {selectedNotificationForView.targetType === "all" ? (
+                  <span className="recipient-badge recipient-all">
+                    <IoPeopleOutline />
+                    All Students
+                  </span>
+                ) : selectedNotificationForView.targetType === "student" ? (
+                  <span className="recipient-badge recipient-student">
+                    <IoPersonOutline />
+                    {selectedNotificationForView.targetStudentName ||
+                      "Specific Student"}
+                  </span>
+                ) : (
+                  <span className="recipient-badge recipient-section">
+                    <IoSchoolOutline />
+                    Section: {selectedNotificationForView.targetSection}
+                  </span>
+                )}
+              </div>
+
+              {/* Message Content */}
+              <div className="notification-detail-message">
+                {selectedNotificationForView.messageHtml ? (
+                  <div
+                    className="notification-detail-message-html"
+                    dangerouslySetInnerHTML={{
+                      __html: selectedNotificationForView.messageHtml,
+                    }}
+                  />
+                ) : (
+                  <div className="notification-detail-message-text">
+                    {selectedNotificationForView.message}
+                  </div>
+                )}
+              </div>
+
+              {/* Display Images */}
+              {(selectedNotificationForView.images ||
+                selectedNotificationForView.imageUrls) && (
+                <div className="notification-detail-images">
+                  {(
+                    selectedNotificationForView.images ||
+                    selectedNotificationForView.imageUrls
+                  ).map((imageUrl, index) => (
+                    <div
+                      key={index}
+                      className="notification-detail-image-wrapper"
+                    >
+                      <img
+                        src={imageUrl}
+                        alt={`Notification image ${index + 1}`}
+                        className="notification-detail-image"
+                        onClick={() => window.open(imageUrl, "_blank")}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Display fileUrl if exists (backward compatibility) */}
+              {selectedNotificationForView.fileUrl &&
+                !selectedNotificationForView.images &&
+                !selectedNotificationForView.imageUrls && (
+                  <div className="notification-detail-images">
+                    {selectedNotificationForView.fileType?.startsWith(
+                      "image/"
+                    ) ? (
+                      <div className="notification-detail-image-wrapper">
+                        <img
+                          src={selectedNotificationForView.fileUrl}
+                          alt={
+                            selectedNotificationForView.fileName || "Attachment"
+                          }
+                          className="notification-detail-image"
+                          onClick={() =>
+                            window.open(
+                              selectedNotificationForView.fileUrl,
+                              "_blank"
+                            )
+                          }
+                        />
+                      </div>
+                    ) : (
+                      <a
+                        href={selectedNotificationForView.fileUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="notification-detail-file-link"
+                      >
+                        <IoAttachOutline />
+                        {selectedNotificationForView.fileName ||
+                          "Download Attachment"}
+                      </a>
+                    )}
+                  </div>
+                )}
+
+              {/* Timestamp */}
+              <div className="notification-detail-timestamp">
+                <IoCalendarOutline />
+                {selectedNotificationForView.timestamp
+                  ? new Date(
+                      selectedNotificationForView.timestamp
+                    ).toLocaleString("en-US", {
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })
+                  : "N/A"}
+              </div>
+            </div>
+            <div className="notification-detail-modal-actions">
+              <button
+                className="notification-detail-delete-btn"
+                onClick={() => {
+                  setShowNotificationDetailModal(false);
+                  handleDeleteNotification(selectedNotificationForView.id);
+                  setSelectedNotificationForView(null);
+                }}
+                disabled={isDeletingNotifications}
+              >
+                <IoTrashOutline />
+                Delete
+              </button>
+              <button
+                className="notification-detail-close-action-btn"
+                onClick={() => {
+                  setShowNotificationDetailModal(false);
+                  setSelectedNotificationForView(null);
+                }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Application Detail Modal */}
+      {showApplicationDetailModal && selectedApplication && (
+        <div
+          className="application-detail-modal-backdrop"
+          onClick={closeApplicationDetailModal}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="application-detail-title"
+        >
+          <div
+            className="application-detail-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="application-detail-modal-header">
+              <h2
+                id="application-detail-title"
+                className="application-detail-modal-title"
+              >
+                Application Details
+              </h2>
+              <button
+                type="button"
+                className="application-detail-close-btn"
+                onClick={closeApplicationDetailModal}
+                aria-label="Close"
+              >
+                <IoCloseOutline />
+              </button>
+            </div>
+            <div className="application-detail-modal-body">
+              {(() => {
+                const app = selectedApplication;
+                const student = students.find((s) => s.id === app.userId);
+                const studentName =
+                  app.userProfile?.name?.trim() ||
+                  app.userProfile?.email ||
+                  (student
+                    ? `${student.firstName || ""} ${
+                        student.lastName || ""
+                      }`.trim() || student.email
+                    : null) ||
+                  app.studentName ||
+                  app.userId ||
+                  "—";
+                const studentId =
+                  student?.studentId ?? app.userProfile?.studentId ?? "—";
+                const section =
+                  student?.section ?? app.userProfile?.section ?? "—";
+                const email = app.userProfile?.email || student?.email || "—";
+                const skills = (app.userProfile?.skills || []).length
+                  ? app.userProfile.skills
+                  : student?.skills || [];
+                const companyName = app.companyName || app.companyId || "—";
+                const status = (app.status || "pending").toLowerCase();
+                const statusLabel =
+                  status === "approved" || status === "accepted"
+                    ? "Approved"
+                    : status === "rejected"
+                    ? "Rejected"
+                    : "Pending";
+                const appliedAt =
+                  app.appliedAt || app.createdAt || app.timestamp;
+                const appliedStr = appliedAt
+                  ? (() => {
+                      const t = getApplicationTime(appliedAt);
+                      return t
+                        ? new Date(t).toLocaleString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
+                        : "—";
+                    })()
+                  : "—";
+                const approvedAt = app.approvedAt;
+                const approvedStr = approvedAt
+                  ? (() => {
+                      const t = getApplicationTime(approvedAt);
+                      return t
+                        ? new Date(t).toLocaleString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
+                        : "—";
+                    })()
+                  : "—";
+                const isPending = status === "pending";
+                const isUpdating = updatingApplicationId === app.id;
+                return (
+                  <>
+                    <div className="application-detail-blocks">
+                      <section className="application-detail-block application-detail-student">
+                        <h3 className="application-detail-block-title">
+                          <IoPersonOutline /> Student
+                        </h3>
+                        <dl className="application-detail-dl">
+                          <dt>Student ID</dt>
+                          <dd>{studentId}</dd>
+                          <dt>Name</dt>
+                          <dd>{studentName}</dd>
+                          <dt>Section</dt>
+                          <dd>{section}</dd>
+                          <dt>Email</dt>
+                          <dd>
+                            <a
+                              href={`mailto:${email}`}
+                              className="application-detail-link"
+                            >
+                              {email}
+                            </a>
+                          </dd>
+                          {Array.isArray(skills) && skills.length > 0 && (
+                            <>
+                              <dt>Skills</dt>
+                              <dd>
+                                <div className="application-detail-skills">
+                                  {skills.map((sk, i) => (
+                                    <span
+                                      key={i}
+                                      className="application-detail-skill-tag"
+                                    >
+                                      {sk}
+                                    </span>
+                                  ))}
+                                </div>
+                              </dd>
+                            </>
+                          )}
+                        </dl>
+                      </section>
+                      <section className="application-detail-block application-detail-company">
+                        <h3 className="application-detail-block-title">
+                          <IoBusinessOutline /> Company
+                        </h3>
+                        <dl className="application-detail-dl">
+                          <dt>Company</dt>
+                          <dd>{companyName}</dd>
+                          {app.companyId && (
+                            <>
+                              <dt>Company ID</dt>
+                              <dd>
+                                <code className="application-detail-code">
+                                  {app.companyId}
+                                </code>
+                              </dd>
+                            </>
+                          )}
+                        </dl>
+                      </section>
+                    </div>
+                    <section className="application-detail-block application-detail-status">
+                      <h3 className="application-detail-block-title">
+                        <IoTimeOutline /> Status &amp; Timeline
+                      </h3>
+                      <div className="application-detail-timeline">
+                        <div className="application-detail-timeline-item">
+                          <span className="application-detail-timeline-label">
+                            Status
+                          </span>
+                          <span
+                            className={`application-status-badge application-detail-status-badge status-${status}`}
+                          >
+                            {statusLabel}
+                          </span>
+                        </div>
+                        <div className="application-detail-timeline-item">
+                          <span className="application-detail-timeline-label">
+                            Applied
+                          </span>
+                          <span>{appliedStr}</span>
+                        </div>
+                        {(status === "approved" || status === "accepted") && (
+                          <div className="application-detail-timeline-item">
+                            <span className="application-detail-timeline-label">
+                              Approved
+                            </span>
+                            <span>{approvedStr}</span>
+                          </div>
+                        )}
+                      </div>
+                    </section>
+                    {(isPending ||
+                      status === "approved" ||
+                      status === "accepted") && (
+                      <div
+                        className="application-detail-actions"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {isPending && (
+                          <>
+                            <button
+                              type="button"
+                              className="application-btn accept-btn application-detail-btn"
+                              onClick={() =>
+                                openApplicationStatusConfirm(app, "accept")
+                              }
+                              disabled={isUpdating}
+                            >
+                              {isUpdating ? (
+                                <span className="spinner-small" />
+                              ) : (
+                                <>
+                                  <IoCheckmarkCircle /> Approve
+                                </>
+                              )}
+                            </button>
+                            <button
+                              type="button"
+                              className="application-btn reject-btn application-detail-btn"
+                              onClick={() =>
+                                openApplicationStatusConfirm(app, "reject")
+                              }
+                              disabled={isUpdating}
+                            >
+                              Reject
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+            <div className="application-detail-modal-footer">
+              {selectedApplication && (
+                <button
+                  type="button"
+                  className="application-detail-remove-btn"
+                  onClick={() =>
+                    openRemoveApplicationConfirm(selectedApplication)
+                  }
+                  disabled={isRemovingApplication}
+                  aria-label="Remove application"
+                >
+                  <IoTrashOutline /> Remove
+                </button>
+              )}
+              <button
+                type="button"
+                className="application-detail-close-action-btn"
+                onClick={closeApplicationDetailModal}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Application status (accept/reject) confirmation */}
+      <ConfirmModal
+        open={showApplicationStatusConfirm}
+        message={(() => {
+          if (!applicationStatusConfirm?.app) return "";
+          const { app, action } = applicationStatusConfirm;
+          const student = students.find((s) => s.id === app.userId);
+          const studentName =
+            app.userProfile?.name?.trim() ||
+            app.userProfile?.email ||
+            (student
+              ? `${student.firstName || ""} ${student.lastName || ""}`.trim() ||
+                student.email
+              : "this student");
+          const companyName = app.companyName || app.companyId || "the company";
+          const verb = action === "accept" ? "approve" : "deny";
+          return `Are you sure you want to ${verb} this application for ${studentName} at ${companyName}?`;
+        })()}
+        onConfirm={handleConfirmApplicationStatus}
+        onCancel={cancelApplicationStatusConfirm}
+        title={
+          applicationStatusConfirm?.action === "accept"
+            ? "Approve application?"
+            : "Deny application?"
+        }
+        confirmButtonText={
+          applicationStatusConfirm?.action === "accept"
+            ? "Yes, approve"
+            : "Yes, deny"
+        }
+      />
+
+      <ConfirmModal
+        open={showRemoveApplicationConfirm}
+        message="This application will be permanently removed. This action cannot be undone."
+        onConfirm={handleRemoveApplication}
+        onCancel={cancelRemoveApplication}
+        title="Remove application?"
+        confirmButtonText={isRemovingApplication ? "Removing…" : "Yes, remove"}
+      />
+
       <ToastContainer toasts={toasts} removeToast={removeToast} />
       <Footer />
     </div>

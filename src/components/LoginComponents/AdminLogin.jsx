@@ -12,13 +12,16 @@ import PropTypes from "prop-types";
 import { useNavigate, useLocation, Link } from "react-router-dom";
 import "./AdminLogin.css";
 import { FaRegEye, FaRegEyeSlash } from "react-icons/fa";
-import { collection, query, where, getDocs, addDoc, doc, updateDoc } from "firebase/firestore";
+import { collection, query, where, getDocs } from "firebase/firestore";
 import { db, auth } from "../../../firebase";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import InternQuestLogo from "../../assets/InternQuest_with_text_white.png";
-import { createAdminSession, isAdminAuthenticated, getAdminRole, ROLES } from "../../utils/auth";
-import { attemptUpdateAuthPassword } from "../../utils/authPasswordUpdate";
-
+import {
+  createAdminSession,
+  isAdminAuthenticated,
+  getAdminRole,
+  ROLES,
+} from "../../utils/auth";
 const AdminLogin = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -75,12 +78,12 @@ const AdminLogin = () => {
   // Handles changes to input fields (username, password)
   const handleChange = (e) => {
     const { name, value } = e.target;
-    
+
     // Clear error when user starts typing
     if (error) {
       setError("");
     }
-    
+
     // Clear field error when user types
     if (fieldErrors[name]) {
       setFieldErrors((prev) => ({
@@ -129,7 +132,10 @@ const AdminLogin = () => {
     const state = location.state;
     if (state?.passwordChanged) {
       setError(""); // Clear any existing error
-      setSuccess(state.message || "Password changed successfully. Please log in with your new password.");
+      setSuccess(
+        state.message ||
+          "Password changed successfully. Please log in with your new password."
+      );
     }
   }, [location]);
 
@@ -137,10 +143,10 @@ const AdminLogin = () => {
     if (isAdminAuthenticated()) {
       // Redirect based on role if already logged in
       const role = getAdminRole();
-      // Map 'admin' to 'super_admin' for backward compatibility
-      const mappedRole = role === 'admin' ? 'super_admin' : role;
-      
-      if (mappedRole === ROLES.ADVISER || mappedRole === 'adviser') {
+      // Normalize legacy 'super_admin' to 'admin' for backward compatibility during migration
+      const normalizedRole = role === "super_admin" ? "admin" : role;
+
+      if (normalizedRole === ROLES.ADVISER || normalizedRole === "adviser") {
         navigate("/StudentDashboard", { replace: true });
       } else {
         navigate("/dashboard", { replace: true });
@@ -151,7 +157,7 @@ const AdminLogin = () => {
   // Handles form submission and authentication logic
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     // Trim input values
     const trimmedUsername = formData.username.trim();
     const trimmedPassword = formData.password.trim();
@@ -183,7 +189,7 @@ const AdminLogin = () => {
     try {
       const adminsRef = collection(db, "adminusers");
 
-      // Try username
+      // Try username with timeout protection
       let adminDoc = null;
       let adminData = null;
 
@@ -191,7 +197,25 @@ const AdminLogin = () => {
         adminsRef,
         where("username", "==", trimmedUsername)
       );
-      const usernameSnapshot = await getDocs(usernameQuery);
+
+      // Add timeout to prevent infinite hangs (30 seconds)
+      const queryPromise = getDocs(usernameQuery);
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(
+          () =>
+            reject(
+              new Error(
+                "Request timeout. Please check your connection and try again."
+              )
+            ),
+          30000
+        )
+      );
+
+      const usernameSnapshot = await Promise.race([
+        queryPromise,
+        timeoutPromise,
+      ]);
 
       if (!usernameSnapshot.empty) {
         adminDoc = usernameSnapshot.docs[0];
@@ -204,309 +228,161 @@ const AdminLogin = () => {
           username: "Invalid username or password",
           password: "Invalid username or password",
         });
+        setIsLoading(false);
         return;
       }
 
-      // Check if password matches
-      if (adminData.password === trimmedPassword) {
+      // Authenticate with Firebase Auth only (no stored password in database)
+      if (!adminData.firebaseEmail) {
+        setError(
+          "Admin account not properly configured with Firebase authentication. Please contact administrator."
+        );
+        setIsLoading(false);
+        return;
+      }
 
-        // Sign into Firebase Auth - REQUIRED for Firestore security rules
-        // Firestore rules require request.auth != null to read/write data
-        if (adminData.firebaseEmail) {
-          // Validate email format before attempting sign-in
-          const firebaseEmail = adminData.firebaseEmail.trim();
-          if (!firebaseEmail || !isValidEmail(firebaseEmail)) {
-            console.error("Invalid Firebase email format:", firebaseEmail);
-            setError("Admin account has invalid Firebase email configuration. Please contact administrator.");
-            setIsLoading(false);
-            return;
-          }
+      const firebaseEmail = adminData.firebaseEmail.trim();
+      if (!firebaseEmail || !isValidEmail(firebaseEmail)) {
+        setError(
+          "Admin account has invalid Firebase email configuration. Please contact administrator."
+        );
+        setIsLoading(false);
+        return;
+      }
 
-          // Validate password is not empty
-          if (!trimmedPassword || trimmedPassword.length === 0) {
-            console.error("Password is empty");
-            setError("Password cannot be empty.");
-            setIsLoading(false);
-            return;
-          }
+      if (!trimmedPassword || trimmedPassword.length === 0) {
+        setError("Password cannot be empty.");
+        setIsLoading(false);
+        return;
+      }
 
-          // Try to sign in with Firebase Auth
-          // First try with the password the user entered
-          let authSuccess = false;
-          let lastAuthError = null;
-          
-          try {
-            await signInWithEmailAndPassword(
-              auth,
-              firebaseEmail,
-              trimmedPassword
-            );
-            authSuccess = true;
-            console.log("Sign-in successful");
-          } catch (authError1) {
-            lastAuthError = authError1;
-            console.error("Firebase Auth sign-in error (first attempt):", {
-              code: authError1.code,
-              message: authError1.message,
-              email: firebaseEmail
-            });
-            
-            // If that fails, try with the stored firebasePassword (might be different)
-            if (adminData.firebasePassword && adminData.firebasePassword !== trimmedPassword) {
-              try {
-                console.log("Attempting Firebase Auth sign-in with stored firebasePassword");
-                await signInWithEmailAndPassword(
-                  auth,
-                  firebaseEmail,
-                  adminData.firebasePassword
-                );
-                authSuccess = true;
-                console.log("Sign-in successful");
-              } catch (authError2) {
-                lastAuthError = authError2;
-                console.error("Firebase Auth sign-in failed with both passwords:", {
-                  code: authError2.code,
-                  message: authError2.message,
-                  email: firebaseEmail
-                });
-              }
-            }
-            
-            if (!authSuccess) {
-              // Firebase Auth authentication failed
-              // Since Firestore password matches, the user is legitimate but Firebase Auth is out of sync
-              // Try to sync the password to Firebase Auth automatically
-              if (lastAuthError.code === "auth/invalid-credential" || lastAuthError.code === "auth/wrong-password") {
-                console.log("Password mismatch detected. Attempting to sync password to Firebase Auth...", {
-                  hasUid: !!adminData.uid,
-                  hasEmail: !!adminData.email,
-                  hasFirebaseEmail: !!firebaseEmail,
-                  passwordLength: trimmedPassword.length
-                });
-                
-                // Ensure we have the necessary data for password sync
-                if (!firebaseEmail) {
-                  console.error("Cannot sync password: firebaseEmail is missing");
-                } else if (!trimmedPassword || trimmedPassword.trim() === '') {
-                  console.error("Cannot sync password: password is empty");
-                } else {
-                  try {
-                    const syncSuccess = await attemptUpdateAuthPassword(
-                      {
-                        uid: adminData.uid || null,
-                        email: adminData.email || null,
-                        firebaseEmail: firebaseEmail,
-                      },
-                      trimmedPassword
-                    );
-                    
-                    if (syncSuccess) {
-                      console.log("Password synced successfully. Retrying login...");
-                      // Wait a moment for the password to propagate
-                      await new Promise(resolve => setTimeout(resolve, 1000));
-                      
-                      // Retry login after sync
-                      try {
-                        await signInWithEmailAndPassword(
-                          auth,
-                          firebaseEmail,
-                          trimmedPassword
-                        );
-                        authSuccess = true;
-                        console.log("Login successful after password sync");
-                      } catch (retryError) {
-                        console.error("Login failed after password sync:", retryError);
-                        setError("Password synced but login still failed. Please try again.");
-                        setIsLoading(false);
-                        return;
-                      }
-                    } else {
-                      console.warn("Password sync failed. User will need admin to reset password.", {
-                        uid: adminData.uid,
-                        email: adminData.email,
-                        firebaseEmail: firebaseEmail
-                      });
-                    }
-                  } catch (syncError) {
-                    console.error("Error attempting password sync:", syncError);
-                  }
-                }
-              }
-              
-              if (!authSuccess) {
-                // If sync didn't work or other error, show appropriate message
-                let errorMessage = "";
-                
-                if (lastAuthError.code === "auth/user-disabled") {
-                  errorMessage = "This account has been disabled. Please contact administrator.";
-                } else if (lastAuthError.code === "auth/invalid-credential" || lastAuthError.code === "auth/wrong-password") {
-                  // Password sync was attempted but failed
-                  errorMessage = "Password sync issue detected. Automatic sync failed. Please contact the system administrator to reset your password (this will sync it with Firebase Auth).";
-                } else if (lastAuthError.code === "auth/invalid-email") {
-                  errorMessage = "Invalid email format in Firebase Auth. Please contact administrator.";
-                } else if (lastAuthError.code === "auth/user-not-found") {
-                  errorMessage = "Firebase Auth account not found. Please contact administrator to create your Firebase authentication account.";
-                } else if (lastAuthError.code === "auth/network-request-failed") {
-                  errorMessage = "Network error. Please check your connection and try again.";
-                } else if (lastAuthError.code === "auth/invalid-password") {
-                  errorMessage = "Invalid password format. Please contact administrator.";
-                } else if (lastAuthError.code === "auth/missing-password") {
-                  errorMessage = "Password is required for authentication.";
-                } else {
-                  // Log the full error for debugging
-                  console.error("Firebase Auth sign-in error (unhandled):", {
-                    code: lastAuthError.code,
-                    message: lastAuthError.message,
-                    email: firebaseEmail,
-                    fullError: lastAuthError
-                  });
-                  errorMessage = `Firebase authentication failed. Error: ${lastAuthError.message || lastAuthError.code || "Unknown error"}. Please contact administrator.`;
-                }
-                
-                setError(errorMessage);
-                setIsLoading(false);
-                return;
-              }
-            }
-          }
-        } else {
-          // No Firebase Auth email - cannot access Firestore
-          setError("Admin account not properly configured with Firebase authentication. Please contact administrator.");
-          setIsLoading(false);
-          return;
-        }
+      try {
+        // Add timeout to Firebase Auth sign-in (30 seconds)
+        const authPromise = signInWithEmailAndPassword(
+          auth,
+          firebaseEmail,
+          trimmedPassword
+        );
+        const authTimeoutPromise = new Promise((_, reject) =>
+          setTimeout(
+            () =>
+              reject(
+                new Error(
+                  "Authentication timeout. Please check your connection and try again."
+                )
+              ),
+            30000
+          )
+        );
 
-        // Store role in session (default to 'adviser' if not specified)
-        // Map 'admin' to 'super_admin' for backward compatibility
-        let adminRole = adminData.role || 'adviser';
-        if (adminRole === 'admin') {
-          adminRole = 'super_admin';
-        }
-        
-        createAdminSession({ 
-          username: trimmedUsername,
-          role: adminRole,
-          adminId: adminDoc.id,
-          college_code: adminData.college_code || null,
-          sections: adminData.sections || (adminData.section ? [adminData.section] : []),
-          mustChangePassword: adminData.mustChangePassword || false
+        await Promise.race([authPromise, authTimeoutPromise]);
+        console.log("Sign-in successful");
+      } catch (authError) {
+        console.error("Firebase Auth sign-in error:", {
+          code: authError.code,
+          message: authError.message,
+          email: firebaseEmail,
         });
-        
-        // Check if password change is required
-        if (adminData.mustChangePassword) {
-          // Store flag in session and navigate to password change page
-          // For now, we'll redirect to a password change route
-          // You can create a separate component for this
-          navigate("/change-password", { 
-            replace: true,
-            state: { 
-              adminId: adminDoc.id,
-              username: trimmedUsername,
-              fromLogin: true 
-            }
-          });
+        let errorMessage = "";
+        if (authError.code === "auth/user-disabled") {
+          errorMessage =
+            "This account has been disabled. Please contact administrator.";
+        } else if (
+          authError.code === "auth/invalid-credential" ||
+          authError.code === "auth/wrong-password"
+        ) {
+          errorMessage = "Invalid username or password";
+        } else if (authError.code === "auth/invalid-email") {
+          errorMessage =
+            "Invalid email format in Firebase Auth. Please contact administrator.";
+        } else if (authError.code === "auth/user-not-found") {
+          errorMessage =
+            "Firebase Auth account not found. Please contact administrator to create your Firebase authentication account.";
+        } else if (authError.code === "auth/network-request-failed") {
+          errorMessage =
+            "Network error. Please check your connection and try again.";
+        } else if (authError.code === "auth/invalid-password") {
+          errorMessage =
+            "Invalid password format. Please contact administrator.";
+        } else if (authError.code === "auth/missing-password") {
+          errorMessage = "Password is required for authentication.";
         } else {
-        // Navigate based on role - check both string and constant
-        if (adminRole === 'adviser' || adminRole === ROLES.ADVISER) {
-          // Adviser (Admin 3) goes to Student Dashboard
+          errorMessage = `Firebase authentication failed. ${
+            authError.message || authError.code || "Unknown error"
+          }. Please contact administrator.`;
+        }
+        setError(errorMessage);
+        setFieldErrors({
+          username:
+            errorMessage === "Invalid username or password"
+              ? "Invalid username or password"
+              : "",
+          password:
+            errorMessage === "Invalid username or password"
+              ? "Invalid username or password"
+              : "",
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      // Store role in session (default to 'adviser' if not specified)
+      // Normalize legacy 'super_admin' to 'admin' during migration period
+      let adminRole = adminData.role || "adviser";
+      if (adminRole === "super_admin") {
+        adminRole = "admin";
+      }
+
+      createAdminSession({
+        username: trimmedUsername,
+        role: adminRole,
+        adminId: adminDoc.id,
+        college_code: adminData.college_code || null,
+        sections:
+          adminData.sections || (adminData.section ? [adminData.section] : []),
+        mustChangePassword: adminData.mustChangePassword || false,
+      });
+
+      if (adminData.mustChangePassword) {
+        navigate("/change-password", {
+          replace: true,
+          state: {
+            adminId: adminDoc.id,
+            username: trimmedUsername,
+            fromLogin: true,
+          },
+        });
+      } else {
+        if (adminRole === "adviser" || adminRole === ROLES.ADVISER) {
           navigate("/StudentDashboard", { replace: true });
         } else {
-          // Super Admin, Coordinator, or any other role goes to Dashboard
           navigate("/dashboard", { replace: true });
-          }
-        }
-      } else {
-        // Firestore password does NOT match what the user typed.
-        // This can happen if the user changed their password via email (sendPasswordResetEmail),
-        // which updates Firebase Auth but not our Firestore copy yet.
-        if (adminData.firebaseEmail) {
-          const firebaseEmail = adminData.firebaseEmail.trim();
-
-          if (!firebaseEmail || !isValidEmail(firebaseEmail)) {
-            console.error("Invalid Firebase email format when password mismatch:", firebaseEmail);
-            setError("Account email configuration is invalid. Please contact the administrator.");
-            setIsLoading(false);
-            return;
-          }
-
-          try {
-            // Try signing in directly with Firebase Auth using the entered password.
-            await signInWithEmailAndPassword(auth, firebaseEmail, trimmedPassword);
-            console.log("Sign-in successful with new password (password was changed outside the system).");
-
-            // If that works, update Firestore to store the new password so everything stays in sync.
-            try {
-              const adminRef = doc(db, "adminusers", adminDoc.id);
-              await updateDoc(adminRef, {
-                password: trimmedPassword,
-                firebasePassword: trimmedPassword,
-                mustChangePassword: false,
-                passwordChangedAt: new Date().toISOString(),
-              });
-              console.log("Updated Firestore password after successful Firebase Auth login with new password.");
-              // Also update local adminData so session & redirects use latest state
-              adminData = {
-                ...adminData,
-                password: trimmedPassword,
-                firebasePassword: trimmedPassword,
-                mustChangePassword: false,
-              };
-            } catch (syncErr) {
-              console.error("Failed to sync new password back to Firestore:", syncErr);
-            }
-
-            // Proceed to create session and redirect just like the normal success path
-            let adminRole = adminData.role || "adviser";
-            if (adminRole === "admin") {
-              adminRole = "super_admin";
-            }
-
-            createAdminSession({
-              username: trimmedUsername,
-              role: adminRole,
-              adminId: adminDoc.id,
-              college_code: adminData.college_code || null,
-              sections:
-                adminData.sections || (adminData.section ? [adminData.section] : []),
-              mustChangePassword: adminData.mustChangePassword || false,
-            });
-
-            if (adminData.mustChangePassword) {
-              navigate("/change-password", {
-                replace: true,
-                state: {
-                  adminId: adminDoc.id,
-                  username: trimmedUsername,
-                  fromLogin: true,
-                },
-              });
-            } else {
-              if (adminRole === "adviser" || adminRole === ROLES.ADVISER) {
-                navigate("/StudentDashboard", { replace: true });
-              } else {
-                navigate("/dashboard", { replace: true });
-              }
-            }
-          } catch (authError) {
-            console.error("Firebase Auth sign-in failed when Firestore password did not match:", authError);
-            // If Firebase also rejects the password, treat it as invalid credentials.
-            setError("Invalid username or password");
-            setFieldErrors({
-              username: "Invalid username or password",
-              password: "Invalid username or password",
-            });
-          }
-        } else {
-          // No firebaseEmail configured; fall back to invalid-credential message.
-          setError("Invalid username or password");
-          setFieldErrors({
-            username: "Invalid username or password",
-            password: "Invalid username or password",
-          });
         }
       }
     } catch (err) {
-      setError(`Login failed: ${err.message || "An unexpected error occurred. Please try again."}`);
+      console.error("Login error:", err);
+      const errorMessage =
+        err.message || "An unexpected error occurred. Please try again.";
+
+      // Handle timeout errors specifically
+      if (
+        errorMessage.includes("timeout") ||
+        errorMessage.includes("Request timeout") ||
+        errorMessage.includes("Authentication timeout")
+      ) {
+        setError(errorMessage);
+      } else if (err.code === "auth/network-request-failed") {
+        setError(
+          "Network error. Please check your internet connection and try again."
+        );
+      } else {
+        setError(`Login failed: ${errorMessage}`);
+      }
+
+      setFieldErrors({
+        username: "",
+        password: "",
+      });
     } finally {
       setIsLoading(false);
     }
@@ -514,19 +390,25 @@ const AdminLogin = () => {
 
   return (
     <div className="login-page">
-      <a href="#login-form" className="skip-link" style={{
-        position: 'absolute',
-        top: '-40px',
-        left: 0,
-        background: '#1976d2',
-        color: '#fff',
-        padding: '8px 16px',
-        textDecoration: 'none',
-        zIndex: 10000,
-        borderRadius: '0 0 4px 0',
-        fontWeight: 500,
-        transition: 'top 0.2s'
-      }} onFocus={(e) => e.target.style.top = '0'} onBlur={(e) => e.target.style.top = '-40px'}>
+      <a
+        href="#login-form"
+        className="skip-link"
+        style={{
+          position: "absolute",
+          top: "-40px",
+          left: 0,
+          background: "#1976d2",
+          color: "#fff",
+          padding: "8px 16px",
+          textDecoration: "none",
+          zIndex: 10000,
+          borderRadius: "0 0 4px 0",
+          fontWeight: 500,
+          transition: "top 0.2s",
+        }}
+        onFocus={(e) => (e.target.style.top = "0")}
+        onBlur={(e) => (e.target.style.top = "-40px")}
+      >
         Skip to login form
       </a>
       <div className="login-container">
@@ -567,18 +449,34 @@ const AdminLogin = () => {
                   placeholder="Enter your username"
                   className={`form-input ${
                     touched.username && fieldErrors.username ? "error" : ""
-                  } ${touched.username && !fieldErrors.username && formData.username ? "success" : ""}`}
+                  } ${
+                    touched.username &&
+                    !fieldErrors.username &&
+                    formData.username
+                      ? "success"
+                      : ""
+                  }`}
                   value={formData.username}
                   onChange={handleChange}
                   onBlur={handleBlur}
                   disabled={isLoading}
                   autoComplete="username"
                   aria-required="true"
-                  aria-invalid={touched.username && fieldErrors.username ? "true" : "false"}
-                  aria-describedby={touched.username && fieldErrors.username ? "username-error" : undefined}
+                  aria-invalid={
+                    touched.username && fieldErrors.username ? "true" : "false"
+                  }
+                  aria-describedby={
+                    touched.username && fieldErrors.username
+                      ? "username-error"
+                      : undefined
+                  }
                 />
                 {touched.username && fieldErrors.username && (
-                  <span id="username-error" className="field-error" role="alert">
+                  <span
+                    id="username-error"
+                    className="field-error"
+                    role="alert"
+                  >
                     {fieldErrors.username}
                   </span>
                 )}
@@ -593,15 +491,29 @@ const AdminLogin = () => {
                     placeholder="Enter your password"
                     className={`form-input ${
                       touched.password && fieldErrors.password ? "error" : ""
-                    } ${touched.password && !fieldErrors.password && formData.password ? "success" : ""}`}
+                    } ${
+                      touched.password &&
+                      !fieldErrors.password &&
+                      formData.password
+                        ? "success"
+                        : ""
+                    }`}
                     value={formData.password}
                     onChange={handleChange}
                     onBlur={handleBlur}
                     disabled={isLoading}
                     autoComplete="current-password"
                     aria-required="true"
-                    aria-invalid={touched.password && fieldErrors.password ? "true" : "false"}
-                    aria-describedby={touched.password && fieldErrors.password ? "password-error" : undefined}
+                    aria-invalid={
+                      touched.password && fieldErrors.password
+                        ? "true"
+                        : "false"
+                    }
+                    aria-describedby={
+                      touched.password && fieldErrors.password
+                        ? "password-error"
+                        : undefined
+                    }
                   />
                   <button
                     type="button"
@@ -616,7 +528,11 @@ const AdminLogin = () => {
                   </button>
                 </div>
                 {touched.password && fieldErrors.password && (
-                  <span id="password-error" className="field-error" role="alert">
+                  <span
+                    id="password-error"
+                    className="field-error"
+                    role="alert"
+                  >
                     {fieldErrors.password}
                   </span>
                 )}
@@ -627,7 +543,12 @@ const AdminLogin = () => {
                 disabled={isLoading}
                 aria-busy={isLoading}
               >
-                {isLoading ? "Signing in..." : "Sign in"}
+                <span className="button-text">
+                  {isLoading ? "Signing in..." : "Sign in"}
+                </span>
+                {isLoading && (
+                  <span className="button-spinner" aria-hidden="true"></span>
+                )}
               </button>
               <div className="forgot-password-link">
                 <Link to="/forgot-password" className="forgot-password-text">

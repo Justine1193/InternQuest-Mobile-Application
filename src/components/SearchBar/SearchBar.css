@@ -11,9 +11,9 @@
 .new-searchbar {
   display: flex;
   align-items: center;
-  background: #fff;
+  background: var(--iq-surface);
   border-radius: 8px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--iq-border-subtle);
   padding: 0.25rem 0.75rem;
   min-width: 280px;
   max-width: 500px;
@@ -22,8 +22,8 @@
 }
 
 .new-searchbar:focus-within {
-  border-color: #2563eb;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+  border-color: var(--iq-primary);
+  box-shadow: var(--iq-focus-ring);
 }
 
 /* Input Styles */
@@ -34,12 +34,12 @@
   font-size: 0.875rem;
   padding: 0.5rem 0.5rem;
   flex: 1;
-  color: #111827;
+  color: var(--iq-text-main);
   width: 100%;
 }
 
 .new-searchbar-input::placeholder {
-  color: #9ca3af;
+  color: var(--iq-text-muted);
   font-weight: 400;
 }
 
@@ -52,15 +52,15 @@
   padding: 0.25rem;
   display: flex;
   align-items: center;
-  color: #6b7280;
+  color: var(--iq-text-muted);
   font-size: 1rem;
   transition: all 0.15s ease;
   border-radius: 4px;
 }
 
 .new-searchbar-btn:hover {
-  color: #2563eb;
-  background: #eff6ff;
+  color: var(--iq-primary);
+  background: var(--iq-primary-soft);
 }
 
 /* Filter Dropdown Container */
@@ -74,7 +74,7 @@
 .clear-search-btn {
   pointer-events: auto !important;
   cursor: pointer !important;
-  color: #9ca3af;
+  color: var(--iq-text-muted);
   padding: 0.25rem;
   margin-right: 0.25rem;
   border-radius: 4px;

@@ -44,10 +44,12 @@ export const getAdminSession = () => {
 
 export const isAdminAuthenticated = () => Boolean(getAdminSession());
 
-// Get the current admin's role
+// Get the current admin's role (normalizes legacy 'super_admin' to 'admin')
 export const getAdminRole = () => {
   const session = getAdminSession();
-  return session?.role || null;
+  const role = session?.role || null;
+  // Normalize legacy 'super_admin' to 'admin' during migration period
+  return role === "super_admin" ? "admin" : role;
 };
 
 // Check if admin has a specific role
@@ -62,24 +64,24 @@ export const hasAnyRole = (roles) => {
   return roles.includes(currentRole);
 };
 
-// Role hierarchy: super_admin > coordinator > adviser
+// Role hierarchy: admin > coordinator > adviser
 export const ROLES = {
-  SUPER_ADMIN: 'super_admin',
+  SUPER_ADMIN: 'admin',
   COORDINATOR: 'coordinator',
   ADVISER: 'adviser',
 };
 
-// Check if admin can create accounts (super_admin and coordinator)
+// Check if admin can create accounts (admin and coordinator)
 export const canCreateAccounts = () => {
   return hasAnyRole([ROLES.SUPER_ADMIN, ROLES.COORDINATOR]);
 };
 
-// Check if admin can create coordinator accounts (only super_admin)
+// Check if admin can create coordinator accounts (only admin)
 export const canCreateCoordinator = () => {
   return hasRole(ROLES.SUPER_ADMIN);
 };
 
-// Check if admin can view full dashboard (super_admin and coordinator)
+// Check if admin can view full dashboard (admin and coordinator)
 export const canViewDashboard = () => {
   return hasAnyRole([ROLES.SUPER_ADMIN, ROLES.COORDINATOR]);
 };

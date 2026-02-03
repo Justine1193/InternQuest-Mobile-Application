@@ -111,10 +111,10 @@
   max-width: 100vw;
   display: flex;
   flex-direction: column;
-  background: #fff;
+  background: var(--iq-bg);
   color: var(--iq-text-main);
   margin-left: 260px;
-  transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1), background var(--iq-transition-slow), color var(--iq-transition-slow);
   overflow-x: hidden;
   box-sizing: border-box;
   position: relative;
@@ -130,11 +130,12 @@ body.sidebar-collapsed .dashboard-container {
   width: 100%;
   max-width: 100%;
   padding: 2rem 1.5rem;
-  background: #fff;
+  background: var(--iq-bg);
   min-width: 0;
   box-sizing: border-box;
   overflow-x: visible;
   position: relative;
+  transition: background var(--iq-transition-slow);
 }
 
 /* Shared top navigation styling (Student + Resource Management) */
@@ -146,10 +147,11 @@ body.sidebar-collapsed .dashboard-container {
   justify-content: space-between;
   align-items: center;
   padding: 0.75rem 1.75rem;
-  background: rgba(255, 255, 255, 0.96);
+  background: var(--iq-surface);
   backdrop-filter: blur(10px);
-  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
-  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04);
+  border-bottom: 1px solid var(--iq-border-subtle);
+  box-shadow: var(--iq-shadow-sm);
+  transition: background var(--iq-transition-slow), border-color var(--iq-transition-slow);
 }
 
 .top-nav .nav-links .nav-link {
@@ -203,7 +205,7 @@ body.sidebar-collapsed .dashboard-container {
   padding: 0.5rem 1rem;
   border-radius: 999px;
   border: 1px solid var(--iq-border-subtle);
-  background: #ffffff;
+  background: var(--iq-surface);
   cursor: pointer;
   min-width: 40px;
   font-weight: 500;
@@ -574,15 +576,15 @@ textarea.input-standard.success {
 }
 
 .iq-stat-card {
-  background: #ffffff;
+  background: var(--iq-surface);
   border-radius: 16px;
   padding: 1.5rem;
   display: flex;
   align-items: center;
   gap: 1.25rem;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-  border: 1px solid rgba(0, 0, 0, 0.06);
-  transition: transform 0.25s ease, box-shadow 0.25s ease;
+  box-shadow: var(--iq-shadow-soft);
+  border: 1px solid var(--iq-border-subtle);
+  transition: transform 0.25s ease, box-shadow 0.25s ease, background var(--iq-transition-slow), border-color var(--iq-transition-slow);
   position: relative;
   overflow: hidden;
   min-width: 0;
@@ -604,7 +606,7 @@ textarea.input-standard.success {
 
 .iq-stat-card:hover {
   transform: translateY(-3px);
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.12);
+  box-shadow: var(--iq-shadow-lg);
 }
 
 .iq-stat-icon-wrapper {
@@ -636,19 +638,21 @@ textarea.input-standard.success {
 .iq-stat-value {
   font-size: 2rem;
   font-weight: 800;
-  color: #111827;
+  color: var(--iq-text-main);
   line-height: 1.1;
   letter-spacing: -0.02em;
   margin-bottom: 0.25rem;
+  transition: color var(--iq-transition-slow);
 }
 
 .iq-stat-label {
   font-size: 0.85rem;
-  color: #6b7280;
+  color: var(--iq-text-muted);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   line-height: 1.3;
+  transition: color var(--iq-transition-slow);
 }
 
 /* Color variants */
@@ -694,5 +698,4 @@ textarea.input-standard.success {
     font-size: 1.75rem;
   }
 }
-
 

@@ -1,6 +1,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import './index.css';
+import './components/dashboardTheme.css';
 import App from './webpage/App.jsx';
 
 // Suppress 401 errors from Firebase Cloud Functions during initial load

@@ -6,7 +6,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
-import { signInWithEmailAndPassword, signOut } from "firebase/auth";
+import { signInWithEmailAndPassword } from "firebase/auth";
 import { db, auth } from "../../../firebase";
 import { FaRegEye, FaRegEyeSlash } from "react-icons/fa";
 import "./PasswordChange.css";
@@ -138,8 +138,20 @@ const PasswordChange = () => {
 
       const adminData = adminSnap.data();
 
-      // Verify current password
-      if (adminData.password !== formData.currentPassword) {
+      // Verify current password using Firebase Auth only
+      if (!adminData.firebaseEmail) {
+        setError("Account not configured with Firebase Auth. Please contact administrator.");
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        await signInWithEmailAndPassword(
+          auth,
+          adminData.firebaseEmail,
+          formData.currentPassword
+        );
+      } catch (authError) {
         setError("Current password is incorrect");
         setErrors({ currentPassword: "Current password is incorrect" });
         setIsLoading(false);
@@ -154,46 +166,8 @@ const PasswordChange = () => {
         return;
       }
 
-      // Ensure user is authenticated with Firebase Auth before updating
-      // This is required for Firestore security rules
-      let isAuthenticated = !!auth.currentUser;
-      
-      // If not authenticated, try to sign in with Firebase Auth
-      if (!isAuthenticated && adminData.firebaseEmail) {
-        // First try with the current password (temporary password)
-        try {
-          await signInWithEmailAndPassword(
-            auth,
-            adminData.firebaseEmail,
-            formData.currentPassword
-          );
-          isAuthenticated = true;
-        } catch (authError) {
-          // If that fails, try with stored firebasePassword (might be different)
-          if (adminData.firebasePassword && adminData.firebasePassword !== formData.currentPassword) {
-            try {
-              await signInWithEmailAndPassword(
-                auth,
-                adminData.firebaseEmail,
-                adminData.firebasePassword
-              );
-              isAuthenticated = true;
-            } catch (authError2) {
-              console.warn("Could not authenticate with Firebase Auth using stored password:", authError2);
-            }
-          }
-          
-          // Firebase Auth authentication failed, but we can still update Firestore
-          // because the Firestore rules now allow password updates without auth
-          // (as long as only password-related fields are updated)
-          console.warn("Could not authenticate with Firebase Auth, but will proceed with Firestore update");
-        }
-      }
-
-      // Update password and clear mustChangePassword flag
+      // Update Firestore: clear mustChangePassword flag only (no password stored in DB)
       await updateDoc(adminRef, {
-        password: formData.newPassword,
-        firebasePassword: formData.newPassword,
         mustChangePassword: false,
         passwordChangedAt: new Date().toISOString(),
       });

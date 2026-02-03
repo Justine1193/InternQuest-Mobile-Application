@@ -1,0 +1,193 @@
+/* Theme Toggle – switch UI with smooth animation */
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: inherit;
+  border-radius: var(--iq-radius-full, 9999px);
+  transition: transform 0.2s ease, color 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.theme-toggle:hover {
+  transform: scale(1.05);
+}
+
+.theme-toggle:focus-visible {
+  outline: 2px solid var(--iq-primary, #2563eb);
+  outline-offset: 3px;
+}
+
+/* Track = pill background */
+.theme-toggle-track {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px;
+  width: 72px;
+  min-width: 72px;
+  border-radius: 9999px;
+  background: var(--iq-border-subtle, #e5eaf2);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.06);
+  transition: background 0.35s ease, box-shadow 0.35s ease;
+}
+
+[data-theme="dark"] .theme-toggle-track {
+  background: var(--iq-surface-hover, #334155);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+/* Thumb = sliding circle */
+.theme-toggle-thumb {
+  position: absolute;
+  left: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--iq-surface, #fff);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1), left 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+  z-index: 1;
+}
+
+.theme-toggle-thumb[data-dark="true"] {
+  left: calc(100% - 32px);
+  background: var(--iq-surface, #1e293b);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+
+/* Icons inside track */
+.theme-toggle-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  font-size: 1.15rem;
+  color: var(--iq-text-muted, #6b7280);
+  transition: color 0.25s ease;
+  z-index: 0;
+}
+
+.theme-toggle-icon--sun {
+  color: var(--iq-accent, #ffb300);
+}
+
+.theme-toggle-thumb[data-dark="false"] ~ .theme-toggle-icon--moon,
+.theme-toggle-thumb[data-dark="true"] ~ .theme-toggle-icon--sun {
+  color: var(--iq-text-muted, #6b7280);
+}
+
+[data-theme="dark"] .theme-toggle-icon--moon {
+  color: var(--iq-primary-light, #64b5f6);
+}
+
+.theme-toggle-thumb[data-dark="true"] ~ .theme-toggle-icon--moon {
+  color: var(--iq-primary-light, #64b5f6);
+}
+
+/* Sizes */
+.theme-toggle--small .theme-toggle-track {
+  width: 56px;
+  min-width: 56px;
+  padding: 3px;
+}
+
+.theme-toggle--small .theme-toggle-thumb {
+  width: 22px;
+  height: 22px;
+}
+
+.theme-toggle--small .theme-toggle-thumb[data-dark="true"] {
+  left: calc(100% - 25px);
+}
+
+.theme-toggle--small .theme-toggle-icon {
+  width: 22px;
+  height: 22px;
+  font-size: 0.95rem;
+}
+
+.theme-toggle--large .theme-toggle-track {
+  width: 88px;
+  min-width: 88px;
+  padding: 5px;
+}
+
+.theme-toggle--large .theme-toggle-thumb {
+  width: 32px;
+  height: 32px;
+}
+
+.theme-toggle--large .theme-toggle-thumb[data-dark="true"] {
+  left: calc(100% - 37px);
+}
+
+.theme-toggle--large .theme-toggle-icon {
+  width: 32px;
+  height: 32px;
+  font-size: 1.35rem;
+}
+
+/* Label */
+.theme-toggle-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--iq-text-secondary, #374151);
+  transition: color 0.25s ease;
+}
+
+[data-theme="dark"] .theme-toggle-label {
+  color: var(--iq-text-secondary, #e2e8f0);
+}
+
+/* Minimal = icon only, no track */
+.theme-toggle--minimal .theme-toggle-track {
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.theme-toggle--minimal .theme-toggle-thumb {
+  display: none;
+}
+
+.theme-toggle--minimal .theme-toggle-icon {
+  width: 1.5rem;
+  height: 1.5rem;
+  opacity: 0.7;
+}
+
+.theme-toggle--minimal .theme-toggle-icon--sun {
+  display: none;
+}
+
+.theme-toggle--minimal .theme-toggle-icon--moon {
+  display: flex;
+}
+
+[data-theme="dark"] .theme-toggle--minimal .theme-toggle-icon--sun {
+  display: flex;
+}
+
+[data-theme="dark"] .theme-toggle--minimal .theme-toggle-icon--moon {
+  display: none;
+}
+
+.theme-toggle--minimal .theme-toggle-icon {
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.theme-toggle--minimal:hover .theme-toggle-icon {
+  opacity: 1;
+  transform: rotate(15deg);
+}

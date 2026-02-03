@@ -78,8 +78,14 @@ body,
   left: 0;
   right: 0;
   bottom: 0;
-  overflow: hidden;
-  padding: 20px;
+  transition: background-color 0.35s ease, background-image 0.35s ease;
+}
+
+.login-page-theme-toggle {
+  position: absolute;
+  top: 1.25rem;
+  right: 1.25rem;
+  z-index: 10;
 }
 
 .login-page::after {
@@ -282,21 +288,32 @@ body,
   transform: translateY(0);
   box-shadow: 0 2px 8px rgba(33, 150, 243, 0.2);
 }
-.sign-in-button.loading {
-  opacity: 0.7;
-  pointer-events: none;
+.sign-in-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
 }
-.sign-in-button.loading::after {
-  content: "";
+
+.sign-in-button.loading {
+  opacity: 0.8;
+  pointer-events: none;
+  cursor: not-allowed;
+}
+
+.button-text {
+  display: inline-block;
+}
+
+.button-spinner {
   display: inline-block;
   width: 18px;
   height: 18px;
-  border: 2.5px solid #fff;
-  border-top: 2.5px solid #1976d2;
+  border: 2.5px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
   border-radius: 50%;
   animation: button-loading-spinner 0.7s linear infinite;
-  position: absolute;
-  right: 18px;
+  flex-shrink: 0;
 }
 
 /* Forgot Password Link */
@@ -320,10 +337,10 @@ body,
 }
 @keyframes button-loading-spinner {
   0% {
-    transform: translateY(-50%) rotate(0deg);
+    transform: rotate(0deg);
   }
   100% {
-    transform: translateY(-50%) rotate(360deg);
+    transform: rotate(360deg);
   }
 }
 

@@ -358,10 +358,12 @@ const StudentTableRow = ({
           submittedLower.includes("psychological")
         )
           return true;
+        // Only match if BOTH "proof" AND "insurance" are present
+        // This prevents company insurance documents from being misidentified
         if (
           reqType === "Proof of Insurance" &&
-          (submittedLower.includes("insurance") ||
-            submittedLower.includes("proof"))
+          submittedLower.includes("proof") &&
+          submittedLower.includes("insurance")
         )
           return true;
 
@@ -514,7 +516,9 @@ const StudentTableRow = ({
           if (reqType === "Notarized Parental Consent" && (submittedLower.includes("parent") || submittedLower.includes("consent"))) return true;
           if (reqType === "Medical Certificate" && submittedLower.includes("medical")) return true;
           if (reqType === "Psychological Test Certification" && submittedLower.includes("psychological")) return true;
-          if (reqType === "Proof of Insurance" && (submittedLower.includes("insurance") || submittedLower.includes("proof"))) return true;
+          // Only match if BOTH "proof" AND "insurance" are present
+          // This prevents company insurance documents from being misidentified
+          if (reqType === "Proof of Insurance" && submittedLower.includes("proof") && submittedLower.includes("insurance")) return true;
           return submittedLower === reqTypeLower;
         });
       });

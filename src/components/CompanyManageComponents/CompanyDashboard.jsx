@@ -32,7 +32,7 @@ import { db, realtimeDb } from "../../../firebase.js";
 import { downloadCSV, prepareCompaniesForExport } from "../../utils/exportUtils.js";
 import { readCSVFile, parseCSV, convertCSVToCompanies } from "../../utils/importUtils.js";
 import { activityLoggers } from "../../utils/activityLogger.js";
-import { checkMoaExpiration } from "../../utils/moaUtils.js";
+import { checkMoaExpiration, MOA_EXPIRING_SOON_DAYS } from "../../utils/moaUtils.js";
 import { IoDownloadOutline, IoCloudUploadOutline, IoBusinessOutline, IoCheckmarkCircleOutline, IoWarningOutline, IoAlertCircleOutline, IoAddOutline, IoTrashOutline } from "react-icons/io5";
 import logger from "../../utils/logger.js";
 import Footer from "../Footer/Footer.jsx";
@@ -161,7 +161,7 @@ const Dashboard = () => {
                 
                 if (daysUntilExpiration < 0) {
                   return filterValues.moaExpirationStatus === "Expired";
-                } else if (daysUntilExpiration <= 30) {
+                } else if (daysUntilExpiration <= MOA_EXPIRING_SOON_DAYS) {
                   return filterValues.moaExpirationStatus === "Expiring Soon";
                 } else {
                   return filterValues.moaExpirationStatus === "Valid";
@@ -261,7 +261,7 @@ const Dashboard = () => {
                     })
                   );
                 }
-              } else if (daysUntilExpiration <= 30) {
+              } else if (daysUntilExpiration <= MOA_EXPIRING_SOON_DAYS) {
                 expiringSoon++;
                 // Keep visible but mark as expiring soon
                 if (company.isVisibleToMobile === false && company.moaStatus === 'expired') {

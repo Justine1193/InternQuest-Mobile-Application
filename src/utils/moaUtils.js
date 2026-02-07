@@ -2,6 +2,9 @@
  * Utility functions for MOA (Memorandum of Agreement) management
  */
 
+/** Number of days before expiration to show "expiring soon" (2 months) */
+export const MOA_EXPIRING_SOON_DAYS = 60;
+
 /**
  * Checks if a company's MOA is expired
  * @param {Object} company - Company object with moaExpirationDate
@@ -33,7 +36,7 @@ export const checkMoaExpiration = (company) => {
         status: "expired",
         message: `MOA expired ${Math.abs(daysUntilExpiration)} day${Math.abs(daysUntilExpiration) !== 1 ? "s" : ""} ago`,
       };
-    } else if (daysUntilExpiration <= 30) {
+    } else if (daysUntilExpiration <= MOA_EXPIRING_SOON_DAYS) {
       return {
         isExpired: false,
         daysExpired: null,

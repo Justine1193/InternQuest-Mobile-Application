@@ -1,19 +1,41 @@
 import React from "react";
-import { IoCloseOutline, IoBusinessOutline, IoLocationOutline, IoMailOutline, IoGlobeOutline, IoDocumentTextOutline, IoCalendarOutline, IoRefreshOutline, IoPersonOutline, IoCallOutline, IoAlertCircle, IoWarning, IoDownloadOutline, IoOpenOutline } from "react-icons/io5";
+import {
+  IoCloseOutline,
+  IoBusinessOutline,
+  IoLocationOutline,
+  IoMailOutline,
+  IoGlobeOutline,
+  IoDocumentTextOutline,
+  IoCalendarOutline,
+  IoRefreshOutline,
+  IoPersonOutline,
+  IoCallOutline,
+  IoAlertCircle,
+  IoWarning,
+  IoDownloadOutline,
+  IoOpenOutline,
+} from "react-icons/io5";
 import { checkMoaExpiration } from "../../../utils/moaUtils";
 import "./CompanyDetailModal.css";
 
-const CompanyDetailModal = ({ open, company, onClose, onRenewMoa, onEdit, onRestore }) => {
+const CompanyDetailModal = ({
+  open,
+  company,
+  onClose,
+  onRenewMoa,
+  onEdit,
+  onRestore,
+}) => {
   if (!open || !company) return null;
 
   const formatDate = (dateString) => {
     if (!dateString) return "N/A";
     try {
       const date = new Date(dateString);
-      return date.toLocaleDateString('en-US', { 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric' 
+      return date.toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
       });
     } catch (e) {
       return dateString;
@@ -21,33 +43,42 @@ const CompanyDetailModal = ({ open, company, onClose, onRenewMoa, onEdit, onRest
   };
 
   const getExpirationStatus = () => {
-    if (!company.moaExpirationDate) return { status: "unknown", text: "N/A", color: "#9e9e9e" };
-    
+    if (!company.moaExpirationDate)
+      return { status: "unknown", text: "N/A", color: "#9e9e9e" };
+
     const expirationDate = new Date(company.moaExpirationDate);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const expDate = new Date(expirationDate);
     expDate.setHours(0, 0, 0, 0);
-    
-    const daysUntilExpiration = Math.ceil((expDate - today) / (1000 * 60 * 60 * 24));
-    
+
+    const daysUntilExpiration = Math.ceil(
+      (expDate - today) / (1000 * 60 * 60 * 24)
+    );
+
     if (daysUntilExpiration < 0) {
-      return { 
-        status: "expired", 
-        text: `Expired ${Math.abs(daysUntilExpiration)} day${Math.abs(daysUntilExpiration) !== 1 ? 's' : ''} ago`,
-        color: "#c62828" 
+      return {
+        status: "expired",
+        text: `Expired ${Math.abs(daysUntilExpiration)} day${
+          Math.abs(daysUntilExpiration) !== 1 ? "s" : ""
+        } ago`,
+        color: "#c62828",
       };
     } else if (daysUntilExpiration <= 30) {
-      return { 
-        status: "expiring-soon", 
-        text: `${daysUntilExpiration} day${daysUntilExpiration !== 1 ? 's' : ''} remaining`,
-        color: "#f57c00" 
+      return {
+        status: "expiring-soon",
+        text: `${daysUntilExpiration} day${
+          daysUntilExpiration !== 1 ? "s" : ""
+        } remaining`,
+        color: "#f57c00",
       };
     } else {
-      return { 
-        status: "valid", 
-        text: `${daysUntilExpiration} day${daysUntilExpiration !== 1 ? 's' : ''} remaining`,
-        color: "#2e7d32" 
+      return {
+        status: "valid",
+        text: `${daysUntilExpiration} day${
+          daysUntilExpiration !== 1 ? "s" : ""
+        } remaining`,
+        color: "#2e7d32",
       };
     }
   };
@@ -57,14 +88,20 @@ const CompanyDetailModal = ({ open, company, onClose, onRenewMoa, onEdit, onRest
 
   return (
     <div className="company-detail-modal-backdrop" onClick={onClose}>
-      <div className="company-detail-modal-content" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="company-detail-modal-content"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* MOA Expiration Warning Banner */}
         {moaStatus.isExpired && (
           <div className="moa-expiration-banner expired">
             <IoAlertCircle className="banner-icon" />
             <div className="banner-content">
               <strong>MOA Expired</strong>
-              <span>{moaStatus.message}. This company cannot be used for student assignments until the MOA is renewed.</span>
+              <span>
+                {moaStatus.message}. This company cannot be used for student
+                assignments until the MOA is renewed.
+              </span>
             </div>
           </div>
         )}
@@ -73,7 +110,9 @@ const CompanyDetailModal = ({ open, company, onClose, onRenewMoa, onEdit, onRest
             <IoWarning className="banner-icon" />
             <div className="banner-content">
               <strong>MOA Expiring Soon</strong>
-              <span>{moaStatus.message}. Please renew the MOA to avoid expiration.</span>
+              <span>
+                {moaStatus.message}. Please renew the MOA to avoid expiration.
+              </span>
             </div>
           </div>
         )}
@@ -84,7 +123,7 @@ const CompanyDetailModal = ({ open, company, onClose, onRenewMoa, onEdit, onRest
           </div>
           <div className="company-detail-actions">
             {onRestore && (
-              <button 
+              <button
                 className="company-detail-action-btn restore-btn"
                 onClick={(e) => {
                   e.stopPropagation();
@@ -96,18 +135,20 @@ const CompanyDetailModal = ({ open, company, onClose, onRenewMoa, onEdit, onRest
                 Restore
               </button>
             )}
-            {onRenewMoa && company.moa === "Yes" && expirationStatus.status !== "valid" && (
-              <button 
-                className="company-detail-action-btn renew-moa-btn"
-                onClick={() => onRenewMoa(company)}
-                title="Renew MOA"
-              >
-                <IoRefreshOutline />
-                Renew MOA
-              </button>
-            )}
+            {onRenewMoa &&
+              company.moa === "Yes" &&
+              expirationStatus.status !== "valid" && (
+                <button
+                  className="company-detail-action-btn renew-moa-btn"
+                  onClick={() => onRenewMoa(company)}
+                  title="Renew MOA"
+                >
+                  <IoRefreshOutline />
+                  Renew MOA
+                </button>
+              )}
             {onEdit && (
-              <button 
+              <button
                 className="company-detail-action-btn edit-btn"
                 onClick={() => onEdit(company)}
                 title="Edit Company"
@@ -126,7 +167,9 @@ const CompanyDetailModal = ({ open, company, onClose, onRenewMoa, onEdit, onRest
           {company.companyDescription && (
             <div className="detail-section">
               <h3 className="detail-section-title">Description</h3>
-              <p className="detail-section-content">{company.companyDescription}</p>
+              <p className="detail-section-content">
+                {company.companyDescription}
+              </p>
             </div>
           )}
 
@@ -139,7 +182,9 @@ const CompanyDetailModal = ({ open, company, onClose, onRenewMoa, onEdit, onRest
                   <IoLocationOutline className="detail-item-icon" />
                   <div className="detail-item-content">
                     <span className="detail-item-label">Address</span>
-                    <span className="detail-item-value">{company.companyAddress}</span>
+                    <span className="detail-item-value">
+                      {company.companyAddress}
+                    </span>
                   </div>
                 </div>
               )}
@@ -148,7 +193,7 @@ const CompanyDetailModal = ({ open, company, onClose, onRenewMoa, onEdit, onRest
                   <IoMailOutline className="detail-item-icon" />
                   <div className="detail-item-content">
                     <span className="detail-item-label">Email</span>
-                    <a 
+                    <a
                       href={`mailto:${company.companyEmail}`}
                       className="detail-item-value link"
                     >
@@ -162,8 +207,12 @@ const CompanyDetailModal = ({ open, company, onClose, onRenewMoa, onEdit, onRest
                   <IoGlobeOutline className="detail-item-icon" />
                   <div className="detail-item-content">
                     <span className="detail-item-label">Website</span>
-                    <a 
-                      href={company.companyWeb.startsWith("http") ? company.companyWeb : `https://${company.companyWeb}`}
+                    <a
+                      href={
+                        company.companyWeb.startsWith("http")
+                          ? company.companyWeb
+                          : `https://${company.companyWeb}`
+                      }
                       target="_blank"
                       rel="noopener noreferrer"
                       className="detail-item-value link"
@@ -177,7 +226,9 @@ const CompanyDetailModal = ({ open, company, onClose, onRenewMoa, onEdit, onRest
           </div>
 
           {/* Contact Person Information */}
-          {(company.contactPersonName || company.contactPersonEmail || company.contactPersonPhone) && (
+          {(company.contactPersonName ||
+            company.contactPersonEmail ||
+            company.contactPersonPhone) && (
             <div className="detail-section">
               <h3 className="detail-section-title">Contact Person</h3>
               <div className="detail-grid">
@@ -186,7 +237,9 @@ const CompanyDetailModal = ({ open, company, onClose, onRenewMoa, onEdit, onRest
                     <IoPersonOutline className="detail-item-icon" />
                     <div className="detail-item-content">
                       <span className="detail-item-label">Name</span>
-                      <span className="detail-item-value">{company.contactPersonName}</span>
+                      <span className="detail-item-value">
+                        {company.contactPersonName}
+                      </span>
                     </div>
                   </div>
                 )}
@@ -195,8 +248,10 @@ const CompanyDetailModal = ({ open, company, onClose, onRenewMoa, onEdit, onRest
                     <IoMailOutline className="detail-item-icon" />
                     <div className="detail-item-content">
                       <span className="detail-item-label">Email</span>
-                      <a 
-                        href={`mailto:${company.contactPersonEmail || company.companyEmail}`}
+                      <a
+                        href={`mailto:${
+                          company.contactPersonEmail || company.companyEmail
+                        }`}
                         className="detail-item-value link"
                       >
                         {company.contactPersonEmail || company.companyEmail}
@@ -209,7 +264,7 @@ const CompanyDetailModal = ({ open, company, onClose, onRenewMoa, onEdit, onRest
                     <IoCallOutline className="detail-item-icon" />
                     <div className="detail-item-content">
                       <span className="detail-item-label">Phone</span>
-                      <a 
+                      <a
                         href={`tel:${company.contactPersonPhone}`}
                         className="detail-item-value link"
                       >
@@ -223,49 +278,57 @@ const CompanyDetailModal = ({ open, company, onClose, onRenewMoa, onEdit, onRest
           )}
 
           {/* Fields */}
-          {company.fields && Array.isArray(company.fields) && company.fields.length > 0 && (
-            <div className="detail-section">
-              <h3 className="detail-section-title">Fields</h3>
-              <div className="detail-tags">
-                {company.fields.map((field, index) => (
-                  <span key={index} className="detail-tag field-tag">
-                    {field}
-                  </span>
-                ))}
+          {company.fields &&
+            Array.isArray(company.fields) &&
+            company.fields.length > 0 && (
+              <div className="detail-section">
+                <h3 className="detail-section-title">Fields</h3>
+                <div className="detail-tags">
+                  {company.fields.map((field, index) => (
+                    <span key={index} className="detail-tag field-tag">
+                      {field}
+                    </span>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
           {/* Skills Required */}
-          {company.skillsREq && Array.isArray(company.skillsREq) && company.skillsREq.length > 0 && (
-            <div className="detail-section">
-              <h3 className="detail-section-title">Skills Required</h3>
-              <div className="detail-tags">
-                {company.skillsREq.map((skill, index) => (
-                  <span key={index} className="detail-tag skill-tag">
-                    {skill}
-                  </span>
-                ))}
+          {company.skillsREq &&
+            Array.isArray(company.skillsREq) &&
+            company.skillsREq.length > 0 && (
+              <div className="detail-section">
+                <h3 className="detail-section-title">Skills Required</h3>
+                <div className="detail-tags">
+                  {company.skillsREq.map((skill, index) => (
+                    <span key={index} className="detail-tag skill-tag">
+                      {skill}
+                    </span>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
           {/* Mode of Work */}
-          {company.modeOfWork && Array.isArray(company.modeOfWork) && company.modeOfWork.length > 0 && (
-            <div className="detail-section">
-              <h3 className="detail-section-title">Mode of Work</h3>
-              <div className="detail-tags">
-                {company.modeOfWork.map((mode, index) => (
-                  <span 
-                    key={index} 
-                    className={`detail-tag mode-tag mode-${mode.toLowerCase().replace(/\s+/g, '-')}`}
-                  >
-                    {mode}
-                  </span>
-                ))}
+          {company.modeOfWork &&
+            Array.isArray(company.modeOfWork) &&
+            company.modeOfWork.length > 0 && (
+              <div className="detail-section">
+                <h3 className="detail-section-title">Mode of Work</h3>
+                <div className="detail-tags">
+                  {company.modeOfWork.map((mode, index) => (
+                    <span
+                      key={index}
+                      className={`detail-tag mode-tag mode-${mode
+                        .toLowerCase()
+                        .replace(/\s+/g, "-")}`}
+                    >
+                      {mode}
+                    </span>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
           {/* MOA Information */}
           <div className="detail-section">
@@ -276,7 +339,11 @@ const CompanyDetailModal = ({ open, company, onClose, onRenewMoa, onEdit, onRest
             <div className="moa-detail-grid">
               <div className="moa-detail-item">
                 <span className="moa-detail-label">Status</span>
-                <span className={`moa-detail-value ${company.moa === "Yes" ? "active" : "inactive"}`}>
+                <span
+                  className={`moa-detail-value ${
+                    company.moa === "Yes" ? "active" : "inactive"
+                  }`}
+                >
                   {company.moa === "Yes" ? "Active" : "Inactive"}
                 </span>
               </div>
@@ -284,7 +351,8 @@ const CompanyDetailModal = ({ open, company, onClose, onRenewMoa, onEdit, onRest
                 <div className="moa-detail-item">
                   <span className="moa-detail-label">Validity</span>
                   <span className="moa-detail-value">
-                    {company.moaValidityYears} {company.moaValidityYears === 1 ? "year" : "years"}
+                    {company.moaValidityYears}{" "}
+                    {company.moaValidityYears === 1 ? "year" : "years"}
                   </span>
                 </div>
               )}
@@ -292,20 +360,24 @@ const CompanyDetailModal = ({ open, company, onClose, onRenewMoa, onEdit, onRest
                 <div className="moa-detail-item">
                   <IoCalendarOutline className="moa-detail-icon" />
                   <span className="moa-detail-label">Start Date</span>
-                  <span className="moa-detail-value">{formatDate(company.moaStartDate)}</span>
+                  <span className="moa-detail-value">
+                    {formatDate(company.moaStartDate)}
+                  </span>
                 </div>
               )}
               {company.moaExpirationDate && (
                 <div className="moa-detail-item">
                   <IoCalendarOutline className="moa-detail-icon" />
                   <span className="moa-detail-label">Expiration Date</span>
-                  <span className="moa-detail-value">{formatDate(company.moaExpirationDate)}</span>
+                  <span className="moa-detail-value">
+                    {formatDate(company.moaExpirationDate)}
+                  </span>
                 </div>
               )}
               {company.moaExpirationDate && (
                 <div className="moa-detail-item">
                   <span className="moa-detail-label">Status</span>
-                  <span 
+                  <span
                     className="moa-detail-value expiration-status"
                     style={{ color: expirationStatus.color }}
                   >
@@ -326,7 +398,9 @@ const CompanyDetailModal = ({ open, company, onClose, onRenewMoa, onEdit, onRest
                   <div className="moa-file-info">
                     <IoDocumentTextOutline className="moa-file-icon" />
                     <div className="moa-file-details">
-                      <span className="moa-file-name">{company.moaFileName || "MOA Document"}</span>
+                      <span className="moa-file-name">
+                        {company.moaFileName || "MOA Document"}
+                      </span>
                       <span className="moa-file-type">PDF Document</span>
                     </div>
                   </div>
@@ -375,5 +449,3 @@ const CompanyDetailModal = ({ open, company, onClose, onRenewMoa, onEdit, onRest
 };
 
 export default CompanyDetailModal;
-
-

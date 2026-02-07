@@ -27,8 +27,13 @@
 
 import React, { useState } from "react";
 import PropTypes from "prop-types";
-import { IoWarningOutline, IoAlertCircle, IoDocumentTextOutline } from "react-icons/io5";
+import {
+  IoWarningOutline,
+  IoAlertCircle,
+  IoDocumentTextOutline,
+} from "react-icons/io5";
 import KebabCell from "../../../KebabcellComponents/KebabCell.jsx";
+import { MOA_EXPIRING_SOON_DAYS } from "../../../../utils/moaUtils.js";
 import "./TableRow.css";
 
 // Renders a single company table row, including fields, skills, mode, MOA, and kebab menu
@@ -83,19 +88,21 @@ const TableRow = ({
     if (row.moa !== "Yes" || !row.moaExpirationDate) {
       return null;
     }
-    
+
     try {
       const expirationDate = new Date(row.moaExpirationDate);
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const expDate = new Date(expirationDate);
       expDate.setHours(0, 0, 0, 0);
-      
-      const daysUntilExpiration = Math.ceil((expDate - today) / (1000 * 60 * 60 * 24));
-      
+
+      const daysUntilExpiration = Math.ceil(
+        (expDate - today) / (1000 * 60 * 60 * 24)
+      );
+
       if (daysUntilExpiration < 0) {
         return { status: "expired", days: Math.abs(daysUntilExpiration) };
-      } else if (daysUntilExpiration <= 30) {
+      } else if (daysUntilExpiration <= MOA_EXPIRING_SOON_DAYS) {
         return { status: "expiring-soon", days: daysUntilExpiration };
       }
       return null;
@@ -109,21 +116,26 @@ const TableRow = ({
   const handleRowClick = (e) => {
     // Don't trigger if clicking on checkbox, kebab menu, links, or interactive elements
     const target = e.target;
-    const isCheckbox = target.type === 'checkbox' || target.closest('.table-checkbox') || target.closest('input[type="checkbox"]');
-    const isKebab = target.closest('.kebab-cell') || target.closest('[class*="kebab"]');
-    const isLink = target.tagName === 'A' || target.closest('a');
-    const isButton = target.tagName === 'BUTTON' || target.closest('button');
-    const isClickableTag = target.closest('.table-skill-tag') || target.closest('.table-field-tag');
-    
+    const isCheckbox =
+      target.type === "checkbox" ||
+      target.closest(".table-checkbox") ||
+      target.closest('input[type="checkbox"]');
+    const isKebab =
+      target.closest(".kebab-cell") || target.closest('[class*="kebab"]');
+    const isLink = target.tagName === "A" || target.closest("a");
+    const isButton = target.tagName === "BUTTON" || target.closest("button");
+    const isClickableTag =
+      target.closest(".table-skill-tag") || target.closest(".table-field-tag");
+
     if (isCheckbox || isKebab || isLink || isButton || isClickableTag) {
       return;
     }
-    
+
     // Prevent default and stop propagation
     e.preventDefault();
     e.stopPropagation();
-    
-    if (onRowClick && typeof onRowClick === 'function') {
+
+    if (onRowClick && typeof onRowClick === "function") {
       onRowClick(row);
     }
   };
@@ -134,13 +146,12 @@ const TableRow = ({
     onRowClick ? "clickable-row" : "",
     expirationStatus?.status === "expiring-soon" ? "moa-expiring-soon" : "",
     expirationStatus?.status === "expired" ? "moa-expired" : "",
-  ].filter(Boolean).join(" ");
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
-    <tr 
-      className={rowClassName}
-      onClick={handleRowClick}
-    >
+    <tr className={rowClassName} onClick={handleRowClick}>
       {selectionMode ? (
         <td className="checkbox-cell">
           <input
@@ -155,12 +166,16 @@ const TableRow = ({
         <div className="company-name-content" title={row.companyName}>
           <span className="company-name-text">{row.companyName}</span>
           {expirationStatus ? (
-            <span 
+            <span
               className={`moa-warning-badge ${expirationStatus.status}`}
               title={
                 expirationStatus.status === "expired"
-                  ? `MOA expired ${expirationStatus.days} day${expirationStatus.days !== 1 ? 's' : ''} ago`
-                  : `MOA expiring in ${expirationStatus.days} day${expirationStatus.days !== 1 ? 's' : ''}`
+                  ? `MOA expired ${expirationStatus.days} day${
+                      expirationStatus.days !== 1 ? "s" : ""
+                    } ago`
+                  : `MOA expiring in ${expirationStatus.days} day${
+                      expirationStatus.days !== 1 ? "s" : ""
+                    }`
               }
             >
               {expirationStatus.status === "expired" ? (
@@ -194,51 +209,51 @@ const TableRow = ({
               ))
             : null}
           {Array.isArray(row.skillsREq) &&
-            row.skillsREq.length > 3 &&
-            !showAllSkills ? (
-              <span
-                className="table-skill-tag"
-                style={{ cursor: "pointer", background: "#555" }}
-                onClick={() => setShowAllSkills(true)}
-              >
-                +{row.skillsREq.length - 3} more
-              </span>
-            ) : null}
+          row.skillsREq.length > 3 &&
+          !showAllSkills ? (
+            <span
+              className="table-skill-tag"
+              style={{ cursor: "pointer", background: "#555" }}
+              onClick={() => setShowAllSkills(true)}
+            >
+              +{row.skillsREq.length - 3} more
+            </span>
+          ) : null}
           {Array.isArray(row.skillsREq) &&
-            row.skillsREq.length > 3 &&
-            showAllSkills ? (
-              <span
-                className="table-skill-tag"
-                style={{ cursor: "pointer", background: "#aaa", color: "#222" }}
-                onClick={() => setShowAllSkills(false)}
-              >
-                Show less
-              </span>
-            ) : null}
+          row.skillsREq.length > 3 &&
+          showAllSkills ? (
+            <span
+              className="table-skill-tag"
+              style={{ cursor: "pointer", background: "#aaa", color: "#222" }}
+              onClick={() => setShowAllSkills(false)}
+            >
+              Show less
+            </span>
+          ) : null}
         </div>
       </td>
       <td>
         <div className="table-mode-tags">
-          {Array.isArray(row.modeOfWork) && row.modeOfWork.length > 0
-            ? row.modeOfWork.map((mode, idx) => (
-                <span
-                  key={mode + idx}
-                  className={`company-table-mode-tag-${mode
-                    .replace(/\s+/g, "")
-                    .toLowerCase()}`}
-                >
-                  {mode}
-                </span>
-              ))
-            : row.modeOfWork && !Array.isArray(row.modeOfWork) ? (
-                <span
-                  className={`company-table-mode-tag-${row.modeOfWork
-                    .replace(/\s+/g, "")
-                    .toLowerCase()}`}
-                >
-                  {row.modeOfWork}
-                </span>
-              ) : null}
+          {Array.isArray(row.modeOfWork) && row.modeOfWork.length > 0 ? (
+            row.modeOfWork.map((mode, idx) => (
+              <span
+                key={mode + idx}
+                className={`company-table-mode-tag-${mode
+                  .replace(/\s+/g, "")
+                  .toLowerCase()}`}
+              >
+                {mode}
+              </span>
+            ))
+          ) : row.modeOfWork && !Array.isArray(row.modeOfWork) ? (
+            <span
+              className={`company-table-mode-tag-${row.modeOfWork
+                .replace(/\s+/g, "")
+                .toLowerCase()}`}
+            >
+              {row.modeOfWork}
+            </span>
+          ) : null}
         </div>
       </td>
       <td>
@@ -261,38 +276,49 @@ const TableRow = ({
           if (row.moa !== "Yes" || !row.moaExpirationDate) {
             return <span className="moa-expiration-text muted">N/A</span>;
           }
-          
+
           const expirationDate = new Date(row.moaExpirationDate);
           const today = new Date();
           today.setHours(0, 0, 0, 0);
           const expDate = new Date(expirationDate);
           expDate.setHours(0, 0, 0, 0);
-          
-          const daysUntilExpiration = Math.ceil((expDate - today) / (1000 * 60 * 60 * 24));
+
+          const daysUntilExpiration = Math.ceil(
+            (expDate - today) / (1000 * 60 * 60 * 24)
+          );
           const isExpired = daysUntilExpiration < 0;
-          const isExpiringSoon = daysUntilExpiration >= 0 && daysUntilExpiration <= 30;
-          
+          const isExpiringSoon =
+            daysUntilExpiration >= 0 &&
+            daysUntilExpiration <= MOA_EXPIRING_SOON_DAYS;
+
           let statusClass = "valid";
-          let statusText = expirationDate.toLocaleDateString('en-US', { 
-            year: 'numeric', 
-            month: 'short', 
-            day: 'numeric' 
+          let statusText = expirationDate.toLocaleDateString("en-US", {
+            year: "numeric",
+            month: "short",
+            day: "numeric",
           });
-          
+
           if (isExpired) {
             statusClass = "expired";
-            statusText = `Expired ${Math.abs(daysUntilExpiration)} day${Math.abs(daysUntilExpiration) !== 1 ? 's' : ''} ago`;
+            statusText = `Expired ${Math.abs(daysUntilExpiration)} day${
+              Math.abs(daysUntilExpiration) !== 1 ? "s" : ""
+            } ago`;
           } else if (isExpiringSoon) {
             statusClass = "expiring-soon";
-            statusText = `${daysUntilExpiration} day${daysUntilExpiration !== 1 ? 's' : ''} left`;
+            statusText = `${daysUntilExpiration} day${
+              daysUntilExpiration !== 1 ? "s" : ""
+            } left`;
           }
-          
+
           return (
-            <span className={`moa-expiration-text ${statusClass}`} title={expirationDate.toLocaleDateString('en-US', { 
-              year: 'numeric', 
-              month: 'long', 
-              day: 'numeric' 
-            })}>
+            <span
+              className={`moa-expiration-text ${statusClass}`}
+              title={expirationDate.toLocaleDateString("en-US", {
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+              })}
+            >
               {statusText}
             </span>
           );

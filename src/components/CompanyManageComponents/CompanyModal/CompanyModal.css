@@ -629,7 +629,7 @@
 .moa-input-wrapper {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.35rem;
   border: 2px solid #d0d7de;
   border-radius: 10px;
   background: #fff;
@@ -670,8 +670,8 @@
   font-weight: 600;
   color: #54657a;
   text-transform: uppercase;
-  letter-spacing: 0.4em;
-  margin-left: 1.3rem;
+  letter-spacing: 0.05em;
+  margin-left: 0;
 }
 
 .moa-expiration-preview {

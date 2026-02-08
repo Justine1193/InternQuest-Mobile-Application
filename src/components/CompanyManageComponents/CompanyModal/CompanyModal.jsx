@@ -53,7 +53,7 @@ function CompanyModal({
       audioContextRef.current = new (window.AudioContext ||
         window.webkitAudioContext)();
     } catch (e) {
-      console.warn("Audio context not available");
+      // Audio context not available
     }
   }, []);
 
@@ -128,14 +128,6 @@ function CompanyModal({
       return matchesInput && !fields.includes(field);
     }
   );
-
-  // Debug: Log suggestionFields to console
-  useEffect(() => {
-    console.log('CompanyModal - suggestionFields:', suggestionFields);
-    console.log('CompanyModal - suggestionFields length:', suggestionFields.length);
-    console.log('CompanyModal - filteredFields:', filteredFields);
-    console.log('CompanyModal - filteredFields length:', filteredFields.length);
-  }, [suggestionFields, filteredFields]);
 
   const addSkill = (skill) => {
     if (skills.length < 15 && !skills.includes(skill)) {
@@ -215,7 +207,6 @@ function CompanyModal({
 
   // New minimal update handler
   const handleUpdate = () => {
-    console.log("Update clicked", { formData, fields, skills, editCompanyId });
     // MOA is now always required, so always check validity years and start date
     const requiresMoaValidity =
       !formData.moaValidityYears ||
@@ -268,32 +259,25 @@ function CompanyModal({
     );
   };
 
-  // Website status check function
+  // Website status check (kept for optional manual "Verify" use; not run automatically
+  // because many servers return 403 for cross-origin HEAD requests, causing console errors)
   const checkWebsite = async (url) => {
+    if (!url || !url.trim()) return;
     setWebsiteChecking(true);
     setWebsiteStatus(null);
-    let testUrl = url;
+    let testUrl = url.trim();
     if (!/^https?:\/\//i.test(testUrl)) testUrl = "https://" + testUrl;
     try {
-      await fetch(testUrl, { method: "HEAD", mode: "no-cors" });
-      setWebsiteStatus("maybe-up");
+      const res = await fetch(testUrl, { method: "HEAD", mode: "cors" });
+      setWebsiteStatus(res.ok ? "maybe-up" : "down");
     } catch (e) {
       setWebsiteStatus("down");
     }
     setWebsiteChecking(false);
   };
 
-  // Debounce website check on input change
-  useEffect(() => {
-    if (!formData.website) {
-      setWebsiteStatus(null);
-      return;
-    }
-    const handler = setTimeout(() => {
-      checkWebsite(formData.website);
-    }, 800);
-    return () => clearTimeout(handler);
-  }, [formData.website]);
+  // No automatic website check: external sites often return 403 for HEAD requests,
+  // which fills the console with errors. URL format is still validated on submit.
 
   // Email format validation
   useEffect(() => {
@@ -714,7 +698,7 @@ function CompanyModal({
                 onChange={handleInputChange}
                 placeholder="e.g., +63 912 345 6789"
                 className="form-input"
-                pattern="[0-9+\s\-()]+"
+                pattern="[0-9+ \-\t()]+"
                 maxLength="20"
               />
             </div>
@@ -879,7 +863,7 @@ function CompanyModal({
                   style={{ display: 'none' }}
                   id="moa-file-input"
                   disabled={moaFileUploading}
-                  required
+                  required={!formData.moaFileUrl}
                 />
                 <label
                   htmlFor="moa-file-input"

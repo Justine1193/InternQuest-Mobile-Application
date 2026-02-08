@@ -53,7 +53,7 @@ const CompanyDetailModal = ({
     expDate.setHours(0, 0, 0, 0);
 
     const daysUntilExpiration = Math.ceil(
-      (expDate - today) / (1000 * 60 * 60 * 24)
+      (expDate - today) / (1000 * 60 * 60 * 24),
     );
 
     if (daysUntilExpiration < 0) {
@@ -177,6 +177,32 @@ const CompanyDetailModal = ({
           <div className="detail-section">
             <h3 className="detail-section-title">Contact Information</h3>
             <div className="detail-grid">
+              {company.contactPersonName && (
+                <div className="detail-item">
+                  <IoPersonOutline className="detail-item-icon" />
+                  <div className="detail-item-content">
+                    <span className="detail-item-label">Name</span>
+                    <span className="detail-item-value">
+                      {company.contactPersonName}
+                    </span>
+                  </div>
+                </div>
+              )}
+              {(company.contactPersonPhone || company.companyContactNumber) && (
+                <div className="detail-item">
+                  <IoCallOutline className="detail-item-icon" />
+                  <div className="detail-item-content">
+                    <span className="detail-item-label">Contact Number</span>
+                    <a
+                      href={`tel:${company.contactPersonPhone || company.companyContactNumber}`}
+                      className="detail-item-value link"
+                    >
+                      {company.contactPersonPhone ||
+                        company.companyContactNumber}
+                    </a>
+                  </div>
+                </div>
+              )}
               {company.companyAddress && (
                 <div className="detail-item">
                   <IoLocationOutline className="detail-item-icon" />

@@ -185,12 +185,9 @@ const PasswordChange = () => {
           );
           
           if (!authUpdateSuccess) {
-            console.warn("Firestore password updated, but Firebase Auth sync failed. You may need to contact administrator to sync passwords.");
-          } else {
-            console.log("Password successfully synced to Firebase Auth");
+            // Firestore updated but Firebase Auth sync failed
           }
         } catch (authError) {
-          console.warn("Firebase Auth password update failed:", authError);
           // Don't fail the password change if Auth update fails - Firestore is updated
         }
       }

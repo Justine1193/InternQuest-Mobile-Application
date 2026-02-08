@@ -11,29 +11,54 @@
   max-width: 1200px;
 }
 
+/* Page header – same style as User & Role Management, Guide, Activity Log, Archive */
 .security-settings-header {
-  margin-bottom: 2rem;
+  background: linear-gradient(135deg, rgba(248, 250, 252, 0.98) 0%, rgba(241, 245, 249, 0.95) 100%);
+  padding: 2rem 2.5rem;
+  margin: 0 -0.5rem 2rem -0.5rem;
+  border-radius: 0 0 20px 20px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-top: none;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+}
+
+.security-settings-header-content {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.security-settings-header-icon-wrapper {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(99, 102, 241, 0.12) 100%);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.12);
+  flex-shrink: 0;
+}
+
+.security-settings-header-icon {
+  font-size: 1.75rem;
+  color: #2563eb;
 }
 
 .security-settings-header h1 {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  font-size: 2rem;
+  font-size: 1.75rem;
   font-weight: 700;
-  color: #1f2937;
-  margin: 0 0 0.5rem 0;
-}
-
-.header-icon {
-  font-size: 2rem;
-  color: #3b82f6;
+  color: var(--iq-text-main, #1f2937);
+  margin: 0 0 0.35rem 0;
+  letter-spacing: -0.02em;
 }
 
 .security-settings-subtitle {
-  color: #6b7280;
-  font-size: 1rem;
+  color: var(--iq-text-muted, #6b7280);
+  font-size: 0.95rem;
   margin: 0;
+  line-height: 1.4;
 }
 
 .error-message,

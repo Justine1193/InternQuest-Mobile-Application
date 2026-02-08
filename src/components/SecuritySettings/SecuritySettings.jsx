@@ -261,13 +261,17 @@ const SecuritySettings = () => {
       <Navbar onLogout={handleLogout} />
       <div className="security-settings-container">
         <div className="security-settings-header">
-          <h1>
-            <IoShieldCheckmarkOutline className="header-icon" />
-            Security Settings
-          </h1>
-          <p className="security-settings-subtitle">
-            Manage your account security settings including password
-          </p>
+          <div className="security-settings-header-content">
+            <div className="security-settings-header-icon-wrapper" aria-hidden="true">
+              <IoShieldCheckmarkOutline className="security-settings-header-icon" />
+            </div>
+            <div>
+              <h1>Security Settings</h1>
+              <p className="security-settings-subtitle">
+                Manage your account security settings including password
+              </p>
+            </div>
+          </div>
         </div>
 
         {error && (

@@ -45,8 +45,6 @@ function detectMimeType(base64) {
  */
 export async function migrateAllAvatars() {
   try {
-    console.log('🚀 Starting avatar migration...');
-    
     // Get all users
     const usersSnapshot = await getDocs(collection(db, 'users'));
     const users = usersSnapshot.docs.map(doc => ({
@@ -57,10 +55,7 @@ export async function migrateAllAvatars() {
     // Filter users with avatarBase64
     const usersWithAvatars = users.filter(user => user.avatarBase64 || user.avatarbase64);
     
-    console.log(`Found ${usersWithAvatars.length} users with avatarBase64`);
-    
     if (usersWithAvatars.length === 0) {
-      console.log('✅ No avatars to migrate');
       return { success: true, migrated: 0, failed: 0 };
     }
     
@@ -71,8 +66,6 @@ export async function migrateAllAvatars() {
       const base64Data = user.avatarBase64 || user.avatarbase64;
       
       try {
-        console.log(`Migrating avatar for user: ${user.id}`);
-        
         // Detect MIME type
         const mimeType = detectMimeType(base64Data);
         const extension = mimeType.split('/')[1] || 'jpg';
@@ -104,8 +97,6 @@ export async function migrateAllAvatars() {
         }
         
         await updateDoc(userRef, updateData);
-        
-        console.log(`✅ Successfully migrated avatar for user: ${user.id}`);
         results.push({ success: true, userId: user.id, downloadUrl });
         
         // Small delay to avoid rate limiting
@@ -118,11 +109,6 @@ export async function migrateAllAvatars() {
     
     const successful = results.filter(r => r.success).length;
     const failed = results.filter(r => !r.success).length;
-    
-    console.log(`\n📊 Migration Summary:`);
-    console.log(`✅ Successful: ${successful}`);
-    console.log(`❌ Failed: ${failed}`);
-    
     return {
       success: true,
       total: usersWithAvatars.length,

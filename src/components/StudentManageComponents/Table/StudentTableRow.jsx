@@ -159,17 +159,7 @@ const StudentTableRow = ({
 
     // Helper function to find approval for a requirement (handles name variations)
     const findApproval = (reqType) => {
-      // Debug logging
-      if (process.env.NODE_ENV === 'development' && row.id) {
-        console.log(`[findApproval] Looking for: "${reqType}"`);
-        console.log(`[findApproval] Available approval keys:`, Object.keys(studentApprovals));
-      }
-      
-      // Direct match first
       if (studentApprovals[reqType]) {
-        if (process.env.NODE_ENV === 'development') {
-          console.log(`[findApproval] Direct match found for: "${reqType}"`);
-        }
         return studentApprovals[reqType];
       }
 
@@ -225,9 +215,6 @@ const StudentTableRow = ({
       const variations = nameVariations[reqType] || [reqType];
       for (const variation of variations) {
         if (studentApprovals[variation]) {
-          if (process.env.NODE_ENV === 'development') {
-            console.log(`[findApproval] Variation match found: "${variation}" for "${reqType}"`);
-          }
           return studentApprovals[variation];
         }
       }
@@ -248,11 +235,7 @@ const StudentTableRow = ({
         
         const keyLower = key.toLowerCase().replace(/\s*\(moa\)\s*/gi, '').trim();
         
-        // Exact match (case-insensitive, normalized)
         if (keyLower === reqTypeLower) {
-          if (process.env.NODE_ENV === 'development') {
-            console.log(`[findApproval] Exact normalized match found: "${key}" for "${reqType}"`);
-          }
           return approval;
         }
         
@@ -265,16 +248,9 @@ const StudentTableRow = ({
           // Match if it has "memorandum" AND ("moa" OR "agreement")
           // This prevents false matches like "Parental Agreement"
           if (hasMemorandum && (hasMOA || hasAgreement)) {
-            if (process.env.NODE_ENV === 'development') {
-              console.log(`[findApproval] MOA fuzzy match found: "${key}" for "${reqType}"`);
-            }
             return approval;
           }
-          // Also match if it's just "moa" (standalone)
           if (hasMOA && keyLower.length <= 5) {
-            if (process.env.NODE_ENV === 'development') {
-              console.log(`[findApproval] MOA standalone match found: "${key}" for "${reqType}"`);
-            }
             return approval;
           }
         }
@@ -288,9 +264,6 @@ const StudentTableRow = ({
           
           // Match if it has "curriculum" AND "vitae", OR has "resume", OR is just "cv"
           if ((hasCurriculum && hasVitae) || hasResume || isCVOnly) {
-            if (process.env.NODE_ENV === 'development') {
-              console.log(`[findApproval] CV fuzzy match found: "${key}" for "${reqType}"`);
-            }
             return approval;
           }
         }
@@ -301,9 +274,6 @@ const StudentTableRow = ({
           keyLower.includes(reqTypeLower) ||
           reqTypeLower.includes(keyLower)
         ) {
-          if (process.env.NODE_ENV === 'development') {
-            console.log(`[findApproval] General fuzzy match found: "${key}" for "${reqType}"`);
-          }
           return approval;
         }
       }
@@ -425,30 +395,10 @@ const StudentTableRow = ({
         const approval = findApproval(reqType);
         const isApproved = approval && approval.status === "accepted";
         
-        // Debug logging
-        if (process.env.NODE_ENV === 'development' && row.id) {
-          if (!isApproved) {
-            console.log(`[Status Check] Requirement "${reqType}" not approved:`, {
-              approval,
-              approvalStatus: approval?.status,
-              studentId: row.id,
-              availableApprovals: Object.keys(studentApprovals),
-            });
-          }
-        }
-        
         return isApproved;
       });
 
     if (allApproved) {
-      if (process.env.NODE_ENV === 'development' && row.id) {
-        console.log(`[Status Check] All requirements approved for student ${row.id}:`, {
-          submittedCount: submittedReqTypes.length,
-          approvedCount: approved,
-          pendingCount: pending,
-        });
-      }
-      
       return {
         status: "checked",
         notSubmitted: 0,
@@ -460,17 +410,7 @@ const StudentTableRow = ({
       }; // All submitted requirements are approved
     }
     
-    if (process.env.NODE_ENV === 'development' && row.id && hasAllSubmitted) {
-      console.log(`[Status Check] Not all approved for student ${row.id}:`, {
-        submittedCount: submittedReqTypes.length,
-        approvedCount: approved,
-        pendingCount: pending,
-        notSubmittedCount: notSubmitted,
-        allApproved,
-      });
-    }
-
-    return { status: null, notSubmitted: 0, pending, approved, notSubmittedList: [], pendingList, approvedList }; // All submitted but not all approved
+    return { status: null, notSubmitted: 0, pending, approved, notSubmittedList: [], pendingList, approvedList };
   };
 
   const requirementsStatus = getRequirementsStatus();
@@ -567,10 +507,18 @@ const StudentTableRow = ({
   };
 
   const overallStatus = getOverallRequirementStatus();
+  const isBlocked = Boolean(row.is_blocked);
 
   return (
     <tr
-      className={isSelected ? "student-selected-row" : ""}
+      className={
+        [
+          isSelected ? "student-selected-row" : "",
+          isBlocked ? "student-row-blocked" : "",
+        ]
+          .filter(Boolean)
+          .join(" ") || undefined
+      }
       onClick={handleRowClick}
       style={{ cursor: selectionMode ? "default" : "pointer" }}
     >

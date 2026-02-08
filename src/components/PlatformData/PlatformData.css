@@ -11,44 +11,53 @@
   max-width: 1200px;
 }
 
+/* Page header – same style as User & Role Management, Guide, Activity Log, Archive */
 .platform-data-header {
-  margin-bottom: 1.5rem;
+  background: linear-gradient(135deg, rgba(248, 250, 252, 0.98) 0%, rgba(241, 245, 249, 0.95) 100%);
+  padding: 2rem 2.5rem;
+  margin: 0 -0.5rem 1.5rem -0.5rem;
+  border-radius: 0 0 20px 20px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-top: none;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
 }
 
 .platform-data-title {
   display: flex;
-  align-items: flex-start;
-  gap: 1rem;
+  align-items: center;
+  gap: 1.25rem;
 }
 
 .platform-data-title-icon {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  background: rgba(37, 99, 235, 0.12);
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(99, 102, 241, 0.12) 100%);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.12);
   color: #2563eb;
   display: grid;
   place-items: center;
-  box-shadow: 0 6px 18px rgba(37, 99, 235, 0.12);
+  flex-shrink: 0;
 }
 
 .platform-data-title-icon svg {
-  font-size: 1.45rem;
+  font-size: 1.75rem;
 }
 
 .platform-data-title h1 {
-  font-size: 2rem;
-  font-weight: 800;
-  color: #0f172a;
-  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--iq-text-main, #1f2937);
+  margin: 0 0 0.35rem 0;
   letter-spacing: -0.02em;
 }
 
 .platform-data-title p {
-  margin: 0.3rem 0 0;
-  color: #64748b;
-  font-size: 1rem;
-  line-height: 1.45;
+  margin: 0;
+  color: var(--iq-text-muted, #6b7280);
+  font-size: 0.95rem;
+  line-height: 1.4;
 }
 
 .platform-data-card {

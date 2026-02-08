@@ -276,7 +276,6 @@ const AdminLogin = () => {
         );
 
         await Promise.race([authPromise, authTimeoutPromise]);
-        console.log("Sign-in successful");
       } catch (authError) {
         console.error("Firebase Auth sign-in error:", {
           code: authError.code,

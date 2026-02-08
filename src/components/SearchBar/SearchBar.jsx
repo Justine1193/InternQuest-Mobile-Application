@@ -5,7 +5,7 @@ import "./SearchBar.css";
 import FilterDropdown from "../FilterDropdown/FilterDropdown";
 import { useSuggestionFields } from "../dashboardUtils";
 
-const SearchBar = ({ onSearch, onFilter, type = "company", filterValues = {}, searchInputRef = null, sectionSuggestions = [] }) => {
+const SearchBar = ({ onSearch, onFilter, type = "company", filterValues = {}, searchInputRef = null, sectionSuggestions = [], programSuggestions = [] }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilter, setShowFilter] = useState(false);
   const [pendingFilterValues, setPendingFilterValues] = useState({
@@ -16,6 +16,7 @@ const SearchBar = ({ onSearch, onFilter, type = "company", filterValues = {}, se
     hired: "",
     locationPreference: "",
     approvedRequirement: "",
+    blocked: "",
   });
   const fieldSuggestions = useSuggestionFields();
 
@@ -48,6 +49,7 @@ const SearchBar = ({ onSearch, onFilter, type = "company", filterValues = {}, se
           hired: "",
           locationPreference: "",
           approvedRequirement: "",
+          blocked: "",
         }
       : {
           field: "",
@@ -57,6 +59,7 @@ const SearchBar = ({ onSearch, onFilter, type = "company", filterValues = {}, se
           hired: "",
           locationPreference: "",
           approvedRequirement: "",
+          blocked: "",
         };
     setPendingFilterValues(reset);
     onFilter(reset);
@@ -131,6 +134,7 @@ const SearchBar = ({ onSearch, onFilter, type = "company", filterValues = {}, se
               onReset={handleFilterReset}
               fieldSuggestions={fieldSuggestions}
               sectionSuggestions={sectionSuggestions}
+              programSuggestions={programSuggestions}
               type={type}
             />
           )}
@@ -146,6 +150,7 @@ const SearchBar = ({ onSearch, onFilter, type = "company", filterValues = {}, se
                  key === 'moaExpirationStatus' ? 'MOA Status' :
                  key === 'program' ? 'Program' :
                  key === 'hired' ? 'Hired' :
+                 key === 'blocked' ? 'Blocked' :
                  key === 'approvedRequirement' ? 'Approved' : key}: {value}
               </span>
               <button

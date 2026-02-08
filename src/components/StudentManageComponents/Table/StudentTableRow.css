@@ -1,5 +1,16 @@
 /* StudentTableRow - Clean & Compact Design (Matching Company Table) */
 
+/* ===== BLOCKED STUDENT ROW HIGHLIGHT ===== */
+.student-row-blocked {
+  background-color: rgba(239, 68, 68, 0.12) !important;
+}
+.student-row-blocked:hover {
+  background-color: rgba(239, 68, 68, 0.18) !important;
+}
+.student-row-blocked.student-selected-row {
+  background-color: rgba(239, 68, 68, 0.22) !important;
+}
+
 /* ===== PROFILE PICTURE ===== */
 .student-profile-picture-cell {
   text-align: center;

@@ -40,12 +40,6 @@ export const updateAuthUserPassword = async (uid = null, email = null, newPasswo
     let authToken;
     try {
       authToken = await currentUser.getIdToken(true); // Force refresh
-      console.log("Auth token refreshed successfully before calling Cloud Function", {
-        uid: currentUser.uid,
-        email: currentUser.email,
-        hasToken: !!authToken,
-        tokenLength: authToken ? authToken.length : 0
-      });
     } catch (tokenError) {
       logger.error("Failed to refresh auth token:", tokenError);
       return false;
@@ -114,18 +108,6 @@ export const updateAuthUserPassword = async (uid = null, email = null, newPasswo
       logger.error("Password is missing from callData object before calling Cloud Function");
       return false;
     }
-    
-    console.log("Calling Cloud Function with data:", {
-      hasUid: !!callData.uid,
-      uid: callData.uid || "not provided",
-      hasEmail: !!callData.email,
-      email: callData.email || "not provided",
-      hasPassword: !!callData.newPassword,
-      passwordLength: callData.newPassword ? callData.newPassword.length : 0,
-      passwordType: typeof callData.newPassword,
-      callDataKeys: Object.keys(callData),
-      callDataPreview: JSON.stringify({ ...callData, newPassword: callData.newPassword ? `[${callData.newPassword.length} chars]` : 'missing' })
-    });
     
     const result = await updatePasswordFunction(callData);
     
@@ -207,34 +189,14 @@ export const attemptUpdateAuthPassword = async (userData, newPassword) => {
   // Prefer firebaseEmail since that's what's used for Firebase Auth
   const emailToUse = firebaseEmail || email;
   
-  console.log("Attempting password update with:", {
-    uid: uid || "not provided",
-    email: email || "not provided",
-    firebaseEmail: firebaseEmail || "not provided",
-    emailToUse: emailToUse || "not provided",
-    passwordLength: newPassword ? newPassword.length : 0
-  });
-  
-  // Try UID first, then firebaseEmail (preferred), then regular email
   if (uid) {
-    console.log("Attempting password update with UID:", uid);
     const success = await updateAuthUserPassword(uid, null, newPassword);
-    if (success) {
-      console.log("Password update successful using UID");
-      return true;
-    }
-    console.log("Password update failed with UID, trying email...");
+    if (success) return true;
   }
   
   if (emailToUse) {
-    console.log("Attempting password update with email:", emailToUse);
-    // Pass emailToUse as the email parameter (the function accepts both email and firebaseEmail)
     const success = await updateAuthUserPassword(null, emailToUse, newPassword);
-    if (success) {
-      console.log("Password update successful using email");
-      return true;
-    }
-    console.log("Password update failed with email");
+    if (success) return true;
   }
   
   logger.warn("No UID or email provided for password update", {

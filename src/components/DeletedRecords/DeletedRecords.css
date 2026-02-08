@@ -17,70 +17,67 @@ body.sidebar-collapsed .deleted-records-page {
   padding: 0;
 }
 
-/* ===== PAGE HEADER ===== */
+/* ===== PAGE HEADER (clean, alive design) ===== */
 .deleted-records-header {
-  background: linear-gradient(135deg, #1e40af 0%, #3b82f6 50%, #60a5fa 100%);
+  background: linear-gradient(135deg, rgba(248, 250, 252, 0.98) 0%, rgba(241, 245, 249, 0.95) 100%);
   padding: 2.5rem 3rem;
   margin-bottom: 0;
   position: relative;
   overflow: hidden;
+  border-radius: 0 0 20px 20px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-top: none;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
 }
 
 .deleted-records-header::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 400px;
-  height: 400px;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0%, transparent 70%);
-  transform: translate(30%, -30%);
-  pointer-events: none;
+  display: none;
 }
 
 .header-content {
   display: flex;
   align-items: center;
-  gap: 1.5rem;
+  gap: 1.25rem;
   margin-bottom: 2rem;
   position: relative;
   z-index: 1;
 }
 
 .header-icon-wrapper {
-  width: 64px;
-  height: 64px;
-  background: rgba(255, 255, 255, 0.2);
-  backdrop-filter: blur(10px);
-  border-radius: 16px;
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(217, 119, 6, 0.12) 100%);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.12);
+  flex-shrink: 0;
 }
 
 .header-icon {
-  font-size: 2rem;
-  color: white;
+  font-size: 1.75rem;
+  color: #d97706;
 }
 
 .deleted-records-header h1 {
-  margin: 0 0 0.5rem 0;
-  color: white;
+  margin: 0 0 0.35rem 0;
+  color: var(--iq-text-main, #1f2937);
   font-size: 2rem;
   font-weight: 700;
-  letter-spacing: -0.5px;
+  letter-spacing: -0.02em;
   position: relative;
   z-index: 1;
 }
 
 .deleted-records-header p {
   margin: 0;
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--iq-text-muted, #6b7280);
   font-size: 1rem;
   position: relative;
   z-index: 1;
+  line-height: 1.4;
 }
 
 /* ===== STATS CARDS ===== */

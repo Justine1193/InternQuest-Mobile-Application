@@ -97,6 +97,12 @@ export const activityLoggers = {
 
   restoreStudent: (studentId, studentName) =>
     logActivity("restore_student", "student", studentId, { studentName }),
+
+  blockStudent: (studentId, studentName) =>
+    logActivity("block_student", "student", studentId, { studentName }),
+
+  unblockStudent: (studentId, studentName) =>
+    logActivity("unblock_student", "student", studentId, { studentName }),
 };
 
 export default activityLoggers;

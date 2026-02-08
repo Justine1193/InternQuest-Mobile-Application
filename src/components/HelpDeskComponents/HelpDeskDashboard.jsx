@@ -392,15 +392,6 @@ const ResourceManagementDashboard = () => {
         return;
       }
 
-      // Debug: Log authentication status
-      console.log("=== UPLOAD DEBUG START ===");
-      console.log("Auth status:", {
-        isAuthenticated: !!auth.currentUser,
-        uid: auth.currentUser?.uid,
-        email: auth.currentUser?.email,
-        token: auth.currentUser?.accessToken ? "Has token" : "No token",
-      });
-
       // Wait a moment for auth to be ready
       if (!auth.currentUser) {
         console.error("ERROR: User is not authenticated!");
@@ -415,13 +406,6 @@ const ResourceManagementDashboard = () => {
       // Ensure fileType is set (fallback to application/octet-stream if missing)
       const mimeType = selectedFile.type || "application/octet-stream";
 
-      console.log("Uploading file to Firebase Storage...");
-      console.log("File info:", {
-        name: selectedFile.name,
-        size: selectedFile.size,
-        type: mimeType,
-      });
-
       // Decide storage folder based on category
       const folder =
         category === "tutorial" ? "helpDesk/tutorial" : "helpDesk/requirement";
@@ -431,28 +415,11 @@ const ResourceManagementDashboard = () => {
       const safeFileName = selectedFile.name.replace(/[^\w.\-]/g, "_");
       const path = `${folder}/${timestamp}-${safeFileName}`;
 
-      // Upload to Storage
-      console.log("Storage path:", path);
-      console.log("Storage instance:", storage);
-      console.log(
-        "Storage bucket config:",
-        storage._delegate?.bucket || "unknown"
-      );
-
       const fileRef = storageRef(storage, path);
-      console.log("File ref created:", fileRef);
-      console.log("File ref full path:", fileRef.fullPath);
-      console.log("File ref bucket:", fileRef.bucket);
-      console.log("Attempting upload...");
-
       await uploadBytes(fileRef, selectedFile);
-      console.log("Upload successful!");
-      console.log("=== UPLOAD DEBUG END ===");
 
       // Get download URL from Storage
       const downloadUrl = await getDownloadURL(fileRef);
-
-      console.log("Saving metadata to Firestore...");
 
       // Determine uploader college code if available
       let uploaderCollegeCode = null;
@@ -462,7 +429,7 @@ const ResourceManagementDashboard = () => {
           uploaderCollegeCode = codeFromSession;
         }
       } catch (e) {
-        console.warn("Could not determine uploader college code:", e);
+        // Could not determine uploader college code
       }
 
       // Save file metadata (Storage-based only) to Firestore
@@ -480,8 +447,6 @@ const ResourceManagementDashboard = () => {
         fileType: mimeType,
         fileExtension: fileExtension.toLowerCase(),
       });
-
-      console.log("File uploaded successfully!");
 
       // Reset form based on category
       if (category === "tutorial") {
@@ -539,10 +504,7 @@ const ResourceManagementDashboard = () => {
           const fileRef = storageRef(storage, fileToDelete.storagePath);
           await deleteObject(fileRef);
         } catch (storageErr) {
-          console.warn(
-            "Failed to delete file from Firebase Storage. Continuing to remove Firestore doc.",
-            storageErr
-          );
+          // Continue to remove Firestore doc
         }
       }
 

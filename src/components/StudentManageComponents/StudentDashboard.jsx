@@ -59,7 +59,7 @@ import {
   IoCloseCircleOutline,
 } from "react-icons/io5";
 import logo from "../../assets/InternQuest_Logo.png";
-import { signOut, createUserWithEmailAndPassword } from "firebase/auth";
+import { signOut, createUserWithEmailAndPassword, onAuthStateChanged } from "firebase/auth";
 import { auth } from "../../../firebase.js";
 import { attemptDeleteAuthUser } from "../../utils/authDelete";
 import {
@@ -115,6 +115,16 @@ const StudentDashboard = () => {
   const [programToCollegeMap, setProgramToCollegeMap] = useState({});
   const [adminPrograms, setAdminPrograms] = useState([]); // coordinator scope (programs)
   const [adminCollegeName, setAdminCollegeName] = useState(null);
+  // Auth user from Firebase (only set after onAuthStateChanged fires so Firestore has token)
+  const [authUser, setAuthUser] = useState(null);
+
+  // Sync auth state so Firestore requests run only after token is available
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setAuthUser(user ?? null);
+    });
+    return () => unsubscribe();
+  }, []);
 
   // Set document title on mount
   useEffect(() => {
@@ -506,21 +516,14 @@ const StudentDashboard = () => {
                 (c) => c.college_code === adviserCollegeCode
               );
               if (college && isMounted) {
-                console.log(
-                  "Setting admin college name:",
-                  college.college_name
-                );
                 setAdminCollegeName(college.college_name);
               } else if (!college && isMounted) {
-                console.warn("College not found for code:", adviserCollegeCode);
                 setAdminCollegeName(null);
               }
             } catch (err) {
               logger.error("Error loading colleges:", err);
             }
           } else if (!adviserCollegeCode && isMounted) {
-            // If no college found, clear the college name
-            console.log("No college code found for admin");
             setAdminCollegeName(null);
           }
         } else {
@@ -666,6 +669,7 @@ const StudentDashboard = () => {
     locationPreference: "",
     approvedRequirement: "",
     section: "",
+    blocked: "",
   });
   const [pendingFilterValues, setPendingFilterValues] = useState({
     program: "",
@@ -676,6 +680,7 @@ const StudentDashboard = () => {
     locationPreference: "",
     approvedRequirement: "",
     section: "",
+    blocked: "",
   });
   // View mode: 'all', 'pending', 'applications', or 'notifications'
   const [viewMode, setViewMode] = useState("all");
@@ -896,8 +901,11 @@ const StudentDashboard = () => {
     programToCollegeMap,
   ]);
 
-  // Real-time listeners for companies and students
+  // Real-time listeners for companies and students (only after auth state is ready)
   useEffect(() => {
+    if (!authUser) {
+      return;
+    }
     setIsLoading(true);
 
     // Real-time listener for companies
@@ -950,10 +958,11 @@ const StudentDashboard = () => {
       unsubscribeCompanies();
       unsubscribeStudents();
     };
-  }, []);
+  }, [authUser?.uid]);
 
-  // Legacy migration code (keep for backward compatibility)
+  // Legacy migration code (keep for backward compatibility) — only run when auth is ready
   useEffect(() => {
+    if (!authUser) return;
     const fetchData = async () => {
       try {
         const companiesSnapshot = await getDocs(collection(db, "companies"));
@@ -1022,7 +1031,7 @@ const StudentDashboard = () => {
       }
     };
     fetchData();
-  }, []);
+  }, [authUser?.uid]);
 
   // Fetch pending students when view mode changes or students data changes
   useEffect(() => {
@@ -1884,8 +1893,10 @@ const StudentDashboard = () => {
   };
 
   useEffect(() => {
-    fetchNotifications();
-  }, [showNotificationSuccess]); // Refetch when a new notification is sent
+    if (authUser) {
+      fetchNotifications();
+    }
+  }, [showNotificationSuccess, authUser?.uid]);
 
   // Handle deleting a notification
   const handleDeleteNotification = (notificationId) => {
@@ -2423,6 +2434,17 @@ const StudentDashboard = () => {
     return Array.from(sections).sort();
   }, [baseStudents, isAdviser, adminSection]);
 
+  // Get unique programs from students for filter dropdown suggestions
+  const programSuggestions = useMemo(() => {
+    const programs = new Set();
+    baseStudents.forEach((student) => {
+      if (student.program && typeof student.program === "string" && student.program.trim()) {
+        programs.add(student.program.trim());
+      }
+    });
+    return Array.from(programs).sort();
+  }, [baseStudents]);
+
   // Determine which data source to use based on view mode
   const dataSource = useMemo(
     () =>
@@ -2558,6 +2580,12 @@ const StudentDashboard = () => {
             .toLowerCase()
             .includes(activeFilterValues.section.toLowerCase())
         : true;
+      const matchesBlocked = (() => {
+        if (!activeFilterValues.blocked || activeFilterValues.blocked === "") return true;
+        if (activeFilterValues.blocked === "Blocked") return student.is_blocked === true;
+        if (activeFilterValues.blocked === "Not blocked") return !student.is_blocked;
+        return true;
+      })();
       return (
         matchesSearch &&
         matchesProgram &&
@@ -2567,7 +2595,8 @@ const StudentDashboard = () => {
         matchesHired &&
         matchesLocation &&
         matchesApprovedRequirement &&
-        matchesSection
+        matchesSection &&
+        matchesBlocked
       );
     });
   }, [
@@ -2906,6 +2935,7 @@ const StudentDashboard = () => {
         locationPreference: "",
         approvedRequirement: "",
         section: "",
+        blocked: "",
       });
     } else {
       setFilterValues({
@@ -2917,6 +2947,7 @@ const StudentDashboard = () => {
         locationPreference: "",
         approvedRequirement: "",
         section: "",
+        blocked: "",
       });
     }
     success("All filters cleared");
@@ -2965,13 +2996,6 @@ const StudentDashboard = () => {
           [studentId]: approvalData,
         }));
 
-        // Log for debugging
-        if (process.env.NODE_ENV === "development") {
-          console.log(
-            `[Requirement Updated] Student: ${studentId}, Type: ${requirementType}, Status: ${status}`
-          );
-          console.log("Approval data:", approvalData);
-        }
       } else {
         // If document doesn't exist, remove it from state
         setRequirementApprovals((prev) => {
@@ -3093,25 +3117,12 @@ const StudentDashboard = () => {
 
       let firebaseUser;
       try {
-        // Log the values being sent (for debugging - remove sensitive data in production)
-        console.log("Creating Firebase Auth account with:", {
-          email: normalizedEmail,
-          emailLength: normalizedEmail.length,
-          passwordLength: providedPassword.length,
-          hasPassword: !!providedPassword,
-        });
-
         const userCredential = await createUserWithEmailAndPassword(
           auth,
           normalizedEmail, // Use normalized institutional email for Firebase Auth
           providedPassword
         );
         firebaseUser = userCredential.user;
-        console.log("Firebase Auth user created successfully:", {
-          uid: firebaseUser.uid,
-          email: firebaseUser.email,
-          expectedEmail: normalizedEmail,
-        });
       } catch (authError) {
         // Log comprehensive error details for debugging
         console.error("=== Firebase Auth Error Details ===");
@@ -3221,17 +3232,7 @@ const StudentDashboard = () => {
         })(),
       };
 
-      // Log what we're saving to verify it's correct
-      console.log("Saving student document with:", {
-        email: newStudent.email,
-        authEmail: newStudent.authEmail,
-        areEqual: newStudent.email === newStudent.authEmail,
-        firebaseAuthEmail: firebaseUser.email,
-      });
-
       const docRef = await addDoc(collection(db, "users"), newStudent);
-
-      console.log("Student document created with ID:", docRef.id);
 
       // Log activity
       await activityLoggers.createStudent(
@@ -4397,6 +4398,7 @@ const StudentDashboard = () => {
                     type="student"
                     searchInputRef={searchInputRef}
                     sectionSuggestions={sectionSuggestions}
+                    programSuggestions={programSuggestions}
                   />
                 </div>
               </div>
@@ -4636,6 +4638,9 @@ const StudentDashboard = () => {
         student={selectedStudent}
         onClose={handleCloseRequirementModal}
         onRequirementUpdated={handleRequirementUpdated}
+        onStudentUpdated={(updated) => setSelectedStudent((prev) => (prev?.id === updated?.id ? { ...prev, ...updated } : prev))}
+        onShowSuccess={success}
+        onShowError={showError}
       />
       <AddStudentModal
         isOpen={showAddStudentModal}

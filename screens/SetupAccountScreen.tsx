@@ -485,6 +485,16 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
         status: 'active',
         accountType: 'student',
 
+        // Account Access
+        // If an adviser/coordinator blocks the account, set accountAccess.isBlocked=true and provide a reason.
+        // Keep separate from the existing top-level `status` field (which is also used for OJT state like 'hired').
+        accountAccess: {
+          isBlocked: false,
+          blockedReason: null,
+          blockedBy: null,
+          blockedAt: null,
+        },
+
         // Security
         // Require users to change the admin-provided default password once.
         mustChangePassword: true,

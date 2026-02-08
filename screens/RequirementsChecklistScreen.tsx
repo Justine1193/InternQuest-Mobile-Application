@@ -22,10 +22,10 @@ import { Linking } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { LinearGradient } from 'expo-linear-gradient';
 import OJTChecklistGenerator from '../services/ojtChecklistGenerator';
-import { colors, radii, shadows } from '../ui/theme';
+import { colors, radii, shadows, spacing } from '../ui/theme';
 import { Screen } from '../ui/components/Screen';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 type RequirementsNavigationProp = StackNavigationProp<RootStackParamList, 'RequirementsChecklist'>;
 
@@ -1260,25 +1260,6 @@ const RequirementsChecklistScreen: React.FC = () => {
 
     return (
         <Screen style={{ backgroundColor: colors.white }} contentContainerStyle={{ paddingHorizontal: 0, paddingTop: 0 }}>
-
-            {/* Hero header */}
-            <LinearGradient
-                colors={['#4F46E5', '#6366F1', '#818CF8']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.heroContainer}
-            >
-                <View style={styles.heroCard}>
-                    <View style={styles.heroTitleRow}>
-                        <Ionicons name="checkbox" size={26} color={colors.onPrimary} style={styles.heroIcon} />
-                        <Text style={styles.heroTitle}>Requirements Checklist</Text>
-                    </View>
-                    <Text style={styles.heroSubtitle}>
-                        Upload documents, track approvals, and complete your OJT requirements.
-                    </Text>
-                </View>
-            </LinearGradient>
-
             {/* Filters + content */}
             <ScrollView 
                 style={styles.scrollView} 
@@ -1292,6 +1273,21 @@ const RequirementsChecklistScreen: React.FC = () => {
                     />
                 }
             >
+                {/* Hero header (scrolls with content) */}
+                <View style={styles.heroContainer}>
+                    <View style={styles.heroCard}>
+                        <View style={styles.heroTitleRow}>
+                            <View style={styles.heroIconWrap}>
+                                <Icon name="clipboard-check-outline" size={28} color={colors.onPrimary} />
+                            </View>
+                            <Text style={styles.heroTitle}>Requirements Checklist</Text>
+                        </View>
+                        <Text style={styles.heroSubtitle}>
+                            Upload documents, track approvals, and complete your OJT requirements.
+                        </Text>
+                    </View>
+                </View>
+
                 {/* Progress Section */}
                 <Text style={styles.sectionTitle}>Your progress</Text>
                 <Card style={styles.progressCard}>
@@ -1570,34 +1566,41 @@ const styles = StyleSheet.create({
         backgroundColor: colors.white,
     },
     heroContainer: {
-        paddingTop: 12,
-        paddingBottom: 16,
-        paddingHorizontal: 16,
+        paddingTop: 14,
+        paddingBottom: 22,
+        backgroundColor: colors.primary,
+        marginHorizontal: -spacing.lg,
+        paddingHorizontal: spacing.lg,
+        marginBottom: spacing.lg,
     },
     heroCard: {
-        paddingVertical: 16,
-        paddingHorizontal: 4,
+        paddingVertical: 4,
     },
     heroTitleRow: {
         flexDirection: 'row',
         alignItems: 'center',
+        marginBottom: 8,
     },
-    heroIcon: {
-        marginRight: 10,
+    heroIconWrap: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 14,
     },
     heroTitle: {
-        color: colors.onPrimary,
-        fontSize: 22,
+        fontSize: 26,
         fontWeight: '800',
-        letterSpacing: 0.3,
-        flex: 1,
+        color: colors.onPrimary,
+        letterSpacing: 0.2,
     },
     heroSubtitle: {
-        color: 'rgba(255,255,255,0.9)',
         fontSize: 14,
-        lineHeight: 20,
+        color: colors.onPrimarySubtle,
+        lineHeight: 21,
         maxWidth: '95%',
-        marginTop: 8,
     },
     sectionTitle: {
         fontSize: 16,
@@ -1703,7 +1706,7 @@ const styles = StyleSheet.create({
     },
     scrollView: {
         flex: 1,
-        padding: 16,
+        padding: spacing.lg,
     },
     progressCard: {
         marginBottom: 16,

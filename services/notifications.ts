@@ -49,9 +49,11 @@ function getExpoProjectId(): string | undefined {
 export async function registerForExpoPushToken(): Promise<string | null> {
   await initNotifications();
 
+  // Prefer a real device for remote push tokens, but allow best-effort attempts
+  // on emulators/simulators so developers can still exercise the code paths.
+  // Delivery on emulators can be unreliable.
   if (!Device.isDevice) {
-    // Push tokens require a physical device.
-    return null;
+    console.warn('Push notifications: running on an emulator/simulator; token/delivery may be unavailable.');
   }
 
   const ok = await requestNotificationPermission();
@@ -63,8 +65,13 @@ export async function registerForExpoPushToken(): Promise<string | null> {
     return null;
   }
 
-  const token = await Notifications.getExpoPushTokenAsync({ projectId });
-  return token.data || null;
+  try {
+    const token = await Notifications.getExpoPushTokenAsync({ projectId });
+    return token.data || null;
+  } catch (e) {
+    console.warn('Push notifications: getExpoPushTokenAsync failed:', e);
+    return null;
+  }
 }
 
 export async function syncExpoPushTokenForCurrentUser(): Promise<{ ok: true } | { ok: false; reason: string }> {

@@ -768,21 +768,6 @@ const ResourceManagementScreen: React.FC = () => {
 
   return (
     <Screen style={{ backgroundColor: colors.white }} contentContainerStyle={{ paddingHorizontal: 0, paddingTop: 0 }}>
-      {/* Hero header */}
-      <View style={styles.heroContainer}>
-        <View style={styles.heroCard}>
-          <View style={styles.heroTitleRow}>
-            <View style={styles.heroIconWrap}>
-              <Ionicons name="book-outline" size={28} color={colors.onPrimary} />
-            </View>
-            <Text style={styles.heroTitle}>Guides</Text>
-          </View>
-          <Text style={styles.heroSubtitle}>
-            Follow the steps below and open or download attached files to complete your internship requirements.
-          </Text>
-        </View>
-      </View>
-
       {/* main content area */}
       <ScrollView
         style={styles.contentWrap}
@@ -791,6 +776,21 @@ const ResourceManagementScreen: React.FC = () => {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
         }
       >
+        {/* Hero header (scrolls with content) */}
+        <View style={styles.heroContainer}>
+          <View style={styles.heroCard}>
+            <View style={styles.heroTitleRow}>
+              <View style={styles.heroIconWrap}>
+                <Ionicons name="book-outline" size={28} color={colors.onPrimary} />
+              </View>
+              <Text style={styles.heroTitle}>Guides</Text>
+            </View>
+            <Text style={styles.heroSubtitle}>
+              Follow the steps below and open or download attached files to complete your internship requirements.
+            </Text>
+          </View>
+        </View>
+
         {/* Dynamic student guide steps */}
         {totalSteps > 0 && (
           <View style={styles.section}>
@@ -1338,10 +1338,12 @@ function StepCard({ index, step, status, onActionPress, onOpenAttachment, isBusy
 const styles = StyleSheet.create({
   /* hero header */
   heroContainer: {
-    paddingTop: 12,
-    paddingBottom: 20,
+    paddingTop: 14,
+    paddingBottom: 22,
     backgroundColor: colors.primary,
-    paddingHorizontal: 20,
+    marginHorizontal: -spacing.lg,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
   },
   heroCard: {
     paddingVertical: 4,

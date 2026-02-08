@@ -4,6 +4,7 @@
 // Secure: uses Firebase Admin SDK and checks optional admin API key header
 
 const { onRequest } = require('firebase-functions/v2/https');
+const { onDocumentCreated } = require('firebase-functions/v2/firestore');
 const { setGlobalOptions } = require('firebase-functions/v2');
 const { initializeApp } = require('firebase-admin/app');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
@@ -98,6 +99,34 @@ exports.lookupEmailByStudentId = onRequest(async (req, res) => {
       return res.status(200).json({ email: null });
     }
     const data = snap.docs[0].data();
+
+    // Account block enforcement (adviser/coordinator/admin)
+    // Support multiple possible schemas to avoid breaking older admin tools.
+    const accountAccess = (data && typeof data.accountAccess === 'object' && data.accountAccess) ? data.accountAccess : null;
+    const isBlocked =
+      (accountAccess && accountAccess.isBlocked === true) ||
+      data?.isBlocked === true ||
+      data?.is_blocked === true ||
+      data?.blocked === true ||
+      String(data?.accountStatus || '').toLowerCase() === 'blocked' ||
+      String(data?.status || '').toLowerCase() === 'blocked';
+
+    if (isBlocked) {
+      const reason =
+        (accountAccess && typeof accountAccess.blockedReason === 'string' && accountAccess.blockedReason.trim()) ? accountAccess.blockedReason.trim() :
+        (typeof data?.blockedReason === 'string' && data.blockedReason.trim()) ? data.blockedReason.trim() :
+        (typeof data?.blockReason === 'string' && data.blockReason.trim()) ? data.blockReason.trim() :
+        null;
+
+      const blockedBy =
+        (accountAccess && typeof accountAccess.blockedBy === 'string' && accountAccess.blockedBy.trim()) ? accountAccess.blockedBy.trim() :
+        (typeof data?.blockedBy === 'string' && data.blockedBy.trim()) ? data.blockedBy.trim() :
+        null;
+
+      // 403 so the client can treat it as a restricted login.
+      return res.status(403).json({ error: 'ACCOUNT_BLOCKED', reason, blockedBy });
+    }
+
     const email = (data && typeof data.email === 'string') ? data.email : null;
     return res.status(200).json({ email });
   } catch (err) {
@@ -260,5 +289,57 @@ exports.sendPushToUser = onRequest(async (req, res) => {
   } catch (e) {
     console.error('sendPushToUser error:', e);
     return res.status(500).json({ error: 'Internal error' });
+  }
+});
+
+// Auto-push when a notification document is created for a specific user.
+// This covers adviser/coordinator/admin messages that write into the `notifications` collection.
+// To opt-out per notification, set { sendPush: false } on the notification doc.
+exports.pushOnNotificationCreated = onDocumentCreated('notifications/{notificationId}', async (event) => {
+  try {
+    const snap = event.data;
+    if (!snap) return;
+    const notif = snap.data() || {};
+
+    if (notif.sendPush === false) return;
+
+    // Determine recipient userId.
+    // Supported schemas:
+    // - userId (common)
+    // - userid (legacy lowercase)
+    // - targetStudentId (your admin/web schema)
+    // - targetStudentIds[0] (array form)
+    const firstTargetId = Array.isArray(notif.targetStudentIds) && notif.targetStudentIds.length > 0
+      ? String(notif.targetStudentIds[0])
+      : null;
+    const recipientId =
+      (typeof notif.userId === 'string' && notif.userId) ? notif.userId :
+      (typeof notif.userid === 'string' && notif.userid) ? notif.userid :
+      (typeof notif.targetStudentId === 'string' && notif.targetStudentId) ? notif.targetStudentId :
+      (typeof firstTargetId === 'string' && firstTargetId) ? firstTargetId :
+      null;
+
+    // Broadcast notifications (targetType='all') are not auto-pushed to avoid spamming.
+    if (!recipientId) return;
+    if (String(notif.targetType || '').toLowerCase() === 'all') return;
+
+    const title = String(notif.title || notif.subject || 'InternQuest');
+    const body = String(notif.description || notif.message || notif.body || 'You have a new notification.');
+
+    const db = getFirestore();
+    const userSnap = await db.collection('users').doc(recipientId).get();
+    if (!userSnap.exists) return;
+    const expoPushToken = userSnap.data().expoPushToken;
+    if (!expoPushToken || typeof expoPushToken !== 'string') return;
+
+    // Keep data small; include notification id for deep-linking later.
+    const data = {
+      notificationId: snap.id,
+      ...(notif.data && typeof notif.data === 'object' ? notif.data : {}),
+    };
+
+    await sendExpoPush({ tokens: [expoPushToken], title, body, data });
+  } catch (e) {
+    console.error('pushOnNotificationCreated error:', e);
   }
 });

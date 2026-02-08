@@ -42,6 +42,30 @@ exports.lookupEmailByStudentId = functions.region('asia-southeast1').https.onReq
       return res.status(200).json({ email: null });
     }
     const data = snap.docs[0].data();
+
+    // Account block enforcement (support common schemas)
+    const accountAccess = (data && typeof data.accountAccess === 'object' && data.accountAccess) ? data.accountAccess : null;
+    const isBlocked =
+      (accountAccess && accountAccess.isBlocked === true) ||
+      data?.isBlocked === true ||
+      data?.is_blocked === true ||
+      data?.blocked === true ||
+      String(data?.accountStatus || '').toLowerCase() === 'blocked' ||
+      String(data?.status || '').toLowerCase() === 'blocked';
+
+    if (isBlocked) {
+      const reason =
+        (accountAccess && typeof accountAccess.blockedReason === 'string' && accountAccess.blockedReason.trim()) ? accountAccess.blockedReason.trim() :
+        (typeof data?.blockedReason === 'string' && data.blockedReason.trim()) ? data.blockedReason.trim() :
+        (typeof data?.blockReason === 'string' && data.blockReason.trim()) ? data.blockReason.trim() :
+        null;
+      const blockedBy =
+        (accountAccess && typeof accountAccess.blockedBy === 'string' && accountAccess.blockedBy.trim()) ? accountAccess.blockedBy.trim() :
+        (typeof data?.blockedBy === 'string' && data.blockedBy.trim()) ? data.blockedBy.trim() :
+        null;
+      return res.status(403).json({ error: 'ACCOUNT_BLOCKED', reason, blockedBy });
+    }
+
     const email = (data && typeof data.email === 'string') ? data.email : null;
     return res.status(200).json({ email });
   } catch (err) {

@@ -16,7 +16,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { auth, firestore } from '../firebase/config';
-import { doc, setDoc, collection, getDoc, getDocFromServer, getDocs, deleteDoc, query, where, getDocsFromServer, serverTimestamp } from "firebase/firestore";
+import { doc, setDoc, collection, getDoc, getDocs, deleteDoc, query, where, getDocsFromServer, serverTimestamp } from "firebase/firestore";
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 // removed `react-native-progress` dependency and use a simple native progress bar instead
@@ -221,7 +221,7 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
         if (appliedId && typeof appliedId === 'string') {
           try {
             const applicationRef = doc(firestore, 'applications', `${auth.currentUser!.uid}_${appliedId}`);
-            const applicationSnap = await getDocFromServer(applicationRef);
+            const applicationSnap = await getDoc(applicationRef);
             const appStatus = applicationSnap.exists() ? (applicationSnap.data() as any).status : null;
 
             // If the application was denied or cancelled, don't show this company in profile anymore.
@@ -242,7 +242,7 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
             } else {
               // Only if application is not explicitly denied/cancelled, verify the company document still exists.
               const companyRef = doc(firestore, 'companies', appliedId);
-              const companySnap = await getDocFromServer(companyRef);
+              const companySnap = await getDoc(companyRef);
               if (!companySnap.exists()) {
                 const appliedName = (data as any).appliedCompanyName;
                 data.appliedCompanyId = null;

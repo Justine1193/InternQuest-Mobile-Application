@@ -26,11 +26,13 @@ type LoginProps = {
   onBiometricUnlock?: () => void;
   /** Called when user signs in with password while in gate mode (so app can clear gate state) */
   onPasswordUnlock?: () => void;
+  /** Optional message shown once (e.g. account was blocked during auto-login). */
+  initialErrorMessage?: string | null;
 };
 
 type LoginErrorType = 'student_id' | 'password' | 'network' | 'other';
 
-const LoginScreen: React.FC<LoginProps> = ({ setIsLoggedIn, gateMode, onBiometricUnlock, onPasswordUnlock }) => {
+const LoginScreen: React.FC<LoginProps> = ({ setIsLoggedIn, gateMode, onBiometricUnlock, onPasswordUnlock, initialErrorMessage }) => {
   const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
   const [studentId, setStudentId] = useState('');
   const [password, setPassword] = useState('');
@@ -39,7 +41,15 @@ const LoginScreen: React.FC<LoginProps> = ({ setIsLoggedIn, gateMode, onBiometri
   const [loading, setLoading] = useState(false);
   const [biometricLoading, setBiometricLoading] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
+  const [blockedMessage, setBlockedMessage] = useState<string | null>(null);
   const [loginError, setLoginError] = useState<{ type: LoginErrorType; message: string } | null>(null);
+
+  // Persist any blocked message coming from app startup (auto-login block).
+  useEffect(() => {
+    if (initialErrorMessage && typeof initialErrorMessage === 'string' && initialErrorMessage.trim()) {
+      setBlockedMessage(initialErrorMessage);
+    }
+  }, [initialErrorMessage]);
 
   const formatStudentId = (text: string) => {
     // Enforce Student ID format: XX-XXXXX-XXX (2-5-3 digits)
@@ -115,7 +125,9 @@ const LoginScreen: React.FC<LoginProps> = ({ setIsLoggedIn, gateMode, onBiometri
         return;
       }
 
-      const lookupEmail = async (studentIdValue: string) => {
+      const BLOCKED_SENTINEL = '__ACCOUNT_BLOCKED__';
+
+      const lookupEmail = async (studentIdValue: string): Promise<string | null> => {
         const res = await fetch(LOOKUP_EMAIL_FUNCTION_BASE_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -123,6 +135,23 @@ const LoginScreen: React.FC<LoginProps> = ({ setIsLoggedIn, gateMode, onBiometri
         });
         if (!res.ok) {
           if (res.status === 403) {
+            // Try to parse structured payloads (e.g. ACCOUNT_BLOCKED)
+            try {
+              const body = await res.json();
+              if (body && body.error === 'ACCOUNT_BLOCKED') {
+                const reason = (typeof body.reason === 'string' && body.reason.trim()) ? body.reason.trim() : '';
+                const blockedBy = (typeof body.blockedBy === 'string' && body.blockedBy.trim()) ? body.blockedBy.trim() : '';
+                const who = blockedBy ? ` by ${blockedBy}` : '';
+                const suffix = reason ? `\n\nReason: ${reason}` : '';
+                const msg = `Your account has been blocked${who}. Please contact your adviser/coordinator.${suffix}`;
+                setBlockedMessage(msg);
+                setLoginError(null);
+                return BLOCKED_SENTINEL;
+              }
+            } catch (e) {
+              // ignore JSON parse errors
+            }
+
             setLoginError({ type: 'other', message: 'Sign-in is currently restricted. Please contact your adviser.' });
             return null;
           }
@@ -137,10 +166,14 @@ const LoginScreen: React.FC<LoginProps> = ({ setIsLoggedIn, gateMode, onBiometri
       try {
         emailToUse = await lookupEmail(identifier);
 
+        if (emailToUse === BLOCKED_SENTINEL) return;
+
         // Some databases store studentId without hyphens. Retry once with a normalized value.
         if (!emailToUse && identifier.includes('-')) {
           const normalized = identifier.replace(/-/g, '');
           emailToUse = await lookupEmail(normalized);
+
+          if (emailToUse === BLOCKED_SENTINEL) return;
         }
       } catch (fetchErr) {
         setLoginError({ type: 'network', message: 'Please check your internet connection and try again.' });
@@ -161,6 +194,9 @@ const LoginScreen: React.FC<LoginProps> = ({ setIsLoggedIn, gateMode, onBiometri
 
       await signInWithEmailAndPassword(auth, emailToUse.trim(), password);
 
+      // Successful login clears any prior blocked banner.
+      setBlockedMessage(null);
+
       if (gateMode && onPasswordUnlock) onPasswordUnlock();
       if (setIsLoggedIn) setIsLoggedIn(true);
       else { try { (navigation as any).getParent?.()?.navigate?.('Home'); } catch (e) { /* ignore */ } }
@@ -172,6 +208,9 @@ const LoginScreen: React.FC<LoginProps> = ({ setIsLoggedIn, gateMode, onBiometri
       if (code === 'auth/user-not-found') {
         type = 'student_id';
         message = "No account found for this Student ID. Please contact your adviser to create an account.";
+      } else if (code === 'auth/user-disabled') {
+        type = 'other';
+        message = 'Your account is disabled. Please contact your adviser/coordinator.';
       } else if (code === 'auth/wrong-password' || code === 'auth/invalid-login-credentials' || code === 'auth/invalid-credential') {
         type = 'password';
         message = "Incorrect password. Please try again or use Forgot password to reset it.";
@@ -271,7 +310,19 @@ const LoginScreen: React.FC<LoginProps> = ({ setIsLoggedIn, gateMode, onBiometri
             </View>
           </View>
 
-          {loginError ? (
+          {blockedMessage ? (
+            <View style={[styles.errorBanner, styles.errorBannerPassword]} accessible accessibilityRole="alert">
+              <Icon
+                name="account-cancel-outline"
+                size={22}
+                color={colors.danger}
+                style={styles.errorBannerIcon}
+              />
+              <Text style={styles.errorBannerText} numberOfLines={6}>{blockedMessage}</Text>
+            </View>
+          ) : null}
+
+          {loginError && loginError.message !== blockedMessage ? (
             <View style={[styles.errorBanner, loginError.type === 'password' && styles.errorBannerPassword, loginError.type === 'student_id' && styles.errorBannerStudentId]} accessible accessibilityRole="alert">
               <Icon
                 name={loginError.type === 'password' ? 'lock-alert-outline' : loginError.type === 'student_id' ? 'account-alert-outline' : 'alert-circle-outline'}

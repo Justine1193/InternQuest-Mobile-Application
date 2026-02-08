@@ -31,6 +31,42 @@ Authentication for the CLI:
 - Recommended: set `GOOGLE_APPLICATION_CREDENTIALS` to a Firebase Admin service account JSON (do not commit it)
 - Alternative: `gcloud auth application-default login`
 
+## Account blocking (show reason in app)
+
+If an adviser/coordinator blocks a student account, the mobile app will show the block reason on the sign-in screen and will also sign out any existing saved session.
+
+To block/unblock a user from your admin website (Firestore):
+
+- Collection: `users/{uid}` (the user's UID document)
+- Field: `accountAccess`
+   - `isBlocked`: boolean
+   - `blockedReason`: string | null
+   - `blockedBy`: string | null (e.g. `adviser`, `coordinator`, `admin`)
+   - `blockedAt`: timestamp | null
+
+Example payload:
+
+```js
+accountAccess: {
+   isBlocked: true,
+   blockedReason: 'Incomplete requirements. Please see your adviser.',
+   blockedBy: 'coordinator',
+   blockedAt: new Date(),
+}
+```
+
+## Device push notifications (adviser/coordinator messages)
+
+The app shows notifications in-app via the `notifications` collection. For device-level push (shows in the OS notification tray), the backend sends Expo push when a notification document is created.
+
+- Store each device token on the user document: `users/{uid}.expoPushToken` (the app does this automatically on login).
+- Create a notification document in `notifications` with either `userId` or `targetStudentId` set to the recipient UID.
+- The Cloud Function `pushOnNotificationCreated` will send a push automatically.
+
+Opt-out (per notification): set `sendPush: false` on the notification doc.
+
+Note: broadcast notifications with `targetType: 'all'` are not auto-pushed to avoid spamming.
+
 In the output, you'll find options to open the app in a
 
 - [development build](https://docs.expo.dev/develop/development-builds/introduction/)

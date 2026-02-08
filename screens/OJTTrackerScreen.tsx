@@ -12,10 +12,12 @@ import type { RootStackParamList } from '../App';
 import { auth, firestore } from '../firebase/config';
 import { doc, setDoc, deleteDoc, collection, getDocs, getDoc, onSnapshot } from 'firebase/firestore';
 import { Picker } from '@react-native-picker/picker';
-import RNBlobUtil from 'react-native-blob-util';
-import DateTimePicker from '@react-native-community/datetimepicker';
+// NOTE: Avoid importing native-only modules at file scope in Expo bridgeless / Expo Go.
+// They can be null and crash during module initialization.
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 import { colors, radii, shadows } from '../ui/theme';
 import { Screen } from '../ui/components/Screen';
 import Svg, { Circle } from 'react-native-svg';
@@ -35,6 +37,7 @@ type AmPm = 'AM' | 'PM';
 // Constants
 const DEFAULT_REQUIRED_HOURS = 300;
 const MAX_HOURS = 24;
+const OJT_CSV_DOWNLOAD_DIR_URI_KEY = 'OJT_CSV_DOWNLOAD_DIR_URI';
 
 const OJTTrackerScreen: React.FC = () => {
   // Navigation
@@ -73,7 +76,7 @@ const OJTTrackerScreen: React.FC = () => {
   // Listen for live updates to the user's profile while this screen is focused
   useFocusEffect(
     useCallback(() => {
-      if (!auth.currentUser) return () => {};
+      if (!auth.currentUser) return () => { };
       const uid = auth.currentUser.uid;
       const userDocRef = doc(firestore, 'users', uid);
       const unsub = onSnapshot(userDocRef, (snap: any) => {
@@ -134,9 +137,9 @@ const OJTTrackerScreen: React.FC = () => {
                 if (appliedId) {
                   try {
                     await deleteDoc(doc(firestore, 'applications', `${uid}_${appliedId}`));
-                  } catch (delErr) {}
+                  } catch (delErr) { }
                 }
-              } catch (readErr) {}
+              } catch (readErr) { }
 
               await setDoc(doc(firestore, 'users', uid), {
                 appliedCompanyId: null,
@@ -222,7 +225,7 @@ const OJTTrackerScreen: React.FC = () => {
       console.error('OJT Tracker: delete log failed', error);
       try {
         if (auth.currentUser) await setDoc(doc(firestore, 'users', auth.currentUser.uid), { lastOjtSyncError: { time: new Date().toISOString(), message: String(error) } }, { merge: true });
-      } catch (dbgErr) {}
+      } catch (dbgErr) { }
       throw error;
     }
   };
@@ -377,7 +380,7 @@ const OJTTrackerScreen: React.FC = () => {
             }
           }, { merge: true });
         }
-      } catch (dbgErr) {}
+      } catch (dbgErr) { }
     }
   };
 
@@ -433,45 +436,183 @@ const OJTTrackerScreen: React.FC = () => {
 
   const handleSaveCSV = async () => {
     try {
+      // Check if there are any logs to export
+      if (!timeLogs || timeLogs.length === 0) {
+        Alert.alert('No Data', 'There are no OJT logs to export. Please add some time logs first.');
+        return;
+      }
+
       const csvContent = generateCSV();
       const fileName = `OJT_Logs_${new Date().toISOString().split('T')[0]}.csv`;
 
-      // Create a data URL for the CSV content
-      const csvData = `data:text/csv;charset=utf-8,${encodeURIComponent(csvContent)}`;
+      // Expo-safe file path (works in Expo Go + dev builds)
+      const baseDir = FileSystem.documentDirectory;
+      if (!baseDir) {
+        Alert.alert('Export unavailable', 'File system is not available on this device/runtime.');
+        return;
+      }
+      const filePath = `${baseDir}${fileName}`;
 
-      // Share the file
-      await Share.share({
-        url: csvData,
-        title: fileName,
-        message: 'Here is my OJT Logs CSV file',
-      });
+      // Add UTF-8 BOM for better Google Sheets compatibility
+      const BOM = '\uFEFF';
+      const csvWithBOM = BOM + csvContent;
 
-      Alert.alert('Success', 'CSV file has been prepared for download.');
-    } catch (error) {
-      console.error('OJT Tracker: prepare CSV failed', error);
-      Alert.alert('Error', 'Failed to prepare CSV file for download.');
+      // Write the CSV file with UTF-8 encoding
+      await FileSystem.writeAsStringAsync(filePath, csvWithBOM, { encoding: FileSystem.EncodingType.UTF8 });
+
+      // Show success message with file location
+      const location = 'App Documents';
+      Alert.alert(
+        'Success',
+        `CSV file created successfully!\n\nFile: ${fileName}\nLocation: ${location}\n\nUse Download to save it to Downloads/Files, or Share to send it.`,
+        [
+          {
+            text: 'OK',
+            style: 'default'
+          },
+          {
+            text: 'Download',
+            onPress: async () => {
+              try {
+                // iOS: the system share sheet includes "Save to Files".
+                if (Platform.OS !== 'android') {
+                  if (await Sharing.isAvailableAsync()) {
+                    await Sharing.shareAsync(filePath, {
+                      mimeType: 'text/csv',
+                      dialogTitle: fileName,
+                    });
+                    return;
+                  }
+                  await Share.share({
+                    url: filePath,
+                    title: fileName,
+                    message: 'Save this CSV to Files',
+                  });
+                  return;
+                }
+
+                // Android: let user choose a directory (Downloads, Drive, etc.) and save there.
+                const saf: any = (FileSystem as any).StorageAccessFramework;
+                if (!saf?.requestDirectoryPermissionsAsync || !saf?.createFileAsync) {
+                  Alert.alert('Download unavailable', 'Folder access is not available in this build.');
+                  return;
+                }
+
+                const saveToDirectory = async (directoryUri: string) => {
+                  const destUri = await saf.createFileAsync(directoryUri, fileName, 'text/csv');
+                  await FileSystem.writeAsStringAsync(destUri, csvWithBOM, { encoding: FileSystem.EncodingType.UTF8 });
+                  return destUri;
+                };
+
+                // Try to reuse the last selected folder so it behaves like a default Downloads folder.
+                const savedDir = await AsyncStorage.getItem(OJT_CSV_DOWNLOAD_DIR_URI_KEY);
+                if (savedDir) {
+                  try {
+                    await saveToDirectory(savedDir);
+                    Alert.alert('Downloaded', 'CSV saved to your default download folder.');
+                    return;
+                  } catch (e) {
+                    // Permission might have been revoked; clear and re-prompt.
+                    await AsyncStorage.removeItem(OJT_CSV_DOWNLOAD_DIR_URI_KEY);
+                  }
+                }
+
+                const perm = await saf.requestDirectoryPermissionsAsync();
+                if (!perm?.granted || !perm?.directoryUri) {
+                  Alert.alert('Cancelled', 'No folder selected.');
+                  return;
+                }
+
+                await saveToDirectory(perm.directoryUri);
+                await AsyncStorage.setItem(OJT_CSV_DOWNLOAD_DIR_URI_KEY, perm.directoryUri);
+                Alert.alert('Downloaded', 'CSV saved. Next time it will download to the same folder automatically.');
+              } catch (downloadErr: any) {
+                console.error('Download failed', downloadErr);
+                Alert.alert('Download Error', `Could not download the file: ${downloadErr?.message || String(downloadErr)}`);
+              }
+            },
+          },
+          {
+            text: 'Share',
+            onPress: async () => {
+              try {
+                // Prefer expo-sharing where available; fallback to RN Share.
+                if (await Sharing.isAvailableAsync()) {
+                  await Sharing.shareAsync(filePath, {
+                    mimeType: 'text/csv',
+                    dialogTitle: fileName,
+                  });
+                  return;
+                }
+                await Share.share({
+                  url: filePath,
+                  title: fileName,
+                  message: 'Here is my OJT Logs CSV file',
+                });
+              } catch (shareError) {
+                console.error('Share failed', shareError);
+                Alert.alert('Share Error', 'Could not share the file. The file has been saved to your device.');
+              }
+            }
+          }
+        ]
+      );
+    } catch (error: any) {
+      console.error('OJT Tracker: save CSV failed', error);
+      const errorMessage = error?.message || String(error);
+      Alert.alert('Error', `Failed to save CSV file: ${errorMessage}\n\nPlease try again or check your storage permissions.`);
     }
   };
 
   const generateCSV = () => {
-    // CSV Header
-    const headers = ['Date', 'Clock In', 'Clock Out', 'Hours'];
-    const csvRows = [headers];
+    // Get user information
+    const userEmail = auth.currentUser?.email || '';
+    const userName = auth.currentUser?.displayName || userEmail.split('@')[0] || 'User';
+    const companyName = userCompany || appliedCompanyName || 'N/A';
 
-    // Add data rows
-    timeLogs.forEach(log => {
+    // CSV Header with additional columns for Google Sheets compatibility
+    const headers = [
+      'Student Name',
+      'Student Email',
+      'Company Name',
+      'Date',
+      'Clock In',
+      'Clock Out',
+      'Hours'
+    ];
+    const csvRows: string[][] = [headers];
+
+    // Add data rows - sort by date (oldest first for better readability)
+    const sortedLogs = [...timeLogs].sort((a, b) => {
+      // Sort by date (YYYY/MM/DD format)
+      return a.date.localeCompare(b.date);
+    });
+
+    sortedLogs.forEach(log => {
+      // Ensure all values are properly formatted
       csvRows.push([
-        log.date,
-        log.clockIn,
-        log.clockOut,
-        log.hours
+        String(userName || ''),
+        String(userEmail || ''),
+        String(companyName || 'N/A'),
+        String(log.date || ''),
+        String(log.clockIn || ''),
+        String(log.clockOut || ''),
+        String(log.hours || '0')
       ]);
     });
 
-    // Convert to CSV string with proper escaping
+    // Convert to CSV string with proper escaping for Google Sheets
+    // Use RFC 4180 compliant CSV format
     const csvContent = csvRows.map(row =>
-      row.map(cell => `"${cell}"`).join(',')
-    ).join('\n');
+      row.map(cell => {
+        // Escape quotes and wrap in quotes if contains comma, quote, or newline
+        const cellStr = String(cell || '');
+        if (cellStr.includes(',') || cellStr.includes('"') || cellStr.includes('\n') || cellStr.includes('\r')) {
+          return `"${cellStr.replace(/"/g, '""')}"`;
+        }
+        return cellStr;
+      }).join(',')
+    ).join('\r\n'); // Use \r\n for better Windows/Google Sheets compatibility
 
     return csvContent;
   };
@@ -508,7 +649,7 @@ const OJTTrackerScreen: React.FC = () => {
       console.error('OJT Tracker: update totalHours failed', error);
       try {
         if (auth.currentUser) await setDoc(doc(firestore, 'users', auth.currentUser.uid), { lastOjtSyncError: { time: new Date().toISOString(), message: String(error) } }, { merge: true });
-      } catch (dbgErr) {}
+      } catch (dbgErr) { }
     }
   };
 
@@ -1116,7 +1257,7 @@ const OJTTrackerScreen: React.FC = () => {
                 <Text style={styles.helperText}>Enter time in HH:MM format</Text>
               </View>
 
-            {/* Total Hours Field */}
+              {/* Total Hours Field */}
               <View style={styles.inputContainer}>
                 <Text style={styles.inputLabel}>Total hours</Text>
                 <View style={styles.hoursInputContainer}>

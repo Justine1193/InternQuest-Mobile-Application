@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system';
 
 export interface WeeklyReportEntry {
   date: string;
@@ -57,7 +58,30 @@ export class PDFGenerator {
     } else {
       // For mobile, use sharing
       if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(pdfUri, {
+        // Many share targets derive the saved filename from the URI.
+        // Copy to a stable path with the requested filename first.
+        const safeNameRaw = String(filename || 'Weekly_Report.pdf');
+        const safeName = safeNameRaw.toLowerCase().endsWith('.pdf') ? safeNameRaw : `${safeNameRaw}.pdf`;
+        const baseDir = FileSystem.cacheDirectory || FileSystem.documentDirectory;
+
+        let shareUri = pdfUri;
+        if (baseDir) {
+          const targetUri = `${baseDir}${safeName.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+          try {
+            await FileSystem.deleteAsync(targetUri, { idempotent: true });
+          } catch (e) {
+            // ignore
+          }
+          try {
+            await FileSystem.copyAsync({ from: pdfUri, to: targetUri });
+            shareUri = targetUri;
+          } catch (e) {
+            // If copy fails, fall back to original URI
+            shareUri = pdfUri;
+          }
+        }
+
+        await Sharing.shareAsync(shareUri, {
           mimeType: 'application/pdf',
           dialogTitle: 'Share Weekly Report',
           UTI: 'com.adobe.pdf',

@@ -1,13 +1,13 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useCallback, useEffect, useState, useRef } from 'react';
 import { StatusBar, ActivityIndicator, View, Text, StyleSheet, Easing, AppState, AppStateStatus, TouchableOpacity } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator, CardStyleInterpolators } from '@react-navigation/stack';
 import { Host } from 'react-native-portalize';
 import { Provider as PaperProvider } from 'react-native-paper';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { onAuthStateChanged } from 'firebase/auth';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from './firebase/config';
-import { doc, getDoc, getDocs, query, collection, where, setDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
+import { doc, getDoc, getDocs, query, collection, where, setDoc, serverTimestamp, deleteDoc, onSnapshot } from 'firebase/firestore';
 import { firestore } from './firebase/config';
 import { useAutoLogout } from './hooks/useAutoLogout';
 import { colors, navigationTheme, paperTheme } from './ui/theme';
@@ -85,9 +85,36 @@ const AppInner: React.FC = () => {
   const [currentScreen, setCurrentScreen] = useState<string>('SignIn');
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
   const [awaitingBiometric, setAwaitingBiometric] = useState(false);
+  const [authBlockMessage, setAuthBlockMessage] = useState<string | null>(null);
   const { notificationCount, setNotificationCount } = useNotificationCount();
   const { biometricEnabled, setAppLocked, appLocked, unlock } = useBiometric();
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+  const blockedListenerUnsubRef = useRef<null | (() => void)>(null);
+
+  const handleBlockedAccount = useCallback(async (data: any) => {
+    const accountAccess = (data && typeof data.accountAccess === 'object' && data.accountAccess) ? data.accountAccess : null;
+    const reason =
+      (accountAccess && typeof accountAccess.blockedReason === 'string' && accountAccess.blockedReason.trim()) ? accountAccess.blockedReason.trim() :
+      (typeof data?.blockedReason === 'string' && data.blockedReason.trim()) ? data.blockedReason.trim() :
+      (typeof data?.blockReason === 'string' && data.blockReason.trim()) ? data.blockReason.trim() :
+      '';
+    const blockedBy =
+      (accountAccess && typeof accountAccess.blockedBy === 'string' && accountAccess.blockedBy.trim()) ? accountAccess.blockedBy.trim() :
+      (typeof data?.blockedBy === 'string' && data.blockedBy.trim()) ? data.blockedBy.trim() :
+      '';
+    const who = blockedBy ? ` by ${blockedBy}` : '';
+    const suffix = reason ? `\n\nReason: ${reason}` : '';
+
+    setAuthBlockMessage(`Your account has been blocked${who}. Please contact your adviser/coordinator.${suffix}`);
+
+    // Best-effort sign-out and reset app state.
+    try { await signOut(auth); } catch (e) { /* best-effort */ }
+    setIsLoggedIn(false);
+    setAwaitingBiometric(false);
+    setIsProfileComplete(null);
+    setMustChangePassword(null);
+    setIsLoading(false);
+  }, []);
   const navigationRef = React.useRef<any>(null);
 
   // Fetch notification count when user is logged in (for badge on bell).
@@ -150,6 +177,12 @@ const AppInner: React.FC = () => {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
+        // Ensure any prior blocked listener is cleaned up before creating a new one.
+        if (blockedListenerUnsubRef.current) {
+          try { blockedListenerUnsubRef.current(); } catch (e) { /* ignore */ }
+          blockedListenerUnsubRef.current = null;
+        }
+
         // Auto-login detected! We may still require biometric before showing the app.
         console.log('✅ Auto-login successful!');
         console.log('📧 User email:', user.email);
@@ -164,6 +197,37 @@ const AppInner: React.FC = () => {
         // Fetch user profile from Firestore
         try {
           const userRef = doc(firestore, 'users', user.uid);
+
+          // Live block sync: if admin blocks this account while the user is in-app,
+          // immediately sign them out and show the reason.
+          blockedListenerUnsubRef.current = onSnapshot(
+            userRef,
+            async (snap) => {
+              if (!snap.exists()) return;
+              const data: any = snap.data();
+              const accountAccess = (data && typeof data.accountAccess === 'object' && data.accountAccess) ? data.accountAccess : null;
+              const isBlocked =
+                (accountAccess && accountAccess.isBlocked === true) ||
+                data?.isBlocked === true ||
+                data?.is_blocked === true ||
+                data?.blocked === true ||
+                String(data?.accountStatus || '').toLowerCase() === 'blocked' ||
+                String(data?.status || '').toLowerCase() === 'blocked';
+
+              if (isBlocked) {
+                // Prevent multiple triggers.
+                if (blockedListenerUnsubRef.current) {
+                  try { blockedListenerUnsubRef.current(); } catch (e) { /* ignore */ }
+                  blockedListenerUnsubRef.current = null;
+                }
+                await handleBlockedAccount(data);
+              }
+            },
+            () => {
+              // Ignore listener errors; one-time checks below still handle block.
+            }
+          );
+
           const userDoc = await getDoc(userRef);
 
           // If an admin created a legacy Firestore user doc under a non-UID document id,
@@ -240,6 +304,24 @@ const AppInner: React.FC = () => {
           if (userDocAfter.exists()) {
             const data: any = userDocAfter.data();
 
+            // Account access block (adviser/coordinator/admin)
+            const accountAccess = (data && typeof data.accountAccess === 'object' && data.accountAccess) ? data.accountAccess : null;
+            const isBlocked =
+              (accountAccess && accountAccess.isBlocked === true) ||
+              data?.isBlocked === true ||
+              data?.is_blocked === true ||
+              data?.blocked === true ||
+              String(data?.accountStatus || '').toLowerCase() === 'blocked' ||
+              String(data?.status || '').toLowerCase() === 'blocked';
+
+            if (isBlocked) {
+              await handleBlockedAccount(data);
+              return;
+            }
+
+            // We now know this signed-in user is not blocked; clear any old banner.
+            setAuthBlockMessage(null);
+
             // One-time password change gate (set after SetupAccountScreen)
             // Self-heal legacy / already-changed accounts:
             // - If mustChangePassword is true but we see a passwordChangedAt timestamp
@@ -304,6 +386,9 @@ const AppInner: React.FC = () => {
             setIsProfileComplete(false);
             setMustChangePassword(false);
             console.log('📋 Profile not found in Firestore');
+
+            // If there is no profile doc, it's not a block scenario.
+            setAuthBlockMessage(null);
           }
         } catch (e: any) {
           console.error('❌ Error fetching profile:', e);
@@ -340,6 +425,11 @@ const AppInner: React.FC = () => {
           setAwaitingBiometric(false);
         }
       } else {
+        // Clean up the live block listener on logout.
+        if (blockedListenerUnsubRef.current) {
+          try { blockedListenerUnsubRef.current(); } catch (e) { /* ignore */ }
+          blockedListenerUnsubRef.current = null;
+        }
         // No user found - need to sign in
         console.log('🔓 No saved session found - showing sign in screen');
         setCurrentUserEmail(null);
@@ -372,7 +462,27 @@ const AppInner: React.FC = () => {
       return (
         <>
           <Stack.Screen name="SignIn">
-            {props => <LoginScreen {...props} setIsLoggedIn={setIsLoggedIn} />}
+            {props => <LoginScreen {...props} setIsLoggedIn={setIsLoggedIn} initialErrorMessage={authBlockMessage} />}
+          </Stack.Screen>
+          <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+        </>
+      );
+    }
+
+    // If the account is blocked, always keep the user on SignIn
+    // (do not route into SetupAccount even if profile state is incomplete).
+    if (authBlockMessage) {
+      return (
+        <>
+          <Stack.Screen name="SignIn">
+            {props => (
+              <LoginScreen
+                {...props}
+                setIsLoggedIn={setIsLoggedIn}
+                initialErrorMessage={authBlockMessage}
+                gateMode={false}
+              />
+            )}
           </Stack.Screen>
           <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
         </>
@@ -388,6 +498,7 @@ const AppInner: React.FC = () => {
               <LoginScreen
                 {...props}
                 setIsLoggedIn={setIsLoggedIn}
+                initialErrorMessage={authBlockMessage}
                 gateMode={awaitingBiometric}
                 onBiometricUnlock={() => {
                   setAwaitingBiometric(false);

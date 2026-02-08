@@ -56,6 +56,14 @@ const emptyEntry: WeeklyReportEntryForm = {
 
 const WEEKLY_REPORT_DRAFT_KEY = 'WEEKLY_REPORT_DRAFT';
 
+const buildWeeklyReportFilename = () => {
+    const date = new Date();
+    const yyyy = date.getFullYear();
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const dd = String(date.getDate()).padStart(2, '0');
+    return `Weekly_Report_${yyyy}-${mm}-${dd}.pdf`;
+};
+
 const WeeklyReportScreen: React.FC = () => {
     const [formInfo, setFormInfo] = useState({
         traineeName: '',
@@ -502,12 +510,25 @@ const WeeklyReportScreen: React.FC = () => {
         try {
             const asset = Asset.fromModule(require('../assets/neu.png'));
             await asset.downloadAsync();
-            if (asset.localUri) {
-                const base64 = await FileSystem.readAsStringAsync(asset.localUri, {
-                    encoding: FileSystem.EncodingType.Base64,
-                });
-                return `data:image/png;base64,${base64}`;
+
+            // In some runtimes/builds, `localUri` can be null even after download.
+            // Fall back to `uri`, and if needed download to a file:// cache path.
+            let sourceUri: string | null = (asset.localUri || asset.uri || null) as any;
+            if (!sourceUri) return undefined;
+
+            if (!sourceUri.startsWith('file://')) {
+                const baseDir = FileSystem.cacheDirectory || FileSystem.documentDirectory;
+                if (baseDir) {
+                    const dest = `${baseDir}neu-logo.png`;
+                    const dl = await FileSystem.downloadAsync(sourceUri, dest);
+                    sourceUri = dl?.uri || sourceUri;
+                }
             }
+
+            const base64 = await FileSystem.readAsStringAsync(sourceUri, {
+                encoding: FileSystem.EncodingType.Base64,
+            });
+            return `data:image/png;base64,${base64}`;
         } catch (error) {
             console.warn('Failed to load NEU logo:', error);
         }
@@ -548,7 +569,7 @@ const WeeklyReportScreen: React.FC = () => {
             const pdfUri = await PDFGenerator.generateWeeklyReportPDF(reportData);
             await PDFGenerator.sharePDF(
                 pdfUri,
-                `Weekly_Report_${formInfo.monthCovered || 'InternQuest'}.pdf`
+                buildWeeklyReportFilename()
             );
         } catch (error: any) {
             Alert.alert('PDF Error', error.message || 'Failed to generate PDF.');

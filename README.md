@@ -39,10 +39,10 @@ To block/unblock a user from your admin website (Firestore):
 
 - Collection: `users/{uid}` (the user's UID document)
 - Field: `accountAccess`
-   - `isBlocked`: boolean
-   - `blockedReason`: string | null
-   - `blockedBy`: string | null (e.g. `adviser`, `coordinator`, `admin`)
-   - `blockedAt`: timestamp | null
+  - `isBlocked`: boolean
+  - `blockedReason`: string | null
+  - `blockedBy`: string | null (e.g. `adviser`, `coordinator`, `admin`)
+  - `blockedAt`: timestamp | null
 
 Example payload:
 

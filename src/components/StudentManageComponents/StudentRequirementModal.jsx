@@ -16,6 +16,9 @@ import {
   IoCloseOutline,
   IoDocumentTextOutline,
   IoDownloadOutline,
+  IoBanOutline,
+  IoCheckmarkCircleOutline,
+  IoRefreshOutline,
 } from "react-icons/io5";
 import { storage, db, auth, functions } from "../../../firebase";
 import {
@@ -41,8 +44,10 @@ import {
 } from "firebase/firestore";
 // import { httpsCallable } from "firebase/functions"; // Removed - PDF function disabled
 import { getAdminRole, hasAnyRole, ROLES } from "../../utils/auth";
+import { activityLoggers } from "../../utils/activityLogger";
 import { useToast } from "../../hooks/useToast";
 import ToastContainer from "../Toast/ToastContainer";
+import ConfirmModal from "../ConfirmModalComponents/ConfirmModal";
 import "./StudentRequirementModal.css";
 
 const StudentRequirementModal = ({
@@ -50,8 +55,13 @@ const StudentRequirementModal = ({
   student,
   onClose,
   onRequirementUpdated,
+  onStudentUpdated,
+  onShowSuccess,
+  onShowError,
 }) => {
   const { toasts, success, error: showError, removeToast } = useToast();
+  const showSuccessToast = onShowSuccess ?? success;
+  const showErrorToast = onShowError ?? showError;
   const [viewingFile, setViewingFile] = useState(null);
   const [viewingFileName, setViewingFileName] = useState("");
   const [profilePictureUrl, setProfilePictureUrl] = useState(null);
@@ -74,11 +84,16 @@ const StudentRequirementModal = ({
   const [creatorInfo, setCreatorInfo] = useState(null); // { username, role, createdAt }
   const [currentSignature, setCurrentSignature] = useState(null); // Current signature for preview
   const [popupMessage, setPopupMessage] = useState(null); // { type: 'success' | 'error', message: string }
+  const [showBlockConfirm, setShowBlockConfirm] = useState(false);
+  const [showUnblockConfirm, setShowUnblockConfirm] = useState(false);
+  const [isBlocking, setIsBlocking] = useState(false);
+  const canBlockUnblock = hasAnyRole([ROLES.SUPER_ADMIN, ROLES.COORDINATOR, ROLES.ADVISER]);
+  const isBlocked = Boolean(student?.is_blocked);
 
   // Fetch creator information from student document or activity logs
   useEffect(() => {
     const fetchCreatorInfo = async () => {
-      if (!student?.id) {
+      if (!student?.id || !auth.currentUser) {
         setCreatorInfo(null);
         return;
       }
@@ -125,7 +140,7 @@ const StudentRequirementModal = ({
       }
     };
 
-    if (open && student?.id) {
+    if (open && student?.id && auth.currentUser) {
       fetchCreatorInfo();
     }
   }, [open, student?.id, student?.createdBy, student?.createdAt]);
@@ -251,15 +266,10 @@ const StudentRequirementModal = ({
           const url = await getDownloadURL(avatarFile);
           setProfilePictureUrl(url);
           setProfilePictureError(false);
-          console.log(
-            "✅ Profile picture found in avatars folder:",
-            avatarFile.name
-          );
           return;
         }
       } catch (error) {
         // If avatars folder doesn't exist, continue to other Storage paths
-        console.log("No avatars folder found, trying other Storage paths...");
       }
 
       // Second: Try profilePictures/{userId}/ folder
@@ -278,10 +288,6 @@ const StudentRequirementModal = ({
           const url = await getDownloadURL(profileRef);
           setProfilePictureUrl(url);
           setProfilePictureError(false);
-          console.log(
-            "✅ Profile picture found in profilePictures folder:",
-            fileName
-          );
           return;
         } catch (e) {
           // Silently continue if file doesn't exist (404 is expected)
@@ -290,10 +296,7 @@ const StudentRequirementModal = ({
             e.code !== "storage/object-not-found" &&
             e.code !== "storage/unauthorized"
           ) {
-            console.warn(
-              `Error checking profile picture ${fileName}:`,
-              e.message
-            );
+            // Skip logging
           }
           continue;
         }
@@ -316,7 +319,7 @@ const StudentRequirementModal = ({
   // Fetch approval statuses from Firestore
   useEffect(() => {
     const fetchApprovalStatuses = async () => {
-      if (!open || !student?.id) {
+      if (!open || !student?.id || !auth.currentUser) {
         setApprovalStatuses({});
         return;
       }
@@ -339,8 +342,12 @@ const StudentRequirementModal = ({
       }
     };
 
-    fetchApprovalStatuses();
-  }, [open, student?.id]);
+    if (auth.currentUser) {
+      fetchApprovalStatuses();
+    } else {
+      setApprovalStatuses({});
+    }
+  }, [open, student?.id, auth.currentUser?.uid]);
 
   // Fetch current signature for preview
   useEffect(() => {
@@ -532,6 +539,44 @@ const StudentRequirementModal = ({
     setApprovalRequirementType(null);
   };
 
+  const handleBlockStudent = async () => {
+    if (!student?.id || !canBlockUnblock) return;
+    setIsBlocking(true);
+    setShowBlockConfirm(false);
+    try {
+      const userRef = doc(db, "users", student.id);
+      await updateDoc(userRef, { is_blocked: true });
+      const studentName = [student.firstName, student.lastName].filter(Boolean).join(" ") || student.studentId || student.id;
+      activityLoggers.blockStudent(student.id, studentName);
+      showSuccessToast("Student has been blocked. They will not be able to access the mobile app.");
+      onStudentUpdated?.({ ...student, is_blocked: true });
+    } catch (err) {
+      console.error("Error blocking student:", err);
+      showErrorToast(err?.message || "Failed to block student.");
+    } finally {
+      setIsBlocking(false);
+    }
+  };
+
+  const handleUnblockStudent = async () => {
+    if (!student?.id || !canBlockUnblock) return;
+    setIsBlocking(true);
+    setShowUnblockConfirm(false);
+    try {
+      const userRef = doc(db, "users", student.id);
+      await updateDoc(userRef, { is_blocked: false });
+      const studentName = [student.firstName, student.lastName].filter(Boolean).join(" ") || student.studentId || student.id;
+      activityLoggers.unblockStudent(student.id, studentName);
+      showSuccessToast("Student has been unblocked. They can access the mobile app again.");
+      onStudentUpdated?.({ ...student, is_blocked: false });
+    } catch (err) {
+      console.error("Error unblocking student:", err);
+      showErrorToast(err?.message || "Failed to unblock student.");
+    } finally {
+      setIsBlocking(false);
+    }
+  };
+
   // Handle approving a requirement (called after confirmation)
   const handleAcceptRequirement = async () => {
     if (!student?.id || !approvalRequirementType || !canApproveRequirements())
@@ -567,7 +612,6 @@ const StudentRequirementModal = ({
         }
       } catch (getError) {
         // If document doesn't exist, start with empty object
-        console.log("Document doesn't exist yet, will create new one");
       }
 
       const updateData = {
@@ -725,7 +769,6 @@ const StudentRequirementModal = ({
         }
       } catch (getError) {
         // If document doesn't exist, start with empty object
-        console.log("Document doesn't exist yet, will create new one");
       }
 
       const updateData = {
@@ -869,35 +912,20 @@ const StudentRequirementModal = ({
                     originalUploadedAt: metadata.timeCreated || null,
                   });
 
-                  console.log(
-                    `✅ Archived file: ${fileRef.name} to ${archivePath}`
-                  );
-
                   // Now delete the original file
                   await deleteObject(fileRef);
-                  console.log(`✅ Deleted file: ${fileRef.name}`);
                 } catch (error) {
-                  console.warn(
-                    `⚠️ Failed to archive/delete file ${fileRef.name}:`,
-                    error
-                  );
                   // Try to delete anyway even if archive failed
                   try {
                     await deleteObject(fileRef);
                   } catch (deleteError) {
-                    console.warn(
-                      `⚠️ Failed to delete file ${fileRef.name}:`,
-                      deleteError
-                    );
+                    // Ignore
                   }
                 }
               }
             );
 
             await Promise.all(archiveAndDeletePromises);
-            console.log(
-              `✅ Archived and deleted ${folderFiles.items.length} file(s) from ${folderName} folder`
-            );
 
             // Refresh storage files list to update UI
             const storagePathRoot = `requirements/${student.id}`;
@@ -951,27 +979,16 @@ const StudentRequirementModal = ({
                 );
                 allFiles.push(...filesWithUrls.filter((file) => file !== null));
               } catch (error) {
-                console.warn(
-                  `Error fetching files from ${folderNameItem}:`,
-                  error
-                );
+                // Skip failed folder
               }
             }
             setStorageFiles(allFiles);
           } catch (listError) {
-            if (listError.code !== "storage/object-not-found") {
-              console.warn(
-                `⚠️ Error listing files in ${folderName} folder:`,
-                listError
-              );
-            }
+            // Ignore list errors
           }
         }
       } catch (storageError) {
-        console.warn(
-          "⚠️ Error deleting files from Storage (non-critical):",
-          storageError
-        );
+        // Non-critical
       }
 
       // Notify parent component that requirement was updated
@@ -1122,6 +1139,11 @@ const StudentRequirementModal = ({
                       {student.studentId || "No ID"}
                     </p>
                     <div className="student-status-badges">
+                      {isBlocked ? (
+                        <span className="status-badge blocked">Blocked</span>
+                      ) : (
+                        <span className="status-badge active">Active</span>
+                      )}
                       {student.status === "hired" ? (
                         <span className="status-badge hired">Hired</span>
                       ) : (
@@ -1510,13 +1532,6 @@ const StudentRequirementModal = ({
                         },
                       ];
 
-                      // Debug: Log total requirements count
-                      if (process.env.NODE_ENV === "development") {
-                        console.log(
-                          `[StudentRequirementModal] Total requirements to display: ${REQUIRED_DOCUMENTS_LIST.length}`
-                        );
-                      }
-
                       return REQUIRED_DOCUMENTS_LIST;
                     })().map((requirement, index) => {
                       // Find matching file from Storage by folder name first (STRICT MATCHING)
@@ -1528,33 +1543,6 @@ const StudentRequirementModal = ({
                       if (!matchingFile) {
                         matchingFile = storageFiles.find(
                           (file) => file.requirementType === requirement.type
-                        );
-                      }
-
-                      // Log matches for debugging
-                      if (matchingFile) {
-                        console.log(
-                          `✅ Matched file "${matchingFile.name}" from folder "${matchingFile.folderName}" to requirement "${requirement.type}"`
-                        );
-                        // Warn if folder name doesn't match expected folder
-                        if (
-                          matchingFile.folderName !== requirement.folderName
-                        ) {
-                          console.warn(
-                            `⚠️ WARNING: File "${matchingFile.name}" is in folder "${matchingFile.folderName}" but matched to requirement "${requirement.type}" (expected folder: "${requirement.folderName}"). This may indicate a file upload error.`
-                          );
-                        }
-                      }
-
-                      // Debug: Log if no match found
-                      if (!matchingFile && storageFiles.length > 0) {
-                        console.log(
-                          `❌ No match for "${requirement.type}". Available files:`,
-                          storageFiles.map((f) => ({
-                            name: f.name,
-                            folder: f.folderName,
-                            type: f.requirementType,
-                          }))
                         );
                       }
 
@@ -1733,11 +1721,76 @@ const StudentRequirementModal = ({
           </div>
 
           <div className="student-requirement-modal-actions">
+            {canBlockUnblock && (
+              isBlocked ? (
+                <button
+                  type="button"
+                  className="unblock-student-btn"
+                  onClick={() => setShowUnblockConfirm(true)}
+                  disabled={isBlocking}
+                  aria-label={isBlocking ? "Unblocking..." : "Unblock student"}
+                >
+                  {isBlocking ? (
+                    <>
+                      <IoRefreshOutline className="block-unblock-spinner" aria-hidden="true" />
+                      Unblocking...
+                    </>
+                  ) : (
+                    <>
+                      <IoCheckmarkCircleOutline />
+                      Unblock Student
+                    </>
+                  )}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="block-student-btn"
+                  onClick={() => setShowBlockConfirm(true)}
+                  disabled={isBlocking}
+                  aria-label={isBlocking ? "Blocking..." : "Block student"}
+                >
+                  {isBlocking ? (
+                    <>
+                      <IoRefreshOutline className="block-unblock-spinner" aria-hidden="true" />
+                      Blocking...
+                    </>
+                  ) : (
+                    <>
+                      <IoBanOutline />
+                      Block Student
+                    </>
+                  )}
+                </button>
+              )
+            )}
             <button className="close-modal-btn" onClick={onClose}>
               Close
             </button>
           </div>
         </div>
+
+        {/* Block student confirmation */}
+        <ConfirmModal
+          open={showBlockConfirm}
+          title="Block Student?"
+          message="Are you sure you want to block this student? They will no longer be able to access the mobile app."
+          confirmButtonText="Yes, block student"
+          confirmButtonClass="confirm-btn block-confirm-btn"
+          onConfirm={handleBlockStudent}
+          onCancel={() => setShowBlockConfirm(false)}
+        />
+
+        {/* Unblock student confirmation */}
+        <ConfirmModal
+          open={showUnblockConfirm}
+          title="Unblock Student?"
+          message="This student will be able to log in and use the mobile app again."
+          confirmButtonText="Yes, unblock student"
+          confirmButtonClass="confirm-btn unblock-confirm-btn"
+          onConfirm={handleUnblockStudent}
+          onCancel={() => setShowUnblockConfirm(false)}
+        />
 
         {/* Rejection Reason Modal */}
         {showRejectionModal && (
@@ -1949,6 +2002,9 @@ StudentRequirementModal.propTypes = {
   student: PropTypes.object,
   onClose: PropTypes.func.isRequired,
   onRequirementUpdated: PropTypes.func,
+  onStudentUpdated: PropTypes.func,
+  onShowSuccess: PropTypes.func,
+  onShowError: PropTypes.func,
 };
 
 export default StudentRequirementModal;

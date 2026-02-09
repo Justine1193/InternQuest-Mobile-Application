@@ -17,10 +17,12 @@ const FilterDropdown = ({
   onReset,
   fieldSuggestions = [],
   sectionSuggestions = [],
+  programSuggestions = [],
   type = "company",
 }) => {
   const [showFieldDropdown, setShowFieldDropdown] = useState(false);
   const [showSectionDropdown, setShowSectionDropdown] = useState(false);
+  const [showProgramDropdown, setShowProgramDropdown] = useState(false);
 
   // Filter field suggestions based on input
   const filteredFields = fieldSuggestions.filter(
@@ -38,6 +40,15 @@ const FilterDropdown = ({
         .toLowerCase()
         .includes((pendingFilterValues.section || "").toLowerCase()) &&
       section !== pendingFilterValues.section
+  );
+
+  // Filter program suggestions based on input
+  const filteredPrograms = (programSuggestions || []).filter(
+    (program) =>
+      program
+        .toLowerCase()
+        .includes((pendingFilterValues.program || "").toLowerCase()) &&
+      program !== pendingFilterValues.program
   );
 
   // Handle field input change
@@ -72,6 +83,24 @@ const FilterDropdown = ({
     (section) => {
       setPendingFilterValues((f) => ({ ...f, section }));
       setShowSectionDropdown(false);
+    },
+    [setPendingFilterValues]
+  );
+
+  // Handle program input change
+  const handleProgramChange = useCallback(
+    (e) => {
+      setPendingFilterValues((f) => ({ ...f, program: e.target.value }));
+      setShowProgramDropdown(true);
+    },
+    [setPendingFilterValues]
+  );
+
+  // Handle program selection
+  const handleProgramSelect = useCallback(
+    (program) => {
+      setPendingFilterValues((f) => ({ ...f, program }));
+      setShowProgramDropdown(false);
     },
     [setPendingFilterValues]
   );
@@ -135,7 +164,7 @@ const FilterDropdown = ({
       {/* Student-specific filters */}
       {type === "student" && (
         <>
-          <div>
+          <div style={{ position: "relative" }}>
             <label className="new-filter-label" htmlFor="program-input">
               Program:
             </label>
@@ -143,16 +172,34 @@ const FilterDropdown = ({
               id="program-input"
               type="text"
               className="new-filter-input"
-              value={pendingFilterValues.program}
-              onChange={(e) =>
-                setPendingFilterValues((f) => ({
-                  ...f,
-                  program: e.target.value,
-                }))
+              value={pendingFilterValues.program || ""}
+              onChange={handleProgramChange}
+              onFocus={() => setShowProgramDropdown(true)}
+              onBlur={() =>
+                setTimeout(() => setShowProgramDropdown(false), DROPDOWN_CLOSE_DELAY)
               }
               placeholder="Program"
               aria-label="Filter by program"
             />
+            {showProgramDropdown && filteredPrograms.length > 0 && (
+              <div
+                className="skills-dropdown"
+                role="listbox"
+                aria-label="Program suggestions"
+              >
+                {filteredPrograms.map((program, idx) => (
+                  <div
+                    key={program + idx}
+                    className="skills-dropdown-item"
+                    onClick={() => handleProgramSelect(program)}
+                    role="option"
+                    aria-selected={pendingFilterValues.program === program}
+                  >
+                    {program}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           <div style={{ position: "relative" }}>
             <label className="new-filter-label" htmlFor="section-input">
@@ -190,6 +237,17 @@ const FilterDropdown = ({
                 ))}
               </div>
             )}
+          </div>
+          <div>
+            <label className="new-filter-label" htmlFor="blocked-dropdown">
+              Blocked:
+            </label>
+            <CustomDropdown
+              id="blocked-dropdown"
+              options={["All", "Blocked", "Not blocked"]}
+              value={pendingFilterValues.blocked || "All"}
+              onChange={(val) => handleDropdownChange("blocked", val)}
+            />
           </div>
           <div>
             <label className="new-filter-label" htmlFor="hired-dropdown">
@@ -285,6 +343,7 @@ FilterDropdown.propTypes = {
     program: PropTypes.string,
     section: PropTypes.string,
     hired: PropTypes.string,
+    blocked: PropTypes.string,
     locationPreference: PropTypes.string,
     approvedRequirement: PropTypes.string,
     modeOfWork: PropTypes.string,
@@ -300,6 +359,8 @@ FilterDropdown.propTypes = {
   fieldSuggestions: PropTypes.arrayOf(PropTypes.string),
   /** List of section suggestions */
   sectionSuggestions: PropTypes.arrayOf(PropTypes.string),
+  /** List of program suggestions for student filter */
+  programSuggestions: PropTypes.arrayOf(PropTypes.string),
   /** Type of filter (company or student) */
   type: PropTypes.oneOf(["company", "student"]),
 };
@@ -307,6 +368,7 @@ FilterDropdown.propTypes = {
 FilterDropdown.defaultProps = {
   fieldSuggestions: [],
   sectionSuggestions: [],
+  programSuggestions: [],
   type: "company",
 };
 

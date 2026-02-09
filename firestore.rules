@@ -14,6 +14,12 @@ service cloud.firestore {
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
+    // True if the user document has is_blocked == true (students blocked by admin)
+    function isBlocked(uid) {
+      return exists(/databases/$(database)/documents/users/$(uid)) &&
+        get(/databases/$(database)/documents/users/$(uid)).data.get('is_blocked', false) == true;
+    }
+
     // ADMIN USERS
     // Read: Allow unauthenticated read so login can look up admin by username to get firebaseEmail before sign-in.
     // Write: Require auth so only logged-in admins can create/update/delete.
@@ -42,12 +48,14 @@ service cloud.firestore {
 
 
     match /users/{userId} {
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null;
+      allow write: if request.auth != null &&
+        (request.auth.uid != userId || !isBlocked(userId));
     }
 
     match /users/{userId}/{allPaths=**} {
       allow read, write: if request.auth != null &&
-        (request.auth.uid == userId || isAdmin());
+        ((request.auth.uid == userId && !isBlocked(userId)) || isAdmin());
     }
 
     // COMPANIES COLLECTION
@@ -58,13 +66,13 @@ service cloud.firestore {
     // WEEKLY REPORTS
     match /users/{userId}/weeklyReports/{reportId} {
       allow read, write: if request.auth != null &&
-        (request.auth.uid == userId || isAdmin());
+        ((request.auth.uid == userId && !isBlocked(userId)) || isAdmin());
     }
 
     // OJT LOGS
     match /users/{userId}/ojtLogs/{logId} {
       allow read, write: if request.auth != null &&
-        (request.auth.uid == userId || isAdmin());
+        ((request.auth.uid == userId && !isBlocked(userId)) || isAdmin());
     }
 
     // HIDDEN NOTIFICATIONS
@@ -135,14 +143,14 @@ service cloud.firestore {
     // REQUIREMENTS
     match /users/{userId}/requirements/{requirementId} {
       allow read, write: if request.auth != null &&
-        (request.auth.uid == userId || isAdmin());
+        ((request.auth.uid == userId && !isBlocked(userId)) || isAdmin());
     }
 
     // REQUIREMENT APPROVALS
-    // Allow authenticated users to read (students can see their approval status)
-    // Allow authenticated users to write (app logic ensures only advisers/coordinators can approve)
+    // Blocked students cannot read their own approval doc; admins can always read/write
     match /requirement_approvals/{studentId} {
-      allow read: if request.auth != null;
+      allow read: if request.auth != null &&
+        (request.auth.uid != studentId || !isBlocked(request.auth.uid));
       allow create: if request.auth != null;
       allow update: if request.auth != null;
       allow delete: if request.auth != null;
@@ -178,17 +186,18 @@ service cloud.firestore {
     }
 
     // APPLICATIONS
-    // Admin panel uses adminusers (not users with role admin), so isAdmin() is false for panel admins.
-    // Read/Update/Delete: allow any authenticated user so admin panel can list, approve/reject, and remove.
-    // Create: student (own userId) or admin.
+    // Blocked students cannot read/update their own applications.
     match /applications/{applicationId} {
-      allow read: if request.auth != null;
+      allow read: if request.auth != null &&
+        (resource.data.userId != request.auth.uid || !isBlocked(request.auth.uid));
       allow create: if request.auth != null && (
         (request.resource.data.userId is string &&
-          request.resource.data.userId == request.auth.uid) ||
+          request.resource.data.userId == request.auth.uid &&
+          !isBlocked(request.auth.uid)) ||
         isAdmin()
       );
-      allow update: if request.auth != null;
+      allow update: if request.auth != null &&
+        (resource.data.userId != request.auth.uid || !isBlocked(request.auth.uid));
       allow delete: if request.auth != null;
     }
 

@@ -186,10 +186,6 @@ const AddStudentModal = ({
             a.localeCompare(b)
           );
 
-          console.log("Loaded program codes by college:", codesByCollegeMap);
-          console.log("College code to name map:", collegeCodeToNameMap);
-          console.log("All program codes:", allProgramCodes);
-
           setProgramCodesByCollege(codesByCollegeMap);
           setProgramCodeOptions(allProgramCodes);
           // Initialize filteredProgramCodes with all codes
@@ -228,12 +224,7 @@ const AddStudentModal = ({
       return [...new Set(allCodes)].sort((a, b) => a.localeCompare(b));
     }
 
-    // Try exact match first
     if (programCodesByCollege[collegeName]) {
-      console.log(
-        `Found program codes for college "${collegeName}":`,
-        programCodesByCollege[collegeName]
-      );
       return programCodesByCollege[collegeName];
     }
 
@@ -244,25 +235,14 @@ const AddStudentModal = ({
     );
 
     if (matchingKey) {
-      console.log(
-        `Found program codes for college "${collegeName}" (matched key: "${matchingKey}"):`,
-        programCodesByCollege[matchingKey]
-      );
       return programCodesByCollege[matchingKey];
     }
-
-    // If no match found, return empty array (college has no program codes)
-    console.warn(
-      `No program codes found for college "${collegeName}". Available college keys:`,
-      Object.keys(programCodesByCollege)
-    );
     return [];
   };
 
   // Auto-fill college when defaultCollege is provided
   useEffect(() => {
     if (isOpen && defaultCollege) {
-      console.log("Auto-filling college in modal:", defaultCollege);
       setFormData((prev) => ({
         ...prev,
         college: defaultCollege,
@@ -440,10 +420,6 @@ const AddStudentModal = ({
           ? getProgramCodesForCollege(formData.college)
           : programCodeOptions;
 
-      console.log("Program code change - available codes:", availableCodes);
-      console.log("Program code options:", programCodeOptions);
-      console.log("Selected college:", formData.college);
-
       if (searchValue.length > 0) {
         const searchUpper = searchValue.toUpperCase();
 
@@ -487,16 +463,9 @@ const AddStudentModal = ({
             return a.code.localeCompare(b.code);
           })
           .map((item) => item.code);
-
-        console.log("Filtered program codes:", filtered);
         setFilteredProgramCodes(filtered);
         setShowProgramCodeSuggestions(filtered.length > 0);
       } else {
-        // When empty, show available options for selected college
-        console.log(
-          "Empty search - showing all available codes:",
-          availableCodes
-        );
         setFilteredProgramCodes(availableCodes);
         setShowProgramCodeSuggestions(availableCodes.length > 0);
       }
@@ -662,13 +631,6 @@ const AddStudentModal = ({
       ? getProgramCodesForCollege(formData.college)
       : programCodeOptions;
 
-    console.log("Program code focus - available codes:", availableCodes);
-    console.log("Selected college:", formData.college);
-    console.log(
-      "Program codes by college keys:",
-      Object.keys(programCodesByCollege)
-    );
-
     if (availableCodes.length > 0) {
       // If there's already text, filter it; otherwise show all available options
       if (
@@ -720,10 +682,6 @@ const AddStudentModal = ({
         setFilteredProgramCodes(programCodeOptions);
         setShowProgramCodeSuggestions(programCodeOptions.length > 0);
       } else {
-        // College selected but no program codes available
-        console.warn(
-          `No program codes available for college: ${formData.college}`
-        );
         setFilteredProgramCodes([]);
         setShowProgramCodeSuggestions(false);
       }

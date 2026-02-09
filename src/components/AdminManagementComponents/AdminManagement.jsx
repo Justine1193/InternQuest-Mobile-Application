@@ -43,7 +43,12 @@ import "./AdminManagement.css";
 import LoadingSpinner from "../LoadingSpinner.jsx";
 import ConfirmModal from "../ConfirmModalComponents/ConfirmModal.jsx";
 import EmptyState from "../EmptyState/EmptyState.jsx";
-import { IoShieldCheckmarkOutline } from "react-icons/io5";
+import {
+  IoShieldCheckmarkOutline,
+  IoPeopleOutline,
+  IoPersonOutline,
+  IoPeopleCircleOutline,
+} from "react-icons/io5";
 
 // Format role name for display (normalizes legacy 'super_admin' to 'admin')
 const getRoleDisplayName = (role) => {
@@ -409,7 +414,7 @@ const AdminManagement = () => {
     }
   };
 
-  // Handle cancel edit/create
+  // Handle cancel edit/create (keep error/success alerts visible after closing modal)
   const handleCancelModal = () => {
     setShowCreateModal(false);
     setEditingAdmin(null);
@@ -428,8 +433,7 @@ const AdminManagement = () => {
       sectionNumber: "",
     });
     setShowPassword(false);
-    setError("");
-    setSuccess("");
+    // Do not clear error/success so alerts remain visible after closing the modal
   };
 
   const loadPrograms = async () => {
@@ -657,16 +661,6 @@ const AdminManagement = () => {
           return programCodesByCollege[partialMatch];
         }
 
-        // Debug: log available keys for troubleshooting (only in development)
-        if (process.env.NODE_ENV === "development") {
-          console.log(
-            "Available college keys in programCodesByCollege:",
-            Object.keys(programCodesByCollege)
-          );
-          console.log("Looking for college:", collegeName);
-          console.log("Selected college code:", selectedCollegeCode);
-          console.log("Selected college object:", selectedCollege);
-        }
       }
 
       // Fallback: try to match by college_code directly (if college name is the code)
@@ -688,13 +682,6 @@ const AdminManagement = () => {
     // This ensures that if a college is selected but no match is found,
     // the user knows something is wrong rather than seeing all codes
     if (selectedCollegeCode) {
-      // College is selected but no match found - return empty to indicate issue
-      if (process.env.NODE_ENV === "development") {
-        console.warn(
-          "No program codes found for college:",
-          selectedCollegeCode
-        );
-      }
       return [];
     }
 
@@ -1190,11 +1177,6 @@ const AdminManagement = () => {
       let authToken;
       try {
         authToken = await auth.currentUser.getIdToken(true); // Force refresh
-        console.log("Auth token verified before account creation/edit", {
-          uid: auth.currentUser.uid,
-          email: auth.currentUser.email,
-          hasToken: !!authToken,
-        });
       } catch (tokenError) {
         console.error("Failed to refresh auth token:", tokenError);
         setError(
@@ -1226,12 +1208,7 @@ const AdminManagement = () => {
         const currentUserData = currentUserDoc.data();
         const currentUserRole = currentUserData.role;
 
-        // Verify the role from Firestore matches the session role
         if (currentUserRole !== currentRole) {
-          console.warn("Role mismatch detected", {
-            sessionRole: currentRole,
-            firestoreRole: currentUserRole,
-          });
           setError(
             "Your account role has changed. Please log out and log back in."
           );
@@ -1384,10 +1361,6 @@ const AdminManagement = () => {
             formData.password
           );
           firebaseUser = userCredential.user;
-          console.log(
-            "Firebase Auth user created successfully:",
-            firebaseUser.uid
-          );
 
           // Note: createUserWithEmailAndPassword automatically signs in as the new user
           // We'll re-authenticate as the original admin after saving to Firestore
@@ -1561,44 +1534,25 @@ const AdminManagement = () => {
       }
       // Password updates are handled via Firebase Auth only, not stored in Firestore
 
-      console.log("Current Firebase Auth user:", auth.currentUser?.email);
-      console.log("Is authenticated:", !!auth.currentUser);
-      console.log("Auth UID:", auth.currentUser?.uid);
-      console.log(
-        isEditing
-          ? "Attempting to update Firestore document..."
-          : "Attempting to create Firestore document..."
-      );
-      console.log("Admin data to save:", adminData);
-      console.log("Is editing:", isEditing);
-      if (isEditing) {
-        console.log("Editing admin ID:", editingAdmin.id);
-      }
-
       // Authentication checks are already performed at the beginning of handleSubmit
       // No need to duplicate them here
 
       try {
         if (isEditing) {
           const adminRef = doc(db, "adminusers", editingAdmin.id);
-          console.log("Updating document:", adminRef.path);
 
-          // Remove undefined values from adminData (Firestore doesn't allow undefined)
           const cleanAdminData = Object.fromEntries(
             Object.entries(adminData).filter(
               ([_, value]) => value !== undefined
             )
           );
 
-          console.log("Update data:", cleanAdminData);
           await updateDoc(adminRef, cleanAdminData);
-          console.log("Firestore document updated successfully");
 
           // Editing now never changes password; use a simple success message
           setSuccess(`Admin account updated successfully.`);
         } else {
           await addDoc(adminsRef, adminData);
-          console.log("Firestore document created successfully");
         }
       } catch (firestoreError) {
         console.error("Firestore error:", firestoreError);
@@ -1660,23 +1614,76 @@ const AdminManagement = () => {
     }
   };
 
+  // Stats derived from admins list
+  const totalAccounts = admins.length;
+  const adminsCount = admins.filter(
+    (a) => a.role === "admin" || a.role === "super_admin"
+  ).length;
+  const coordinatorsCount = admins.filter((a) => a.role === "coordinator").length;
+  const advisersCount = admins.filter((a) => a.role === "adviser").length;
+
   return (
     <div className="admin-management-page">
       <LoadingSpinner isLoading={isLoading} message="Processing request..." />
       <Navbar onLogout={handleLogout} />
       <div className="admin-management-container">
         <div className="admin-management-header">
-          <h1>User & Role Management</h1>
-          <p className="role-indicator">
-            {currentRole === "admin" || currentRole === "super_admin"
-              ? "Admin"
-              : currentRole === "coordinator"
-              ? "OJT Coordinator"
-              : "OJT Adviser"}
-          </p>
+          <div className="admin-management-header-content">
+            <div className="admin-management-header-icon-wrapper" aria-hidden="true">
+              <IoPeopleOutline className="admin-management-header-icon" />
+            </div>
+            <div>
+              <h1>User & Role Management</h1>
+              <p className="admin-management-header-subtitle">
+                View and manage admin accounts, coordinators, and advisers
+              </p>
+            </div>
+          </div>
         </div>
 
-        {error && !showCreateModal && (
+        {/* Stats Cards */}
+        <div className="iq-stats-wrapper">
+          <div className="iq-stats-grid">
+            <div className="iq-stat-card iq-stat--info">
+              <div className="iq-stat-icon-wrapper" aria-hidden="true">
+                <IoPeopleOutline className="iq-stat-icon" />
+              </div>
+              <div className="iq-stat-content">
+                <div className="iq-stat-value">{totalAccounts}</div>
+                <div className="iq-stat-label">Total Accounts</div>
+              </div>
+            </div>
+            <div className="iq-stat-card iq-stat--info">
+              <div className="iq-stat-icon-wrapper" aria-hidden="true">
+                <IoShieldCheckmarkOutline className="iq-stat-icon" />
+              </div>
+              <div className="iq-stat-content">
+                <div className="iq-stat-value">{adminsCount}</div>
+                <div className="iq-stat-label">Admins</div>
+              </div>
+            </div>
+            <div className="iq-stat-card iq-stat--success">
+              <div className="iq-stat-icon-wrapper" aria-hidden="true">
+                <IoPeopleCircleOutline className="iq-stat-icon" />
+              </div>
+              <div className="iq-stat-content">
+                <div className="iq-stat-value">{coordinatorsCount}</div>
+                <div className="iq-stat-label">Coordinators</div>
+              </div>
+            </div>
+            <div className="iq-stat-card iq-stat--warning">
+              <div className="iq-stat-icon-wrapper" aria-hidden="true">
+                <IoPersonOutline className="iq-stat-icon" />
+              </div>
+              <div className="iq-stat-content">
+                <div className="iq-stat-value">{advisersCount}</div>
+                <div className="iq-stat-label">Advisers</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {error && (
           <div className="error-message" role="alert">
             {error}
           </div>

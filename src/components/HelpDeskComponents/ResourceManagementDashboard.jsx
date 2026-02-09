@@ -14,6 +14,7 @@ import {
   IoCloudUploadOutline,
   IoDocumentOutline,
   IoTrashOutline,
+  IoBookOutline,
 } from "react-icons/io5";
 import { useNavigate } from "react-router-dom";
 
@@ -182,7 +183,7 @@ const ResourceManagementDashboard = () => {
 
   const addInstructionField = () => {
     setStepForm((prev) => ({
-      ...prev,
+            ...prev,
       instructions: [...prev.instructions, ""],
     }));
   };
@@ -236,12 +237,12 @@ const ResourceManagementDashboard = () => {
         nextAttachments.splice(index, 1);
       }
 
-      return {
-        ...prev,
+        return {
+          ...prev,
         required_documents: nextDocs,
         required_document_attachments: nextAttachments,
-      };
-    });
+        };
+      });
     setRequiredDocFiles((prev) => {
       const copy = { ...prev };
       delete copy[index];
@@ -266,7 +267,7 @@ const ResourceManagementDashboard = () => {
         for (let i = next.length; i <= index; i += 1) {
           next[i] = null;
         }
-      } else {
+            } else {
         next[index] = null;
       }
       return { ...prev, required_document_attachments: next };
@@ -275,8 +276,8 @@ const ResourceManagementDashboard = () => {
       const updated = { ...prev };
       delete updated[index];
       return updated;
-    });
-  };
+      });
+    };
 
   const handleSaveStep = async (event) => {
     if (event && event.preventDefault) {
@@ -294,8 +295,8 @@ const ResourceManagementDashboard = () => {
     if (stepForm.action_type !== "none" && !stepForm.action_label.trim()) {
       setStepFormError(
         "Action label is required when an action type is selected."
-      );
-      return;
+        );
+        return;
     }
 
     const cleanInstructions = (stepForm.instructions || []).map((item) =>
@@ -340,7 +341,7 @@ const ResourceManagementDashboard = () => {
             });
           } else if (existing[i]) {
             attachments.push(existing[i]);
-          } else {
+      } else {
             attachments.push(null);
           }
         }
@@ -379,7 +380,7 @@ const ResourceManagementDashboard = () => {
           { merge: true }
         );
         success("Guide step updated successfully.");
-      } else {
+    } else {
         const maxOrder = guideSteps.reduce((max, step) => {
           const value =
             typeof step.order === "number" && !Number.isNaN(step.order)
@@ -506,10 +507,17 @@ const ResourceManagementDashboard = () => {
       <div className="dashboard-content">
         {/* Page Header */}
         <div className="resource-header">
-          <h1>Guide Management</h1>
-          <p className="resource-management-subtitle">
-            Configure the student guide steps that appear in the mobile app.
-          </p>
+          <div className="resource-header-content">
+            <div className="resource-header-icon-wrapper" aria-hidden="true">
+              <IoBookOutline className="resource-header-icon" />
+            </div>
+            <div>
+              <h1>Guide Management</h1>
+              <p className="resource-management-subtitle">
+                Configure the student guide steps that appear in the mobile app.
+              </p>
+            </div>
+          </div>
         </div>
 
         {/* Student Guide Steps Section */}
@@ -544,7 +552,7 @@ const ResourceManagementDashboard = () => {
                 <IoAdd />
                 <span>Add Step</span>
               </button>
-            </div>
+                </div>
 
             <div className="student-guide-body">
               {guideStepsLoading ? (
@@ -556,7 +564,7 @@ const ResourceManagementDashboard = () => {
                     Create your first step to help students understand how to
                     start and complete their requirements.
                   </p>
-                  <button
+                <button
                     type="button"
                     className="guide-add-btn secondary"
                     onClick={openCreateStepModal}
@@ -564,7 +572,7 @@ const ResourceManagementDashboard = () => {
                   >
                     <IoAdd />
                     <span>Create First Step</span>
-                  </button>
+                </button>
                 </div>
               ) : (
                 <div
@@ -578,7 +586,7 @@ const ResourceManagementDashboard = () => {
                     <div className="guide-col-action-type">Action</div>
                     <div className="guide-col-attachments">Attachments</div>
                     <div className="guide-col-actions">Actions</div>
-                  </div>
+                      </div>
                   <div className="guide-steps-rows">
                     {guideSteps.map((step, index) => (
                       <div
@@ -592,26 +600,26 @@ const ResourceManagementDashboard = () => {
                         onDrop={() => handleGuideStepDrop(step.id)}
                       >
                         <div className="guide-col-order">
-                          <button
+                <button
                             type="button"
                             className="drag-handle-btn"
                             aria-label="Drag to reorder step"
                           >
                             <IoReorderThreeOutline />
-                          </button>
+                </button>
                           <span className="guide-order-label">
                             {(step.order || index + 1)
                               .toString()
                               .padStart(2, "0")}
                           </span>
-                        </div>
+                </div>
                         <div className="guide-col-title">
                           <div className="guide-step-title">{step.title}</div>
                           {step.description && (
                             <div className="guide-step-description">
                               {step.description}
-                            </div>
-                          )}
+                      </div>
+                    )}
                           {Array.isArray(step.instructions) &&
                             step.instructions.length > 0 && (
                               <ul className="guide-step-instructions">
@@ -619,8 +627,8 @@ const ResourceManagementDashboard = () => {
                                   <li key={idx}>{item}</li>
                                 ))}
                               </ul>
-                            )}
-                        </div>
+                    )}
+                  </div>
                         <div className="guide-col-status">
                           <span
                             className={`guide-status-pill ${
@@ -640,7 +648,7 @@ const ResourceManagementDashboard = () => {
                               None
                             </span>
                           )}
-                        </div>
+                    </div>
                         <div className="guide-col-attachments">
                           {(() => {
                             const attachments = Array.isArray(
@@ -658,7 +666,7 @@ const ResourceManagementDashboard = () => {
                                 : 0
                             );
                             if (total === 0) {
-                              return (
+                            return (
                                 <span className="guide-attachments-count none">
                                   —
                                 </span>
@@ -672,41 +680,41 @@ const ResourceManagementDashboard = () => {
                                 title={`${count} of ${total} document(s) have an attached file`}
                               >
                                 {count}/{total} file{count !== 1 ? "s" : ""}
-                              </span>
+                                  </span>
                             );
                           })()}
-                        </div>
+                                </div>
                         <div className="guide-col-actions">
-                          <button
+                                    <button
                             type="button"
                             className="guide-action-btn"
                             onClick={() => openEditStepModal(step)}
                             disabled={isLoading}
                           >
                             Edit
-                          </button>
-                          <button
+                                    </button>
+                                  <button
                             type="button"
                             className="guide-action-btn subtle"
                             onClick={() => handleToggleStepActive(step)}
                             disabled={isLoading}
                           >
                             {step.is_active ? "Disable" : "Enable"}
-                          </button>
-                        </div>
-                      </div>
+                                  </button>
+                                </div>
+                              </div>
                     ))}
-                  </div>
+                      </div>
                   {isSavingGuideOrder && (
                     <div className="guide-steps-saving">
                       Saving new order...
                     </div>
                   )}
-                </div>
+                                  </div>
               )}
-            </div>
-          </div>
-        </div>
+                                </div>
+                                </div>
+                                </div>
       </div>
 
       {/* Guide Step Modal */}
@@ -715,21 +723,21 @@ const ResourceManagementDashboard = () => {
           <div className="guide-modal">
             <div className="guide-modal-header">
               <h2>{editingStep ? "Edit Guide Step" : "Add Guide Step"}</h2>
-              <button
+                                    <button
                 type="button"
                 className="guide-modal-close-btn"
                 onClick={closeStepModal}
                 aria-label="Close"
               >
                 <IoCloseOutline />
-              </button>
-            </div>
+                                  </button>
+                                </div>
             <form className="guide-modal-body" onSubmit={handleSaveStep}>
               {stepFormError && (
                 <div className="guide-modal-error" role="alert">
                   {stepFormError}
-                </div>
-              )}
+                    </div>
+                  )}
 
               <div className="guide-field-group">
                 <label className="guide-field-label">
@@ -747,7 +755,7 @@ const ResourceManagementDashboard = () => {
                   }
                   placeholder="Example: Submit OJT Requirements"
                 />
-              </div>
+                                  </div>
 
               <div className="guide-field-group">
                 <label className="guide-field-label">Description</label>
@@ -763,7 +771,7 @@ const ResourceManagementDashboard = () => {
                   }
                   placeholder="Short explanation of what this step is about."
                 />
-              </div>
+                                </div>
 
               <div className="guide-field-group">
                 <label className="guide-field-label">Instructions</label>
@@ -783,26 +791,26 @@ const ResourceManagementDashboard = () => {
                       placeholder={`Instruction ${index + 1}`}
                     />
                     {stepForm.instructions.length > 1 && (
-                      <button
+                                    <button
                         type="button"
                         className="guide-icon-btn danger"
                         onClick={() => removeInstructionField(index)}
                         aria-label="Remove instruction"
                       >
                         <span className="guide-icon-x">×</span>
-                      </button>
-                    )}
+                                    </button>
+                                  )}
                   </div>
                 ))}
-                <button
+                                  <button
                   type="button"
                   className="guide-inline-btn"
                   onClick={addInstructionField}
                 >
                   <IoAdd />
                   <span>Add instruction</span>
-                </button>
-              </div>
+                                  </button>
+      </div>
 
               <div className="guide-field-group">
                 <label className="guide-field-label">Required documents</label>
@@ -833,7 +841,7 @@ const ResourceManagementDashboard = () => {
                             Document {index + 1}
                           </span>
                           {stepForm.required_documents.length > 1 && (
-                            <button
+                    <button
                               type="button"
                               className="guide-remove-doc-btn"
                               onClick={() => removeRequiredDocField(index)}
@@ -842,7 +850,7 @@ const ResourceManagementDashboard = () => {
                             >
                               <IoTrashOutline className="guide-remove-doc-icon" />
                               <span>Remove document</span>
-                            </button>
+                    </button>
                           )}
                         </div>
                         <div className="guide-required-doc-name-row">
@@ -862,7 +870,7 @@ const ResourceManagementDashboard = () => {
                         <div className="guide-required-doc-attachment-box">
                           <span className="guide-required-doc-sublabel">
                             Reference file (optional)
-                          </span>
+                    </span>
                           {existingAttachment && !stagedFile && (
                             <div className="guide-attachment-current">
                               <IoDocumentOutline className="guide-attachment-file-icon" />
@@ -875,7 +883,7 @@ const ResourceManagementDashboard = () => {
                                 {existingAttachment.attachment_name ||
                                   "View file"}
                               </a>
-                              <button
+                      <button
                                 type="button"
                                 className="guide-attachment-remove-btn"
                                 onClick={() =>
@@ -884,16 +892,16 @@ const ResourceManagementDashboard = () => {
                                 title="Remove this file only"
                               >
                                 Remove file
-                              </button>
-                            </div>
-                          )}
+                      </button>
+                  </div>
+                )}
                           {stagedFile && (
                             <div className="guide-attachment-selected">
                               <IoDocumentOutline className="guide-attachment-file-icon" />
                               <span className="guide-attachment-filename">
                                 {stagedFile.name}
                               </span>
-                              <button
+              <button
                                 type="button"
                                 className="guide-attachment-remove-btn"
                                 onClick={() =>
@@ -902,13 +910,13 @@ const ResourceManagementDashboard = () => {
                                 title="Remove this file only"
                               >
                                 Remove file
-                              </button>
-                            </div>
+              </button>
+            </div>
                           )}
                           {!existingAttachment && !stagedFile && (
                             <div className="guide-attachment-empty">
                               No file attached
-                            </div>
+                </div>
                           )}
                           <label className="guide-file-input-label">
                             <IoCloudUploadOutline className="guide-file-input-icon" />
@@ -925,11 +933,11 @@ const ResourceManagementDashboard = () => {
                               }
                             />
                           </label>
-                        </div>
+                      </div>
                       </div>
                     );
                   })}
-                </div>
+                        </div>
                 <button
                   type="button"
                   className="guide-add-doc-btn"
@@ -938,7 +946,7 @@ const ResourceManagementDashboard = () => {
                   <IoAdd />
                   <span>Add document</span>
                 </button>
-              </div>
+                      </div>
 
               <div className="guide-field-inline">
                 <div className="guide-field-group">
@@ -958,7 +966,7 @@ const ResourceManagementDashboard = () => {
                     <option value="download">Download</option>
                     <option value="view">View</option>
                   </select>
-                </div>
+                  </div>
 
                 <div className="guide-field-group">
                   <label className="guide-field-label">
@@ -987,7 +995,7 @@ const ResourceManagementDashboard = () => {
                         : "No primary action"
                     }
                   />
-                </div>
+            </div>
               </div>
 
               <div className="guide-field-group">
@@ -1021,7 +1029,7 @@ const ResourceManagementDashboard = () => {
                 >
                   {editingStep ? "Save Changes" : "Create Step"}
                 </button>
-              </div>
+            </div>
             </form>
           </div>
         </div>

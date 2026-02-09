@@ -1,8 +1,10 @@
+@import "../dashboardTheme.css";
+
 /* ===== ADMIN MANAGEMENT - MODERN DESIGN ===== */
 
 .admin-management-page {
   min-height: 100vh;
-  background: #f8fafc;
+  background: var(--iq-bg, #f8fafc);
   margin-left: 260px;
   transition: margin-left 0.3s ease;
 }
@@ -14,41 +16,75 @@ body.sidebar-collapsed .admin-management-page {
 .admin-management-container {
   max-width: 1400px;
   margin: 0 auto;
-  padding: 0;
+  padding: 2rem 1.5rem 1.5rem 1.5rem;
+  box-sizing: border-box;
 }
 
-/* ===== PAGE HEADER ===== */
+/* ===== PAGE HEADER (clean, alive design) ===== */
 .admin-management-header {
-  background: linear-gradient(135deg, #1e40af 0%, #3b82f6 50%, #60a5fa 100%);
-  padding: 2.5rem 3rem;
-  margin-bottom: 0;
+  background: linear-gradient(135deg, rgba(248, 250, 252, 0.98) 0%, rgba(241, 245, 249, 0.95) 100%);
+  color: var(--iq-text-main, #1f2937);
+  padding: 2rem 2.5rem;
+  margin: -2rem -1.5rem 0 -1.5rem;
   position: relative;
   overflow: hidden;
+  width: calc(100% + 3rem);
+  max-width: 100%;
+  box-sizing: border-box;
+  border-radius: 0 0 20px 20px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-top: none;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
 }
 
 .admin-management-header::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 400px;
-  height: 400px;
-  background: radial-gradient(
-    circle,
-    rgba(255, 255, 255, 0.1) 0%,
-    transparent 70%
-  );
-  transform: translate(30%, -30%);
-  pointer-events: none;
+  display: none;
+}
+
+.admin-management-header-content {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  position: relative;
+  z-index: 1;
+}
+
+.admin-management-header-icon-wrapper {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(99, 102, 241, 0.12) 100%);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.12);
+  flex-shrink: 0;
+}
+
+.admin-management-header-icon {
+  font-size: 1.75rem;
+  color: #2563eb;
 }
 
 .admin-management-header h1 {
-  font-size: 2rem;
+  font-size: 1.75rem;
   font-weight: 700;
-  color: white;
-  margin: 0 0 0.5rem 0;
+  color: var(--iq-text-main, #1f2937);
+  margin: 0 0 0.35rem 0;
   position: relative;
   z-index: 1;
+  letter-spacing: -0.02em;
+}
+
+.admin-management-header-subtitle {
+  font-size: 0.9rem;
+  opacity: 0.9;
+  margin: 0;
+  position: relative;
+  z-index: 1;
+  color: var(--iq-text-muted, #6b7280);
+  line-height: 1.4;
 }
 
 .role-indicator {

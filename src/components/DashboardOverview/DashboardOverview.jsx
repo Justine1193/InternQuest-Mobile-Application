@@ -67,7 +67,7 @@ const DashboardOverview = ({
       audioContextRef.current = new (window.AudioContext ||
         window.webkitAudioContext)();
     } catch (e) {
-      console.warn("Audio context not available");
+      // Audio context not available
     }
   }, []);
 

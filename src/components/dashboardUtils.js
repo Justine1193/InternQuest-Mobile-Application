@@ -37,12 +37,10 @@ export function useSuggestionSkills() {
               setSkills(skillValues.map(skill => skill.trim()));
             } else {
               logger.warn('Meta suggestionSkills document exists but has no valid skill data structure');
-              console.warn('Meta suggestionSkills document data:', data);
             }
           }
         } else {
           logger.warn('Meta suggestionSkills document does not exist at meta/suggestionSkills');
-          console.warn('Document meta/suggestionSkills not found. Please create it in Firestore with structure: { list: ["Skill1", "Skill2", ...] }');
         }
       } catch (error) {
         logger.error('Error fetching skills:', error);
@@ -83,16 +81,11 @@ export function useSuggestionFields() {
             const processedFields = data.list
               .map(field => String(field).trim())
               .filter(field => field.length > 0);
-            
-            console.log('✅ useSuggestionFields: Loaded', processedFields.length, 'fields from meta/field');
             setFields(processedFields);
           } else {
-            console.warn('⚠️ useSuggestionFields: Document exists but list field is missing or not an array');
-            console.warn('Document data:', data);
             setFields([]);
           }
         } else {
-          console.warn('⚠️ useSuggestionFields: Document meta/field does not exist');
           setFields([]);
         }
       } catch (error) {
@@ -219,7 +212,11 @@ export const dashboardHandlers = {
 
       if (fields.length === 0) throw new Error("At least one field is required");
       if (skills.length === 0) throw new Error("At least one skill is required");
-      if (!formData.modeOfWork || formData.modeOfWork.trim() === "") throw new Error("Mode of work is required");
+      const modeOfWorkEmpty = !formData.modeOfWork ||
+        (Array.isArray(formData.modeOfWork)
+          ? formData.modeOfWork.length === 0
+          : String(formData.modeOfWork).trim() === "");
+      if (modeOfWorkEmpty) throw new Error("Please select at least one mode of work (e.g. On-site, Hybrid, or Remote).");
       // MOA is now always required
       if (
         !formData.moaValidityYears ||
@@ -256,7 +253,7 @@ export const dashboardHandlers = {
         moaFileUrl: formData.moaFileUrl || "",
         moaFileName: formData.moaFileName || "",
         moaStoragePath: formData.moaStoragePath || "",
-        modeOfWork: formData.modeOfWork,
+        modeOfWork: Array.isArray(formData.modeOfWork) ? formData.modeOfWork : [formData.modeOfWork].filter(Boolean),
         createdAt: new Date().toISOString(),
         fields: fields,
         contactPersonName: formData.contactPersonName || "",
@@ -344,7 +341,11 @@ export const dashboardHandlers = {
 
       if (fields.length === 0) throw new Error("At least one field is required");
       if (skills.length === 0) throw new Error("At least one skill is required");
-      if (!formData.modeOfWork || formData.modeOfWork.trim() === "") throw new Error("Mode of work is required");
+      const modeOfWorkEmptyEdit = !formData.modeOfWork ||
+        (Array.isArray(formData.modeOfWork)
+          ? formData.modeOfWork.length === 0
+          : String(formData.modeOfWork).trim() === "");
+      if (modeOfWorkEmptyEdit) throw new Error("Please select at least one mode of work (e.g. On-site, Hybrid, or Remote).");
       // MOA is now always required
       if (
         !formData.moaValidityYears ||
@@ -374,7 +375,7 @@ export const dashboardHandlers = {
         moaFileUrl: formData.moaFileUrl || "",
         moaFileName: formData.moaFileName || "",
         moaStoragePath: formData.moaStoragePath || "",
-        modeOfWork: formData.modeOfWork,
+        modeOfWork: Array.isArray(formData.modeOfWork) ? formData.modeOfWork : [formData.modeOfWork].filter(Boolean),
         fields: fields,
         contactPersonName: formData.contactPersonName || "",
         contactPersonEmail: formData.email || "",
@@ -492,6 +493,9 @@ export const dashboardHandlers = {
    * Prepares the edit form with company data
    */
   handleEdit: (company, setFormData, setSkills, setIsEditMode, setEditCompanyId, setIsModalOpen, setFields) => {
+    const modeOfWorkValue = Array.isArray(company.modeOfWork) && company.modeOfWork.length > 0
+      ? company.modeOfWork[0]
+      : typeof company.modeOfWork === "string" ? company.modeOfWork : "";
     setFormData({
       companyName: company.companyName || '',
       description: company.companyDescription || '',
@@ -505,7 +509,10 @@ export const dashboardHandlers = {
           ? String(company.moaValidityYears)
           : "",
       moaStartDate: company.moaStartDate || "",
-      modeOfWork: Array.isArray(company.modeOfWork) ? company.modeOfWork : [],
+      modeOfWork: modeOfWorkValue,
+      moaFileUrl: company.moaFileUrl || "",
+      moaFileName: company.moaFileName || "",
+      moaStoragePath: company.moaStoragePath || "",
       contactPersonName: company.contactPersonName || "",
       contactPersonEmail: company.contactPersonEmail || company.companyEmail || "",
       contactPersonPhone: company.contactPersonPhone || "",

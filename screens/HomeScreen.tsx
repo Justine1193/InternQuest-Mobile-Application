@@ -86,6 +86,7 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
           location: data.companyAddress || '',
           industry: data.fields || '',
           tags: data.skillsREq || [],
+          endorsedByCollege: data.endorsedByCollege || data.endorsed_by_college || data.collegeEndorsement || '',
           website: data.companyWeb || '',
           email: data.companyEmail || '',
           contactPersonName: data.contactPersonName || data.companyContactPerson || data.contactPerson || '',

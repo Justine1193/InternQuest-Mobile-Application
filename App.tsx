@@ -46,6 +46,7 @@ export type Post = {
   location: string;
   industry: string;
   tags: string[];
+  endorsedByCollege?: string;
   website?: string;
   email?: string;
   contactPersonName?: string;

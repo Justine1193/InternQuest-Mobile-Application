@@ -15,9 +15,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList, Post } from '../App';
-import { auth, firestore } from '../firebase/config';
-import { doc, getDoc, setDoc, updateDoc, collection, addDoc, query, where, getDocsFromServer } from 'firebase/firestore';
-import * as FileSystem from 'expo-file-system';
+import { auth, firestore, storage } from '../firebase/config';
+import { doc, getDoc, setDoc, updateDoc, collection, addDoc, query, where, getDocs } from 'firebase/firestore';
+import { getDownloadURL, ref as storageRef } from 'firebase/storage';
 import { colors, radii, shadows, spacing } from '../ui/theme';
 import { Screen } from '../ui/components/Screen';
 import { useSavedInternships } from '../context/SavedInternshipsContext';
@@ -44,6 +44,15 @@ const CompanyProfileScreen: React.FC = () => {
                 const docSnap = await getDoc(docRef);
                 if (docSnap.exists()) {
                     const data = docSnap.data() as any;
+
+                    const rawMoa = data?.moa;
+                    const moaValue =
+                        typeof rawMoa === 'string'
+                            ? rawMoa
+                            : (rawMoa && typeof rawMoa === 'object')
+                                ? (rawMoa.url || rawMoa.downloadUrl || rawMoa.downloadURL || rawMoa.path || rawMoa.storagePath || '')
+                                : '';
+
                     const mapped: Post = {
                         id: docSnap.id,
                         company: data.companyName || data.company || '',
@@ -52,11 +61,12 @@ const CompanyProfileScreen: React.FC = () => {
                         location: data.companyAddress || data.location || '',
                         industry: data.fields || data.industry || '',
                         tags: Array.isArray(data.skillsREq) ? data.skillsREq : (Array.isArray(data.tags) ? data.tags : []),
+                        endorsedByCollege: data.endorsedByCollege || data.endorsed_by_college || data.collegeEndorsement || '',
                         website: data.companyWeb || data.website || '',
                         email: data.companyEmail || data.email || '',
                         contactPersonName: data.contactPersonName || data.companyContactPerson || data.contactPerson || '',
                         contactPersonPhone: data.contactPersonPhone || data.companyContactPhone || data.contactPhone || data.phone || '',
-                        moa: data.moa || '',
+                        moa: moaValue || '',
                         modeOfWork: Array.isArray(data.modeOfWork) ? data.modeOfWork[0] : (data.modeOfWork || ''),
                         latitude: data.latitude || 0,
                         longitude: data.longitude || 0,
@@ -103,7 +113,7 @@ const CompanyProfileScreen: React.FC = () => {
                 // if the user already has a pending OR approved application elsewhere, block applying here.
                 where('status', 'in', ['approved', 'pending'])
             );
-            const snap = await getDocsFromServer(q);
+            const snap = await getDocs(q);
             if (!snap.empty) {
                 // If there's an approved application for a different company, lock applying elsewhere
                 const app = snap.docs[0].data() as any;
@@ -147,18 +157,39 @@ const CompanyProfileScreen: React.FC = () => {
     };
 
     const handleDownloadMOA = async () => {
-        if (!company?.moa) {
+        const raw = String(company?.moa || '').trim();
+        if (!raw) {
             Alert.alert('No MOA available', 'The MOA link is not available for this company.');
             return;
         }
 
         try {
-            // If it's a URL, open it directly
-            if (company.moa.startsWith('http')) {
-                await Linking.openURL(company.moa);
-            } else {
-                Alert.alert('MOA Information', company.moa);
+            let urlToOpen = raw;
+            const looksLikeHttp = /^https?:\/\//i.test(raw);
+
+            // If it's not an http(s) URL, treat it as a Firebase Storage reference or path.
+            // Common shapes:
+            // - gs://<bucket>/<path>
+            // - <folder>/<file>.pdf
+            // - /<folder>/<file>.pdf
+            if (!looksLikeHttp) {
+                const normalizedPath = raw.startsWith('/') ? raw.slice(1) : raw;
+                try {
+                    urlToOpen = await getDownloadURL(storageRef(storage, normalizedPath));
+                } catch (storageErr) {
+                    // Some admins store a non-link note; fallback to showing the raw value.
+                    Alert.alert('MOA Information', raw);
+                    return;
+                }
             }
+
+            const canOpen = await Linking.canOpenURL(urlToOpen);
+            if (!canOpen) {
+                Alert.alert('Error', 'This MOA link cannot be opened on your device.');
+                return;
+            }
+
+            await Linking.openURL(urlToOpen);
         } catch (error) {
             Alert.alert('Error', 'Could not open the MOA. Please try again.');
             console.error('Error downloading MOA:', error);
@@ -528,6 +559,16 @@ const CompanyProfileScreen: React.FC = () => {
                                 </View>
                             )}
                     </View>
+                </View>
+
+                {/* Endorsed by College */}
+                <View style={styles.section}>
+                    <Text style={styles.sectionLabel}>
+                        Endorsed by College <Text style={{ color: colors.danger }}>*</Text>
+                    </Text>
+                    <Text style={styles.bodyText}>
+                        {company.endorsedByCollege?.trim() ? company.endorsedByCollege.trim() : '—'}
+                    </Text>
                 </View>
 
                 {/* Contact & reach out (single section) */}

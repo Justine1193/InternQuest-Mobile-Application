@@ -201,7 +201,8 @@ export const dashboardHandlers = {
         companyName: "Company name",
         description: "Description",
         address: "Address",
-        email: "Email"
+        email: "Email",
+        endorsedByCollege: "Endorsed by College"
       };
 
       for (const [field, label] of Object.entries(requiredFields)) {
@@ -259,6 +260,7 @@ export const dashboardHandlers = {
         contactPersonName: formData.contactPersonName || "",
         contactPersonEmail: formData.email || "",
         contactPersonPhone: formData.contactPersonPhone || "",
+        endorsedByCollege: formData.endorsedByCollege || "",
         isVisibleToMobile: true, // Visible to mobile app by default
         moaStatus: 'valid', // Initial status
       };
@@ -310,6 +312,7 @@ export const dashboardHandlers = {
         moaFileUrl: "",
         moaFileName: "",
         moaStoragePath: "",
+        endorsedByCollege: "",
       });
       setSkills([]);
       setFields([]);
@@ -330,7 +333,8 @@ export const dashboardHandlers = {
         companyName: "Company name",
         description: "Description",
         address: "Address",
-        email: "Email"
+        email: "Email",
+        endorsedByCollege: "Endorsed by College"
       };
 
       for (const [field, label] of Object.entries(requiredFields)) {
@@ -380,6 +384,7 @@ export const dashboardHandlers = {
         contactPersonName: formData.contactPersonName || "",
         contactPersonEmail: formData.email || "",
         contactPersonPhone: formData.contactPersonPhone || "",
+        endorsedByCollege: formData.endorsedByCollege || "",
       };
 
       // Calculate expiration date if start date and validity years are provided
@@ -444,6 +449,7 @@ export const dashboardHandlers = {
         moaFileUrl: "",
         moaFileName: "",
         moaStoragePath: "",
+        endorsedByCollege: "",
       });
       setSkills([]);
       setFields([]);
@@ -516,6 +522,7 @@ export const dashboardHandlers = {
       contactPersonName: company.contactPersonName || "",
       contactPersonEmail: company.contactPersonEmail || company.companyEmail || "",
       contactPersonPhone: company.contactPersonPhone || "",
+      endorsedByCollege: company.endorsedByCollege || "",
     });
     setSkills(Array.isArray(company.skillsREq) ? company.skillsREq : []);
     setFields(company.fields && Array.isArray(company.fields) ? [...company.fields] : []);

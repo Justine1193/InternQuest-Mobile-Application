@@ -173,6 +173,15 @@ const CompanyDetailModal = ({
             </div>
           )}
 
+          {company.endorsedByCollege && (
+            <div className="detail-section">
+              <h3 className="detail-section-title">Endorsed by College</h3>
+              <p className="detail-section-content">
+                {company.endorsedByCollege}
+              </p>
+            </div>
+          )}
+
           {/* Contact Information */}
           <div className="detail-section">
             <h3 className="detail-section-title">Contact Information</h3>

@@ -26,6 +26,7 @@ function CompanyModal({
   isLoading,
   suggestionSkills,
   suggestionFields,
+  suggestionColleges = [],
   setTableData,
   editCompanyId,
   setIsLoading,
@@ -34,6 +35,7 @@ function CompanyModal({
   const [fieldInput, setFieldInput] = useState("");
   const [showSkillDropdown, setShowSkillDropdown] = useState(false);
   const [showFieldDropdown, setShowFieldDropdown] = useState(false);
+  const [showCollegeDropdown, setShowCollegeDropdown] = useState(false);
   const skillsInputRef = useRef(null);
   const [localError, setLocalError] = useState("");
   const [shakeKey, setShakeKey] = useState(0);
@@ -129,6 +131,15 @@ function CompanyModal({
     }
   );
 
+  // College names for "Endorsed by College" dropdown (suggestionColleges: { college_name, college_code }[])
+  const collegeNames = (suggestionColleges || []).map((c) =>
+    typeof c === "string" ? c : (c?.college_name || "")
+  ).filter(Boolean);
+  const filteredColleges = collegeNames.filter((name) =>
+    !formData.endorsedByCollege?.trim() ||
+    name.toLowerCase().includes(formData.endorsedByCollege.trim().toLowerCase())
+  );
+
   const addSkill = (skill) => {
     if (skills.length < 15 && !skills.includes(skill)) {
       setSkills([...skills, skill]);
@@ -154,6 +165,7 @@ function CompanyModal({
       !formData.website.trim() ||
       !formData.address.trim() ||
       !formData.email.trim() ||
+      !formData.endorsedByCollege?.trim() ||
       skills.length === 0 ||
       fields.length === 0 ||
       !formData.modeOfWork ||
@@ -169,6 +181,8 @@ function CompanyModal({
           ? "Please specify the MOA start date. MOA is required."
           : requiresMoaValidity
           ? "Please specify how many years the MOA is valid. MOA is required."
+          : !formData.endorsedByCollege?.trim()
+          ? "Please select or enter the Endorsed by College."
           : "Please fill in all required fields."
       );
       setErrorTrigger((prev) => prev + 1); // Increment to trigger scroll
@@ -220,6 +234,7 @@ function CompanyModal({
       !formData.website ||
       !formData.address ||
       !formData.email ||
+      !formData.endorsedByCollege?.trim() ||
       skills.length === 0 ||
       fields.length === 0 ||
       !formData.modeOfWork ||
@@ -235,6 +250,8 @@ function CompanyModal({
           ? "Please specify the MOA start date. MOA is required."
           : requiresMoaValidity
           ? "Please specify how many years the MOA is valid. MOA is required."
+          : !formData.endorsedByCollege?.trim()
+          ? "Please select or enter the Endorsed by College."
           : "Please fill in all required fields."
       );
       setErrorTrigger((prev) => prev + 1); // Increment to trigger scroll
@@ -519,6 +536,55 @@ function CompanyModal({
               )}
               {websiteStatus === "down" && (
                 <span className="feedback-error">⚠ Website may not be reachable</span>
+              )}
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="endorsedByCollege">
+              <span className="label-text">Endorsed by College</span>
+              <span className="required-asterisk">*</span>
+            </label>
+            <div className="skills-input-wrapper">
+              <input
+                id="endorsedByCollege"
+                type="text"
+                name="endorsedByCollege"
+                value={formData.endorsedByCollege || ""}
+                onChange={handleInputChange}
+                placeholder="e.g., College of Information and Computing Sciences"
+                className="form-input"
+                required
+                autoComplete="off"
+                onFocus={() => setShowCollegeDropdown(true)}
+                onBlur={() => setTimeout(() => setShowCollegeDropdown(false), 150)}
+              />
+              {showCollegeDropdown && (
+                <div className="skills-dropdown">
+                  {filteredColleges.length > 0 ? (
+                    filteredColleges.map((name, index) => (
+                      <div
+                        key={name + index}
+                        className="skills-dropdown-item"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          setFormData((prev) => ({ ...prev, endorsedByCollege: name }));
+                          setShowCollegeDropdown(false);
+                        }}
+                      >
+                        {name}
+                      </div>
+                    ))
+                  ) : collegeNames.length === 0 ? (
+                    <div className="skills-dropdown-item" style={{ color: "#888" }}>
+                      No college suggestions available. Type to enter manually.
+                    </div>
+                  ) : (
+                    <div className="skills-dropdown-item" style={{ color: "#888" }}>
+                      No matching college. Type to enter manually.
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           </div>

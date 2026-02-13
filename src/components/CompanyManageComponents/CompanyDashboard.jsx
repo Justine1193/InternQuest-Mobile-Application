@@ -37,6 +37,7 @@ import { IoDownloadOutline, IoCloudUploadOutline, IoBusinessOutline, IoCheckmark
 import logger from "../../utils/logger.js";
 import Footer from "../Footer/Footer.jsx";
 import { getAdminRole, ROLES, isAdviserOnly } from "../../utils/auth.js";
+import { loadColleges } from "../../utils/collegeUtils.js";
 
 // --- Company Dashboard Main Component ---
 const Dashboard = () => {
@@ -63,6 +64,7 @@ const Dashboard = () => {
     contactPersonName: "",
     contactPersonEmail: "",
     contactPersonPhone: "",
+    endorsedByCollege: "",
   });
   const [skills, setSkills] = useState([]);
   const [fields, setFields] = useState([]);
@@ -102,6 +104,16 @@ const Dashboard = () => {
   // Suggestions for skills and fields
   const suggestionSkills = useSuggestionSkills();
   const suggestionFields = useSuggestionFields();
+  const [collegeOptions, setCollegeOptions] = useState([]);
+
+  useEffect(() => {
+    loadColleges()
+      .then((colleges) => setCollegeOptions(colleges || []))
+      .catch((err) => {
+        logger.error("Error loading colleges for company form:", err);
+        setCollegeOptions([]);
+      });
+  }, []);
 
   // Clear all filters and search
   const handleClearAllFilters = () => {
@@ -796,6 +808,10 @@ const Dashboard = () => {
                     moaFileName: "",
                     moaStoragePath: "",
                     modeOfWork: [],
+                    contactPersonName: "",
+                    contactPersonEmail: "",
+                    contactPersonPhone: "",
+                    endorsedByCollege: "",
                   });
                   setSkills([]);
                   setFields([]);
@@ -849,6 +865,7 @@ const Dashboard = () => {
           isLoading={isLoading}
           suggestionSkills={suggestionSkills}
           suggestionFields={suggestionFields}
+          suggestionColleges={collegeOptions}
           setTableData={setTableData}
           editCompanyId={editCompanyId}
           setIsLoading={setIsLoading}

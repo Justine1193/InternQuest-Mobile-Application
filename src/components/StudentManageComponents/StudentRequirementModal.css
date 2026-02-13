@@ -18,7 +18,9 @@
 .student-requirement-modal {
   background: #fff;
   border-radius: 24px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(37, 99, 235, 0.1);
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.3),
+    0 0 0 1px rgba(37, 99, 235, 0.1);
   max-width: 95vw;
   width: 1400px;
   max-height: 90vh;
@@ -31,7 +33,7 @@
 }
 
 .student-requirement-modal::before {
-  content: '';
+  content: "";
   position: absolute;
   top: 0;
   left: 0;
@@ -161,13 +163,17 @@
 }
 
 .profile-card-header::before {
-  content: '';
+  content: "";
   position: absolute;
   top: -50%;
   right: -10%;
   width: 200px;
   height: 200px;
-  background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+  background: radial-gradient(
+    circle,
+    rgba(255, 255, 255, 0.1) 0%,
+    transparent 70%
+  );
   border-radius: 50%;
 }
 
@@ -193,8 +199,8 @@
 .student-id-display {
   margin: 0 0 8px 0;
   font-size: 0.85rem;
-  color: rgba(255,255,255,0.8);
-  font-family: 'SF Mono', monospace;
+  color: rgba(255, 255, 255, 0.8);
+  font-family: "SF Mono", monospace;
   font-weight: 500;
 }
 
@@ -396,7 +402,7 @@
   height: 85px;
   border-radius: 50%;
   object-fit: cover;
-  border: 4px solid rgba(255,255,255,0.9);
+  border: 4px solid rgba(255, 255, 255, 0.9);
   display: inline-block;
   background: #f8fafc;
   flex-shrink: 0;
@@ -414,7 +420,7 @@
   width: 85px;
   height: 85px;
   border-radius: 50%;
-  background: rgba(255,255,255,0.2);
+  background: rgba(255, 255, 255, 0.2);
   backdrop-filter: blur(10px);
   color: white;
   display: inline-flex;
@@ -422,7 +428,7 @@
   justify-content: center;
   font-weight: 700;
   font-size: 28px;
-  border: 4px solid rgba(255,255,255,0.4);
+  border: 4px solid rgba(255, 255, 255, 0.4);
   flex-shrink: 0;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -431,10 +437,10 @@
 }
 
 .student-modal-profile-picture-placeholder:hover {
-  border-color: rgba(255,255,255,0.6);
+  border-color: rgba(255, 255, 255, 0.6);
   transform: scale(1.1);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
-  background: rgba(255,255,255,0.3);
+  background: rgba(255, 255, 255, 0.3);
 }
 
 .student-modal-profile-picture.clickable {
@@ -864,7 +870,7 @@
 }
 
 .document-item::before {
-  content: '';
+  content: "";
   position: absolute;
   top: 0;
   left: 0;
@@ -890,7 +896,9 @@
 .document-item.has-file {
   background: #ffffff;
   border: 1px solid #e5e7eb;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04);
+  box-shadow:
+    0 4px 16px rgba(0, 0, 0, 0.08),
+    0 2px 4px rgba(0, 0, 0, 0.04);
 }
 
 .document-item.has-file::before {
@@ -899,7 +907,9 @@
 }
 
 .document-item.has-file:hover {
-  box-shadow: 0 8px 24px rgba(34, 197, 94, 0.2), 0 4px 8px rgba(0, 0, 0, 0.08);
+  box-shadow:
+    0 8px 24px rgba(34, 197, 94, 0.2),
+    0 4px 8px rgba(0, 0, 0, 0.08);
   border-color: #bbf7d0;
 }
 
@@ -1097,8 +1107,9 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-    "Helvetica Neue", Arial, sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, sans-serif;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   letter-spacing: 0.5px;
   text-transform: uppercase;
@@ -1530,7 +1541,9 @@
   align-items: center;
   justify-content: center;
   border-radius: 4px;
-  transition: background 0.2s, color 0.2s;
+  transition:
+    background 0.2s,
+    color 0.2s;
 }
 
 .rejection-modal-close:hover {
@@ -1759,9 +1772,12 @@
   align-items: center;
   justify-content: center;
   gap: 10px;
-  box-shadow: 0 2px 4px rgba(144, 202, 249, 0.15),
-              0 1px 2px rgba(0, 0, 0, 0.08);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  box-shadow:
+    0 2px 4px rgba(144, 202, 249, 0.15),
+    0 1px 2px rgba(0, 0, 0, 0.08);
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, sans-serif;
   margin: 0;
   letter-spacing: 0.3px;
   position: relative;
@@ -1769,13 +1785,18 @@
 }
 
 .student-requirement-modal-actions .close-modal-btn::before {
-  content: '';
+  content: "";
   position: absolute;
   top: 0;
   left: -100%;
   width: 100%;
   height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.4),
+    transparent
+  );
   transition: left 0.5s;
 }
 
@@ -1796,8 +1817,9 @@
   background: #f8f9fa !important;
   border-color: #64b5f6 !important;
   color: #212121 !important;
-  box-shadow: 0 4px 12px rgba(144, 202, 249, 0.25),
-              0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow:
+    0 4px 12px rgba(144, 202, 249, 0.25),
+    0 2px 4px rgba(0, 0, 0, 0.1);
   transform: translateY(-2px);
 }
 
@@ -1807,8 +1829,9 @@
 
 .student-requirement-modal-actions .close-modal-btn:active {
   transform: translateY(0);
-  box-shadow: 0 2px 4px rgba(144, 202, 249, 0.2),
-              0 1px 2px rgba(0, 0, 0, 0.08);
+  box-shadow:
+    0 2px 4px rgba(144, 202, 249, 0.2),
+    0 1px 2px rgba(0, 0, 0, 0.08);
 }
 
 .student-requirement-modal-actions .close-modal-btn:focus {
@@ -1908,7 +1931,9 @@
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .skeleton-loader-container {
@@ -1953,8 +1978,12 @@
 }
 
 @keyframes loading {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 /* No requirements state */
@@ -2072,7 +2101,9 @@
 .file-viewer-modal {
   background: #fff;
   border-radius: 20px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(37, 99, 235, 0.1);
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(37, 99, 235, 0.1);
   max-width: 95vw;
   max-height: 95vh;
   width: 90vw;
@@ -2086,7 +2117,7 @@
 }
 
 .file-viewer-modal::before {
-  content: '';
+  content: "";
   position: absolute;
   top: 0;
   left: 0;
@@ -2159,7 +2190,9 @@
   align-items: center;
   justify-content: center;
   border-radius: 4px;
-  transition: background 0.2s, color 0.2s;
+  transition:
+    background 0.2s,
+    color 0.2s;
   width: 32px;
   height: 32px;
 }

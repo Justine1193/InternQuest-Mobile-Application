@@ -87,7 +87,11 @@ const StudentRequirementModal = ({
   const [showBlockConfirm, setShowBlockConfirm] = useState(false);
   const [showUnblockConfirm, setShowUnblockConfirm] = useState(false);
   const [isBlocking, setIsBlocking] = useState(false);
-  const canBlockUnblock = hasAnyRole([ROLES.SUPER_ADMIN, ROLES.COORDINATOR, ROLES.ADVISER]);
+  const canBlockUnblock = hasAnyRole([
+    ROLES.SUPER_ADMIN,
+    ROLES.COORDINATOR,
+    ROLES.ADVISER,
+  ]);
   const isBlocked = Boolean(student?.is_blocked);
 
   // Fetch creator information from student document or activity logs
@@ -116,7 +120,7 @@ const StudentRequirementModal = ({
           where("action", "==", "create_student"),
           where("entityId", "==", student.id),
           orderBy("timestamp", "asc"),
-          limit(1)
+          limit(1),
         );
 
         const querySnapshot = await getDocs(q);
@@ -216,7 +220,7 @@ const StudentRequirementModal = ({
                 } catch (error) {
                   return null;
                 }
-              })
+              }),
             );
 
             return filesWithUrls.filter((file) => file !== null);
@@ -283,7 +287,7 @@ const StudentRequirementModal = ({
         try {
           const profileRef = ref(
             storage,
-            `profilePictures/${student.id}/${fileName}`
+            `profilePictures/${student.id}/${fileName}`,
           );
           const url = await getDownloadURL(profileRef);
           setProfilePictureUrl(url);
@@ -361,7 +365,7 @@ const StudentRequirementModal = ({
         const signatureRef = doc(
           db,
           "teacher_signatures",
-          auth.currentUser.uid
+          auth.currentUser.uid,
         );
         const signatureSnap = await getDoc(signatureRef);
 
@@ -546,9 +550,14 @@ const StudentRequirementModal = ({
     try {
       const userRef = doc(db, "users", student.id);
       await updateDoc(userRef, { is_blocked: true });
-      const studentName = [student.firstName, student.lastName].filter(Boolean).join(" ") || student.studentId || student.id;
+      const studentName =
+        [student.firstName, student.lastName].filter(Boolean).join(" ") ||
+        student.studentId ||
+        student.id;
       activityLoggers.blockStudent(student.id, studentName);
-      showSuccessToast("Student has been blocked. They will not be able to access the mobile app.");
+      showSuccessToast(
+        "Student has been blocked. They will not be able to access the mobile app.",
+      );
       onStudentUpdated?.({ ...student, is_blocked: true });
     } catch (err) {
       console.error("Error blocking student:", err);
@@ -565,9 +574,14 @@ const StudentRequirementModal = ({
     try {
       const userRef = doc(db, "users", student.id);
       await updateDoc(userRef, { is_blocked: false });
-      const studentName = [student.firstName, student.lastName].filter(Boolean).join(" ") || student.studentId || student.id;
+      const studentName =
+        [student.firstName, student.lastName].filter(Boolean).join(" ") ||
+        student.studentId ||
+        student.id;
       activityLoggers.unblockStudent(student.id, studentName);
-      showSuccessToast("Student has been unblocked. They can access the mobile app again.");
+      showSuccessToast(
+        "Student has been unblocked. They can access the mobile app again.",
+      );
       onStudentUpdated?.({ ...student, is_blocked: false });
     } catch (err) {
       console.error("Error unblocking student:", err);
@@ -671,7 +685,7 @@ const StudentRequirementModal = ({
 
       // Show success toast
       success(
-        `${requirementType} approved successfully! ${studentName} has been notified.`
+        `${requirementType} approved successfully! ${studentName} has been notified.`,
       );
 
       // Show popup message in modal
@@ -879,7 +893,7 @@ const StudentRequirementModal = ({
                   const timestamp = Date.now();
                   const safeRequirementType = rejectionRequirementType.replace(
                     /[^a-zA-Z0-9]/g,
-                    "_"
+                    "_",
                   );
                   const archivePath = `archive/rejected_requirements/${student.id}/${safeRequirementType}/${timestamp}-${fileRef.name}`;
                   const archiveRef = ref(storage, archivePath);
@@ -922,7 +936,7 @@ const StudentRequirementModal = ({
                     // Ignore
                   }
                 }
-              }
+              },
             );
 
             await Promise.all(archiveAndDeletePromises);
@@ -975,7 +989,7 @@ const StudentRequirementModal = ({
                     } catch (error) {
                       return null;
                     }
-                  })
+                  }),
                 );
                 allFiles.push(...filesWithUrls.filter((file) => file !== null));
               } catch (error) {
@@ -1027,7 +1041,7 @@ const StudentRequirementModal = ({
 
       // Show success toast
       success(
-        `${rejectionRequirementType} rejected. ${studentName} has been notified.`
+        `${rejectionRequirementType} rejected. ${studentName} has been notified.`,
       );
 
       // Show popup message in modal
@@ -1408,8 +1422,8 @@ const StudentRequirementModal = ({
                         .map((f) => f.folderName)
                         .filter(
                           (n) =>
-                            typeof n === "string" && REQUIRED_FOLDERS.has(n)
-                        )
+                            typeof n === "string" && REQUIRED_FOLDERS.has(n),
+                        ),
                     );
                     const submittedCount = submittedFolderNames.size;
                     return (
@@ -1434,13 +1448,13 @@ const StudentRequirementModal = ({
                           .map((f) => f.folderName)
                           .filter(
                             (n) =>
-                              typeof n === "string" && REQUIRED_FOLDERS.has(n)
-                          )
+                              typeof n === "string" && REQUIRED_FOLDERS.has(n),
+                          ),
                       );
                       const submittedCount = submittedFolderNames.size;
                       const pct = Math.min(
                         100,
-                        Math.max(0, (submittedCount / 7) * 100)
+                        Math.max(0, (submittedCount / 7) * 100),
                       );
                       return (
                         <div
@@ -1536,18 +1550,18 @@ const StudentRequirementModal = ({
                     })().map((requirement, index) => {
                       // Find matching file from Storage by folder name first (STRICT MATCHING)
                       let matchingFile = storageFiles.find(
-                        (file) => file.folderName === requirement.folderName
+                        (file) => file.folderName === requirement.folderName,
                       );
 
                       // If no match by folder name, try requirementType matching (exact match only)
                       if (!matchingFile) {
                         matchingFile = storageFiles.find(
-                          (file) => file.requirementType === requirement.type
+                          (file) => file.requirementType === requirement.type,
                         );
                       }
 
                       const approvalStatus = getApprovalStatus(
-                        requirement.type
+                        requirement.type,
                       );
                       const isUpdating =
                         updatingRequirement === requirement.type;
@@ -1617,7 +1631,7 @@ const StudentRequirementModal = ({
                               <p className="review-info">
                                 Reviewed by {approvalStatus.reviewedBy} on{" "}
                                 {new Date(
-                                  approvalStatus.reviewedAt
+                                  approvalStatus.reviewedAt,
                                 ).toLocaleDateString()}
                               </p>
                             )}
@@ -1629,7 +1643,7 @@ const StudentRequirementModal = ({
                                   handleFileClick(
                                     e,
                                     matchingFile.downloadURL,
-                                    matchingFile.name
+                                    matchingFile.name,
                                   )
                                 }
                                 className="document-link"
@@ -1642,7 +1656,7 @@ const StudentRequirementModal = ({
                                   <button
                                     onClick={() =>
                                       handleApproveRequirementClick(
-                                        requirement.type
+                                        requirement.type,
                                       )
                                     }
                                     className="approve-btn"
@@ -1668,7 +1682,7 @@ const StudentRequirementModal = ({
                                   <button
                                     onClick={() =>
                                       handleApproveRequirementClick(
-                                        requirement.type
+                                        requirement.type,
                                       )
                                     }
                                     className={`approve-btn ${
@@ -1721,8 +1735,8 @@ const StudentRequirementModal = ({
           </div>
 
           <div className="student-requirement-modal-actions">
-            {canBlockUnblock && (
-              isBlocked ? (
+            {canBlockUnblock &&
+              (isBlocked ? (
                 <button
                   type="button"
                   className="unblock-student-btn"
@@ -1732,7 +1746,10 @@ const StudentRequirementModal = ({
                 >
                   {isBlocking ? (
                     <>
-                      <IoRefreshOutline className="block-unblock-spinner" aria-hidden="true" />
+                      <IoRefreshOutline
+                        className="block-unblock-spinner"
+                        aria-hidden="true"
+                      />
                       Unblocking...
                     </>
                   ) : (
@@ -1752,7 +1769,10 @@ const StudentRequirementModal = ({
                 >
                   {isBlocking ? (
                     <>
-                      <IoRefreshOutline className="block-unblock-spinner" aria-hidden="true" />
+                      <IoRefreshOutline
+                        className="block-unblock-spinner"
+                        aria-hidden="true"
+                      />
                       Blocking...
                     </>
                   ) : (
@@ -1762,8 +1782,7 @@ const StudentRequirementModal = ({
                     </>
                   )}
                 </button>
-              )
-            )}
+              ))}
             <button className="close-modal-btn" onClick={onClose}>
               Close
             </button>

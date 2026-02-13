@@ -26,14 +26,42 @@ import {
   useSuggestionFields,
   dashboardHandlers,
 } from "../dashboardUtils.js";
-import { getDocs, collection, onSnapshot, query, orderBy, addDoc, updateDoc, doc } from "firebase/firestore";
+import {
+  getDocs,
+  collection,
+  onSnapshot,
+  query,
+  orderBy,
+  addDoc,
+  updateDoc,
+  doc,
+} from "firebase/firestore";
 import { ref, update as updateRealtime } from "firebase/database";
 import { db, realtimeDb } from "../../../firebase.js";
-import { downloadCSV, prepareCompaniesForExport } from "../../utils/exportUtils.js";
-import { readCSVFile, parseCSV, convertCSVToCompanies } from "../../utils/importUtils.js";
+import {
+  downloadCSV,
+  prepareCompaniesForExport,
+} from "../../utils/exportUtils.js";
+import {
+  readCSVFile,
+  parseCSV,
+  convertCSVToCompanies,
+} from "../../utils/importUtils.js";
 import { activityLoggers } from "../../utils/activityLogger.js";
-import { checkMoaExpiration, MOA_EXPIRING_SOON_DAYS } from "../../utils/moaUtils.js";
-import { IoDownloadOutline, IoCloudUploadOutline, IoBusinessOutline, IoCheckmarkCircleOutline, IoWarningOutline, IoAlertCircleOutline, IoAddOutline, IoTrashOutline } from "react-icons/io5";
+import {
+  checkMoaExpiration,
+  MOA_EXPIRING_SOON_DAYS,
+} from "../../utils/moaUtils.js";
+import {
+  IoDownloadOutline,
+  IoCloudUploadOutline,
+  IoBusinessOutline,
+  IoCheckmarkCircleOutline,
+  IoWarningOutline,
+  IoAlertCircleOutline,
+  IoAddOutline,
+  IoTrashOutline,
+} from "react-icons/io5";
 import logger from "../../utils/logger.js";
 import Footer from "../Footer/Footer.jsx";
 import { getAdminRole, ROLES, isAdviserOnly } from "../../utils/auth.js";
@@ -94,9 +122,12 @@ const Dashboard = () => {
   });
   const [selectedRowId, setSelectedRowId] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
   const [isImporting, setIsImporting] = useState(false);
-  const [importProgress, setImportProgress] = useState({ current: 0, total: 0 });
+  const [importProgress, setImportProgress] = useState({
+    current: 0,
+    total: 0,
+  });
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const fileInputRef = useRef(null);
   const { toasts, removeToast, success, error: showError } = useToast();
@@ -128,9 +159,9 @@ const Dashboard = () => {
 
   // Sorting function
   const handleSort = (key) => {
-    let direction = 'asc';
-    if (sortConfig.key === key && sortConfig.direction === 'asc') {
-      direction = 'desc';
+    let direction = "asc";
+    if (sortConfig.key === key && sortConfig.direction === "asc") {
+      direction = "desc";
     }
     setSortConfig({ key, direction });
   };
@@ -142,21 +173,21 @@ const Dashboard = () => {
           row.companyName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
           (Array.isArray(row.fields) &&
             row.fields.some((f) =>
-              f.toLowerCase().includes(searchQuery.toLowerCase())
+              f.toLowerCase().includes(searchQuery.toLowerCase()),
             )) ||
           row.description?.toLowerCase().includes(searchQuery.toLowerCase());
         const matchesField = filterValues.field
           ? Array.isArray(row.fields) &&
             row.fields.some((f) =>
-              f.toLowerCase().includes(filterValues.field.toLowerCase())
+              f.toLowerCase().includes(filterValues.field.toLowerCase()),
             )
           : true;
         const matchesModeOfWork = filterValues.modeOfWork
-          ? (Array.isArray(row.modeOfWork) 
-              ? row.modeOfWork.includes(filterValues.modeOfWork)
-              : row.modeOfWork === filterValues.modeOfWork)
+          ? Array.isArray(row.modeOfWork)
+            ? row.modeOfWork.includes(filterValues.modeOfWork)
+            : row.modeOfWork === filterValues.modeOfWork
           : true;
-        
+
         // MOA Expiration Status filter
         const matchesMoaExpiration = filterValues.moaExpirationStatus
           ? (() => {
@@ -169,8 +200,10 @@ const Dashboard = () => {
                 today.setHours(0, 0, 0, 0);
                 const expDate = new Date(expirationDate);
                 expDate.setHours(0, 0, 0, 0);
-                const daysUntilExpiration = Math.ceil((expDate - today) / (1000 * 60 * 60 * 24));
-                
+                const daysUntilExpiration = Math.ceil(
+                  (expDate - today) / (1000 * 60 * 60 * 24),
+                );
+
                 if (daysUntilExpiration < 0) {
                   return filterValues.moaExpirationStatus === "Expired";
                 } else if (daysUntilExpiration <= MOA_EXPIRING_SOON_DAYS) {
@@ -183,8 +216,13 @@ const Dashboard = () => {
               }
             })()
           : true;
-        
-        return matchesSearch && matchesField && matchesModeOfWork && matchesMoaExpiration;
+
+        return (
+          matchesSearch &&
+          matchesField &&
+          matchesModeOfWork &&
+          matchesMoaExpiration
+        );
       })
     : [];
 
@@ -197,29 +235,29 @@ const Dashboard = () => {
 
     // Handle array fields (like fields, modeOfWork, skills)
     if (Array.isArray(aValue)) {
-      aValue = aValue.join(', ');
+      aValue = aValue.join(", ");
     }
     if (Array.isArray(bValue)) {
-      bValue = bValue.join(', ');
+      bValue = bValue.join(", ");
     }
 
     // Handle string comparison
-    if (typeof aValue === 'string') {
+    if (typeof aValue === "string") {
       aValue = aValue.toLowerCase();
     }
-    if (typeof bValue === 'string') {
+    if (typeof bValue === "string") {
       bValue = bValue.toLowerCase();
     }
 
     // Handle null/undefined
-    if (aValue == null) aValue = '';
-    if (bValue == null) bValue = '';
+    if (aValue == null) aValue = "";
+    if (bValue == null) bValue = "";
 
     if (aValue < bValue) {
-      return sortConfig.direction === 'asc' ? -1 : 1;
+      return sortConfig.direction === "asc" ? -1 : 1;
     }
     if (aValue > bValue) {
-      return sortConfig.direction === 'asc' ? 1 : -1;
+      return sortConfig.direction === "asc" ? 1 : -1;
     }
     return 0;
   });
@@ -233,9 +271,12 @@ const Dashboard = () => {
   // Real-time listener for companies and students
   useEffect(() => {
     setIsLoading(true);
-    
-        // Set up real-time listener for companies
-    const companiesQuery = query(collection(db, "companies"), orderBy("companyName"));
+
+    // Set up real-time listener for companies
+    const companiesQuery = query(
+      collection(db, "companies"),
+      orderBy("companyName"),
+    );
     const unsubscribeCompanies = onSnapshot(
       companiesQuery,
       async (snapshot) => {
@@ -243,52 +284,57 @@ const Dashboard = () => {
         snapshot.forEach((doc) => {
           companies.push({ id: doc.id, ...doc.data() });
         });
-        
+
         // Calculate MOA expiration statistics and update visibility for mobile app
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         let expiringSoon = 0;
         let expired = 0;
         let valid = 0;
-        
+
         // Update companies with expired MOAs to hide them from mobile app
         const updatePromises = [];
-        
+
         companies.forEach((company) => {
           if (company.moa === "Yes" && company.moaExpirationDate) {
             try {
               const expirationDate = new Date(company.moaExpirationDate);
               const expDate = new Date(expirationDate);
               expDate.setHours(0, 0, 0, 0);
-              const daysUntilExpiration = Math.ceil((expDate - today) / (1000 * 60 * 60 * 24));
-              
+              const daysUntilExpiration = Math.ceil(
+                (expDate - today) / (1000 * 60 * 60 * 24),
+              );
+
               if (daysUntilExpiration < 0) {
                 expired++;
                 // Hide from mobile app if MOA is expired
                 if (company.isVisibleToMobile !== false) {
                   updatePromises.push(
-                    updateDoc(doc(db, 'companies', company.id), {
+                    updateDoc(doc(db, "companies", company.id), {
                       isVisibleToMobile: false,
-                      moaStatus: 'expired',
-                    })
+                      moaStatus: "expired",
+                    }),
                   );
                 }
               } else if (daysUntilExpiration <= MOA_EXPIRING_SOON_DAYS) {
                 expiringSoon++;
                 // Keep visible but mark as expiring soon
-                if (company.isVisibleToMobile === false && company.moaStatus === 'expired') {
+                if (
+                  company.isVisibleToMobile === false &&
+                  company.moaStatus === "expired"
+                ) {
                   // If MOA was renewed, make it visible again
                   updatePromises.push(
-                    updateDoc(doc(db, 'companies', company.id), {
+                    updateDoc(doc(db, "companies", company.id), {
                       isVisibleToMobile: true,
-                      moaStatus: 'expiring-soon',
-                    })
+                      moaStatus: "expiring-soon",
+                    }),
                   );
-                } else if (company.moaStatus !== 'expiring-soon') {
+                } else if (company.moaStatus !== "expiring-soon") {
                   updatePromises.push(
-                    updateDoc(doc(db, 'companies', company.id), {
-                      moaStatus: 'expiring-soon',
-                    })
+                    updateDoc(doc(db, "companies", company.id), {
+                      moaStatus: "expiring-soon",
+                    }),
                   );
                 }
               } else {
@@ -296,16 +342,16 @@ const Dashboard = () => {
                 // Ensure valid MOAs are visible
                 if (company.isVisibleToMobile === false) {
                   updatePromises.push(
-                    updateDoc(doc(db, 'companies', company.id), {
+                    updateDoc(doc(db, "companies", company.id), {
                       isVisibleToMobile: true,
-                      moaStatus: 'valid',
-                    })
+                      moaStatus: "valid",
+                    }),
                   );
-                } else if (company.moaStatus !== 'valid') {
+                } else if (company.moaStatus !== "valid") {
                   updatePromises.push(
-                    updateDoc(doc(db, 'companies', company.id), {
-                      moaStatus: 'valid',
-                    })
+                    updateDoc(doc(db, "companies", company.id), {
+                      moaStatus: "valid",
+                    }),
                   );
                 }
               }
@@ -316,24 +362,24 @@ const Dashboard = () => {
             // No MOA - hide from mobile
             if (company.isVisibleToMobile !== false) {
               updatePromises.push(
-                updateDoc(doc(db, 'companies', company.id), {
+                updateDoc(doc(db, "companies", company.id), {
                   isVisibleToMobile: false,
-                  moaStatus: 'no-moa',
-                })
+                  moaStatus: "no-moa",
+                }),
               );
             }
           }
         });
-        
+
         // Execute all updates in parallel (fire and forget - don't wait)
         if (updatePromises.length > 0) {
           Promise.all(updatePromises).catch((err) => {
             logger.error("Error updating company visibility:", err);
           });
         }
-        
+
         setTableData(companies);
-        
+
         setOverviewStats((prev) => ({
           ...prev,
           totalCompanies: companies.length,
@@ -348,7 +394,7 @@ const Dashboard = () => {
         logger.error("Error fetching companies:", err);
         setError("Failed to fetch companies. Please try again.");
         setIsLoading(false);
-      }
+      },
     );
 
     // Set up real-time listener for students
@@ -369,7 +415,7 @@ const Dashboard = () => {
       (err) => {
         logger.error("Error fetching students:", err);
         setError("Failed to fetch students. Please try again.");
-      }
+      },
     );
 
     // Cleanup listeners on unmount
@@ -389,7 +435,7 @@ const Dashboard = () => {
   // Scroll to top when error occurs
   useEffect(() => {
     if (error) {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      window.scrollTo({ top: 0, behavior: "smooth" });
     }
   }, [error]);
 
@@ -409,10 +455,10 @@ const Dashboard = () => {
 
       // Read CSV file
       const csvText = await readCSVFile(file);
-      
+
       // Parse CSV
       const csvData = parseCSV(csvText);
-      
+
       // Convert to company objects
       const { companies, errors } = convertCSVToCompanies(csvData);
 
@@ -431,7 +477,7 @@ const Dashboard = () => {
       for (let i = 0; i < companies.length; i++) {
         try {
           const company = companies[i];
-          
+
           // Map to Firestore format
           const newCompany = {
             companyName: company.companyName,
@@ -448,8 +494,8 @@ const Dashboard = () => {
             updatedAt: company.updatedAt || new Date().toISOString(),
           };
 
-          const docRef = await addDoc(collection(db, 'companies'), newCompany);
-          
+          const docRef = await addDoc(collection(db, "companies"), newCompany);
+
           // Sync to Realtime DB
           await updateRealtime(ref(realtimeDb, `companies/${docRef.id}`), {
             moa: "Yes",
@@ -459,8 +505,11 @@ const Dashboard = () => {
           });
 
           // Log activity
-          await activityLoggers.createCompany(docRef.id, newCompany.companyName);
-          
+          await activityLoggers.createCompany(
+            docRef.id,
+            newCompany.companyName,
+          );
+
           successCount++;
         } catch (err) {
           errorCount++;
@@ -468,7 +517,10 @@ const Dashboard = () => {
             company: companies[i].companyName,
             error: err.message,
           });
-          logger.error(`Failed to import company ${companies[i].companyName}:`, err);
+          logger.error(
+            `Failed to import company ${companies[i].companyName}:`,
+            err,
+          );
         }
 
         setImportProgress({ current: i + 1, total: companies.length });
@@ -478,22 +530,28 @@ const Dashboard = () => {
       if (successCount > 0) {
         success(`Successfully imported ${successCount} company/companies`);
         if (errorCount > 0) {
-          showError(`${errorCount} company/companies failed to import. Check console for details.`);
+          showError(
+            `${errorCount} company/companies failed to import. Check console for details.`,
+          );
         }
         if (errors.length > 0) {
           logger.warn(`CSV parsing errors:`, errors);
         }
       } else {
-        showError("Failed to import any companies. Please check the CSV format.");
+        showError(
+          "Failed to import any companies. Please check the CSV format.",
+        );
       }
 
       // Reset file input
       if (fileInputRef.current) {
-        fileInputRef.current.value = '';
+        fileInputRef.current.value = "";
       }
     } catch (err) {
       logger.error("Import error:", err);
-      showError(err.message || "Failed to import CSV file. Please check the format.");
+      showError(
+        err.message || "Failed to import CSV file. Please check the format.",
+      );
     } finally {
       setIsImporting(false);
       setImportProgress({ current: 0, total: 0 });
@@ -529,7 +587,11 @@ const Dashboard = () => {
         {/* Page Header */}
         <div className="company-page-header">
           <h1>{isAdviser ? "View Companies" : "Manage Companies"}</h1>
-          <p>{isAdviser ? "View partner companies and their MOA status" : "View and manage partner companies and their MOA status"}</p>
+          <p>
+            {isAdviser
+              ? "View partner companies and their MOA status"
+              : "View and manage partner companies and their MOA status"}
+          </p>
         </div>
 
         {/* Stats Cards */}
@@ -540,7 +602,9 @@ const Dashboard = () => {
                 <IoBusinessOutline className="iq-stat-icon" />
               </div>
               <div className="iq-stat-content">
-                <div className="iq-stat-value">{overviewStats.totalCompanies || 0}</div>
+                <div className="iq-stat-value">
+                  {overviewStats.totalCompanies || 0}
+                </div>
                 <div className="iq-stat-label">Total Companies</div>
               </div>
             </div>
@@ -549,7 +613,9 @@ const Dashboard = () => {
                 <IoCheckmarkCircleOutline className="iq-stat-icon" />
               </div>
               <div className="iq-stat-content">
-                <div className="iq-stat-value">{overviewStats.moaValid || 0}</div>
+                <div className="iq-stat-value">
+                  {overviewStats.moaValid || 0}
+                </div>
                 <div className="iq-stat-label">Active MOA</div>
               </div>
             </div>
@@ -558,7 +624,9 @@ const Dashboard = () => {
                 <IoWarningOutline className="iq-stat-icon" />
               </div>
               <div className="iq-stat-content">
-                <div className="iq-stat-value">{overviewStats.moaExpiringSoon || 0}</div>
+                <div className="iq-stat-value">
+                  {overviewStats.moaExpiringSoon || 0}
+                </div>
                 <div className="iq-stat-label">Expiring Soon</div>
               </div>
             </div>
@@ -567,7 +635,9 @@ const Dashboard = () => {
                 <IoAlertCircleOutline className="iq-stat-icon" />
               </div>
               <div className="iq-stat-content">
-                <div className="iq-stat-value">{overviewStats.moaExpired || 0}</div>
+                <div className="iq-stat-value">
+                  {overviewStats.moaExpired || 0}
+                </div>
                 <div className="iq-stat-label">Expired MOA</div>
               </div>
             </div>
@@ -581,26 +651,34 @@ const Dashboard = () => {
             <div className="moa-alert-banner expired">
               <IoAlertCircleOutline className="alert-icon" />
               <div className="alert-content">
-                <strong>{overviewStats.moaExpired} expired MOA{overviewStats.moaExpired !== 1 ? 's' : ''}</strong>
+                <strong>
+                  {overviewStats.moaExpired} expired MOA
+                  {overviewStats.moaExpired !== 1 ? "s" : ""}
+                </strong>
                 <span>These companies need MOA renewal before use</span>
               </div>
             </div>
           )}
-          {overviewStats.moaExpiringSoon > 0 && overviewStats.moaExpired === 0 && (
-            <div className="moa-alert-banner expiring">
-              <IoWarningOutline className="alert-icon" />
-              <div className="alert-content">
-                <strong>{overviewStats.moaExpiringSoon} MOA{overviewStats.moaExpiringSoon !== 1 ? 's' : ''} expiring soon</strong>
-                <span>Renew before expiration to avoid restrictions</span>
+          {overviewStats.moaExpiringSoon > 0 &&
+            overviewStats.moaExpired === 0 && (
+              <div className="moa-alert-banner expiring">
+                <IoWarningOutline className="alert-icon" />
+                <div className="alert-content">
+                  <strong>
+                    {overviewStats.moaExpiringSoon} MOA
+                    {overviewStats.moaExpiringSoon !== 1 ? "s" : ""} expiring
+                    soon
+                  </strong>
+                  <span>Renew before expiration to avoid restrictions</span>
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
           {/* Search Bar */}
           <div className="search-filter-area">
-            <SearchBar 
-              onSearch={setSearchQuery} 
-              onFilter={setFilterValues} 
+            <SearchBar
+              onSearch={setSearchQuery}
+              onFilter={setFilterValues}
               filterValues={filterValues}
               type="company"
             />
@@ -614,63 +692,76 @@ const Dashboard = () => {
               data={currentItems}
               sortConfig={sortConfig}
               onSort={handleSort}
-              onEdit={!isAdviser ? (company) =>
-              dashboardHandlers.handleEdit(
-                company,
-                setFormData,
-                setSkills,
-                setIsEditMode,
-                setEditCompanyId,
-                setIsModalOpen,
-                setFields
-              )
-            : undefined}
-            onDelete={!isAdviser ? (id) =>
-              dashboardHandlers.handleDeleteSingle(
-                id,
-                setIsDeleting,
-                setTableData,
-                setSelectedItems,
-                setError
-              )
-            : undefined}
-            selectedItems={selectedItems}
-            onSelectItem={!isAdviser ? (id) =>
-              dashboardHandlers.handleSelectItem(
-                id,
-                selectedItems,
-                setSelectedItems
-              )
-            : undefined}
-            onSelectAll={!isAdviser ? (e) => {
-              if (e.target.checked) {
-                setSelectedItems(currentItems.map((item) => item.id));
-              } else {
-                setSelectedItems([]);
+              onEdit={
+                !isAdviser
+                  ? (company) =>
+                      dashboardHandlers.handleEdit(
+                        company,
+                        setFormData,
+                        setSkills,
+                        setIsEditMode,
+                        setEditCompanyId,
+                        setIsModalOpen,
+                        setFields,
+                      )
+                  : undefined
               }
-            } : undefined}
-            selectionMode={!isAdviser && selectionMode}
-            openMenuId={openMenuId}
-            setOpenMenuId={setOpenMenuId}
-            selectedRowId={selectedRowId}
-            setSelectedRowId={setSelectedRowId}
-            setIsEditMode={setIsEditMode}
-            setEditCompanyId={setEditCompanyId}
-            setFormData={setFormData}
-            setSkills={setSkills}
-            setIsModalOpen={setIsModalOpen}
-            setSelectionMode={setSelectionMode}
-            setSelectedItems={setSelectedItems}
-            handleDeleteSingle={dashboardHandlers.handleDeleteSingle}
-            isDeleting={isDeleting}
-            onRowClick={(company) => {
-              setSelectedCompany(company);
-              setIsDetailModalOpen(true);
-            }}
-            onClearFilters={handleClearAllFilters}
-            onAddCompany={!isAdviser ? () => setIsModalOpen(true) : undefined}
-            isReadOnly={isAdviser}
-          />
+              onDelete={
+                !isAdviser
+                  ? (id) =>
+                      dashboardHandlers.handleDeleteSingle(
+                        id,
+                        setIsDeleting,
+                        setTableData,
+                        setSelectedItems,
+                        setError,
+                      )
+                  : undefined
+              }
+              selectedItems={selectedItems}
+              onSelectItem={
+                !isAdviser
+                  ? (id) =>
+                      dashboardHandlers.handleSelectItem(
+                        id,
+                        selectedItems,
+                        setSelectedItems,
+                      )
+                  : undefined
+              }
+              onSelectAll={
+                !isAdviser
+                  ? (e) => {
+                      if (e.target.checked) {
+                        setSelectedItems(currentItems.map((item) => item.id));
+                      } else {
+                        setSelectedItems([]);
+                      }
+                    }
+                  : undefined
+              }
+              selectionMode={!isAdviser && selectionMode}
+              openMenuId={openMenuId}
+              setOpenMenuId={setOpenMenuId}
+              selectedRowId={selectedRowId}
+              setSelectedRowId={setSelectedRowId}
+              setIsEditMode={setIsEditMode}
+              setEditCompanyId={setEditCompanyId}
+              setFormData={setFormData}
+              setSkills={setSkills}
+              setIsModalOpen={setIsModalOpen}
+              setSelectionMode={setSelectionMode}
+              setSelectedItems={setSelectedItems}
+              handleDeleteSingle={dashboardHandlers.handleDeleteSingle}
+              isDeleting={isDeleting}
+              onRowClick={(company) => {
+                setSelectedCompany(company);
+                setIsDetailModalOpen(true);
+              }}
+              onClearFilters={handleClearAllFilters}
+              onAddCompany={!isAdviser ? () => setIsModalOpen(true) : undefined}
+              isReadOnly={isAdviser}
+            />
           )}
 
           {/* Pagination */}
@@ -693,7 +784,9 @@ const Dashboard = () => {
               </button>
             ))}
             <button
-              onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+              onClick={() =>
+                setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+              }
               disabled={currentPage === totalPages}
               className="pagination-arrow"
               aria-label="Next page"
@@ -703,7 +796,8 @@ const Dashboard = () => {
           </div>
           <div className="pagination-info-wrapper">
             <div className="pagination-info">
-              Showing {indexOfFirstItem + 1}–{Math.min(indexOfLastItem, sortedData.length)} companies
+              Showing {indexOfFirstItem + 1}–
+              {Math.min(indexOfLastItem, sortedData.length)} companies
             </div>
             <div className="pagination-items-per-page">
               <label htmlFor="items-per-page">Show:</label>
@@ -735,7 +829,9 @@ const Dashboard = () => {
                   <span>{selectedItems.length} selected</span>
                   <button
                     className="delete table-action-btn"
-                    onClick={() => dashboardHandlers.handleDelete(setShowConfirm)}
+                    onClick={() =>
+                      dashboardHandlers.handleDelete(setShowConfirm)
+                    }
                     disabled={isDeleting}
                   >
                     <IoTrashOutline />
@@ -758,7 +854,7 @@ const Dashboard = () => {
                 accept=".csv"
                 ref={fileInputRef}
                 onChange={handleImportCompanies}
-                style={{ display: 'none' }}
+                style={{ display: "none" }}
                 disabled={isImporting}
               />
               <button
@@ -768,16 +864,23 @@ const Dashboard = () => {
                 title="Import companies from CSV"
               >
                 <IoCloudUploadOutline />
-                {isImporting ? `${importProgress.current}/${importProgress.total}` : "Import"}
+                {isImporting
+                  ? `${importProgress.current}/${importProgress.total}`
+                  : "Import"}
               </button>
               <button
                 className="export-btn table-action-btn"
                 onClick={() => {
                   try {
                     const exportData = prepareCompaniesForExport(filteredData);
-                    downloadCSV(exportData, `companies_export_${new Date().toISOString().split('T')[0]}`);
+                    downloadCSV(
+                      exportData,
+                      `companies_export_${new Date().toISOString().split("T")[0]}`,
+                    );
                     activityLoggers.exportData("companies", exportData.length);
-                    success(`Exported ${exportData.length} companies successfully`);
+                    success(
+                      `Exported ${exportData.length} companies successfully`,
+                    );
                   } catch (err) {
                     logger.error("Export error:", err);
                     showError("Failed to export data. Please try again.");
@@ -834,11 +937,11 @@ const Dashboard = () => {
           setError={setError}
           handleInputChange={dashboardHandlers.handleInputChange(
             formData,
-            setFormData
+            setFormData,
           )}
           handleModeOfWorkChange={dashboardHandlers.handleModeOfWorkChange(
             formData,
-            setFormData
+            setFormData,
           )}
           handleAddEntry={() =>
             dashboardHandlers.handleAddEntry(
@@ -851,7 +954,7 @@ const Dashboard = () => {
               setFormData,
               setSkills,
               setFields,
-              setError
+              setError,
             )
           }
           handleUpdateEntry={dashboardHandlers.handleUpdateEntry}
@@ -880,38 +983,46 @@ const Dashboard = () => {
         }}
         onRenewMoa={async (company) => {
           if (!company || !company.id) return;
-          
+
           try {
             setIsLoading(true);
             const today = new Date();
             today.setHours(0, 0, 0, 0);
-            
+
             // Calculate new expiration date based on current validity years
             const validityYears = company.moaValidityYears || 1;
             const newExpirationDate = new Date(today);
-            newExpirationDate.setFullYear(newExpirationDate.getFullYear() + validityYears);
-            
+            newExpirationDate.setFullYear(
+              newExpirationDate.getFullYear() + validityYears,
+            );
+
             // Update company in Firestore
-            await updateDoc(doc(db, 'companies', company.id), {
+            await updateDoc(doc(db, "companies", company.id), {
               moaStartDate: today.toISOString(),
               moaExpirationDate: newExpirationDate.toISOString(),
               isVisibleToMobile: true, // Make visible to mobile app after renewal
-              moaStatus: 'valid', // Set status to valid
+              moaStatus: "valid", // Set status to valid
               updatedAt: new Date().toISOString(),
             });
-            
+
             // Sync to Realtime DB
             await updateRealtime(ref(realtimeDb, `companies/${company.id}`), {
               updatedAt: new Date().toISOString(),
             });
-            
+
             // Log activity
-            await activityLoggers.updateCompany(company.id, company.companyName, {
-              moaStartDate: today.toISOString(),
-              moaExpirationDate: newExpirationDate.toISOString(),
-            });
-            
-            success(`MOA renewed for ${company.companyName}. New expiration: ${newExpirationDate.toLocaleDateString()}`);
+            await activityLoggers.updateCompany(
+              company.id,
+              company.companyName,
+              {
+                moaStartDate: today.toISOString(),
+                moaExpirationDate: newExpirationDate.toISOString(),
+              },
+            );
+
+            success(
+              `MOA renewed for ${company.companyName}. New expiration: ${newExpirationDate.toLocaleDateString()}`,
+            );
             setIsDetailModalOpen(false);
             setSelectedCompany(null);
           } catch (err) {
@@ -929,7 +1040,7 @@ const Dashboard = () => {
             setIsEditMode,
             setEditCompanyId,
             setIsModalOpen,
-            setFields
+            setFields,
           );
           setIsDetailModalOpen(false);
         }}
@@ -944,11 +1055,16 @@ const Dashboard = () => {
             setIsDeleting,
             setTableData,
             setSelectedItems,
-            setError
+            setError,
           );
           if (result) {
-            activityLoggers.bulkDeleteCompanies(selectedItems.length, selectedItems);
-            success(`Successfully deleted ${selectedItems.length} company(ies)`);
+            activityLoggers.bulkDeleteCompanies(
+              selectedItems.length,
+              selectedItems,
+            );
+            success(
+              `Successfully deleted ${selectedItems.length} company(ies)`,
+            );
           } else {
             showError("Failed to delete companies. Please try again.");
           }

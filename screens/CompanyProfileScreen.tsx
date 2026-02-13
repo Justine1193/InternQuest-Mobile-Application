@@ -45,13 +45,35 @@ const CompanyProfileScreen: React.FC = () => {
                 if (docSnap.exists()) {
                     const data = docSnap.data() as any;
 
-                    const rawMoa = data?.moa;
-                    const moaValue =
-                        typeof rawMoa === 'string'
-                            ? rawMoa
-                            : (rawMoa && typeof rawMoa === 'object')
-                                ? (rawMoa.url || rawMoa.downloadUrl || rawMoa.downloadURL || rawMoa.path || rawMoa.storagePath || '')
-                                : '';
+                    const normalizeMoaCandidate = (v: any): string => {
+                        if (typeof v === 'string') return v.trim();
+                        if (v && typeof v === 'object') {
+                            const fromObj = v.url || v.downloadUrl || v.downloadURL || v.path || v.storagePath;
+                            return typeof fromObj === 'string' ? fromObj.trim() : '';
+                        }
+                        return '';
+                    };
+
+                    // NOTE: Some company docs store `moa: "Yes"` as a flag, while the actual file is in `moaFileUrl`/`moaStoragePath`.
+                    // Prefer a real URL/path first.
+                    const moaCandidates = [
+                        data?.moaFileUrl,
+                        data?.moaFileURL,
+                        data?.moaUrl,
+                        data?.moaURL,
+                        data?.moaStoragePath,
+                        data?.moaPath,
+                        data?.moa,
+                    ];
+                    const moaValue = moaCandidates
+                        .map(normalizeMoaCandidate)
+                        .find((s) => {
+                            if (!s) return false;
+                            const lower = s.toLowerCase();
+                            // skip boolean-like flags
+                            if (['yes', 'no', 'true', 'false', '1', '0', 'y', 'n'].includes(lower)) return false;
+                            return true;
+                        }) || normalizeMoaCandidate(data?.moa);
 
                     const mapped: Post = {
                         id: docSnap.id,
@@ -164,8 +186,44 @@ const CompanyProfileScreen: React.FC = () => {
         }
 
         try {
+            const resolveMoaFromHelpDeskTemplates = async (): Promise<string | null> => {
+                try {
+                    const snap = await getDocs(query(collection(firestore, 'helpDeskFiles')));
+                    const docs: any[] = [];
+                    snap.forEach((d: any) => docs.push({ id: d.id, ...(d.data() as any) }));
+
+                    const isMoaTemplate = (t: any) => {
+                        const name = String(t?.fileName || t?.name || '').toLowerCase();
+                        const desc = String(t?.description || '').toLowerCase();
+                        const hay = `${name} ${desc}`;
+                        return hay.includes('memorandum of agreement') || hay.includes('moa');
+                    };
+
+                    const resolveTemplateUrl = async (t: any): Promise<string | null> => {
+                        const possibleUrl = t?.url || t?.fileUrl || t?.downloadUrl || t?.downloadURL || t?.fileDownloadUrl;
+                        if (possibleUrl) return String(possibleUrl);
+                        const possiblePath = t?.path || t?.filePath || t?.storagePath || t?.file_path || t?.file_pathname;
+                        if (possiblePath) {
+                            try {
+                                return await getDownloadURL(storageRef(storage, String(possiblePath)));
+                            } catch (e) {
+                                return null;
+                            }
+                        }
+                        return null;
+                    };
+
+                    const moaDoc = docs.find(isMoaTemplate);
+                    if (!moaDoc) return null;
+                    return await resolveTemplateUrl(moaDoc);
+                } catch (e) {
+                    return null;
+                }
+            };
+
             let urlToOpen = raw;
             const looksLikeHttp = /^https?:\/\//i.test(raw);
+            const looksLikeYesNoFlag = ['yes', 'true', '1', 'y'].includes(raw.toLowerCase());
 
             // If it's not an http(s) URL, treat it as a Firebase Storage reference or path.
             // Common shapes:
@@ -177,9 +235,22 @@ const CompanyProfileScreen: React.FC = () => {
                 try {
                     urlToOpen = await getDownloadURL(storageRef(storage, normalizedPath));
                 } catch (storageErr) {
-                    // Some admins store a non-link note; fallback to showing the raw value.
-                    Alert.alert('MOA Information', raw);
-                    return;
+                    // Some admins store a non-link note (e.g. "Yes").
+                    // Fallback: try to use the admin-provided MOA template from Help Desk.
+                    const helpDeskUrl = await resolveMoaFromHelpDeskTemplates();
+                    if (helpDeskUrl) {
+                        urlToOpen = helpDeskUrl;
+                    } else {
+                        if (looksLikeYesNoFlag) {
+                            Alert.alert(
+                                'No MOA file configured',
+                                'This company is marked as having an MOA, but no downloadable MOA file/link was found. Please ask an admin to upload the MOA in Guides/Help Desk.'
+                            );
+                        } else {
+                            Alert.alert('MOA Information', raw);
+                        }
+                        return;
+                    }
                 }
             }
 

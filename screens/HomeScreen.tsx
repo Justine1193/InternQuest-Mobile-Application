@@ -78,6 +78,33 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
       const querySnapshot = await getDocs(collection(firestore, 'companies'));
       const companyData: Post[] = querySnapshot.docs.map((doc: any) => {
         const data = doc.data();
+
+        const normalizeMoaCandidate = (v: any): string => {
+          if (typeof v === 'string') return v.trim();
+          if (v && typeof v === 'object') {
+            const fromObj = v.url || v.downloadUrl || v.downloadURL || v.path || v.storagePath;
+            return typeof fromObj === 'string' ? fromObj.trim() : '';
+          }
+          return '';
+        };
+        const moaCandidates = [
+          data?.moaFileUrl,
+          data?.moaFileURL,
+          data?.moaUrl,
+          data?.moaURL,
+          data?.moaStoragePath,
+          data?.moaPath,
+          data?.moa,
+        ];
+        const moaValue = moaCandidates
+          .map(normalizeMoaCandidate)
+          .find((s) => {
+            if (!s) return false;
+            const lower = s.toLowerCase();
+            if (['yes', 'no', 'true', 'false', '1', '0', 'y', 'n'].includes(lower)) return false;
+            return true;
+          }) || normalizeMoaCandidate(data?.moa);
+
         return {
           id: doc.id,
           company: data.companyName || '',
@@ -91,7 +118,7 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
           email: data.companyEmail || '',
           contactPersonName: data.contactPersonName || data.companyContactPerson || data.contactPerson || '',
           contactPersonPhone: data.contactPersonPhone || data.companyContactPhone || data.contactPhone || data.phone || '',
-          moa: data.moa || '',
+          moa: moaValue || '',
           modeOfWork: Array.isArray(data.modeofwork) ? data.modeofwork[0] : data.modeofwork || '',
           latitude: data.latitude || 0,
           longitude: data.longitude || 0,

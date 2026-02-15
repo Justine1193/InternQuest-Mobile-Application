@@ -117,6 +117,15 @@ export const convertCSVToCompanies = (csvData) => {
         moa: parseBooleanField(row['MOA'] || row['moa'] || ''),
         moaValidityYears: parseNumberField(row['MOA Validity Years'] || row['moaValidityYears'] || ''),
         modeOfWork: parseArrayField(row['Mode of Work'] || row['modeOfWork'] || '', ','),
+        endorsedByCollege: (row['Endorsed by College'] || row['endorsedByCollege'] || '').trim(),
+        contactPersonName: (row['Contact Person Name'] || row['contactPersonName'] || '').trim(),
+        contactPersonPhone: (row['Contact Number'] || row['Contact Person Phone'] || row['contactPersonPhone'] || '').trim(),
+        moaStartDate: (() => {
+          const raw = row['MOA Start Date'] || row['moaStartDate'] || '';
+          return raw && String(raw).trim() ? parseDateField(raw) : '';
+        })(),
+        moaFileUrl: (row['MOA Document URL'] || row['moaFileUrl'] || '').trim(),
+        moaFileName: (row['MOA Document Name'] || row['moaFileName'] || '').trim(),
         createdAt: row['Created'] ? parseDateField(row['Created']) : new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };

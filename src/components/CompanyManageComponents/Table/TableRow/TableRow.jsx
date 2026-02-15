@@ -256,14 +256,6 @@ const TableRow = ({
           ) : null}
         </div>
       </td>
-      <td>
-        <input
-          type="checkbox"
-          className="table-checkbox"
-          checked={row.moa === "Yes"}
-          readOnly
-        />
-      </td>
       <td className="moa-validity-cell">
         <span
           className={`moa-validity-pill moa-validity-pill-${moaValidity.variant}`}

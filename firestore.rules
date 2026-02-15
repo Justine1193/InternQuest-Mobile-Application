@@ -58,7 +58,7 @@ service cloud.firestore {
         ((request.auth.uid == userId && !isBlocked(userId)) || isAdmin());
     }
 
-    // COMPANIES COLLECTION
+    // COMPANIES COLLECTION (admin panel: ensure user is signed in with Firebase Auth before import/save)
     match /companies/{companyId} {
       allow read, write: if request.auth != null;
     }
@@ -205,7 +205,8 @@ service cloud.firestore {
     match /meta/{docId} {
       // Allow read for everyone (skills/fields suggestions)
       allow read: if true;
-      allow write: if isAdmin();
+      // Write: any authenticated user (Settings > Platform Data is admin-only in app; admin panel users sign in via Firebase Auth)
+      allow write: if request.auth != null;
     }
 
     // COLLEGES collection

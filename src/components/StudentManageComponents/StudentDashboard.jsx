@@ -100,6 +100,7 @@ import { activityLoggers } from "../../utils/activityLogger.js";
 import logger from "../../utils/logger.js";
 import "./StudentDashboard.css";
 import "../DashboardOverview/DashboardOverview.css";
+import "../DashboardPageHeader/DashboardPageHeader.css";
 import "./NotificationSection.css";
 import "../dashboardTheme.css";
 import Footer from "../Footer/Footer.jsx";
@@ -804,8 +805,6 @@ const StudentDashboard = () => {
   const fetchPendingStudentsWithRequirements = useCallback(async () => {
     setIsLoadingPendingStudents(true);
     try {
-      const pendingStudents = [];
-
       // Filter students who are not approved (status !== true) within role scope
       const scopedStudents = (() => {
         // Adviser: scope by section(s)
@@ -873,19 +872,21 @@ const StudentDashboard = () => {
         return students;
       })();
 
+      const isHiredStatus = (s) =>
+        s.status === true ||
+        (typeof s.status === "string" && s.status.toLowerCase() === "hired");
       const unapprovedStudents = scopedStudents.filter(
-        (student) => student.status !== true
+        (student) => !isHiredStatus(student)
       );
 
-      // Check each unapproved student for requirements
-      for (const student of unapprovedStudents) {
-        const hasRequirements = await checkStudentHasRequirements(student.id);
-        if (hasRequirements) {
-          pendingStudents.push(student);
-        }
-      }
-
-      setPendingStudentsWithRequirements(pendingStudents);
+      // Check all unapproved students in parallel (was sequential — caused slow load)
+      const results = await Promise.all(
+        unapprovedStudents.map(async (student) => {
+          const hasRequirements = await checkStudentHasRequirements(student.id);
+          return hasRequirements ? student : null;
+        })
+      );
+      setPendingStudentsWithRequirements(results.filter(Boolean));
     } catch (error) {
       logger.error("Error fetching pending students with requirements:", error);
       setError("Failed to fetch pending students with requirements.");
@@ -1033,12 +1034,19 @@ const StudentDashboard = () => {
     fetchData();
   }, [authUser?.uid]);
 
-  // Fetch pending students when view mode changes or students data changes
+  // Fetch pending students as soon as students (and admin scope) are available — no need to click Pending tab
   useEffect(() => {
-    if (viewMode === "pending" && students.length > 0) {
+    if (students.length > 0) {
       fetchPendingStudentsWithRequirements();
     }
-  }, [viewMode, students.length, fetchPendingStudentsWithRequirements]);
+  }, [
+    students.length,
+    fetchPendingStudentsWithRequirements,
+    // Re-run when admin scope loads so stat is correct before user clicks Pending tab
+    adminSection,
+    adminPrograms,
+    adminCollegeCode,
+  ]);
 
   // Helper: get time in ms from Firestore appliedAt/approvedAt (Timestamp, string, or number)
   const getApplicationTime = (val) => {
@@ -1644,7 +1652,12 @@ const StudentDashboard = () => {
       };
     }
 
-    const hiredCount = statsStudents.filter((s) => s.status === true).length;
+    // Count as hired: boolean true, or string "hired" (UI displays hired for both)
+    const hiredCount = statsStudents.filter(
+      (s) =>
+        s.status === true ||
+        (typeof s.status === "string" && s.status.toLowerCase() === "hired")
+    ).length;
     let pendingCount = 0;
     let approvedCount = 0;
     let totalReqs = 0;
@@ -1696,12 +1709,19 @@ const StudentDashboard = () => {
   useEffect(() => {
     setOverviewStats((prev) => ({
       ...prev,
-      pendingRequirements: enhancedStats.pendingCount,
       approvedRequirements: enhancedStats.approvedCount,
       totalRequirements: enhancedStats.totalReqs,
       hiredStudents: enhancedStats.hiredCount,
     }));
   }, [enhancedStats]);
+
+  // Pending Review stat = number of students with pending requirements (matches table count)
+  useEffect(() => {
+    setOverviewStats((prev) => ({
+      ...prev,
+      pendingRequirements: pendingStudentsWithRequirements.length,
+    }));
+  }, [pendingStudentsWithRequirements]);
 
   // Update active filter chips
   useEffect(() => {
@@ -2506,14 +2526,18 @@ const StudentDashboard = () => {
           return true; // Show all if no filter or "All" selected
         }
         if (activeFilterValues.hired === "Yes") {
-          return student.status === true;
+          return (
+            student.status === true ||
+            (typeof student.status === "string" &&
+              student.status.toLowerCase() === "hired")
+          );
         }
         if (activeFilterValues.hired === "No") {
-          return (
-            student.status === false ||
-            student.status === undefined ||
-            student.status === null
-          );
+          const isHired =
+            student.status === true ||
+            (typeof student.status === "string" &&
+              student.status.toLowerCase() === "hired");
+          return !isHired;
         }
         return true; // Default: show all
       })();
@@ -3274,24 +3298,23 @@ const StudentDashboard = () => {
       />
       <Navbar onLogout={handleLogoutClick} />
       <div className="dashboard-content">
-        {/* Page Header */}
-        <div className="student-page-header">
-          <h1>Manage Students</h1>
-          <p>Track student progress and manage internship requirements</p>
-        </div>
-
-        {/* Stats Cards Row */}
-        <div className="iq-stats-wrapper">
-          <div className="iq-stats-grid">
-            <div className="iq-stat-card iq-stat--purple">
-              <div className="iq-stat-icon-wrapper" aria-hidden="true">
-                <IoPeopleOutline className="iq-stat-icon" />
-              </div>
-              <div className="iq-stat-content">
-                <div className="iq-stat-value">
-                  {overviewStats.totalStudents || 0}
-                </div>
-                <div className="iq-stat-label">
+        {/* Page Header (Archive Management style) */}
+        <div className="dashboard-page-header">
+          <div className="dashboard-header-content">
+            <div className="dashboard-header-icon-wrapper dashboard-header-icon--purple" aria-hidden="true">
+              <IoPeopleOutline className="dashboard-header-icon dashboard-header-icon--purple" />
+            </div>
+            <div>
+              <h1>Manage Students</h1>
+              <p>Track student progress and manage internship requirements</p>
+            </div>
+          </div>
+          <div className="dashboard-header-stats dashboard-stat-count-3">
+            <div className="dashboard-stat-card">
+              <IoPeopleOutline className="dashboard-stat-icon" />
+              <div className="dashboard-stat-content">
+                <span className="dashboard-stat-value">{overviewStats.totalStudents || 0}</span>
+                <span className="dashboard-stat-label">
                   {currentRole === ROLES.SUPER_ADMIN ||
                   currentRole === "super_admin"
                     ? "Total Students"
@@ -3307,29 +3330,21 @@ const StudentDashboard = () => {
                     : currentRole === ROLES.ADVISER
                     ? "Students (Your Section)"
                     : "Total Students"}
-                </div>
+                </span>
               </div>
             </div>
-            <div className="iq-stat-card iq-stat--warning">
-              <div className="iq-stat-icon-wrapper" aria-hidden="true">
-                <IoTimeOutline className="iq-stat-icon" />
-              </div>
-              <div className="iq-stat-content">
-                <div className="iq-stat-value">
-                  {overviewStats.pendingRequirements || 0}
-                </div>
-                <div className="iq-stat-label">Pending Review</div>
+            <div className="dashboard-stat-card">
+              <IoTimeOutline className="dashboard-stat-icon" />
+              <div className="dashboard-stat-content">
+                <span className="dashboard-stat-value">{overviewStats.pendingRequirements || 0}</span>
+                <span className="dashboard-stat-label">Pending Review</span>
               </div>
             </div>
-            <div className="iq-stat-card iq-stat--success">
-              <div className="iq-stat-icon-wrapper" aria-hidden="true">
-                <IoCheckmarkCircle className="iq-stat-icon" />
-              </div>
-              <div className="iq-stat-content">
-                <div className="iq-stat-value">
-                  {overviewStats.hiredStudents || 0}
-                </div>
-                <div className="iq-stat-label">Hired Students</div>
+            <div className="dashboard-stat-card">
+              <IoCheckmarkCircle className="dashboard-stat-icon" />
+              <div className="dashboard-stat-content">
+                <span className="dashboard-stat-value">{overviewStats.hiredStudents || 0}</span>
+                <span className="dashboard-stat-label">Hired Students</span>
               </div>
             </div>
           </div>

@@ -160,6 +160,25 @@
   line-height: 1.4;
 }
 
+/* Page header matches table-section width (90%) and background */
+.dashboard-content .dashboard-page-header {
+  width: 90%;
+}
+
+/* Company dashboard stat card icon colors: Total=blue, Active MOA=green, Expiring=yellow, Expired=red */
+.dashboard-content .dashboard-page-header .dashboard-header-stats .dashboard-stat-card:nth-child(1) .dashboard-stat-icon {
+  color: #2563eb;
+}
+.dashboard-content .dashboard-page-header .dashboard-header-stats .dashboard-stat-card:nth-child(2) .dashboard-stat-icon {
+  color: #10b981;
+}
+.dashboard-content .dashboard-page-header .dashboard-header-stats .dashboard-stat-card:nth-child(3) .dashboard-stat-icon {
+  color: #eab308;
+}
+.dashboard-content .dashboard-page-header .dashboard-header-stats .dashboard-stat-card:nth-child(4) .dashboard-stat-icon {
+  color: #ef4444;
+}
+
 /* Table Section */
 .table-section {
   background: white;
@@ -212,13 +231,18 @@
   align-items: center;
   gap: 0.75rem;
   padding: 0.75rem 1rem;
-  margin: 0 1.5rem 1rem 1.5rem;
+  margin: 1.25rem 1.5rem 1rem 1.5rem;
   border-radius: 8px;
   font-size: 0.8rem;
   animation: slideIn 0.3s ease-out;
   min-width: 0;
   max-width: calc(100% - 3rem);
   box-sizing: border-box;
+}
+
+/* Less top margin when expiring alert follows expired alert */
+.moa-alert-banner.expired + .moa-alert-banner.expiring {
+  margin-top: 0.5rem;
 }
 
 @keyframes slideIn {
@@ -504,7 +528,7 @@
   min-width: 0;
   max-width: 100%;
   box-sizing: border-box;
-  overflow-x: visible;
+  overflow: visible;
   width: 100%;
 }
 

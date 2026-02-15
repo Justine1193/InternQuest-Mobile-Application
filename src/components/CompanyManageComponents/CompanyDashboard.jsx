@@ -9,6 +9,7 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import "./CompanyDashboard.css";
+import "../DashboardPageHeader/DashboardPageHeader.css";
 import Navbar from "../Navbar/Navbar.jsx";
 import DashboardOverview from "../DashboardOverview/DashboardOverview.jsx";
 import SearchBar from "../SearchBar/SearchBar.jsx";
@@ -37,7 +38,7 @@ import {
   doc,
 } from "firebase/firestore";
 import { ref, update as updateRealtime } from "firebase/database";
-import { db, realtimeDb } from "../../../firebase.js";
+import { auth, db, realtimeDb } from "../../../firebase.js";
 import {
   downloadCSV,
   prepareCompaniesForExport,
@@ -109,6 +110,8 @@ const Dashboard = () => {
     field: "",
     modeOfWork: "",
     moaExpirationStatus: "",
+    endorsedByCollege: "",
+    skills: "",
   });
   const [showConfirm, setShowConfirm] = useState(false);
   const [openMenuId, setOpenMenuId] = useState(null);
@@ -153,6 +156,8 @@ const Dashboard = () => {
       field: "",
       modeOfWork: "",
       moaExpirationStatus: "",
+      endorsedByCollege: "",
+      skills: "",
     });
     success("All filters cleared");
   };
@@ -166,6 +171,32 @@ const Dashboard = () => {
     setSortConfig({ key, direction });
   };
 
+  // Unique "Endorsed by College" values from current companies (for filter dropdown)
+  const endorsedByCollegeOptions = React.useMemo(() => {
+    if (!Array.isArray(tableData)) return [];
+    const set = new Set();
+    tableData.forEach((row) => {
+      const v = row.endorsedByCollege;
+      if (v && typeof v === "string" && v.trim()) set.add(v.trim());
+    });
+    return ["All", ...Array.from(set).sort((a, b) => a.localeCompare(b))];
+  }, [tableData]);
+
+  // Unique skills from current companies (skillsREq) for filter dropdown
+  const skillsFilterOptions = React.useMemo(() => {
+    if (!Array.isArray(tableData)) return [];
+    const set = new Set();
+    tableData.forEach((row) => {
+      const skillsArr = row.skillsREq || row.skills;
+      if (Array.isArray(skillsArr)) {
+        skillsArr.forEach((s) => {
+          if (s && typeof s === "string" && s.trim()) set.add(s.trim());
+        });
+      }
+    });
+    return ["All", ...Array.from(set).sort((a, b) => a.localeCompare(b))];
+  }, [tableData]);
+
   // --- Filtering and Sorting logic for companies table ---
   const filteredData = Array.isArray(tableData)
     ? tableData.filter((row) => {
@@ -175,7 +206,9 @@ const Dashboard = () => {
             row.fields.some((f) =>
               f.toLowerCase().includes(searchQuery.toLowerCase()),
             )) ||
-          row.description?.toLowerCase().includes(searchQuery.toLowerCase());
+          row.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          (row.address && row.address.toLowerCase().includes(searchQuery.toLowerCase())) ||
+          (row.companyAddress && row.companyAddress.toLowerCase().includes(searchQuery.toLowerCase()));
         const matchesField = filterValues.field
           ? Array.isArray(row.fields) &&
             row.fields.some((f) =>
@@ -186,6 +219,25 @@ const Dashboard = () => {
           ? Array.isArray(row.modeOfWork)
             ? row.modeOfWork.includes(filterValues.modeOfWork)
             : row.modeOfWork === filterValues.modeOfWork
+          : true;
+
+        const matchesEndorsedByCollege = filterValues.endorsedByCollege
+          ? (row.endorsedByCollege || "").trim().toLowerCase() ===
+            filterValues.endorsedByCollege.trim().toLowerCase()
+          : true;
+
+        const matchesSkills = filterValues.skills
+          ? (() => {
+              const skillsArr = row.skillsREq || row.skills;
+              if (!Array.isArray(skillsArr)) return false;
+              const filterSkill = filterValues.skills.trim().toLowerCase();
+              return skillsArr.some(
+                (s) =>
+                  s &&
+                  (String(s).trim().toLowerCase() === filterSkill ||
+                    String(s).trim().toLowerCase().includes(filterSkill))
+              );
+            })()
           : true;
 
         // MOA Expiration Status filter
@@ -221,6 +273,8 @@ const Dashboard = () => {
           matchesSearch &&
           matchesField &&
           matchesModeOfWork &&
+          matchesEndorsedByCollege &&
+          matchesSkills &&
           matchesMoaExpiration
         );
       })
@@ -467,6 +521,11 @@ const Dashboard = () => {
         return;
       }
 
+      if (!auth.currentUser) {
+        showError("You must be signed in to import companies. Please sign in and try again.");
+        return;
+      }
+
       setImportProgress({ current: 0, total: companies.length });
 
       // Batch import companies
@@ -478,6 +537,18 @@ const Dashboard = () => {
         try {
           const company = companies[i];
 
+          // Compute MOA expiration from start date + validity years when provided
+          let moaStartDate = company.moaStartDate || "";
+          let moaExpirationDate = "";
+          if (moaStartDate && (company.moaValidityYears || 1) > 0) {
+            try {
+              const start = new Date(moaStartDate);
+              const exp = new Date(start);
+              exp.setFullYear(exp.getFullYear() + (company.moaValidityYears || 1));
+              moaExpirationDate = exp.toISOString();
+            } catch (_) {}
+          }
+
           // Map to Firestore format
           const newCompany = {
             companyName: company.companyName,
@@ -488,8 +559,15 @@ const Dashboard = () => {
             skillsREq: company.skills,
             moa: "Yes", // MOA is always required
             moaValidityYears: company.moaValidityYears || 1,
+            moaStartDate: moaStartDate || undefined,
+            moaExpirationDate: moaExpirationDate || undefined,
+            moaFileUrl: company.moaFileUrl || "",
+            moaFileName: company.moaFileName || "",
             modeOfWork: company.modeOfWork,
             fields: company.fields,
+            endorsedByCollege: company.endorsedByCollege || "",
+            contactPersonName: company.contactPersonName || "",
+            contactPersonPhone: company.contactPersonPhone || "",
             createdAt: company.createdAt || new Date().toISOString(),
             updatedAt: company.updatedAt || new Date().toISOString(),
           };
@@ -513,9 +591,15 @@ const Dashboard = () => {
           successCount++;
         } catch (err) {
           errorCount++;
+          const isPermissionError =
+            err?.code === "permission-denied" ||
+            (err?.message && String(err.message).toLowerCase().includes("permission"));
+          const userMessage = isPermissionError
+            ? "Permission denied. Please sign out, sign in again, and retry the import."
+            : err.message;
           importErrors.push({
             company: companies[i].companyName,
-            error: err.message,
+            error: userMessage,
           });
           logger.error(
             `Failed to import company ${companies[i].companyName}:`,
@@ -584,61 +668,48 @@ const Dashboard = () => {
         type="warning"
       />
       <div className="dashboard-content">
-        {/* Page Header */}
-        <div className="company-page-header">
-          <h1>{isAdviser ? "View Companies" : "Manage Companies"}</h1>
-          <p>
-            {isAdviser
-              ? "View partner companies and their MOA status"
-              : "View and manage partner companies and their MOA status"}
-          </p>
-        </div>
-
-        {/* Stats Cards */}
-        <div className="iq-stats-wrapper">
-          <div className="iq-stats-grid">
-            <div className="iq-stat-card iq-stat--info">
-              <div className="iq-stat-icon-wrapper" aria-hidden="true">
-                <IoBusinessOutline className="iq-stat-icon" />
-              </div>
-              <div className="iq-stat-content">
-                <div className="iq-stat-value">
-                  {overviewStats.totalCompanies || 0}
-                </div>
-                <div className="iq-stat-label">Total Companies</div>
+        {/* Page Header (Archive Management style) */}
+        <div className="dashboard-page-header">
+          <div className="dashboard-header-content">
+            <div className="dashboard-header-icon-wrapper dashboard-header-icon--blue" aria-hidden="true">
+              <IoBusinessOutline className="dashboard-header-icon dashboard-header-icon--blue" />
+            </div>
+            <div>
+              <h1>{isAdviser ? "View Companies" : "Manage Companies"}</h1>
+              <p>
+                {isAdviser
+                  ? "View partner companies and their MOA status"
+                  : "View and manage partner companies and their MOA status"}
+              </p>
+            </div>
+          </div>
+          <div className="dashboard-header-stats">
+            <div className="dashboard-stat-card">
+              <IoBusinessOutline className="dashboard-stat-icon" />
+              <div className="dashboard-stat-content">
+                <span className="dashboard-stat-value">{overviewStats.totalCompanies || 0}</span>
+                <span className="dashboard-stat-label">Total Companies</span>
               </div>
             </div>
-            <div className="iq-stat-card iq-stat--success">
-              <div className="iq-stat-icon-wrapper" aria-hidden="true">
-                <IoCheckmarkCircleOutline className="iq-stat-icon" />
-              </div>
-              <div className="iq-stat-content">
-                <div className="iq-stat-value">
-                  {overviewStats.moaValid || 0}
-                </div>
-                <div className="iq-stat-label">Active MOA</div>
+            <div className="dashboard-stat-card">
+              <IoCheckmarkCircleOutline className="dashboard-stat-icon" />
+              <div className="dashboard-stat-content">
+                <span className="dashboard-stat-value">{overviewStats.moaValid || 0}</span>
+                <span className="dashboard-stat-label">Active MOA</span>
               </div>
             </div>
-            <div className="iq-stat-card iq-stat--warning">
-              <div className="iq-stat-icon-wrapper" aria-hidden="true">
-                <IoWarningOutline className="iq-stat-icon" />
-              </div>
-              <div className="iq-stat-content">
-                <div className="iq-stat-value">
-                  {overviewStats.moaExpiringSoon || 0}
-                </div>
-                <div className="iq-stat-label">Expiring Soon</div>
+            <div className="dashboard-stat-card">
+              <IoWarningOutline className="dashboard-stat-icon" />
+              <div className="dashboard-stat-content">
+                <span className="dashboard-stat-value">{overviewStats.moaExpiringSoon || 0}</span>
+                <span className="dashboard-stat-label">Expiring Soon</span>
               </div>
             </div>
-            <div className="iq-stat-card iq-stat--danger">
-              <div className="iq-stat-icon-wrapper" aria-hidden="true">
-                <IoAlertCircleOutline className="iq-stat-icon" />
-              </div>
-              <div className="iq-stat-content">
-                <div className="iq-stat-value">
-                  {overviewStats.moaExpired || 0}
-                </div>
-                <div className="iq-stat-label">Expired MOA</div>
+            <div className="dashboard-stat-card">
+              <IoAlertCircleOutline className="dashboard-stat-icon" />
+              <div className="dashboard-stat-content">
+                <span className="dashboard-stat-value">{overviewStats.moaExpired || 0}</span>
+                <span className="dashboard-stat-label">Expired MOA</span>
               </div>
             </div>
           </div>
@@ -681,6 +752,8 @@ const Dashboard = () => {
               onFilter={setFilterValues}
               filterValues={filterValues}
               type="company"
+              endorsedByCollegeOptions={endorsedByCollegeOptions}
+              skillsFilterOptions={skillsFilterOptions}
             />
           </div>
 

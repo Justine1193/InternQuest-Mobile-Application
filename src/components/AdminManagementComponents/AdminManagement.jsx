@@ -43,6 +43,7 @@ import "./AdminManagement.css";
 import LoadingSpinner from "../LoadingSpinner.jsx";
 import ConfirmModal from "../ConfirmModalComponents/ConfirmModal.jsx";
 import EmptyState from "../EmptyState/EmptyState.jsx";
+import CustomDropdown from "../CustomDropdown.jsx";
 import {
   IoShieldCheckmarkOutline,
   IoPeopleOutline,
@@ -986,10 +987,31 @@ const AdminManagement = () => {
       .trim()
       .toUpperCase()}-${currentSection.sectionNumber.trim().toUpperCase()}`;
 
-    // Check if section already exists
+    // Check if section already exists in current form
     if (formData.sections.includes(sectionString)) {
       setSectionProgramError("This section has already been added.");
       return;
+    }
+
+    // Check if section is already assigned to another user (only one user per section)
+    const normalizedNew = sectionString.trim().toUpperCase();
+    const currentEditingId = editingAdmin?.id || null;
+    for (const admin of admins) {
+      if (admin.id === currentEditingId) continue;
+      if (admin.role !== "adviser" && admin.role !== "coordinator") continue;
+      const theirSections =
+        admin.sections || (admin.section ? [admin.section] : []);
+      for (const sec of theirSections) {
+        const normalizedSec = (sec || "").toString().trim().toUpperCase();
+        if (normalizedSec === normalizedNew) {
+          const who =
+            admin.name?.trim() || admin.username || admin.email || "another user";
+          setSectionProgramError(
+            `This section (${sectionString}) is already assigned to ${who}. Only one user can be assigned per section.`
+          );
+          return;
+        }
+      }
     }
 
     // Add to sections array
@@ -2060,14 +2082,6 @@ const AdminManagement = () => {
                               ))}
                             </div>
                           )}
-                        {sectionProgramError && (
-                          <span
-                            className="error-message"
-                            style={{ display: "block", marginTop: "0.25rem" }}
-                          >
-                            {sectionProgramError}
-                          </span>
-                        )}
                       </div>
                       <div className="section-input-item">
                         <label
@@ -2094,69 +2108,24 @@ const AdminManagement = () => {
                       className="add-section-btn"
                       onClick={handleAddSection}
                       disabled={isLoading}
-                      style={{
-                        marginTop: "0.5rem",
-                        padding: "0.5rem 1rem",
-                        backgroundColor: "#1976d2",
-                        color: "white",
-                        border: "none",
-                        borderRadius: "4px",
-                        cursor: "pointer",
-                        fontSize: "0.9rem",
-                      }}
                     >
                       + Add Section
                     </button>
                     {formData.sections.length > 0 && (
-                      <div
-                        style={{
-                          marginTop: "1rem",
-                          padding: "0.75rem",
-                          backgroundColor: "#f5f5f5",
-                          borderRadius: "4px",
-                        }}
-                      >
-                        <strong
-                          style={{ display: "block", marginBottom: "0.5rem" }}
-                        >
+                      <div className="added-sections-block">
+                        <strong>
                           Added Sections ({formData.sections.length}):
                         </strong>
-                        <div
-                          style={{
-                            display: "flex",
-                            flexWrap: "wrap",
-                            gap: "0.5rem",
-                          }}
-                        >
+                        <div className="added-sections-list">
                           {formData.sections.map((section, index) => (
-                            <span
-                              key={index}
-                              style={{
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: "0.5rem",
-                                padding: "0.25rem 0.75rem",
-                                backgroundColor: "white",
-                                border: "1px solid #ddd",
-                                borderRadius: "4px",
-                                fontSize: "0.9rem",
-                              }}
-                            >
+                            <span key={index} className="added-section-chip">
                               {section}
                               <button
                                 type="button"
+                                className="remove-section-btn"
                                 onClick={() => handleRemoveSection(section)}
                                 disabled={isLoading}
-                                style={{
-                                  background: "none",
-                                  border: "none",
-                                  color: "#d32f2f",
-                                  cursor: "pointer",
-                                  fontSize: "1.2rem",
-                                  padding: "0",
-                                  lineHeight: "1",
-                                }}
-                                aria-label={`Remove section ${section}`}
+                                aria-label={"Remove section " + section}
                               >
                                 ×
                               </button>
@@ -2177,6 +2146,11 @@ const AdminManagement = () => {
                         ? "Advisers will only see students in their assigned sections."
                         : "Coordinators with sections will only see students in their assigned sections."}
                     </small>
+                    {sectionProgramError && (
+                      <div className="section-error-below" role="alert">
+                        {sectionProgramError}
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -2241,35 +2215,56 @@ const AdminManagement = () => {
               </div>
 
               <div className="admin-filter-wrapper">
-                <select
-                  className="admin-filter-select"
-                  value={filterRole}
-                  onChange={(e) => {
-                    setFilterRole(e.target.value);
+                <CustomDropdown
+                  options={["All Roles", "Admin", "OJT Coordinator", "OJT Adviser"]}
+                  value={
+                    filterRole === ""
+                      ? "All Roles"
+                      : filterRole === "admin"
+                        ? "Admin"
+                        : filterRole === "coordinator"
+                          ? "OJT Coordinator"
+                          : filterRole === "adviser"
+                            ? "OJT Adviser"
+                            : "All Roles"
+                  }
+                  onChange={(display) => {
+                    const value =
+                      display === "All Roles"
+                        ? ""
+                        : display === "Admin"
+                          ? "admin"
+                          : display === "OJT Coordinator"
+                            ? "coordinator"
+                            : display === "OJT Adviser"
+                              ? "adviser"
+                              : "";
+                    setFilterRole(value);
                     setCurrentPage(1);
                   }}
-                >
-                  <option value="">All Roles</option>
-                  <option value="admin">Admin</option>
-                  <option value="coordinator">OJT Coordinator</option>
-                  <option value="adviser">OJT Adviser</option>
-                </select>
+                />
 
-                <select
-                  className="admin-filter-select"
-                  value={filterCollege}
-                  onChange={(e) => {
-                    setFilterCollege(e.target.value);
+                <CustomDropdown
+                  options={[
+                    "All Colleges",
+                    ...collegeOptions.map((c) => c.college_name),
+                  ]}
+                  value={
+                    filterCollege
+                      ? collegeOptions.find((c) => c.college_code === filterCollege)
+                          ?.college_name ?? "All Colleges"
+                      : "All Colleges"
+                  }
+                  onChange={(display) => {
+                    const value =
+                      display === "All Colleges"
+                        ? ""
+                        : collegeOptions.find((c) => c.college_name === display)
+                            ?.college_code ?? "";
+                    setFilterCollege(value);
                     setCurrentPage(1);
                   }}
-                >
-                  <option value="">All Colleges</option>
-                  {collegeOptions.map((college) => (
-                    <option key={college.id} value={college.college_code}>
-                      {college.college_name}
-                    </option>
-                  ))}
-                </select>
+                />
 
                 {(searchQuery || filterRole || filterCollege) && (
                   <button
@@ -2683,8 +2678,7 @@ const AdminManagement = () => {
                   pendingDeleteAdmin.role
                     ? ` (${getRoleDisplayName(pendingDeleteAdmin.role)})`
                     : ""
-                }?\nThis will remove their admin record and add an entry to deletion history.`
-              : ""
+                }?\nThis will remove their admin record and add an entry to deletion history.`: ""
           }
           onConfirm={confirmDeleteAdmin}
           onCancel={cancelDeleteAdmin}

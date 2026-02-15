@@ -332,6 +332,11 @@
 }
 
 /* ===== TABLE SECTION ===== */
+/* Page header matches table-section width (80%) and background */
+.dashboard-content .dashboard-page-header {
+  width: 80%;
+}
+
 .table-section {
   margin: 1.5rem auto;
   background: var(--iq-surface);

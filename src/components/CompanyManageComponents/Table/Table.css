@@ -32,11 +32,12 @@ table th {
   letter-spacing: 0.04em;
   border-bottom: 1px solid #e5e7eb;
   padding: 0.65rem 0.5rem;
-  text-align: left;
+  text-align: center;
   white-space: nowrap;
   position: sticky;
   top: 0;
   z-index: 10;
+  vertical-align: middle;
 }
 
 table th:first-child {
@@ -92,6 +93,7 @@ table td {
   border-bottom: 1px solid #f3f4f6;
   color: #374151;
   font-size: 0.8rem;
+  text-align: center;
   vertical-align: middle;
   line-height: 1.4;
 }
@@ -136,13 +138,18 @@ table tbody tr:last-child td {
 }
 
 /* ===== COLUMN WIDTHS (Fixed Layout) ===== */
-/* Total: 12% + 15% + 18% + 10% + 5% + 10% + 12% + 10% + 40px = ~92% + 40px */
+/* Center alignment: th and td default to center; override for company name */
 
 .checkbox-cell {
   width: 32px !important;
   text-align: center;
   padding: 0.5rem 0.25rem !important;
 }
+
+.company-name-header {
+  text-align: left;
+}
+
 
 /* Company Name - 12% */
 table th:nth-child(1),
@@ -168,13 +175,6 @@ table td:nth-child(4) {
   width: 10%;
 }
 
-/* MOA (checkbox) - 5% */
-table th:nth-child(5),
-table td:nth-child(5) {
-  width: 5%;
-  text-align: center;
-}
-
 /* MOA Validity - 10% */
 table th:nth-child(6),
 table td:nth-child(6) {
@@ -191,7 +191,6 @@ table td:nth-child(7) {
 table th:nth-child(8),
 table td:nth-child(8) {
   width: 10%;
-  text-align: center;
 }
 
 /* Actions/Kebab - Fixed 40px */
@@ -199,13 +198,13 @@ table td:nth-child(8) {
 table th:nth-child(9),
 table td:nth-child(9) {
   width: 40px;
-  text-align: center;
 }
 
 /* ===== COMPANY NAME ===== */
 .company-name-cell {
   position: relative;
   overflow: hidden;
+  text-align: left;
 }
 
 .company-name-content {
@@ -291,6 +290,7 @@ table td:nth-child(9) {
   flex-wrap: wrap;
   gap: 3px;
   overflow: hidden;
+  justify-content: center;
 }
 
 .table-field-tag {
@@ -394,7 +394,7 @@ table td:nth-child(9) {
 
 /* ===== MOA VALIDITY - Compact ===== */
 .moa-validity-cell {
-  text-align: left;
+  text-align: center;
 }
 
 .moa-validity-pill {

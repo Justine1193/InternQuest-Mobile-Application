@@ -10,13 +10,28 @@
   border-radius: 14px;
   box-shadow: 0 8px 32px rgba(25, 118, 210, 0.1),
     0 1.5px 6px rgba(0, 0, 0, 0.08);
+  padding: 0;
+  min-width: 260px;
+  max-width: 320px;
+  max-height: min(85vh, 480px);
+  overflow: hidden;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Scrollable filter fields - only this part scrolls */
+.new-filter-dropdown-scroll {
   padding: 18px 20px 14px 20px;
-  min-width: 240px;
-  z-index: 100;
+  overflow-y: auto;
+  overflow-x: hidden;
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 14px;
 }
+
 
 /* Label Styles */
 .new-filter-label {
@@ -57,12 +72,16 @@
   background: #fff;
 }
 
-/* Button Styles */
+/* Button Styles - pinned to bottom so Apply/Reset are always visible */
 .filter-actions {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-top: 8px;
+  padding: 14px 20px 18px 20px;
+  flex-shrink: 0;
+  background: #fff;
+  border-top: 1px solid #e3eafc;
+  border-radius: 0 0 14px 14px;
 }
 
 .new-filter-btn {
@@ -212,4 +231,58 @@
   padding: 0.2rem 0;
   min-width: 100%;
   overflow: hidden;
+}
+
+/* Portaled list (rendered in body so Mode of Work, MOA, Endorsed by College options aren't clipped) */
+.custom-dropdown-list-portaled {
+  background: #fff;
+  border: 1.5px solid #e3eafc;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  padding: 0.2rem 0;
+  overflow: hidden;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.custom-dropdown-list-portaled .custom-dropdown-option {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem 1.2rem;
+  font-size: 1em;
+  color: #222;
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.16s, color 0.16s;
+  border: none;
+  outline: none;
+  text-align: left;
+  width: 100%;
+  box-sizing: border-box;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  min-width: 0;
+}
+
+.custom-dropdown-list-portaled .custom-dropdown-option .custom-dropdown-checkmark {
+  flex-shrink: 0;
+}
+
+.custom-dropdown-list-portaled .custom-dropdown-option:hover {
+  background: #f0f7ff;
+}
+
+.custom-dropdown-list-portaled .custom-dropdown-option.selected {
+  background: #e3f2fd;
+  color: #1976d2;
+  font-weight: 500;
+}
+
+.custom-dropdown-list-portaled .custom-dropdown-checkmark {
+  color: #1976d2;
+  font-weight: bold;
+  margin-left: 0.5rem;
+  font-size: 1.1em;
 }

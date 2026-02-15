@@ -1,17 +1,20 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { FaFilter } from "react-icons/fa";
 import { IoCloseOutline, IoCloseCircle } from "react-icons/io5";
 import "./SearchBar.css";
 import FilterDropdown from "../FilterDropdown/FilterDropdown";
 import { useSuggestionFields } from "../dashboardUtils";
 
-const SearchBar = ({ onSearch, onFilter, type = "company", filterValues = {}, searchInputRef = null, sectionSuggestions = [], programSuggestions = [] }) => {
+const SearchBar = ({ onSearch, onFilter, type = "company", filterValues = {}, searchInputRef = null, sectionSuggestions = [], programSuggestions = [], endorsedByCollegeOptions = [], skillsFilterOptions = [] }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilter, setShowFilter] = useState(false);
+  const filterAnchorRef = useRef(null);
   const [pendingFilterValues, setPendingFilterValues] = useState({
     field: "",
     modeOfWork: "",
     moaExpirationStatus: "",
+    endorsedByCollege: "",
+    skills: "",
     program: "",
     hired: "",
     locationPreference: "",
@@ -55,6 +58,8 @@ const SearchBar = ({ onSearch, onFilter, type = "company", filterValues = {}, se
           field: "",
           modeOfWork: "",
           moaExpirationStatus: "",
+          endorsedByCollege: "",
+          skills: "",
           program: "",
           hired: "",
           locationPreference: "",
@@ -99,7 +104,7 @@ const SearchBar = ({ onSearch, onFilter, type = "company", filterValues = {}, se
           type="text"
           className="new-searchbar-input"
           placeholder={
-            type === "student" ? "Search students... (Ctrl+F)" : "Search companies... (Ctrl+F)"
+            type === "student" ? "Search students... (Ctrl+F)" : "Search companies, location... (Ctrl+F)"
           }
           value={searchQuery}
           onChange={handleSearch}
@@ -114,7 +119,7 @@ const SearchBar = ({ onSearch, onFilter, type = "company", filterValues = {}, se
             <IoCloseCircle size={20} />
           </button>
         )}
-        <div className="filter-dropdown-container">
+        <div className="filter-dropdown-container" ref={filterAnchorRef}>
           <button
             className={`new-searchbar-btn filter-btn ${activeFilters.length > 0 ? 'has-filters' : ''}`}
             type="button"
@@ -128,6 +133,7 @@ const SearchBar = ({ onSearch, onFilter, type = "company", filterValues = {}, se
           </button>
           {showFilter && (
             <FilterDropdown
+              anchorRef={filterAnchorRef}
               pendingFilterValues={pendingFilterValues}
               setPendingFilterValues={setPendingFilterValues}
               onApply={handleFilterApply}
@@ -135,6 +141,8 @@ const SearchBar = ({ onSearch, onFilter, type = "company", filterValues = {}, se
               fieldSuggestions={fieldSuggestions}
               sectionSuggestions={sectionSuggestions}
               programSuggestions={programSuggestions}
+              endorsedByCollegeOptions={endorsedByCollegeOptions}
+              skillsFilterOptions={skillsFilterOptions}
               type={type}
             />
           )}
@@ -148,6 +156,8 @@ const SearchBar = ({ onSearch, onFilter, type = "company", filterValues = {}, se
                 {key === 'field' ? 'Field' : 
                  key === 'modeOfWork' ? 'Mode' :
                  key === 'moaExpirationStatus' ? 'MOA Status' :
+                 key === 'endorsedByCollege' ? 'Endorsed by College' :
+                 key === 'skills' ? 'Skills' :
                  key === 'program' ? 'Program' :
                  key === 'hired' ? 'Hired' :
                  key === 'blocked' ? 'Blocked' :

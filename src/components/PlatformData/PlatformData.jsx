@@ -20,11 +20,13 @@ import LoadingSpinner from "../LoadingSpinner.jsx";
 import ToastContainer from "../Toast/ToastContainer.jsx";
 import { useToast } from "../../hooks/useToast.js";
 import { clearAdminSession } from "../../utils/auth";
+import { clearCollegeCache } from "../../utils/collegeUtils.js";
 import "./PlatformData.css";
 
 const DOCS = {
   skills: { path: ["meta", "suggestionSkills"], title: "Skills" },
   fields: { path: ["meta", "field"], title: "Preferred Fields" },
+  programs: { path: ["meta", "programs"], title: "Programs" },
 };
 
 const normalizeItem = (value) => String(value || "").trim().replace(/\s+/g, " ");
@@ -38,25 +40,58 @@ const readListFromMetaDoc = (snap) => {
   return [];
 };
 
+/**
+ * Read meta/programs into { collegeName: string[] } (program names only).
+ * Supports: (1) array of strings; (2) array of { name, code } -> use .name.
+ */
+const readPrograms = (programsSnap) => {
+  if (!programsSnap?.exists()) return {};
+  const data = programsSnap.data() || {};
+  const out = {};
+  Object.keys(data).forEach((collegeName) => {
+    const key = collegeName.trim();
+    if (!key) return;
+    const val = data[key];
+    if (!Array.isArray(val)) return;
+    const list = val.map((item) => {
+      if (item && typeof item === "object" && "name" in item) return String(item.name || "").trim();
+      return String(item || "").trim();
+    }).filter(Boolean);
+    if (list.length) out[key] = list;
+  });
+  return out;
+};
+
 const PlatformData = () => {
   const { toasts, removeToast, success, error } = useToast();
 
-  const [activeTab, setActiveTab] = useState("skills"); // "skills" | "fields"
+  const [activeTab, setActiveTab] = useState("skills"); // "skills" | "fields" | "programs"
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
   const [skills, setSkills] = useState([]);
   const [fields, setFields] = useState([]);
+  const [programsMap, setProgramsMap] = useState({}); // { collegeName: string[] }
 
   const [search, setSearch] = useState("");
 
-  // Modal state
+  // Modal state (skills/fields)
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState("add"); // "add" | "edit"
   const [modalValue, setModalValue] = useState("");
   const [editingIndex, setEditingIndex] = useState(-1);
   const [pendingDeleteIndex, setPendingDeleteIndex] = useState(-1);
   const [pendingDeleteName, setPendingDeleteName] = useState("");
+
+  // Programs: edit program names for one college
+  const [editingGroupKey, setEditingGroupKey] = useState(null);
+  const [editingGroupList, setEditingGroupList] = useState([]); // string[]
+  const [addGroupKey, setAddGroupKey] = useState("");
+  const [addGroupModalOpen, setAddGroupModalOpen] = useState(false);
+  const [pendingDeleteGroupKey, setPendingDeleteGroupKey] = useState(null);
+  const [newGroupItemName, setNewGroupItemName] = useState("");
+  const [editingItemIndex, setEditingItemIndex] = useState(-1);
+  const [editingItemValue, setEditingItemValue] = useState("");
 
   const currentItems = activeTab === "skills" ? skills : fields;
   const setCurrentItems = activeTab === "skills" ? setSkills : setFields;
@@ -70,12 +105,14 @@ const PlatformData = () => {
   const loadAll = async () => {
     setIsLoading(true);
     try {
-      const [skillsSnap, fieldsSnap] = await Promise.all([
+      const [skillsSnap, fieldsSnap, programsSnap] = await Promise.all([
         getDoc(doc(db, ...DOCS.skills.path)),
         getDoc(doc(db, ...DOCS.fields.path)),
+        getDoc(doc(db, ...DOCS.programs.path)),
       ]);
       setSkills(readListFromMetaDoc(skillsSnap));
       setFields(readListFromMetaDoc(fieldsSnap));
+      setProgramsMap(readPrograms(programsSnap));
     } catch (e) {
       console.error("Failed to load platform data:", e);
       error("Failed to load platform data. Please try again.");
@@ -113,8 +150,18 @@ const PlatformData = () => {
   const persist = async (nextList) => {
     const key = activeTab;
     const ref = doc(db, ...DOCS[key].path);
-    // Use setDoc with merge so doc can be created if missing
     await setDoc(ref, { list: nextList }, { merge: true });
+  };
+
+  /** Persist programs to meta/programs (program names only). */
+  const persistPrograms = async (nextProgramsMap) => {
+    const programsPayload = {};
+    Object.keys(nextProgramsMap).forEach((collegeName) => {
+      const list = nextProgramsMap[collegeName] || [];
+      programsPayload[collegeName] = list.map((name) => normalizeItem(name)).filter(Boolean);
+    });
+    await setDoc(doc(db, ...DOCS.programs.path), programsPayload, { merge: true });
+    clearCollegeCache();
   };
 
   const handleSave = async () => {
@@ -205,6 +252,129 @@ const PlatformData = () => {
     await handleDelete(index);
   };
 
+  // --- Programs: college -> string[] (program names only) ---
+  const openEditGroup = (key) => {
+    setEditingGroupKey(key);
+    setEditingGroupList((programsMap[key] || []).slice());
+    setNewGroupItemName("");
+    setEditingItemIndex(-1);
+    setEditingItemValue("");
+  };
+
+  const closeEditGroup = () => {
+    setEditingGroupKey(null);
+    setEditingGroupList([]);
+    setNewGroupItemName("");
+    setEditingItemIndex(-1);
+    setEditingItemValue("");
+  };
+
+  const addGroupListItem = () => {
+    const name = normalizeItem(newGroupItemName);
+    if (!name) return;
+    setEditingGroupList((prev) => [...prev, name]);
+    setNewGroupItemName("");
+  };
+
+  const startEditGroupItem = (index) => {
+    setEditingItemIndex(index);
+    setEditingItemValue(editingGroupList[index] || "");
+  };
+
+  const saveEditGroupItem = () => {
+    if (editingItemIndex < 0) return;
+    const name = normalizeItem(editingItemValue);
+    if (!name) return;
+    setEditingGroupList((prev) => {
+      const next = prev.slice();
+      next[editingItemIndex] = name;
+      return next;
+    });
+    setEditingItemIndex(-1);
+    setEditingItemValue("");
+  };
+
+  const removeGroupListItem = (index) => {
+    setEditingGroupList((prev) => prev.filter((_, i) => i !== index));
+    if (editingItemIndex === index) {
+      setEditingItemIndex(-1);
+      setEditingItemValue("");
+    } else if (editingItemIndex > index) {
+      setEditingItemIndex((i) => i - 1);
+    }
+  };
+
+  const saveEditingGroupList = async () => {
+    if (editingGroupKey == null) return;
+    const cleaned = editingGroupList.map(normalizeItem).filter(Boolean);
+    const nextMap = { ...programsMap, [editingGroupKey]: cleaned };
+    setIsSaving(true);
+    try {
+      await persistPrograms(nextMap);
+      setProgramsMap(nextMap);
+      success("Updated successfully.");
+      closeEditGroup();
+    } catch (e) {
+      console.error("Save failed:", e);
+      error("Failed to save. Please try again.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const openAddGroup = () => {
+    setAddGroupKey("");
+    setAddGroupModalOpen(true);
+  };
+
+  const saveAddGroup = async () => {
+    const key = normalizeItem(addGroupKey);
+    if (!key) {
+      error("Please enter a college name.");
+      return;
+    }
+    if (programsMap[key]) {
+      error("That college already exists.");
+      return;
+    }
+    const nextMap = { ...programsMap, [key]: [] };
+    setIsSaving(true);
+    try {
+      await persistPrograms(nextMap);
+      setProgramsMap(nextMap);
+      success("Added successfully.");
+      setAddGroupModalOpen(false);
+      setAddGroupKey("");
+    } catch (e) {
+      console.error("Save failed:", e);
+      error("Failed to save. Please try again.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const openDeleteGroupConfirm = (key) => setPendingDeleteGroupKey(key);
+  const closeDeleteGroupConfirm = () => setPendingDeleteGroupKey(null);
+
+  const confirmDeleteGroup = async () => {
+    if (pendingDeleteGroupKey == null) return;
+    const key = pendingDeleteGroupKey;
+    const nextMap = { ...programsMap };
+    delete nextMap[key];
+    closeDeleteGroupConfirm();
+    setIsSaving(true);
+    try {
+      await persistPrograms(nextMap);
+      setProgramsMap(nextMap);
+      success("Deleted successfully.");
+    } catch (e) {
+      console.error("Delete failed:", e);
+      error("Failed to delete. Please try again.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleLogout = async () => {
     try {
       await signOut(auth);
@@ -228,7 +398,7 @@ const PlatformData = () => {
             </div>
             <div>
               <h1>Platform Data</h1>
-              <p>Manage skills and preferred fields across the platform</p>
+              <p>Manage skills, preferred fields, and college programs (with program codes)</p>
             </div>
           </div>
         </header>
@@ -261,106 +431,217 @@ const PlatformData = () => {
               Preferred Fields
               <span className="tab-pill">{fields.length}</span>
             </button>
-          </div>
-
-          <div className="platform-data-toolbar">
-            <div className="platform-data-search">
-              <IoSearchOutline className="search-icon" aria-hidden="true" />
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder={`Search ${DOCS[activeTab].title.toLowerCase()}...`}
-                aria-label="Search"
-              />
-              {search && (
-                <button
-                  type="button"
-                  className="search-clear"
-                  onClick={() => setSearch("")}
-                  aria-label="Clear search"
-                >
-                  <IoCloseOutline />
-                </button>
-              )}
-            </div>
-
             <button
               type="button"
-              className="primary-btn"
-              onClick={openAdd}
-              disabled={isSaving}
+              className={`tab-btn ${activeTab === "programs" ? "active" : ""}`}
+              onClick={() => setActiveTab("programs")}
+              role="tab"
+              aria-selected={activeTab === "programs"}
             >
-              <IoAddOutline />
-              {activeTab === "skills" ? "Add Skill" : "Add Field"}
+              Programs
+              <span className="tab-pill">{Object.keys(programsMap).length}</span>
             </button>
           </div>
 
-          <div className="platform-data-table-wrap">
-            <table className="platform-data-table" role="table">
-              <thead>
-                <tr>
-                  <th>{activeTab === "skills" ? "Skill" : "Preferred Field"}</th>
-                  <th className="actions-col">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredItems.length === 0 ? (
+          <div className="platform-data-toolbar">
+            {(activeTab === "skills" || activeTab === "fields") && (
+              <>
+                <div className="platform-data-search">
+                  <IoSearchOutline className="search-icon" aria-hidden="true" />
+                  <input
+                    type="text"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder={`Search ${DOCS[activeTab].title.toLowerCase()}...`}
+                    aria-label="Search"
+                  />
+                  {search && (
+                    <button
+                      type="button"
+                      className="search-clear"
+                      onClick={() => setSearch("")}
+                      aria-label="Clear search"
+                    >
+                      <IoCloseOutline />
+                    </button>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  className="primary-btn"
+                  onClick={openAdd}
+                  disabled={isSaving}
+                >
+                  <IoAddOutline />
+                  {activeTab === "skills" ? "Add Skill" : "Add Field"}
+                </button>
+              </>
+            )}
+            {activeTab === "programs" && (
+              <>
+                <div className="platform-data-search">
+                  <IoSearchOutline className="search-icon" aria-hidden="true" />
+                  <input
+                    type="text"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Search colleges..."
+                    aria-label="Search"
+                  />
+                  {search && (
+                    <button
+                      type="button"
+                      className="search-clear"
+                      onClick={() => setSearch("")}
+                      aria-label="Clear search"
+                    >
+                      <IoCloseOutline />
+                    </button>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  className="primary-btn"
+                  onClick={openAddGroup}
+                  disabled={isSaving}
+                >
+                  <IoAddOutline />
+                  Add College
+                </button>
+              </>
+            )}
+          </div>
+
+          {(activeTab === "skills" || activeTab === "fields") && (
+            <div className="platform-data-table-wrap">
+              <table className="platform-data-table" role="table">
+                <thead>
                   <tr>
-                    <td colSpan={2} className="empty-row">
-                      <div className="empty-state">
-                        <div className="empty-icon" aria-hidden="true">
-                          <IoHammerOutline />
-                        </div>
-                        <div className="empty-text">
-                          <div className="empty-title">No items found</div>
-                          <div className="empty-subtitle">
-                            Try a different search or add a new one.
+                    <th>{activeTab === "skills" ? "Skill" : "Preferred Field"}</th>
+                    <th className="actions-col">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredItems.length === 0 ? (
+                    <tr>
+                      <td colSpan={2} className="empty-row">
+                        <div className="empty-state">
+                          <div className="empty-icon" aria-hidden="true">
+                            <IoHammerOutline />
+                          </div>
+                          <div className="empty-text">
+                            <div className="empty-title">No items found</div>
+                            <div className="empty-subtitle">
+                              Try a different search or add a new one.
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </td>
-                  </tr>
-                ) : (
-                  filteredItems.map((name) => {
-                    // Map back to original index for edit/delete
-                    const originalIndex = currentItems.findIndex((x) => x === name);
-                    return (
-                      <tr key={`${activeTab}-${name}`}>
-                        <td className="name-cell">
-                          <span className="name-text">{name}</span>
-                        </td>
-                        <td className="actions-col">
-                          <div className="row-actions" aria-label="Row actions">
-                            <button
-                              type="button"
-                              className="icon-btn"
-                              onClick={() => openEdit(originalIndex)}
-                              title="Edit"
-                              aria-label={`Edit ${name}`}
-                              disabled={isSaving}
-                            >
-                              <IoPencilOutline />
-                            </button>
-                            <button
-                              type="button"
-                              className="icon-btn danger"
-                              onClick={() => openDeleteConfirm(originalIndex)}
-                              title="Delete"
-                              aria-label={`Delete ${name}`}
-                              disabled={isSaving}
-                            >
-                              <IoTrashOutline />
-                            </button>
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredItems.map((name) => {
+                      const originalIndex = currentItems.findIndex((x) => x === name);
+                      return (
+                        <tr key={`${activeTab}-${name}`}>
+                          <td className="name-cell">
+                            <span className="name-text">{name}</span>
+                          </td>
+                          <td className="actions-col">
+                            <div className="row-actions" aria-label="Row actions">
+                              <button
+                                type="button"
+                                className="icon-btn"
+                                onClick={() => openEdit(originalIndex)}
+                                title="Edit"
+                                aria-label={`Edit ${name}`}
+                                disabled={isSaving}
+                              >
+                                <IoPencilOutline />
+                              </button>
+                              <button
+                                type="button"
+                                className="icon-btn danger"
+                                onClick={() => openDeleteConfirm(originalIndex)}
+                                title="Delete"
+                                aria-label={`Delete ${name}`}
+                                disabled={isSaving}
+                              >
+                                <IoTrashOutline />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {activeTab === "programs" && (() => {
+            const keys = Object.keys(programsMap).sort((a, b) => a.localeCompare(b));
+            const filteredKeys = search.trim()
+              ? keys.filter((k) => normalizeKey(k).includes(search.trim().toLowerCase()))
+              : keys;
+            return (
+              <div className="platform-data-table-wrap">
+                <table className="platform-data-table platform-data-table--programs" role="table">
+                  <thead>
+                    <tr>
+                      <th>Colleges</th>
+                      <th className="actions-col">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredKeys.length === 0 ? (
+                      <tr>
+                        <td colSpan={2} className="empty-row">
+                          <div className="empty-state">
+                            <div className="empty-icon" aria-hidden="true">
+                              <IoHammerOutline />
+                            </div>
+                            <div className="empty-text">
+                              <div className="empty-title">No colleges found</div>
+                              <div className="empty-subtitle">
+                                {search ? "Try a different search." : "Add a college to get started."}
+                              </div>
+                            </div>
                           </div>
                         </td>
                       </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
+                    ) : (
+                      filteredKeys.flatMap((collegeName) => {
+                        const programs = programsMap[collegeName] || [];
+                        const rows = [
+                          <tr key={`college-${collegeName}`} className="pd-college-row">
+                            <td className="name-cell pd-college-name">
+                              <span className="name-text">{collegeName}</span>
+                            </td>
+                            <td className="actions-col">
+                              <div className="row-actions" aria-label="Row actions">
+                                <button type="button" className="icon-btn" onClick={() => openEditGroup(collegeName)} title="Edit programs" aria-label={`Edit programs for ${collegeName}`} disabled={isSaving}><IoPencilOutline /></button>
+                                <button type="button" className="icon-btn danger" onClick={() => openDeleteGroupConfirm(collegeName)} title="Delete" aria-label={`Delete ${collegeName}`} disabled={isSaving}><IoTrashOutline /></button>
+                              </div>
+                            </td>
+                          </tr>,
+                          ...programs.map((name, idx) => (
+                            <tr key={`${collegeName}-${idx}-${name}`} className="pd-program-row">
+                              <td className="name-cell pd-program-name">
+                                <span className="name-text">{name}</span>
+                              </td>
+                              <td className="actions-col" />
+                            </tr>
+                          )),
+                        ];
+                        return rows;
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })()}
         </section>
       </main>
 
@@ -445,6 +726,99 @@ const PlatformData = () => {
               <button type="button" className="primary-btn pd-danger-btn" onClick={confirmDelete} disabled={isSaving}>
                 Delete
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {addGroupModalOpen && (
+        <div className="pd-modal-backdrop" role="dialog" aria-modal="true">
+          <div className="pd-modal">
+            <div className="pd-modal-header">
+              <div>
+                <div className="pd-modal-title">Add College</div>
+                <div className="pd-modal-subtitle">Add a college name. You can add programs after saving.</div>
+              </div>
+              <button type="button" className="pd-modal-close" onClick={() => { setAddGroupModalOpen(false); setAddGroupKey(""); }} aria-label="Close">
+                <IoCloseOutline />
+              </button>
+            </div>
+            <div className="pd-modal-body">
+              <label className="pd-field">
+                <span className="pd-label">College</span>
+                <input type="text" value={addGroupKey} onChange={(e) => setAddGroupKey(e.target.value)} placeholder="e.g., College of Accounting" autoFocus />
+              </label>
+            </div>
+            <div className="pd-modal-footer">
+              <button type="button" className="secondary-btn" onClick={() => { setAddGroupModalOpen(false); setAddGroupKey(""); }} disabled={isSaving}>Cancel</button>
+              <button type="button" className="primary-btn" onClick={saveAddGroup} disabled={isSaving}>Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editingGroupKey != null && (
+        <div className="pd-modal-backdrop" role="dialog" aria-modal="true">
+          <div className="pd-modal pd-modal--wide">
+            <div className="pd-modal-header">
+              <div>
+                <div className="pd-modal-title">Edit programs for {editingGroupKey}</div>
+                <div className="pd-modal-subtitle">Add, edit, or remove program names for this college.</div>
+              </div>
+              <button type="button" className="pd-modal-close" onClick={closeEditGroup} aria-label="Close">
+                <IoCloseOutline />
+              </button>
+            </div>
+            <div className="pd-modal-body">
+              <ul className="pd-group-list">
+                {editingGroupList.map((item, idx) => (
+                  <li key={`${editingGroupKey}-${idx}-${item}`} className="pd-group-list-item pd-group-list-item--program">
+                    {editingItemIndex === idx ? (
+                      <>
+                        <input type="text" className="pd-group-list-input" value={editingItemValue} onChange={(e) => setEditingItemValue(e.target.value)} placeholder="Program name (e.g. BS Accountancy)" autoFocus />
+                        <button type="button" className="primary-btn pd-group-list-btn" onClick={saveEditGroupItem} disabled={isSaving}>Save</button>
+                        <button type="button" className="secondary-btn pd-group-list-btn" onClick={() => { setEditingItemIndex(-1); setEditingItemValue(""); }}>Cancel</button>
+                      </>
+                    ) : (
+                      <>
+                        <span className="pd-group-list-text">{item}</span>
+                        <button type="button" className="icon-btn" onClick={() => startEditGroupItem(idx)} title="Edit" aria-label={`Edit ${item}`} disabled={isSaving}><IoPencilOutline /></button>
+                        <button type="button" className="icon-btn danger" onClick={() => removeGroupListItem(idx)} title="Remove" aria-label={`Remove ${item}`} disabled={isSaving}><IoTrashOutline /></button>
+                      </>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              <div className="pd-group-list-add pd-group-list-add--program">
+                <input type="text" className="pd-group-list-input" value={newGroupItemName} onChange={(e) => setNewGroupItemName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addGroupListItem())} placeholder="Program name" />
+                <button type="button" className="primary-btn" onClick={addGroupListItem} disabled={isSaving}><IoAddOutline /> Add</button>
+              </div>
+            </div>
+            <div className="pd-modal-footer">
+              <button type="button" className="secondary-btn" onClick={closeEditGroup} disabled={isSaving}>Cancel</button>
+              <button type="button" className="primary-btn" onClick={saveEditingGroupList} disabled={isSaving}>Save all</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {pendingDeleteGroupKey != null && (
+        <div className="pd-modal-backdrop" role="dialog" aria-modal="true">
+          <div className="pd-modal pd-modal--confirm">
+            <div className="pd-modal-header">
+              <div>
+                <div className="pd-modal-title">Delete College?</div>
+                <div className="pd-modal-subtitle">
+                  This will remove <strong>{pendingDeleteGroupKey}</strong> and all its programs.
+                </div>
+              </div>
+              <button type="button" className="pd-modal-close" onClick={closeDeleteGroupConfirm} aria-label="Close">
+                <IoCloseOutline />
+              </button>
+            </div>
+            <div className="pd-modal-footer">
+              <button type="button" className="secondary-btn" onClick={closeDeleteGroupConfirm} disabled={isSaving}>Cancel</button>
+              <button type="button" className="primary-btn pd-danger-btn" onClick={confirmDeleteGroup} disabled={isSaving}>Delete</button>
             </div>
           </div>
         </div>

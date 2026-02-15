@@ -556,6 +556,91 @@
   box-shadow: 0 14px 30px rgba(239, 68, 68, 0.22);
 }
 
+.pd-modal--wide {
+  max-width: 640px;
+}
+
+.pd-group-list {
+  list-style: none;
+  margin: 0 0 1rem 0;
+  padding: 0;
+  max-height: 320px;
+  overflow-y: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.pd-group-list-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid #eef2f7;
+  flex-wrap: wrap;
+}
+
+.pd-group-list-item:last-child {
+  border-bottom: none;
+}
+
+.pd-group-list-text {
+  flex: 1;
+  min-width: 0;
+  font-weight: 500;
+  color: #0f172a;
+}
+
+.pd-group-list-input {
+  flex: 1;
+  min-width: 120px;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  font-size: 0.95rem;
+}
+
+.pd-group-list-btn {
+  flex-shrink: 0;
+}
+
+.pd-group-list-add {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.pd-group-list-add .pd-group-list-input {
+  flex: 1;
+}
+
+.pd-group-list-item--program {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.pd-group-list-item--program .pd-group-list-text { flex: 1; min-width: 0; }
+.pd-group-list-add--program {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+.pd-group-list-add--program .pd-group-list-input { flex: 1; }
+
+/* Programs table: college row + indented program rows */
+.platform-data-table--programs .pd-college-row .name-cell {
+  font-weight: 700;
+  background: rgba(248, 250, 252, 0.8);
+  border-bottom: 1px solid #e2e8f0;
+}
+.platform-data-table--programs .pd-program-row .pd-program-name {
+  padding-left: 2rem;
+  color: #475569;
+}
+
 /* Responsive */
 @media (max-width: 1024px) {
   .platform-data-container {

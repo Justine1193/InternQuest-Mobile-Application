@@ -5,7 +5,8 @@ import { isAdminAuthenticated, hasAnyRole, getAdminRole, ROLES } from "../utils/
 import useIdleLogout from "../hooks/useIdleLogout";
 import SessionWarning from "./SessionWarning/SessionWarning";
 import { signOut, onAuthStateChanged } from "firebase/auth";
-import { auth } from "../../firebase";
+import { doc, setDoc } from "firebase/firestore";
+import { auth, db } from "../../firebase";
 import { clearAdminSession } from "../utils/auth";
 
 const ProtectedRoute = ({ children, allowedRoles = null }) => {
@@ -20,9 +21,19 @@ const ProtectedRoute = ({ children, allowedRoles = null }) => {
       setHasFirebaseAuth(!!user);
       setIsFirebaseAuthReady(true);
     });
-    
     return () => unsubscribe();
   }, []);
+
+  // Sync admin_roles/{uid} so Firestore rules can restrict adminusers writes to admins/coordinators
+  useEffect(() => {
+    if (!hasFirebaseAuth || !isFirebaseAuthReady || !isAdminAuthenticated() || !auth.currentUser) return;
+    const role = getAdminRole();
+    if (!role) return;
+    const adminRoleRef = doc(db, "admin_roles", auth.currentUser.uid);
+    setDoc(adminRoleRef, { role }, { merge: true }).catch((err) => {
+      console.warn("Could not sync admin_roles for rules:", err);
+    });
+  }, [hasFirebaseAuth, isFirebaseAuthReady]);
   
   // Enable idle logout for authenticated users
   useIdleLogout(isAdminAuthenticated());

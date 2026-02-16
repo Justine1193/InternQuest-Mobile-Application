@@ -27,6 +27,7 @@ const DOCS = {
   skills: { path: ["meta", "suggestionSkills"], title: "Skills" },
   fields: { path: ["meta", "field"], title: "Preferred Fields" },
   programs: { path: ["meta", "programs"], title: "Programs" },
+  program_code: { path: ["meta", "program_code"], title: "Program Codes" },
 };
 
 const normalizeItem = (value) => String(value || "").trim().replace(/\s+/g, " ");
@@ -62,16 +63,39 @@ const readPrograms = (programsSnap) => {
   return out;
 };
 
+/**
+ * Read meta/program_code into { collegeName: string[] } (program codes only, e.g. BSA, BSAIS).
+ */
+const readProgramCodes = (snap) => {
+  if (!snap?.exists()) return {};
+  const data = snap.data() || {};
+  const out = {};
+  Object.keys(data).forEach((collegeName) => {
+    const key = collegeName.trim();
+    if (!key) return;
+    const val = data[key];
+    if (!Array.isArray(val)) return;
+    const list = val.map((item) => {
+      if (item && typeof item === "object" && ("code" in item || "name" in item))
+        return String(item.code ?? item.name ?? "").trim();
+      return String(item || "").trim();
+    }).filter(Boolean);
+    if (list.length) out[key] = list;
+  });
+  return out;
+};
+
 const PlatformData = () => {
   const { toasts, removeToast, success, error } = useToast();
 
-  const [activeTab, setActiveTab] = useState("skills"); // "skills" | "fields" | "programs"
+  const [activeTab, setActiveTab] = useState("skills"); // "skills" | "fields" | "programs" | "program_codes"
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
   const [skills, setSkills] = useState([]);
   const [fields, setFields] = useState([]);
   const [programsMap, setProgramsMap] = useState({}); // { collegeName: string[] }
+  const [programCodesMap, setProgramCodesMap] = useState({}); // { collegeName: string[] } codes e.g. BSA, BSAIS
 
   const [search, setSearch] = useState("");
 
@@ -93,6 +117,16 @@ const PlatformData = () => {
   const [editingItemIndex, setEditingItemIndex] = useState(-1);
   const [editingItemValue, setEditingItemValue] = useState("");
 
+  // Program codes: same pattern as programs
+  const [editingCodeGroupKey, setEditingCodeGroupKey] = useState(null);
+  const [editingCodeGroupList, setEditingCodeGroupList] = useState([]);
+  const [addCodeGroupKey, setAddCodeGroupKey] = useState("");
+  const [addCodeGroupModalOpen, setAddCodeGroupModalOpen] = useState(false);
+  const [pendingDeleteCodeGroupKey, setPendingDeleteCodeGroupKey] = useState(null);
+  const [newCodeGroupItemName, setNewCodeGroupItemName] = useState("");
+  const [editingCodeItemIndex, setEditingCodeItemIndex] = useState(-1);
+  const [editingCodeItemValue, setEditingCodeItemValue] = useState("");
+
   const currentItems = activeTab === "skills" ? skills : fields;
   const setCurrentItems = activeTab === "skills" ? setSkills : setFields;
 
@@ -105,14 +139,16 @@ const PlatformData = () => {
   const loadAll = async () => {
     setIsLoading(true);
     try {
-      const [skillsSnap, fieldsSnap, programsSnap] = await Promise.all([
+      const [skillsSnap, fieldsSnap, programsSnap, programCodesSnap] = await Promise.all([
         getDoc(doc(db, ...DOCS.skills.path)),
         getDoc(doc(db, ...DOCS.fields.path)),
         getDoc(doc(db, ...DOCS.programs.path)),
+        getDoc(doc(db, ...DOCS.program_code.path)),
       ]);
       setSkills(readListFromMetaDoc(skillsSnap));
       setFields(readListFromMetaDoc(fieldsSnap));
       setProgramsMap(readPrograms(programsSnap));
+      setProgramCodesMap(readProgramCodes(programCodesSnap));
     } catch (e) {
       console.error("Failed to load platform data:", e);
       error("Failed to load platform data. Please try again.");
@@ -161,6 +197,17 @@ const PlatformData = () => {
       programsPayload[collegeName] = list.map((name) => normalizeItem(name)).filter(Boolean);
     });
     await setDoc(doc(db, ...DOCS.programs.path), programsPayload, { merge: true });
+    clearCollegeCache();
+  };
+
+  /** Persist program codes to meta/program_code. */
+  const persistProgramCodes = async (nextMap) => {
+    const payload = {};
+    Object.keys(nextMap).forEach((collegeName) => {
+      const list = nextMap[collegeName] || [];
+      payload[collegeName] = list.map((code) => normalizeItem(code)).filter(Boolean);
+    });
+    await setDoc(doc(db, ...DOCS.program_code.path), payload, { merge: true });
     clearCollegeCache();
   };
 
@@ -375,6 +422,129 @@ const PlatformData = () => {
     }
   };
 
+  // --- Program codes: college -> string[] (codes e.g. BSA, BSAIS) ---
+  const openEditCodeGroup = (key) => {
+    setEditingCodeGroupKey(key);
+    setEditingCodeGroupList((programCodesMap[key] || []).slice());
+    setNewCodeGroupItemName("");
+    setEditingCodeItemIndex(-1);
+    setEditingCodeItemValue("");
+  };
+
+  const closeEditCodeGroup = () => {
+    setEditingCodeGroupKey(null);
+    setEditingCodeGroupList([]);
+    setNewCodeGroupItemName("");
+    setEditingCodeItemIndex(-1);
+    setEditingCodeItemValue("");
+  };
+
+  const addCodeGroupListItem = () => {
+    const code = normalizeItem(newCodeGroupItemName);
+    if (!code) return;
+    setEditingCodeGroupList((prev) => [...prev, code]);
+    setNewCodeGroupItemName("");
+  };
+
+  const startEditCodeGroupItem = (index) => {
+    setEditingCodeItemIndex(index);
+    setEditingCodeItemValue(editingCodeGroupList[index] || "");
+  };
+
+  const saveEditCodeGroupItem = () => {
+    if (editingCodeItemIndex < 0) return;
+    const code = normalizeItem(editingCodeItemValue);
+    if (!code) return;
+    setEditingCodeGroupList((prev) => {
+      const next = prev.slice();
+      next[editingCodeItemIndex] = code;
+      return next;
+    });
+    setEditingCodeItemIndex(-1);
+    setEditingCodeItemValue("");
+  };
+
+  const removeCodeGroupListItem = (index) => {
+    setEditingCodeGroupList((prev) => prev.filter((_, i) => i !== index));
+    if (editingCodeItemIndex === index) {
+      setEditingCodeItemIndex(-1);
+      setEditingCodeItemValue("");
+    } else if (editingCodeItemIndex > index) {
+      setEditingCodeItemIndex((i) => i - 1);
+    }
+  };
+
+  const saveEditingCodeGroupList = async () => {
+    if (editingCodeGroupKey == null) return;
+    const cleaned = editingCodeGroupList.map(normalizeItem).filter(Boolean);
+    const nextMap = { ...programCodesMap, [editingCodeGroupKey]: cleaned };
+    setIsSaving(true);
+    try {
+      await persistProgramCodes(nextMap);
+      setProgramCodesMap(nextMap);
+      success("Updated successfully.");
+      closeEditCodeGroup();
+    } catch (e) {
+      console.error("Save failed:", e);
+      error("Failed to save. Please try again.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const openAddCodeGroup = () => {
+    setAddCodeGroupKey("");
+    setAddCodeGroupModalOpen(true);
+  };
+
+  const saveAddCodeGroup = async () => {
+    const key = normalizeItem(addCodeGroupKey);
+    if (!key) {
+      error("Please enter a college name.");
+      return;
+    }
+    if (programCodesMap[key]) {
+      error("That college already exists.");
+      return;
+    }
+    const nextMap = { ...programCodesMap, [key]: [] };
+    setIsSaving(true);
+    try {
+      await persistProgramCodes(nextMap);
+      setProgramCodesMap(nextMap);
+      success("Added successfully.");
+      setAddCodeGroupModalOpen(false);
+      setAddCodeGroupKey("");
+    } catch (e) {
+      console.error("Save failed:", e);
+      error("Failed to save. Please try again.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const openDeleteCodeGroupConfirm = (key) => setPendingDeleteCodeGroupKey(key);
+  const closeDeleteCodeGroupConfirm = () => setPendingDeleteCodeGroupKey(null);
+
+  const confirmDeleteCodeGroup = async () => {
+    if (pendingDeleteCodeGroupKey == null) return;
+    const key = pendingDeleteCodeGroupKey;
+    const nextMap = { ...programCodesMap };
+    delete nextMap[key];
+    closeDeleteCodeGroupConfirm();
+    setIsSaving(true);
+    try {
+      await persistProgramCodes(nextMap);
+      setProgramCodesMap(nextMap);
+      success("Deleted successfully.");
+    } catch (e) {
+      console.error("Delete failed:", e);
+      error("Failed to delete. Please try again.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleLogout = async () => {
     try {
       await signOut(auth);
@@ -441,6 +611,16 @@ const PlatformData = () => {
               Programs
               <span className="tab-pill">{Object.keys(programsMap).length}</span>
             </button>
+            <button
+              type="button"
+              className={`tab-btn ${activeTab === "program_codes" ? "active" : ""}`}
+              onClick={() => setActiveTab("program_codes")}
+              role="tab"
+              aria-selected={activeTab === "program_codes"}
+            >
+              Program Codes
+              <span className="tab-pill">{Object.keys(programCodesMap).length}</span>
+            </button>
           </div>
 
           <div className="platform-data-toolbar">
@@ -477,7 +657,7 @@ const PlatformData = () => {
                 </button>
               </>
             )}
-            {activeTab === "programs" && (
+            {(activeTab === "programs" || activeTab === "program_codes") && (
               <>
                 <div className="platform-data-search">
                   <IoSearchOutline className="search-icon" aria-hidden="true" />
@@ -502,7 +682,7 @@ const PlatformData = () => {
                 <button
                   type="button"
                   className="primary-btn"
-                  onClick={openAddGroup}
+                  onClick={activeTab === "program_codes" ? openAddCodeGroup : openAddGroup}
                   disabled={isSaving}
                 >
                   <IoAddOutline />
@@ -629,6 +809,70 @@ const PlatformData = () => {
                             <tr key={`${collegeName}-${idx}-${name}`} className="pd-program-row">
                               <td className="name-cell pd-program-name">
                                 <span className="name-text">{name}</span>
+                              </td>
+                              <td className="actions-col" />
+                            </tr>
+                          )),
+                        ];
+                        return rows;
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })()}
+
+          {activeTab === "program_codes" && (() => {
+            const keys = Object.keys(programCodesMap).sort((a, b) => a.localeCompare(b));
+            const filteredKeys = search.trim()
+              ? keys.filter((k) => normalizeKey(k).includes(search.trim().toLowerCase()))
+              : keys;
+            return (
+              <div className="platform-data-table-wrap">
+                <table className="platform-data-table platform-data-table--programs" role="table">
+                  <thead>
+                    <tr>
+                      <th>Colleges</th>
+                      <th className="actions-col">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredKeys.length === 0 ? (
+                      <tr>
+                        <td colSpan={2} className="empty-row">
+                          <div className="empty-state">
+                            <div className="empty-icon" aria-hidden="true">
+                              <IoHammerOutline />
+                            </div>
+                            <div className="empty-text">
+                              <div className="empty-title">No colleges found</div>
+                              <div className="empty-subtitle">
+                                {search ? "Try a different search." : "Add a college to get started."}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredKeys.flatMap((collegeName) => {
+                        const codes = programCodesMap[collegeName] || [];
+                        const rows = [
+                          <tr key={`code-college-${collegeName}`} className="pd-college-row">
+                            <td className="name-cell pd-college-name">
+                              <span className="name-text">{collegeName}</span>
+                            </td>
+                            <td className="actions-col">
+                              <div className="row-actions" aria-label="Row actions">
+                                <button type="button" className="icon-btn" onClick={() => openEditCodeGroup(collegeName)} title="Edit program codes" aria-label={`Edit program codes for ${collegeName}`} disabled={isSaving}><IoPencilOutline /></button>
+                                <button type="button" className="icon-btn danger" onClick={() => openDeleteCodeGroupConfirm(collegeName)} title="Delete" aria-label={`Delete ${collegeName}`} disabled={isSaving}><IoTrashOutline /></button>
+                              </div>
+                            </td>
+                          </tr>,
+                          ...codes.map((code, idx) => (
+                            <tr key={`${collegeName}-code-${idx}-${code}`} className="pd-program-row">
+                              <td className="name-cell pd-program-name">
+                                <span className="name-text">{code}</span>
                               </td>
                               <td className="actions-col" />
                             </tr>
@@ -819,6 +1063,99 @@ const PlatformData = () => {
             <div className="pd-modal-footer">
               <button type="button" className="secondary-btn" onClick={closeDeleteGroupConfirm} disabled={isSaving}>Cancel</button>
               <button type="button" className="primary-btn pd-danger-btn" onClick={confirmDeleteGroup} disabled={isSaving}>Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {addCodeGroupModalOpen && (
+        <div className="pd-modal-backdrop" role="dialog" aria-modal="true">
+          <div className="pd-modal">
+            <div className="pd-modal-header">
+              <div>
+                <div className="pd-modal-title">Add College (Program Codes)</div>
+                <div className="pd-modal-subtitle">Add a college name. You can add program codes (e.g. BSA, BSAIS) after saving.</div>
+              </div>
+              <button type="button" className="pd-modal-close" onClick={() => { setAddCodeGroupModalOpen(false); setAddCodeGroupKey(""); }} aria-label="Close">
+                <IoCloseOutline />
+              </button>
+            </div>
+            <div className="pd-modal-body">
+              <label className="pd-field">
+                <span className="pd-label">College</span>
+                <input type="text" value={addCodeGroupKey} onChange={(e) => setAddCodeGroupKey(e.target.value)} placeholder="e.g., College of Accountancy" autoFocus />
+              </label>
+            </div>
+            <div className="pd-modal-footer">
+              <button type="button" className="secondary-btn" onClick={() => { setAddCodeGroupModalOpen(false); setAddCodeGroupKey(""); }} disabled={isSaving}>Cancel</button>
+              <button type="button" className="primary-btn" onClick={saveAddCodeGroup} disabled={isSaving}>Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editingCodeGroupKey != null && (
+        <div className="pd-modal-backdrop" role="dialog" aria-modal="true">
+          <div className="pd-modal pd-modal--wide">
+            <div className="pd-modal-header">
+              <div>
+                <div className="pd-modal-title">Edit program codes for {editingCodeGroupKey}</div>
+                <div className="pd-modal-subtitle">Add, edit, or remove program codes (e.g. BSA, BSAIS) for this college.</div>
+              </div>
+              <button type="button" className="pd-modal-close" onClick={closeEditCodeGroup} aria-label="Close">
+                <IoCloseOutline />
+              </button>
+            </div>
+            <div className="pd-modal-body">
+              <ul className="pd-group-list">
+                {editingCodeGroupList.map((item, idx) => (
+                  <li key={`code-${editingCodeGroupKey}-${idx}-${item}`} className="pd-group-list-item pd-group-list-item--program">
+                    {editingCodeItemIndex === idx ? (
+                      <>
+                        <input type="text" className="pd-group-list-input" value={editingCodeItemValue} onChange={(e) => setEditingCodeItemValue(e.target.value)} placeholder="Program code (e.g. BSA)" autoFocus />
+                        <button type="button" className="primary-btn pd-group-list-btn" onClick={saveEditCodeGroupItem} disabled={isSaving}>Save</button>
+                        <button type="button" className="secondary-btn pd-group-list-btn" onClick={() => { setEditingCodeItemIndex(-1); setEditingCodeItemValue(""); }}>Cancel</button>
+                      </>
+                    ) : (
+                      <>
+                        <span className="pd-group-list-text">{item}</span>
+                        <button type="button" className="icon-btn" onClick={() => startEditCodeGroupItem(idx)} title="Edit" aria-label={`Edit ${item}`} disabled={isSaving}><IoPencilOutline /></button>
+                        <button type="button" className="icon-btn danger" onClick={() => removeCodeGroupListItem(idx)} title="Remove" aria-label={`Remove ${item}`} disabled={isSaving}><IoTrashOutline /></button>
+                      </>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              <div className="pd-group-list-add pd-group-list-add--program">
+                <input type="text" className="pd-group-list-input" value={newCodeGroupItemName} onChange={(e) => setNewCodeGroupItemName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addCodeGroupListItem())} placeholder="Program code (e.g. BSA)" />
+                <button type="button" className="primary-btn" onClick={addCodeGroupListItem} disabled={isSaving}><IoAddOutline /> Add</button>
+              </div>
+            </div>
+            <div className="pd-modal-footer">
+              <button type="button" className="secondary-btn" onClick={closeEditCodeGroup} disabled={isSaving}>Cancel</button>
+              <button type="button" className="primary-btn" onClick={saveEditingCodeGroupList} disabled={isSaving}>Save all</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {pendingDeleteCodeGroupKey != null && (
+        <div className="pd-modal-backdrop" role="dialog" aria-modal="true">
+          <div className="pd-modal pd-modal--confirm">
+            <div className="pd-modal-header">
+              <div>
+                <div className="pd-modal-title">Delete College?</div>
+                <div className="pd-modal-subtitle">
+                  This will remove <strong>{pendingDeleteCodeGroupKey}</strong> and all its program codes.
+                </div>
+              </div>
+              <button type="button" className="pd-modal-close" onClick={closeDeleteCodeGroupConfirm} aria-label="Close">
+                <IoCloseOutline />
+              </button>
+            </div>
+            <div className="pd-modal-footer">
+              <button type="button" className="secondary-btn" onClick={closeDeleteCodeGroupConfirm} disabled={isSaving}>Cancel</button>
+              <button type="button" className="primary-btn pd-danger-btn" onClick={confirmDeleteCodeGroup} disabled={isSaving}>Delete</button>
             </div>
           </div>
         </div>

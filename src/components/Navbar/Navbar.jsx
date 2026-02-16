@@ -297,16 +297,16 @@ const Navbar = ({ onLogout }) => {
                     </a>
                   )}
 
-                  {/* 2. Security */}
+                  {/* 2. Change Password */}
                   <a
                     href="/security-settings"
                     className={`sidebar-link ${
                       isActive("/security-settings") ? "active" : ""
                     }`}
-                    title="Security Settings"
+                    title="Change Password"
                   >
                     <IoLockClosedOutline className="sidebar-icon" />
-                    <span>Security</span>
+                    <span>Change Password</span>
                   </a>
 
                   {/* 3. Guide (Resource / Help Desk) */}
@@ -357,9 +357,9 @@ const Navbar = ({ onLogout }) => {
                   {/* 6. Archive Management (super admin only) */}
                   {isSuperAdmin && (
                     <a
-                      href="/deleted"
+                      href="/archive"
                       className={`sidebar-link ${
-                        isActive("/deleted") ? "active" : ""
+                        isActive("/archive") || isActive("/deleted") ? "active" : ""
                       }`}
                       title="Archive Management"
                     >

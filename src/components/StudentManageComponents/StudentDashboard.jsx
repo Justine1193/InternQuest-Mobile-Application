@@ -3892,7 +3892,7 @@ const StudentDashboard = () => {
 
                 {isLoadingApplications ? (
                   <div className="applications-loading">
-                    <LoadingSpinner message="Loading applications..." />
+                    <LoadingSpinner isLoading={isLoadingApplications} message="Loading applications..." />
                   </div>
                 ) : applicationsList.length === 0 ? (
                   <div className="applications-empty">

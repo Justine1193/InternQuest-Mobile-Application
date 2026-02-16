@@ -20,29 +20,56 @@ service cloud.firestore {
         get(/databases/$(database)/documents/users/$(uid)).data.get('is_blocked', false) == true;
     }
 
+    // True if the current user has an admin panel role (admin_roles doc synced by app on load)
+    function isAdminPanelAdmin() {
+      return request.auth != null &&
+        exists(/databases/$(database)/documents/admin_roles/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/admin_roles/$(request.auth.uid)).data.role in ['admin', 'super_admin', 'coordinator'];
+    }
+
+    // True if the current user is admin only (not coordinator)
+    function isAdminOnly() {
+      return request.auth != null &&
+        exists(/databases/$(database)/documents/admin_roles/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/admin_roles/$(request.auth.uid)).data.role in ['admin', 'super_admin'];
+    }
+
     // ADMIN USERS
     // Read: Allow unauthenticated read so login can look up admin by username to get firebaseEmail before sign-in.
-    // Write: Require auth so only logged-in admins can create/update/delete.
+    // Write: Require auth; if admin_roles is populated, only admin/coordinator can create/update/delete.
+    // Restore operations (create with restoredAt field) require admin only.
     match /adminusers/{adminId} {
       allow read: if true;
-      
-      // Create: Allow authenticated users to create admin accounts
-      // PIN verification is enforced at app level and Cloud Functions level
+
       allow create: if request.auth != null &&
-        // Prevent password storage in Firestore - passwords only in Firebase Auth
+        (
+          // If restoring (has restoredAt field), require admin only
+          ('restoredAt' in request.resource.data) ? 
+            (exists(/databases/$(database)/documents/admin_roles/$(request.auth.uid)) ? isAdminOnly() : false) :
+          // Otherwise, allow admin/coordinator (backward compat if no admin_roles)
+            (exists(/databases/$(database)/documents/admin_roles/$(request.auth.uid)) ? isAdminPanelAdmin() : true)
+        ) &&
         !('password' in request.resource.data) &&
         !('firebasePassword' in request.resource.data);
-      
-      // Delete: Allow authenticated users to delete
-      // PIN verification and role checks enforced at app level
-      allow delete: if request.auth != null;
-      
-      // Update: Allow authenticated users to update
-      // PIN verification enforced at app level for sensitive operations
+
+      allow delete: if request.auth != null &&
+        (exists(/databases/$(database)/documents/admin_roles/$(request.auth.uid)) ? isAdminPanelAdmin() : true);
+
       allow update: if request.auth != null &&
-        // Prevent password storage in Firestore - passwords only in Firebase Auth
+        (
+          // If restoring (has restoredAt field), require admin only
+          ('restoredAt' in request.resource.data) ?
+            (exists(/databases/$(database)/documents/admin_roles/$(request.auth.uid)) ? isAdminOnly() : false) :
+          // Otherwise, allow admin/coordinator (backward compat if no admin_roles)
+            (exists(/databases/$(database)/documents/admin_roles/$(request.auth.uid)) ? isAdminPanelAdmin() : true)
+        ) &&
         !('password' in request.resource.data) &&
         !('firebasePassword' in request.resource.data);
+    }
+
+    // Admin panel role lookup: synced by app so rules can restrict adminusers writes to admins/coordinators.
+    match /admin_roles/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
     }
     
 
@@ -121,7 +148,10 @@ service cloud.firestore {
     match /admin_deletions/{docId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null;
-      allow update, delete: if false;
+      allow update: if false;
+      // Allow delete only for admins (for restore functionality)
+      allow delete: if request.auth != null &&
+        (exists(/databases/$(database)/documents/admin_roles/$(request.auth.uid)) ? isAdminOnly() : false);
     }
 
     // REJECTED REQUIREMENTS ARCHIVE

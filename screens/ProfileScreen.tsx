@@ -1196,15 +1196,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 12,
   },
-  detailLabel: {
-    fontSize: 14,
-    color: colors.textMuted,
-    marginTop: 10,
-  },
-  detailValue: {
-    fontSize: 15,
-    color: colors.text,
-  },
   progressContainer: {
     marginTop: 20,
     marginBottom: 30,

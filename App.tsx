@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState, useRef } from 'react';
-import { StatusBar, ActivityIndicator, View, Text, StyleSheet, Easing, AppState, AppStateStatus, TouchableOpacity } from 'react-native';
+import { StatusBar, ActivityIndicator, View, StyleSheet, Easing } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator, CardStyleInterpolators } from '@react-navigation/stack';
 import { Host } from 'react-native-portalize';
@@ -10,6 +10,7 @@ import { auth } from './firebase/config';
 import { doc, getDoc, getDocs, query, collection, where, setDoc, serverTimestamp, deleteDoc, onSnapshot } from 'firebase/firestore';
 import { firestore } from './firebase/config';
 import { useAutoLogout } from './hooks/useAutoLogout';
+import { useAutoLock } from './hooks/useAutoLock';
 import { colors, navigationTheme, paperTheme } from './ui/theme';
 import { initNotifications, syncExpoPushTokenForCurrentUser } from './services/notifications';
 
@@ -88,8 +89,7 @@ const AppInner: React.FC = () => {
   const [awaitingBiometric, setAwaitingBiometric] = useState(false);
   const [authBlockMessage, setAuthBlockMessage] = useState<string | null>(null);
   const { notificationCount, setNotificationCount } = useNotificationCount();
-  const { biometricEnabled, setAppLocked, appLocked, unlock } = useBiometric();
-  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+  const { biometricEnabled } = useBiometric();
   const blockedListenerUnsubRef = useRef<null | (() => void)>(null);
 
   const handleBlockedAccount = useCallback(async (data: any) => {
@@ -149,26 +149,23 @@ const AppInner: React.FC = () => {
     return () => { cancelled = true; };
   }, [auth.currentUser?.uid, setNotificationCount]);
 
-  const { registerActivity } = useAutoLogout({
+  const { registerActivity: registerLogoutActivity } = useAutoLogout({
     enabled: isLoggedIn,
     inactivityMs: 30 * 60 * 1000,
     backgroundMs: 5 * 60 * 1000,
   });
 
-  // Biometric lock: when app comes to foreground and biometric is enabled, require biometric to continue
-  useEffect(() => {
-    if (!isLoggedIn || !biometricEnabled) return;
-    const sub = AppState.addEventListener('change', (nextState) => {
-      const prev = appStateRef.current;
-      appStateRef.current = nextState;
-      if (prev.match(/inactive|background/) && nextState === 'active') {
-        unlock('Unlock InternQuest').then((success) => {
-          if (!success) setAppLocked(true);
-        });
-      }
-    });
-    return () => sub.remove();
-  }, [isLoggedIn, biometricEnabled, unlock, setAppLocked]);
+  // Auto-lock to the biometric gate (Login screen) after short inactivity/background.
+  // This keeps the Firebase session, but requires biometric to continue.
+  const { registerActivity: registerLockActivity } = useAutoLock({
+    enabled: isLoggedIn && biometricEnabled,
+    inactivityMs: 20 * 1000,
+    backgroundMs: 10 * 1000,
+    onLock: () => {
+      setAwaitingBiometric(true);
+      setIsLoggedIn(false);
+    },
+  });
 
   useEffect(() => {
     // Best-effort initialization for device notifications (local + foreground display).
@@ -223,9 +220,6 @@ const AppInner: React.FC = () => {
                 }
                 await handleBlockedAccount(data);
               }
-            },
-            () => {
-              // Ignore listener errors; one-time checks below still handle block.
             }
           );
 
@@ -639,7 +633,8 @@ const AppInner: React.FC = () => {
           <View
             style={{ flex: 1, paddingBottom: showBottomNav ? bottomNavHeight : 0, backgroundColor: colors.bg }}
             onStartShouldSetResponderCapture={() => {
-              registerActivity();
+              registerLogoutActivity();
+              registerLockActivity();
               return false;
             }}
           >
@@ -677,23 +672,6 @@ const AppInner: React.FC = () => {
                 <BottomNavbar currentRoute={currentScreen} notificationCount={notificationCount} />
               </View>
             )}
-
-            {/* Biometric lock overlay – when app is locked after returning from background */}
-            {appLocked && (
-              <View style={styles.biometricLockOverlay}>
-                <View style={styles.biometricLockCard}>
-                  <Text style={styles.biometricLockTitle}>App locked</Text>
-                  <Text style={styles.biometricLockMessage}>Use your fingerprint or face to unlock.</Text>
-                  <TouchableOpacity
-                    style={styles.biometricLockButton}
-                    onPress={() => unlock('Unlock InternQuest')}
-                    activeOpacity={0.85}
-                  >
-                    <Text style={styles.biometricLockButtonText}>Unlock with biometric</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            )}
           </View>
           </NavigationContainer>
         </SavedInternshipsProvider>
@@ -722,44 +700,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 100,
     backgroundColor: '#FFFFFF',
-  },
-  biometricLockOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 1000,
-  },
-  biometricLockCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 20,
-    padding: 28,
-    margin: 24,
-    minWidth: 280,
-    alignItems: 'center',
-  },
-  biometricLockTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: 10,
-  },
-  biometricLockMessage: {
-    fontSize: 15,
-    color: colors.textMuted,
-    textAlign: 'center',
-    marginBottom: 24,
-  },
-  biometricLockButton: {
-    backgroundColor: colors.primary,
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-  },
-  biometricLockButtonText: {
-    color: colors.onPrimary,
-    fontSize: 16,
-    fontWeight: '700',
   },
 });
 

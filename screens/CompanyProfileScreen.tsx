@@ -1189,62 +1189,6 @@ const styles = StyleSheet.create({
         fontWeight: '600',
     },
 
-    /* Application success modal */
-    successOverlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.4)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 24,
-    },
-    successCard: {
-        width: '100%',
-        maxWidth: 360,
-        backgroundColor: colors.surface,
-        borderRadius: radii.xl,
-        paddingVertical: 24,
-        paddingHorizontal: 22,
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: colors.border,
-        ...shadows.card,
-    },
-    successIconCircle: {
-        width: 60,
-        height: 60,
-        borderRadius: 30,
-        backgroundColor: colors.success,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 16,
-    },
-    successTitle: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: colors.text,
-        marginBottom: 8,
-        textAlign: 'center',
-    },
-    successMessage: {
-        fontSize: 14,
-        color: colors.textMuted,
-        textAlign: 'center',
-        lineHeight: 20,
-        marginBottom: 20,
-    },
-    successButton: {
-        marginTop: 4,
-        paddingHorizontal: 24,
-        paddingVertical: 10,
-        borderRadius: 999,
-        backgroundColor: colors.primary,
-    },
-    successButtonText: {
-        fontSize: 14,
-        fontWeight: '700',
-        color: colors.onPrimary,
-    },
-
     /* Apply CTA */
     applyCard: {
         flexDirection: 'row',

@@ -173,14 +173,62 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
 
     // Subscribe to realtime MOA validity for all companies.
     // IMPORTANT: RTDB rules typically require auth; avoid subscribing while auth is still null.
-    let unsubListener: null | (() => void) = null;
+    let unsubCompaniesListener: null | (() => void) = null;
+    let unsubMoaAvailabilityListener: null | (() => void) = null;
     let unsubAuth: null | (() => void) = null;
+    let retryTimeout: ReturnType<typeof setTimeout> | null = null;
+    let retriedAfterTokenRefresh = false;
+
+    const isPermissionDenied = (err: any) => {
+      const code = (err && (err.code || err.name)) ? String(err.code || err.name) : '';
+      const message = err && err.message ? String(err.message) : '';
+      return code.toLowerCase().includes('permission') || message.toLowerCase().includes('permission_denied');
+    };
+
+    const startMoaAvailabilitySubscription = () => {
+      if (unsubMoaAvailabilityListener) return;
+      try {
+        const availabilityRef = ref(db, 'moaAvailability');
+        unsubMoaAvailabilityListener = onValue(
+          availabilityRef,
+          (snapshot: any) => {
+            const availability = snapshot.val() || {};
+            const processed: { [key: string]: MoaValidity } = {};
+
+            Object.entries(availability).forEach(([companyId, rawYears]) => {
+              const parsedYears = typeof rawYears === 'number' ? rawYears : Number(rawYears);
+              const years = Number.isFinite(parsedYears) ? parsedYears : null;
+
+              processed[String(companyId)] = {
+                years,
+                updatedAt: null,
+                expiresOn: null,
+                expired: false,
+              };
+            });
+
+            setMoaValidity(processed);
+          },
+          (error: any) => {
+            // If even moaAvailability is denied, avoid spamming errors.
+            if (isPermissionDenied(error)) {
+              console.warn('Realtime DB MOA availability read denied.');
+              setMoaValidity({});
+              return;
+            }
+            console.error('Failed to read MOA availability from Realtime DB', error);
+          }
+        );
+      } catch (e) {
+        console.warn('Realtime DB MOA availability subscription skipped:', e);
+      }
+    };
 
     const startMoaSubscription = () => {
-      if (unsubListener) return;
+      if (unsubCompaniesListener) return;
       try {
         const companiesRef = ref(db, 'companies');
-        unsubListener = onValue(
+        unsubCompaniesListener = onValue(
           companiesRef,
           (snapshot: any) => {
             const companies = snapshot.val() || {};
@@ -227,6 +275,42 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
             setMoaValidity(processed);
           },
           (error: any) => {
+            if (isPermissionDenied(error)) {
+              // This usually means your deployed RTDB rules disallow reading /companies.
+              // First: retry once after forcing an auth token refresh.
+              if (!retriedAfterTokenRefresh && auth.currentUser) {
+                retriedAfterTokenRefresh = true;
+                auth.currentUser
+                  .getIdToken(true)
+                  .catch(() => {
+                    // ignore
+                  })
+                  .finally(() => {
+                    try {
+                      if (unsubCompaniesListener) {
+                        unsubCompaniesListener();
+                        unsubCompaniesListener = null;
+                      }
+                    } catch { }
+                    retryTimeout = setTimeout(() => {
+                      startMoaSubscription();
+                    }, 250);
+                  });
+                return;
+              }
+
+              // Second: fall back to the more restricted node used by admin tooling.
+              console.warn('Realtime DB /companies read denied. Falling back to moaAvailability.');
+              try {
+                if (unsubCompaniesListener) {
+                  unsubCompaniesListener();
+                  unsubCompaniesListener = null;
+                }
+              } catch { }
+              startMoaAvailabilitySubscription();
+              return;
+            }
+
             console.error('Failed to read MOA validity from Realtime DB', error);
           }
         );
@@ -251,7 +335,9 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
 
     return () => {
       try {
-        if (unsubListener) unsubListener();
+        if (retryTimeout) clearTimeout(retryTimeout);
+        if (unsubCompaniesListener) unsubCompaniesListener();
+        if (unsubMoaAvailabilityListener) unsubMoaAvailabilityListener();
         if (unsubAuth) unsubAuth();
       } catch (e) { }
     };

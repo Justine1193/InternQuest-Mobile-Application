@@ -14,11 +14,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, spacing } from '../ui/theme';
 
 const TAB_CONFIG = [
-  { route: 'Home', label: 'Internships', iconActive: 'briefcase-search', iconInactive: 'briefcase-search-outline' },
-  { route: 'OJTTracker', label: 'OJT Tracker', iconActive: 'clock', iconInactive: 'clock-outline' },
-  { route: 'RequirementsChecklist', label: 'Checklist', iconActive: 'clipboard-check', iconInactive: 'clipboard-check-outline' },
-  { route: 'ResourceManagement', label: 'Guides', iconActive: 'book-open', iconInactive: 'book-open-outline' },
-  { route: 'Settings', label: 'Settings', iconActive: 'cog', iconInactive: 'cog-outline' },
+  { route: 'Home', label: 'Internships', iconActive: 'briefcase-search', iconInactive: 'briefcase-search-outline', badge: false },
+  { route: 'OJTTracker', label: 'OJT Tracker', iconActive: 'clock', iconInactive: 'clock-outline', badge: false },
+  { route: 'RequirementsChecklist', label: 'Checklist', iconActive: 'clipboard-check', iconInactive: 'clipboard-check-outline', badge: false },
+  { route: 'ResourceManagement', label: 'Guides', iconActive: 'book-open', iconInactive: 'book-open-outline', badge: false },
+  { route: 'Settings', label: 'Settings', iconActive: 'cog', iconInactive: 'cog-outline', badge: false },
 ] as const;
 
 type Props = {
@@ -109,7 +109,6 @@ const BottomNavbar: React.FC<Props> = ({ currentRoute, notificationCount = 0 }) 
                 <Text
                   style={[styles.label, active && styles.labelActive]}
                   numberOfLines={1}
-                  textAlign="center"
                   adjustsFontSizeToFit
                   minimumFontScale={0.75}
                 >

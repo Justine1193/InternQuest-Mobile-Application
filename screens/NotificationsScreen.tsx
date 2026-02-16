@@ -41,6 +41,8 @@ type NotificationItem = {
   image?: string;
   images?: string[];
   imageUrls?: string[];
+  raw?: any;
+  _rawData?: any;
 };
 
 type PendingApplicationItem = {
@@ -428,7 +430,8 @@ const NotificationsScreen: React.FC<Props> = ({ navigation }) => {
         unsubscribe3();
       };
     }
-  }, [fetchNotifications]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const fetchNotifications = useCallback(async () => {
     if (!auth.currentUser) {
@@ -1001,18 +1004,18 @@ const NotificationsScreen: React.FC<Props> = ({ navigation }) => {
             <Text style={styles.cardSubtextNew} numberOfLines={2}>{item.subtext}</Text>
           ) : null}
           {/* Images */}
-          {item.type === 'notification' && item.images && item.images.length > 0 && (
+          {item.type === 'notification' && (item.images?.length ?? 0) > 0 && (
             <View style={styles.cardImagesContainer}>
-              {item.images.slice(0, 3).map((imageUrl, idx) => (
+              {(item.images ?? []).slice(0, 3).map((imageUrl, idx) => (
                 <View key={idx} style={styles.cardImageWrap}>
                   <Image
                     source={{ uri: imageUrl }}
                     style={styles.cardImage}
                     resizeMode="cover"
                   />
-                  {idx === 2 && item.images.length > 3 && (
+                  {idx === 2 && (item.images?.length ?? 0) > 3 && (
                     <View style={styles.cardImageOverlay}>
-                      <Text style={styles.cardImageOverlayText}>+{item.images.length - 3}</Text>
+                      <Text style={styles.cardImageOverlayText}>+{(item.images?.length ?? 0) - 3}</Text>
                     </View>
                   )}
                 </View>
@@ -1100,8 +1103,8 @@ const NotificationsScreen: React.FC<Props> = ({ navigation }) => {
     
     // Sort previous by timestamp (newest first)
     previous.sort((a, b) => {
-      const tsA = a.raw?.ts || 0;
-      const tsB = b.raw?.ts || 0;
+      const tsA = a.type === 'notification' ? (a.raw?.ts || 0) : 0;
+      const tsB = b.type === 'notification' ? (b.raw?.ts || 0) : 0;
       return tsB - tsA;
     });
     
@@ -1209,7 +1212,7 @@ const NotificationsScreen: React.FC<Props> = ({ navigation }) => {
       </View>
 
       <FlatList
-        data={filteredFeed}
+        data={[...groupedFeed.recent, ...groupedFeed.previous]}
         keyExtractor={(item) => item.id}
         contentContainerStyle={[styles.scrollContent, isEmpty && styles.scrollContentEmpty]}
         refreshControl={
@@ -1297,7 +1300,6 @@ const NotificationsScreen: React.FC<Props> = ({ navigation }) => {
             ) : null}
           </>
         }
-        data={[...groupedFeed.recent, ...groupedFeed.previous]}
         renderItem={({ item, index }) => {
           const isFirstPrevious = index === groupedFeed.recent.length && groupedFeed.previous.length > 0;
           return (
@@ -1920,13 +1922,6 @@ const styles = StyleSheet.create({
     marginTop: 12,
     marginBottom: 16,
   },
-  modalImagesContainer: {
-    maxHeight: 400,
-  },
-  modalImagesContent: {
-    paddingRight: 8,
-    gap: 12,
-  },
   modalImageWrap: {
     width: 300,
     height: 300,
@@ -2124,20 +2119,6 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     lineHeight: 22,
     marginBottom: 12,
-  },
-  modalImageWrap: {
-    marginTop: 12,
-    marginBottom: 16,
-    borderRadius: radii.md,
-    overflow: 'hidden',
-    backgroundColor: colors.surfaceAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalImage: {
-    width: '100%',
-    maxHeight: 400,
-    borderRadius: radii.md,
   },
   modalTime: {
     fontSize: 12,

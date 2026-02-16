@@ -20,5 +20,5 @@
     "functions/**",
     "tools/**"
   ],
-  "extends": "expo/tsconfig.base"
+  "extends": "expo/tsconfig.base.json"
 }

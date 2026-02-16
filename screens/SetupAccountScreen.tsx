@@ -1052,7 +1052,7 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
         <Portal>
           {successOpen ? (
             <View style={styles.modalOverlay} accessibilityViewIsModal>
-              <View style={styles.successModal} accessibilityRole="dialog">
+              <View style={styles.successModal} accessibilityRole="alert">
                 <View style={styles.successIconWrap}>
                   <View style={styles.successIconInner}>
                     <Icon name="check" size={18} color={colors.white} />

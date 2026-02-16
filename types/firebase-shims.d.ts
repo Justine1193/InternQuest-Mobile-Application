@@ -11,6 +11,7 @@ declare module 'firebase/firestore' {
   export function collection(...args: any[]): any;
   export function addDoc(...args: any[]): Promise<any> | any;
   export function getDocs(...args: any[]): Promise<any> | any;
+  export function getDocsFromServer(...args: any[]): Promise<any> | any;
   export function query(...args: any[]): any;
   export function where(...args: any[]): any;
   export function orderBy(...args: any[]): any;
@@ -19,7 +20,7 @@ declare module 'firebase/firestore' {
   export function updateDoc(...args: any[]): Promise<any> | any;
   export function deleteDoc(...args: any[]): Promise<any> | any;
   export function deleteField(...args: any[]): any;
-  export function onSnapshot(ref: any, cb: (snap: any) => any): any;
+  export function onSnapshot(ref: any, cb: (snap: any) => any, onError?: (err: any) => any): any;
   export function serverTimestamp(): any;
   export const Timestamp: any;
 }

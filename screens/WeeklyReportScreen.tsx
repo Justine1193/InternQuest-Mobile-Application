@@ -22,7 +22,7 @@ import { collection, addDoc, Timestamp, getDocs } from 'firebase/firestore';
 import { firestore } from '../firebase/config';
 import { getAuth } from 'firebase/auth';
 import { LinearGradient } from 'expo-linear-gradient';
-import Icon from 'react-native-vector-icons/Ionicons';
+import { Ionicons as Icon } from '@expo/vector-icons';
 import PDFGenerator, { WeeklyReportEntry, WeeklyReportData } from '../services/pdfGenerator';
 import { colors, radii, shadows } from '../ui/theme';
 import { Screen } from '../ui/components/Screen';

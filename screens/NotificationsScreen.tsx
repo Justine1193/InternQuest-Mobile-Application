@@ -20,7 +20,7 @@ import { Swipeable } from 'react-native-gesture-handler';
 import { auth, firestore } from '../firebase/config';
 import { doc, getDoc, collection, getDocs, query, orderBy, setDoc, updateDoc, where, onSnapshot } from 'firebase/firestore';
 import { LinearGradient } from 'expo-linear-gradient';
-import Ionicons from 'react-native-vector-icons/Ionicons';
+import { Ionicons } from '@expo/vector-icons';
 import { SecurityUtils } from '../services/security';
 import { colors, radii, shadows } from '../ui/theme';
 import { Screen } from '../ui/components/Screen';

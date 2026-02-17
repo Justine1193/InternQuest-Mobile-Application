@@ -4,7 +4,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { Card, Button, ActivityIndicator, IconButton, TextInput } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import Ionicons from 'react-native-vector-icons/Ionicons';
+import { Ionicons } from '@expo/vector-icons';
 import { auth, firestore, storage, ADMIN_FILE_FUNCTION_BASE_URL } from '../firebase/config';
 import { collection, addDoc, query, orderBy, getDocs, doc, deleteDoc, updateDoc, getDoc, deleteField, where, setDoc } from 'firebase/firestore';
 import * as DocumentPicker from 'expo-document-picker';
@@ -1150,19 +1150,33 @@ function StepCard({ index, step, status, onActionPress, onOpenAttachment, isBusy
     ?? (step as any).files
     ?? [];
   const attachedFiles: StepAttachment[] = Array.isArray(rawAttached)
-    ? rawAttached.map((item: any) => {
-        const docName = item.document_name ?? item.documentName ?? item.attachment_name ?? item.name;
-        const refFile = item.reference_file ?? item.referenceFile;
-        const url = item.attachment_url ?? item.url ?? refFile?.url;
-        const fileName = refFile?.fileName ?? refFile?.name ?? item.attachment_name ?? item.name;
+    ? rawAttached.map((item: any, index: number) => {
+        // Firestore arrays can contain nulls; keep index alignment with `documents`.
+        if (!item || typeof item !== 'object') {
+          return {
+            name: documents[index] ?? `Document ${index + 1}`,
+            fileName: undefined,
+            url: undefined,
+            fileUrl: undefined,
+            downloadUrl: undefined,
+            path: undefined,
+            storagePath: undefined,
+          };
+        }
+
+        const docName = item?.document_name ?? item?.documentName ?? item?.attachment_name ?? item?.name;
+        const refFile = item?.reference_file ?? item?.referenceFile;
+        const url = item?.attachment_url ?? item?.url ?? refFile?.url;
+        const fileName = refFile?.fileName ?? refFile?.name ?? item?.attachment_name ?? item?.name;
+
         return {
           name: docName,
-          fileName: fileName,
+          fileName,
           url,
-          fileUrl: url ?? item.fileUrl,
-          downloadUrl: url ?? item.downloadUrl,
-          path: item.path,
-          storagePath: item.storagePath,
+          fileUrl: url ?? item?.fileUrl,
+          downloadUrl: url ?? item?.downloadUrl,
+          path: item?.path,
+          storagePath: item?.storagePath,
         };
       })
     : [];

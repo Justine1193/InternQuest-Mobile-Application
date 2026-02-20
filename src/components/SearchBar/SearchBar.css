@@ -63,11 +63,12 @@
   background: var(--iq-primary-soft);
 }
 
-/* Filter Dropdown Container */
+/* Filter Dropdown Container - allow dropdown to overflow without clipping */
 .filter-dropdown-container {
   display: flex;
   align-items: center;
   position: relative;
+  overflow: visible;
 }
 
 /* Clear Search Button */

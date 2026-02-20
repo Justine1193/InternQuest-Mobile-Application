@@ -64,35 +64,47 @@ export const loadProgramToCollegeMap = async () => {
       if (metaProgramsDoc.exists()) {
         const data = metaProgramsDoc.data();
 
-        // Check if data is organized by college (college names as keys, arrays as values)
-        // Example: { "College of Accountancy": ["BS Accountancy", ...], ... }
-        const isCollegeOrganized = Object.keys(data).some((key) => {
+        // New format: { "College Name": [ { name: "BS Accountancy", code: "BSA" }, ... ] }
+        const isNewFormat = Object.keys(data).some((key) => {
           const value = data[key];
-          return Array.isArray(value) && value.length > 0 && typeof value[0] === "string";
+          return Array.isArray(value) && value.length > 0 && value[0] && typeof value[0] === "object" && "name" in value[0];
         });
 
-        if (isCollegeOrganized) {
-          // Structure: { "College Name": ["Program 1", "Program 2", ...] }
+        if (isNewFormat) {
           Object.keys(data).forEach((collegeName) => {
             const programs = data[collegeName];
             if (Array.isArray(programs)) {
-              // Get college code (prefer from colleges collection, fallback to college name)
-              const collegeCode = collegeNameToCodeMap[collegeName] || collegeName;
-
-              programs.forEach((programName) => {
-                if (typeof programName === "string" && programName.trim()) {
-                  map[programName.trim()] = collegeCode;
-                }
+              const collegeCode = collegeNameToCodeMap[collegeName] || collegeName.split(" ").filter((w) => w.length).map((w) => w[0]).join("").toUpperCase();
+              programs.forEach((item) => {
+                const name = item && typeof item === "object" && item.name ? String(item.name).trim() : "";
+                if (name) map[name] = collegeCode;
               });
             }
           });
-        } else if (Array.isArray(data.list)) {
-          // Fallback: flat array structure
-          // This case would need college info from elsewhere
-          logger.warn("meta/programs uses flat array structure - college mapping may be incomplete");
         } else {
-          // Fallback: all values are programs (no college organization)
-          logger.warn("meta/programs structure not recognized - college mapping may be incomplete");
+          // Old format: { "College Name": ["Program 1", "Program 2", ...] }
+          const isCollegeOrganized = Object.keys(data).some((key) => {
+            const value = data[key];
+            return Array.isArray(value) && value.length > 0 && typeof value[0] === "string";
+          });
+
+          if (isCollegeOrganized) {
+            Object.keys(data).forEach((collegeName) => {
+              const programs = data[collegeName];
+              if (Array.isArray(programs)) {
+                const collegeCode = collegeNameToCodeMap[collegeName] || collegeName;
+                programs.forEach((programName) => {
+                  if (typeof programName === "string" && programName.trim()) {
+                    map[programName.trim()] = collegeCode;
+                  }
+                });
+              }
+            });
+          } else if (Array.isArray(data.list)) {
+            logger.warn("meta/programs uses flat array structure - college mapping may be incomplete");
+          } else {
+            logger.warn("meta/programs structure not recognized - college mapping may be incomplete");
+          }
         }
       }
     } catch (err) {
@@ -217,10 +229,12 @@ export const loadColleges = async () => {
         if (metaProgramsDoc.exists()) {
           const data = metaProgramsDoc.data();
 
-          // Check if data is organized by college
+          // Check if data is organized by college (array of strings or array of { name, code })
           const isCollegeOrganized = Object.keys(data).some((key) => {
             const value = data[key];
-            return Array.isArray(value) && value.length > 0 && typeof value[0] === "string";
+            if (!Array.isArray(value) || value.length === 0) return false;
+            const first = value[0];
+            return typeof first === "string" || (first && typeof first === "object" && "name" in first);
           });
 
           if (isCollegeOrganized) {

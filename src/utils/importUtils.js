@@ -117,6 +117,15 @@ export const convertCSVToCompanies = (csvData) => {
         moa: parseBooleanField(row['MOA'] || row['moa'] || ''),
         moaValidityYears: parseNumberField(row['MOA Validity Years'] || row['moaValidityYears'] || ''),
         modeOfWork: parseArrayField(row['Mode of Work'] || row['modeOfWork'] || '', ','),
+        endorsedByCollege: (row['Endorsed by College'] || row['endorsedByCollege'] || '').trim(),
+        contactPersonName: (row['Contact Person Name'] || row['contactPersonName'] || '').trim(),
+        contactPersonPhone: (row['Contact Number'] || row['Contact Person Phone'] || row['contactPersonPhone'] || '').trim(),
+        moaStartDate: (() => {
+          const raw = row['MOA Start Date'] || row['moaStartDate'] || '';
+          return raw && String(raw).trim() ? parseDateField(raw) : '';
+        })(),
+        moaFileUrl: (row['MOA Document URL'] || row['moaFileUrl'] || '').trim(),
+        moaFileName: (row['MOA Document Name'] || row['moaFileName'] || '').trim(),
         createdAt: row['Created'] ? parseDateField(row['Created']) : new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
@@ -128,8 +137,9 @@ export const convertCSVToCompanies = (csvData) => {
       if (!company.email) {
         throw new Error('Email is required');
       }
+      // Default MOA Validity Years to 1 if MOA is Yes but validity years is not provided
       if (company.moa && !company.moaValidityYears) {
-        throw new Error('MOA Validity Years is required when MOA is Yes');
+        company.moaValidityYears = 1;
       }
 
       companies.push(company);
@@ -182,6 +192,27 @@ export const convertCSVToStudents = (csvData) => {
         derived.program = sectionMatch[2].toUpperCase();
       }
 
+      // Support both old "Status" and new "Hired" columns for hired flag
+      const hiredRaw =
+        row['Hired'] ||
+        row['hired'] ||
+        row['Status'] ||
+        row['status'] ||
+        '';
+
+      // Optional field/program field of specialization
+      const fieldValue = row['Field'] || row['field'] || '';
+
+      // Optional skills list (semicolon or comma separated)
+      const skillsValue = row['Skills'] || row['skills'] || '';
+
+      // Optional location preference string (e.g. "Onsite; Remote")
+      const locationPreferenceValue =
+        row['Location Preference'] || row['locationPreference'] || '';
+
+      // Optional blocked flag ("Yes"/"No", "true"/"false", etc.)
+      const blockedRaw = row['Blocked'] || row['blocked'] || '';
+
       const student = {
         studentId: studentIdValue,
         firstName: firstName || '',
@@ -193,9 +224,26 @@ export const convertCSVToStudents = (csvData) => {
         yearLevel: row['Year Level'] || row['yearLevel'] || derived.yearLevel || '',
         contact: row['Contact Number'] || row['Contact'] || row['contact'] || '',
         companyName: row['Company'] || row['companyName'] || '',
-        status: parseBooleanField(row['Status'] || row['status'] || ''),
+        field: String(fieldValue || '').trim(),
+        skills: parseArrayField(skillsValue),
+        // Store locationPreference as an object with flags (onsite/remote/hybrid)
+        locationPreference: (() => {
+          if (!locationPreferenceValue) return undefined;
+          const prefs = parseArrayField(locationPreferenceValue, /[;,]/.test(locationPreferenceValue) ? ';' : ';');
+          const flags = { onsite: false, remote: false, hybrid: false };
+          prefs.forEach((p) => {
+            const normalized = p.toLowerCase().trim();
+            if (normalized === 'onsite' || normalized === 'on-site') flags.onsite = true;
+            if (normalized === 'remote') flags.remote = true;
+            if (normalized === 'hybrid') flags.hybrid = true;
+          });
+          // If none matched, return undefined to avoid storing empty object
+          return flags.onsite || flags.remote || flags.hybrid ? flags : undefined;
+        })(),
+        status: parseBooleanField(hiredRaw),
+        is_blocked: parseBooleanField(blockedRaw),
         createdAt: row['Created'] ? parseDateField(row['Created']) : new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+        updatedAt: row['Updated'] ? parseDateField(row['Updated']) : new Date().toISOString(),
       };
 
       // Validation

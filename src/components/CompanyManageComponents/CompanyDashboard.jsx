@@ -7,14 +7,16 @@
  * <CompanyDashboard />
  */
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import "./CompanyDashboard.css";
+import "../DashboardPageHeader/DashboardPageHeader.css";
 import Navbar from "../Navbar/Navbar.jsx";
 import DashboardOverview from "../DashboardOverview/DashboardOverview.jsx";
 import SearchBar from "../SearchBar/SearchBar.jsx";
 import Table from "./Table/Table.jsx";
 import CompanyModal from "./CompanyModal/CompanyModal.jsx";
 import CompanyDetailModal from "./CompanyDetailModal/CompanyDetailModal.jsx";
+import RenewMoaModal from "./RenewMoaModal/RenewMoaModal.jsx";
 import ConfirmModal from "../ConfirmModalComponents/ConfirmModal.jsx";
 import ConfirmAction from "../ConfirmAction/ConfirmAction.jsx";
 import LoadingSpinner from "../LoadingSpinner.jsx";
@@ -35,9 +37,10 @@ import {
   addDoc,
   updateDoc,
   doc,
+  where,
 } from "firebase/firestore";
 import { ref, update as updateRealtime } from "firebase/database";
-import { db, realtimeDb } from "../../../firebase.js";
+import { auth, db, realtimeDb } from "../../../firebase.js";
 import {
   downloadCSV,
   prepareCompaniesForExport,
@@ -61,10 +64,11 @@ import {
   IoAlertCircleOutline,
   IoAddOutline,
   IoTrashOutline,
+  IoCloseOutline,
 } from "react-icons/io5";
 import logger from "../../utils/logger.js";
 import Footer from "../Footer/Footer.jsx";
-import { getAdminRole, ROLES, isAdviserOnly } from "../../utils/auth.js";
+import { getAdminRole, ROLES, isAdviserOnly, getAdminSession, hasAnyRole, getAdminCollegeCode } from "../../utils/auth.js";
 import { loadColleges } from "../../utils/collegeUtils.js";
 
 // --- Company Dashboard Main Component ---
@@ -74,6 +78,8 @@ const Dashboard = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [selectedCompany, setSelectedCompany] = useState(null);
+  const [companyToRenewMoa, setCompanyToRenewMoa] = useState(null);
+  const [isRenewMoaModalOpen, setIsRenewMoaModalOpen] = useState(false);
   const [formData, setFormData] = useState({
     companyName: "",
     description: "",
@@ -99,6 +105,7 @@ const Dashboard = () => {
   const [error, setError] = useState(null);
   const [selectedItems, setSelectedItems] = useState([]);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [allCompanies, setAllCompanies] = useState([]); // Raw companies from Firestore
   const [tableData, setTableData] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -109,6 +116,8 @@ const Dashboard = () => {
     field: "",
     modeOfWork: "",
     moaExpirationStatus: "",
+    endorsedByCollege: "",
+    skills: "",
   });
   const [showConfirm, setShowConfirm] = useState(false);
   const [openMenuId, setOpenMenuId] = useState(null);
@@ -129,6 +138,9 @@ const Dashboard = () => {
     total: 0,
   });
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [showImportPreview, setShowImportPreview] = useState(false);
+  const [previewCompanies, setPreviewCompanies] = useState([]);
+  const [previewErrors, setPreviewErrors] = useState([]);
   const fileInputRef = useRef(null);
   const { toasts, removeToast, success, error: showError } = useToast();
 
@@ -136,6 +148,7 @@ const Dashboard = () => {
   const suggestionSkills = useSuggestionSkills();
   const suggestionFields = useSuggestionFields();
   const [collegeOptions, setCollegeOptions] = useState([]);
+  const [adminCollegeName, setAdminCollegeName] = useState(null);
 
   useEffect(() => {
     loadColleges()
@@ -146,6 +159,142 @@ const Dashboard = () => {
       });
   }, []);
 
+  // Load admin's college name if they are coordinator/adviser
+  useEffect(() => {
+    const loadAdminCollege = async () => {
+      const currentRole = getAdminRole();
+      if (
+        hasAnyRole([ROLES.COORDINATOR, ROLES.ADVISER]) &&
+        !hasAnyRole([ROLES.SUPER_ADMIN])
+      ) {
+        const adminCollegeCode = getAdminCollegeCode();
+        if (adminCollegeCode) {
+          try {
+            const colleges = await loadColleges();
+            const college = colleges.find(
+              (c) => c.college_code === adminCollegeCode
+            );
+            if (college) {
+              setAdminCollegeName(college.college_name);
+            } else {
+              setAdminCollegeName(null);
+            }
+          } catch (error) {
+            logger.error("Error loading admin college:", error);
+            setAdminCollegeName(null);
+          }
+        } else {
+          setAdminCollegeName(null);
+        }
+      } else {
+        setAdminCollegeName(null);
+      }
+    };
+
+    loadAdminCollege();
+  }, []);
+
+  // Filter companies based on role and college endorsement
+  const filteredCompanies = useMemo(() => {
+    const currentRole = getAdminRole();
+    
+    // Only admin can see all companies
+    if (hasAnyRole([ROLES.SUPER_ADMIN])) {
+      return allCompanies;
+    }
+
+    // Coordinators/advisers can only see companies endorsed by their college
+    if (hasAnyRole([ROLES.COORDINATOR, ROLES.ADVISER])) {
+      // If college name is not loaded yet, return empty array (will update when loaded)
+      if (!adminCollegeName) {
+        return [];
+      }
+
+      return allCompanies.filter((company) => {
+        // Only show companies where endorsedByCollege matches admin's college
+        if (!company.endorsedByCollege) {
+          return false; // Hide companies without endorsement
+        }
+        // Compare case-insensitively
+        return (
+          company.endorsedByCollege.trim().toLowerCase() ===
+          adminCollegeName.trim().toLowerCase()
+        );
+      });
+    }
+
+    // Other roles: hide all
+    return [];
+  }, [allCompanies, adminCollegeName]);
+
+  // Update tableData and stats when filteredCompanies changes
+  useEffect(() => {
+    setTableData(filteredCompanies);
+
+    // Recalculate stats based on filtered companies
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const filteredExpiringSoon = filteredCompanies.filter((company) => {
+      if (company.moa === "Yes" && company.moaExpirationDate) {
+        try {
+          const expirationDate = new Date(company.moaExpirationDate);
+          const expDate = new Date(expirationDate);
+          expDate.setHours(0, 0, 0, 0);
+          const daysUntilExpiration = Math.ceil(
+            (expDate - today) / (1000 * 60 * 60 * 24),
+          );
+          return daysUntilExpiration > 0 && daysUntilExpiration <= MOA_EXPIRING_SOON_DAYS;
+        } catch (e) {
+          return false;
+        }
+      }
+      return false;
+    }).length;
+
+    const filteredExpired = filteredCompanies.filter((company) => {
+      if (company.moa === "Yes" && company.moaExpirationDate) {
+        try {
+          const expirationDate = new Date(company.moaExpirationDate);
+          const expDate = new Date(expirationDate);
+          expDate.setHours(0, 0, 0, 0);
+          const daysUntilExpiration = Math.ceil(
+            (expDate - today) / (1000 * 60 * 60 * 24),
+          );
+          return daysUntilExpiration < 0;
+        } catch (e) {
+          return false;
+        }
+      }
+      return false;
+    }).length;
+
+    const filteredValid = filteredCompanies.filter((company) => {
+      if (company.moa === "Yes" && company.moaExpirationDate) {
+        try {
+          const expirationDate = new Date(company.moaExpirationDate);
+          const expDate = new Date(expirationDate);
+          expDate.setHours(0, 0, 0, 0);
+          const daysUntilExpiration = Math.ceil(
+            (expDate - today) / (1000 * 60 * 60 * 24),
+          );
+          return daysUntilExpiration > MOA_EXPIRING_SOON_DAYS;
+        } catch (e) {
+          return false;
+        }
+      }
+      return false;
+    }).length;
+
+    setOverviewStats((prev) => ({
+      ...prev,
+      totalCompanies: filteredCompanies.length,
+      moaExpiringSoon: filteredExpiringSoon,
+      moaExpired: filteredExpired,
+      moaValid: filteredValid,
+    }));
+  }, [filteredCompanies]);
+
   // Clear all filters and search
   const handleClearAllFilters = () => {
     setSearchQuery("");
@@ -153,6 +302,8 @@ const Dashboard = () => {
       field: "",
       modeOfWork: "",
       moaExpirationStatus: "",
+      endorsedByCollege: "",
+      skills: "",
     });
     success("All filters cleared");
   };
@@ -166,6 +317,32 @@ const Dashboard = () => {
     setSortConfig({ key, direction });
   };
 
+  // Unique "Endorsed by College" values from current companies (for filter dropdown)
+  const endorsedByCollegeOptions = React.useMemo(() => {
+    if (!Array.isArray(tableData)) return [];
+    const set = new Set();
+    tableData.forEach((row) => {
+      const v = row.endorsedByCollege;
+      if (v && typeof v === "string" && v.trim()) set.add(v.trim());
+    });
+    return ["All", ...Array.from(set).sort((a, b) => a.localeCompare(b))];
+  }, [tableData]);
+
+  // Unique skills from current companies (skillsREq) for filter dropdown
+  const skillsFilterOptions = React.useMemo(() => {
+    if (!Array.isArray(tableData)) return [];
+    const set = new Set();
+    tableData.forEach((row) => {
+      const skillsArr = row.skillsREq || row.skills;
+      if (Array.isArray(skillsArr)) {
+        skillsArr.forEach((s) => {
+          if (s && typeof s === "string" && s.trim()) set.add(s.trim());
+        });
+      }
+    });
+    return ["All", ...Array.from(set).sort((a, b) => a.localeCompare(b))];
+  }, [tableData]);
+
   // --- Filtering and Sorting logic for companies table ---
   const filteredData = Array.isArray(tableData)
     ? tableData.filter((row) => {
@@ -175,7 +352,9 @@ const Dashboard = () => {
             row.fields.some((f) =>
               f.toLowerCase().includes(searchQuery.toLowerCase()),
             )) ||
-          row.description?.toLowerCase().includes(searchQuery.toLowerCase());
+          row.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          (row.address && row.address.toLowerCase().includes(searchQuery.toLowerCase())) ||
+          (row.companyAddress && row.companyAddress.toLowerCase().includes(searchQuery.toLowerCase()));
         const matchesField = filterValues.field
           ? Array.isArray(row.fields) &&
             row.fields.some((f) =>
@@ -186,6 +365,25 @@ const Dashboard = () => {
           ? Array.isArray(row.modeOfWork)
             ? row.modeOfWork.includes(filterValues.modeOfWork)
             : row.modeOfWork === filterValues.modeOfWork
+          : true;
+
+        const matchesEndorsedByCollege = filterValues.endorsedByCollege
+          ? (row.endorsedByCollege || "").trim().toLowerCase() ===
+            filterValues.endorsedByCollege.trim().toLowerCase()
+          : true;
+
+        const matchesSkills = filterValues.skills
+          ? (() => {
+              const skillsArr = row.skillsREq || row.skills;
+              if (!Array.isArray(skillsArr)) return false;
+              const filterSkill = filterValues.skills.trim().toLowerCase();
+              return skillsArr.some(
+                (s) =>
+                  s &&
+                  (String(s).trim().toLowerCase() === filterSkill ||
+                    String(s).trim().toLowerCase().includes(filterSkill))
+              );
+            })()
           : true;
 
         // MOA Expiration Status filter
@@ -221,6 +419,8 @@ const Dashboard = () => {
           matchesSearch &&
           matchesField &&
           matchesModeOfWork &&
+          matchesEndorsedByCollege &&
+          matchesSkills &&
           matchesMoaExpiration
         );
       })
@@ -378,15 +578,8 @@ const Dashboard = () => {
           });
         }
 
-        setTableData(companies);
-
-        setOverviewStats((prev) => ({
-          ...prev,
-          totalCompanies: companies.length,
-          moaExpiringSoon: expiringSoon,
-          moaExpired: expired,
-          moaValid: valid,
-        }));
+        // Store raw companies - filtering will happen in useMemo
+        setAllCompanies(companies);
         setIsLoading(false);
         logger.debug("Companies updated:", companies.length);
       },
@@ -444,15 +637,12 @@ const Dashboard = () => {
     document.title = "Dashboard | InternQuest Admin";
   }, []);
 
-  // Handle CSV import
+  // Handle CSV import - preview step
   const handleImportCompanies = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     try {
-      setIsImporting(true);
-      setImportProgress({ current: 0, total: 0 });
-
       // Read CSV file
       const csvText = await readCSVFile(file);
 
@@ -464,19 +654,127 @@ const Dashboard = () => {
 
       if (companies.length === 0) {
         showError("No valid companies found in CSV file");
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+        }
         return;
       }
 
-      setImportProgress({ current: 0, total: companies.length });
+      if (!auth.currentUser) {
+        showError("You must be signed in to import companies. Please sign in and try again.");
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+        }
+        return;
+      }
+
+      // Show preview modal
+      setPreviewCompanies(companies);
+      setPreviewErrors(errors);
+      setShowImportPreview(true);
+    } catch (err) {
+      logger.error("Import preview error:", err);
+      showError(
+        err.message || "Failed to parse CSV file. Please check the format.",
+      );
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
+
+  // Actual import execution after confirmation
+  const executeImport = async () => {
+    if (previewCompanies.length === 0) return;
+
+    try {
+      setIsImporting(true);
+      setShowImportPreview(false);
+      setImportProgress({ current: 0, total: previewCompanies.length });
 
       // Batch import companies
       let successCount = 0;
       let errorCount = 0;
       const importErrors = [];
+      
+      // Track which company names/emails have been imported in this batch (for duplicate detection within CSV)
+      const importedInBatch = {
+        companyNames: new Set(),
+        companyEmails: new Set(),
+      };
 
-      for (let i = 0; i < companies.length; i++) {
+      for (let i = 0; i < previewCompanies.length; i++) {
         try {
-          const company = companies[i];
+          const company = previewCompanies[i];
+          
+          // Check for duplicates within the CSV file itself
+          const companyNameLower = (company.companyName || "").trim().toLowerCase();
+          const companyEmailLower = (company.email || "").trim().toLowerCase();
+          
+          if (companyNameLower) {
+            if (importedInBatch.companyNames.has(companyNameLower)) {
+              throw new Error(
+                `Duplicate company name in CSV file - "${company.companyName}" already imported earlier in this batch`
+              );
+            }
+          }
+          
+          if (companyEmailLower) {
+            if (importedInBatch.companyEmails.has(companyEmailLower)) {
+              throw new Error(
+                `Duplicate company email in CSV file - "${company.email}" already imported earlier in this batch`
+              );
+            }
+          }
+          
+          // Check if company name or email already exists in database (case-insensitive)
+          // Use existing allCompanies state if available, otherwise fetch once
+          const companiesToCheck = allCompanies.length > 0 
+            ? allCompanies 
+            : (await getDocs(collection(db, "companies"))).docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          
+          if (companyNameLower) {
+            const existingByName = companiesToCheck.find(
+              (comp) => comp.companyName?.toLowerCase() === companyNameLower
+            );
+            
+            if (existingByName) {
+              throw new Error(
+                `Company name "${company.companyName}" already exists in database`
+              );
+            }
+          }
+          
+          if (companyEmailLower) {
+            const existingByEmail = companiesToCheck.find(
+              (comp) => comp.companyEmail?.toLowerCase() === companyEmailLower
+            );
+            
+            if (existingByEmail) {
+              throw new Error(
+                `Company email "${company.email}" already exists in database`
+              );
+            }
+          }
+
+          // Compute MOA expiration from start date + validity years when provided
+          let moaStartDate = company.moaStartDate || "";
+          let moaExpirationDate = "";
+          if (moaStartDate && (company.moaValidityYears || 1) > 0) {
+            try {
+              const start = new Date(moaStartDate);
+              const exp = new Date(start);
+              exp.setFullYear(exp.getFullYear() + (company.moaValidityYears || 1));
+              moaExpirationDate = exp.toISOString();
+            } catch (_) {}
+          }
+
+          // Get creator info
+          const session = getAdminSession();
+          const createdBy = session ? {
+            username: session.username || "Unknown",
+            role: session.role || "Unknown",
+          } : null;
 
           // Map to Firestore format
           const newCompany = {
@@ -488,13 +786,39 @@ const Dashboard = () => {
             skillsREq: company.skills,
             moa: "Yes", // MOA is always required
             moaValidityYears: company.moaValidityYears || 1,
+            moaFileUrl: company.moaFileUrl || "",
+            moaFileName: company.moaFileName || "",
             modeOfWork: company.modeOfWork,
             fields: company.fields,
+            endorsedByCollege: company.endorsedByCollege || "",
+            contactPersonName: company.contactPersonName || "",
+            contactPersonPhone: company.contactPersonPhone || "",
             createdAt: company.createdAt || new Date().toISOString(),
             updatedAt: company.updatedAt || new Date().toISOString(),
           };
 
+          // Only include MOA dates if they have values (Firestore doesn't allow undefined)
+          if (moaStartDate) {
+            newCompany.moaStartDate = moaStartDate;
+          }
+          if (moaExpirationDate) {
+            newCompany.moaExpirationDate = moaExpirationDate;
+          }
+
+          // Add createdBy if available
+          if (createdBy) {
+            newCompany.createdBy = createdBy;
+          }
+
           const docRef = await addDoc(collection(db, "companies"), newCompany);
+          
+          // Track this company as imported in this batch
+          if (companyNameLower) {
+            importedInBatch.companyNames.add(companyNameLower);
+          }
+          if (companyEmailLower) {
+            importedInBatch.companyEmails.add(companyEmailLower);
+          }
 
           // Sync to Realtime DB
           await updateRealtime(ref(realtimeDb, `companies/${docRef.id}`), {
@@ -513,17 +837,23 @@ const Dashboard = () => {
           successCount++;
         } catch (err) {
           errorCount++;
+          const isPermissionError =
+            err?.code === "permission-denied" ||
+            (err?.message && String(err.message).toLowerCase().includes("permission"));
+          const userMessage = isPermissionError
+            ? "Permission denied. Please sign out, sign in again, and retry the import."
+            : err.message;
           importErrors.push({
-            company: companies[i].companyName,
-            error: err.message,
+            company: previewCompanies[i].companyName,
+            error: userMessage,
           });
           logger.error(
-            `Failed to import company ${companies[i].companyName}:`,
+            `Failed to import company ${previewCompanies[i].companyName}:`,
             err,
           );
         }
 
-        setImportProgress({ current: i + 1, total: companies.length });
+        setImportProgress({ current: i + 1, total: previewCompanies.length });
       }
 
       // Show results
@@ -534,8 +864,8 @@ const Dashboard = () => {
             `${errorCount} company/companies failed to import. Check console for details.`,
           );
         }
-        if (errors.length > 0) {
-          logger.warn(`CSV parsing errors:`, errors);
+        if (previewErrors.length > 0) {
+          logger.warn(`CSV parsing errors:`, previewErrors);
         }
       } else {
         showError(
@@ -543,10 +873,12 @@ const Dashboard = () => {
         );
       }
 
-      // Reset file input
+      // Reset file input and preview
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
+      setPreviewCompanies([]);
+      setPreviewErrors([]);
     } catch (err) {
       logger.error("Import error:", err);
       showError(
@@ -584,61 +916,48 @@ const Dashboard = () => {
         type="warning"
       />
       <div className="dashboard-content">
-        {/* Page Header */}
-        <div className="company-page-header">
-          <h1>{isAdviser ? "View Companies" : "Manage Companies"}</h1>
-          <p>
-            {isAdviser
-              ? "View partner companies and their MOA status"
-              : "View and manage partner companies and their MOA status"}
-          </p>
-        </div>
-
-        {/* Stats Cards */}
-        <div className="iq-stats-wrapper">
-          <div className="iq-stats-grid">
-            <div className="iq-stat-card iq-stat--info">
-              <div className="iq-stat-icon-wrapper" aria-hidden="true">
-                <IoBusinessOutline className="iq-stat-icon" />
-              </div>
-              <div className="iq-stat-content">
-                <div className="iq-stat-value">
-                  {overviewStats.totalCompanies || 0}
-                </div>
-                <div className="iq-stat-label">Total Companies</div>
+        {/* Page Header (Archive Management style) */}
+        <div className="dashboard-page-header">
+          <div className="dashboard-header-content">
+            <div className="dashboard-header-icon-wrapper dashboard-header-icon--blue" aria-hidden="true">
+              <IoBusinessOutline className="dashboard-header-icon dashboard-header-icon--blue" />
+            </div>
+            <div>
+              <h1>{isAdviser ? "View Companies" : "Manage Companies"}</h1>
+              <p>
+                {isAdviser
+                  ? "View partner companies and their MOA status"
+                  : "View and manage partner companies and their MOA status"}
+              </p>
+            </div>
+          </div>
+          <div className="dashboard-header-stats">
+            <div className="dashboard-stat-card">
+              <IoBusinessOutline className="dashboard-stat-icon" />
+              <div className="dashboard-stat-content">
+                <span className="dashboard-stat-value">{overviewStats.totalCompanies || 0}</span>
+                <span className="dashboard-stat-label">Total Companies</span>
               </div>
             </div>
-            <div className="iq-stat-card iq-stat--success">
-              <div className="iq-stat-icon-wrapper" aria-hidden="true">
-                <IoCheckmarkCircleOutline className="iq-stat-icon" />
-              </div>
-              <div className="iq-stat-content">
-                <div className="iq-stat-value">
-                  {overviewStats.moaValid || 0}
-                </div>
-                <div className="iq-stat-label">Active MOA</div>
+            <div className="dashboard-stat-card">
+              <IoCheckmarkCircleOutline className="dashboard-stat-icon" />
+              <div className="dashboard-stat-content">
+                <span className="dashboard-stat-value">{overviewStats.moaValid || 0}</span>
+                <span className="dashboard-stat-label">Active MOA</span>
               </div>
             </div>
-            <div className="iq-stat-card iq-stat--warning">
-              <div className="iq-stat-icon-wrapper" aria-hidden="true">
-                <IoWarningOutline className="iq-stat-icon" />
-              </div>
-              <div className="iq-stat-content">
-                <div className="iq-stat-value">
-                  {overviewStats.moaExpiringSoon || 0}
-                </div>
-                <div className="iq-stat-label">Expiring Soon</div>
+            <div className="dashboard-stat-card">
+              <IoWarningOutline className="dashboard-stat-icon" />
+              <div className="dashboard-stat-content">
+                <span className="dashboard-stat-value">{overviewStats.moaExpiringSoon || 0}</span>
+                <span className="dashboard-stat-label">Expiring Soon</span>
               </div>
             </div>
-            <div className="iq-stat-card iq-stat--danger">
-              <div className="iq-stat-icon-wrapper" aria-hidden="true">
-                <IoAlertCircleOutline className="iq-stat-icon" />
-              </div>
-              <div className="iq-stat-content">
-                <div className="iq-stat-value">
-                  {overviewStats.moaExpired || 0}
-                </div>
-                <div className="iq-stat-label">Expired MOA</div>
+            <div className="dashboard-stat-card">
+              <IoAlertCircleOutline className="dashboard-stat-icon" />
+              <div className="dashboard-stat-content">
+                <span className="dashboard-stat-value">{overviewStats.moaExpired || 0}</span>
+                <span className="dashboard-stat-label">Expired MOA</span>
               </div>
             </div>
           </div>
@@ -681,6 +1000,8 @@ const Dashboard = () => {
               onFilter={setFilterValues}
               filterValues={filterValues}
               type="company"
+              endorsedByCollegeOptions={endorsedByCollegeOptions}
+              skillsFilterOptions={skillsFilterOptions}
             />
           </div>
 
@@ -955,6 +1276,7 @@ const Dashboard = () => {
               setSkills,
               setFields,
               setError,
+              (companyName) => success(`Company "${companyName}" added successfully.`),
             )
           }
           handleUpdateEntry={dashboardHandlers.handleUpdateEntry}
@@ -981,56 +1303,9 @@ const Dashboard = () => {
           setIsDetailModalOpen(false);
           setSelectedCompany(null);
         }}
-        onRenewMoa={async (company) => {
-          if (!company || !company.id) return;
-
-          try {
-            setIsLoading(true);
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-
-            // Calculate new expiration date based on current validity years
-            const validityYears = company.moaValidityYears || 1;
-            const newExpirationDate = new Date(today);
-            newExpirationDate.setFullYear(
-              newExpirationDate.getFullYear() + validityYears,
-            );
-
-            // Update company in Firestore
-            await updateDoc(doc(db, "companies", company.id), {
-              moaStartDate: today.toISOString(),
-              moaExpirationDate: newExpirationDate.toISOString(),
-              isVisibleToMobile: true, // Make visible to mobile app after renewal
-              moaStatus: "valid", // Set status to valid
-              updatedAt: new Date().toISOString(),
-            });
-
-            // Sync to Realtime DB
-            await updateRealtime(ref(realtimeDb, `companies/${company.id}`), {
-              updatedAt: new Date().toISOString(),
-            });
-
-            // Log activity
-            await activityLoggers.updateCompany(
-              company.id,
-              company.companyName,
-              {
-                moaStartDate: today.toISOString(),
-                moaExpirationDate: newExpirationDate.toISOString(),
-              },
-            );
-
-            success(
-              `MOA renewed for ${company.companyName}. New expiration: ${newExpirationDate.toLocaleDateString()}`,
-            );
-            setIsDetailModalOpen(false);
-            setSelectedCompany(null);
-          } catch (err) {
-            logger.error("Error renewing MOA:", err);
-            showError("Failed to renew MOA. Please try again.");
-          } finally {
-            setIsLoading(false);
-          }
+        onRenewMoa={(company) => {
+          setCompanyToRenewMoa(company);
+          setIsRenewMoaModalOpen(true);
         }}
         onEdit={(company) => {
           dashboardHandlers.handleEdit(
@@ -1043,6 +1318,62 @@ const Dashboard = () => {
             setFields,
           );
           setIsDetailModalOpen(false);
+        }}
+      />
+      <RenewMoaModal
+        open={isRenewMoaModalOpen}
+        company={companyToRenewMoa}
+        onClose={() => {
+          setIsRenewMoaModalOpen(false);
+          setCompanyToRenewMoa(null);
+        }}
+        isSubmitting={isLoading}
+        onSubmit={async (payload) => {
+          const company = companyToRenewMoa;
+          if (!company || !company.id) return;
+
+          try {
+            setIsLoading(true);
+            await updateDoc(doc(db, "companies", company.id), {
+              moaStartDate: payload.startDate,
+              moaExpirationDate: payload.expirationDate,
+              moaValidityYears: payload.validityYears,
+              moaFileUrl: payload.moaFileUrl,
+              moaFileName: payload.moaFileName,
+              moaStoragePath: payload.moaStoragePath,
+              isVisibleToMobile: true,
+              moaStatus: "valid",
+              updatedAt: new Date().toISOString(),
+            });
+
+            await updateRealtime(ref(realtimeDb, `companies/${company.id}`), {
+              updatedAt: new Date().toISOString(),
+            });
+
+            await activityLoggers.updateCompany(
+              company.id,
+              company.companyName,
+              {
+                moaStartDate: payload.startDate,
+                moaExpirationDate: payload.expirationDate,
+                moaValidityYears: payload.validityYears,
+              },
+            );
+
+            const expDate = new Date(payload.expirationDate);
+            success(
+              `MOA renewed for ${company.companyName}. New expiration: ${expDate.toLocaleDateString()}`,
+            );
+            setIsRenewMoaModalOpen(false);
+            setCompanyToRenewMoa(null);
+            setIsDetailModalOpen(false);
+            setSelectedCompany(null);
+          } catch (err) {
+            logger.error("Error renewing MOA:", err);
+            showError("Failed to renew MOA. Please try again.");
+          } finally {
+            setIsLoading(false);
+          }
         }}
       />
       <ConfirmModal
@@ -1071,6 +1402,136 @@ const Dashboard = () => {
         }}
         onCancel={() => dashboardHandlers.cancelDelete(setShowConfirm)}
       />
+      {/* CSV Import Preview Modal */}
+      {showImportPreview && (
+        <div className="import-preview-modal-backdrop" onClick={() => {
+          setShowImportPreview(false);
+          setPreviewCompanies([]);
+          setPreviewErrors([]);
+          if (fileInputRef.current) {
+            fileInputRef.current.value = "";
+          }
+        }}>
+          <div className="import-preview-modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="import-preview-header">
+              <h2>CSV Import Preview</h2>
+              <p className="import-preview-subtitle">
+                Review {previewCompanies.length} company/companies before importing
+              </p>
+              <button
+                type="button"
+                className="import-preview-close"
+                onClick={() => {
+                  setShowImportPreview(false);
+                  setPreviewCompanies([]);
+                  setPreviewErrors([]);
+                  if (fileInputRef.current) {
+                    fileInputRef.current.value = "";
+                  }
+                }}
+                aria-label="Close"
+              >
+                <IoCloseOutline />
+              </button>
+            </div>
+            {previewErrors.length > 0 && (
+              <div className="import-preview-errors">
+                <IoWarningOutline className="error-icon" />
+                <div>
+                  <strong>Parsing Warnings ({previewErrors.length}):</strong>
+                  <ul>
+                    {previewErrors.slice(0, 5).map((err, idx) => (
+                      <li key={idx}>{err}</li>
+                    ))}
+                    {previewErrors.length > 5 && (
+                      <li>... and {previewErrors.length - 5} more</li>
+                    )}
+                  </ul>
+                </div>
+              </div>
+            )}
+            <div className="import-preview-table-wrapper">
+              <table className="import-preview-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Company Name</th>
+                    <th>Description</th>
+                    <th>Email</th>
+                    <th>Website</th>
+                    <th>Address</th>
+                    <th>Fields</th>
+                    <th>Skills</th>
+                    <th>Mode of Work</th>
+                    <th>Endorsed by College</th>
+                    <th>Contact Person Name</th>
+                    <th>Contact Number</th>
+                    <th>MOA</th>
+                    <th>MOA Validity Years</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {previewCompanies.map((company, index) => (
+                    <tr key={index}>
+                      <td>{index + 1}</td>
+                      <td>{company.companyName || "N/A"}</td>
+                      <td className="preview-description-cell" title={company.description || "N/A"}>
+                        {company.description ? (company.description.length > 50 ? company.description.substring(0, 50) + "..." : company.description) : "N/A"}
+                      </td>
+                      <td>{company.email || "N/A"}</td>
+                      <td>{company.companyWebsite || "N/A"}</td>
+                      <td>{company.address || "N/A"}</td>
+                      <td>{Array.isArray(company.fields) ? company.fields.join(", ") : (company.fields || "N/A")}</td>
+                      <td>{Array.isArray(company.skills) ? company.skills.join(", ") : (company.skills || "N/A")}</td>
+                      <td>{Array.isArray(company.modeOfWork) ? company.modeOfWork.join(", ") : (company.modeOfWork || "N/A")}</td>
+                      <td>{company.endorsedByCollege || "N/A"}</td>
+                      <td>{company.contactPersonName || "N/A"}</td>
+                      <td>{company.contactPersonPhone || "N/A"}</td>
+                      <td>{company.moa ? "Yes" : "No"}</td>
+                      <td>{company.moaValidityYears || (company.moa ? "1 (default)" : "N/A")}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="import-preview-actions">
+              <button
+                type="button"
+                className="import-preview-btn cancel"
+                onClick={() => {
+                  setShowImportPreview(false);
+                  setPreviewCompanies([]);
+                  setPreviewErrors([]);
+                  if (fileInputRef.current) {
+                    fileInputRef.current.value = "";
+                  }
+                }}
+                disabled={isImporting}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="import-preview-btn confirm"
+                onClick={executeImport}
+                disabled={isImporting}
+              >
+                {isImporting ? (
+                  <>
+                    <span className="spinner"></span>
+                    Importing... ({importProgress.current}/{importProgress.total})
+                  </>
+                ) : (
+                  <>
+                    <IoCheckmarkCircleOutline />
+                    Confirm & Import ({previewCompanies.length})
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <ToastContainer toasts={toasts} removeToast={removeToast} />
       <Footer />
     </div>

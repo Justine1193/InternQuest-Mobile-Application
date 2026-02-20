@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   IoCloseOutline,
   IoBusinessOutline,
@@ -14,8 +14,16 @@ import {
   IoWarning,
   IoDownloadOutline,
   IoOpenOutline,
+  IoTimeOutline,
 } from "react-icons/io5";
 import { checkMoaExpiration } from "../../../utils/moaUtils";
+import {
+  getAdminRole,
+  getAdminCollegeCode,
+  ROLES,
+  hasAnyRole,
+} from "../../../utils/auth";
+import { loadColleges } from "../../../utils/collegeUtils";
 import "./CompanyDetailModal.css";
 
 const CompanyDetailModal = ({
@@ -26,6 +34,70 @@ const CompanyDetailModal = ({
   onEdit,
   onRestore,
 }) => {
+  const [adminCollegeName, setAdminCollegeName] = useState(null);
+
+  // Load admin's college name if they are coordinator/adviser
+  useEffect(() => {
+    const loadAdminCollege = async () => {
+      const currentRole = getAdminRole();
+      if (
+        hasAnyRole([ROLES.COORDINATOR, ROLES.ADVISER]) &&
+        !hasAnyRole([ROLES.SUPER_ADMIN])
+      ) {
+        const adminCollegeCode = getAdminCollegeCode();
+        if (adminCollegeCode) {
+          try {
+            const colleges = await loadColleges();
+            const college = colleges.find(
+              (c) => c.college_code === adminCollegeCode
+            );
+            if (college) {
+              setAdminCollegeName(college.college_name);
+            } else {
+              setAdminCollegeName(null);
+            }
+          } catch (error) {
+            console.error("Error loading colleges:", error);
+            setAdminCollegeName(null);
+          }
+        } else {
+          setAdminCollegeName(null);
+        }
+      } else {
+        setAdminCollegeName(null);
+      }
+    };
+
+    if (open && company) {
+      loadAdminCollege();
+    }
+  }, [open, company]);
+
+  // Determine if "Created By" should be visible
+  const shouldShowCreatedBy = () => {
+    const currentRole = getAdminRole();
+    
+    // Admin can see all
+    if (hasAnyRole([ROLES.SUPER_ADMIN])) {
+      return true;
+    }
+
+    // Coordinator/Adviser can only see if company is endorsed by their college
+    if (hasAnyRole([ROLES.COORDINATOR, ROLES.ADVISER])) {
+      if (!company.endorsedByCollege || !adminCollegeName) {
+        return false;
+      }
+      // Compare case-insensitively
+      return (
+        company.endorsedByCollege.trim().toLowerCase() ===
+        adminCollegeName.trim().toLowerCase()
+      );
+    }
+
+    // Other roles cannot see
+    return false;
+  };
+
   if (!open || !company) return null;
 
   const formatDate = (dateString) => {
@@ -164,84 +236,55 @@ const CompanyDetailModal = ({
 
         <div className="company-detail-body">
           {/* Description */}
-          {company.companyDescription && (
-            <div className="detail-section">
-              <h3 className="detail-section-title">Description</h3>
-              <p className="detail-section-content">
-                {company.companyDescription}
-              </p>
-            </div>
-          )}
+          <div className="detail-section">
+            <h3 className="detail-section-title">Description</h3>
+            <p className="detail-section-content">
+              {company.companyDescription || <span className="empty-value">Not set</span>}
+            </p>
+          </div>
 
-          {company.endorsedByCollege && (
-            <div className="detail-section">
-              <h3 className="detail-section-title">Endorsed by College</h3>
-              <p className="detail-section-content">
-                {company.endorsedByCollege}
-              </p>
-            </div>
-          )}
+          <div className="detail-section">
+            <h3 className="detail-section-title">Endorsed by College</h3>
+            <p className="detail-section-content">
+              {company.endorsedByCollege || <span className="empty-value">Not set</span>}
+            </p>
+          </div>
 
-          {/* Contact Information */}
+          {/* Contact Information (company-level) */}
           <div className="detail-section">
             <h3 className="detail-section-title">Contact Information</h3>
+            <p className="detail-section-desc">Company address, email, and website</p>
             <div className="detail-grid">
-              {company.contactPersonName && (
-                <div className="detail-item">
-                  <IoPersonOutline className="detail-item-icon" />
-                  <div className="detail-item-content">
-                    <span className="detail-item-label">Name</span>
-                    <span className="detail-item-value">
-                      {company.contactPersonName}
-                    </span>
-                  </div>
+              <div className="detail-item">
+                <IoLocationOutline className="detail-item-icon" />
+                <div className="detail-item-content">
+                  <span className="detail-item-label">Address</span>
+                  <span className="detail-item-value">
+                    {company.companyAddress || <span className="empty-value">Not set</span>}
+                  </span>
                 </div>
-              )}
-              {(company.contactPersonPhone || company.companyContactNumber) && (
-                <div className="detail-item">
-                  <IoCallOutline className="detail-item-icon" />
-                  <div className="detail-item-content">
-                    <span className="detail-item-label">Contact Number</span>
-                    <a
-                      href={`tel:${company.contactPersonPhone || company.companyContactNumber}`}
-                      className="detail-item-value link"
-                    >
-                      {company.contactPersonPhone ||
-                        company.companyContactNumber}
-                    </a>
-                  </div>
-                </div>
-              )}
-              {company.companyAddress && (
-                <div className="detail-item">
-                  <IoLocationOutline className="detail-item-icon" />
-                  <div className="detail-item-content">
-                    <span className="detail-item-label">Address</span>
-                    <span className="detail-item-value">
-                      {company.companyAddress}
-                    </span>
-                  </div>
-                </div>
-              )}
-              {company.companyEmail && (
-                <div className="detail-item">
-                  <IoMailOutline className="detail-item-icon" />
-                  <div className="detail-item-content">
-                    <span className="detail-item-label">Email</span>
+              </div>
+              <div className="detail-item">
+                <IoMailOutline className="detail-item-icon" />
+                <div className="detail-item-content">
+                  <span className="detail-item-label">Email</span>
+                  {company.companyEmail ? (
                     <a
                       href={`mailto:${company.companyEmail}`}
                       className="detail-item-value link"
                     >
                       {company.companyEmail}
                     </a>
-                  </div>
+                  ) : (
+                    <span className="detail-item-value empty-value">Not set</span>
+                  )}
                 </div>
-              )}
-              {company.companyWeb && (
-                <div className="detail-item">
-                  <IoGlobeOutline className="detail-item-icon" />
-                  <div className="detail-item-content">
-                    <span className="detail-item-label">Website</span>
+              </div>
+              <div className="detail-item">
+                <IoGlobeOutline className="detail-item-icon" />
+                <div className="detail-item-content">
+                  <span className="detail-item-label">Website</span>
+                  {company.companyWeb ? (
                     <a
                       href={
                         company.companyWeb.startsWith("http")
@@ -254,6 +297,40 @@ const CompanyDetailModal = ({
                     >
                       {company.companyWeb}
                     </a>
+                  ) : (
+                    <span className="detail-item-value empty-value">Not set</span>
+                  )}
+                </div>
+              </div>
+              {company.createdAt && (
+                <div className="detail-item">
+                  <IoTimeOutline className="detail-item-icon" />
+                  <div className="detail-item-content">
+                    <span className="detail-item-label">Created At</span>
+                    <span className="detail-item-value">
+                      {(() => {
+                        try {
+                          const date = new Date(company.createdAt);
+                          return date.toLocaleString();
+                        } catch (e) {
+                          return <span className="empty-value">Invalid date</span>;
+                        }
+                      })()}
+                    </span>
+                  </div>
+                </div>
+              )}
+              {company.createdBy && shouldShowCreatedBy() && (
+                <div className="detail-item">
+                  <IoPersonOutline className="detail-item-icon" />
+                  <div className="detail-item-content">
+                    <span className="detail-item-label">Created By</span>
+                    <span className="detail-item-value">
+                      {company.createdBy.username || "Unknown"}
+                      {company.createdBy.role && (
+                        <span className="created-by-role"> ({company.createdBy.role})</span>
+                      )}
+                    </span>
                   </div>
                 </div>
               )}
@@ -261,109 +338,108 @@ const CompanyDetailModal = ({
           </div>
 
           {/* Contact Person Information */}
-          {(company.contactPersonName ||
-            company.contactPersonEmail ||
-            company.contactPersonPhone) && (
-            <div className="detail-section">
-              <h3 className="detail-section-title">Contact Person</h3>
-              <div className="detail-grid">
-                {company.contactPersonName && (
-                  <div className="detail-item">
-                    <IoPersonOutline className="detail-item-icon" />
-                    <div className="detail-item-content">
-                      <span className="detail-item-label">Name</span>
-                      <span className="detail-item-value">
-                        {company.contactPersonName}
-                      </span>
-                    </div>
-                  </div>
-                )}
-                {(company.contactPersonEmail || company.companyEmail) && (
-                  <div className="detail-item">
-                    <IoMailOutline className="detail-item-icon" />
-                    <div className="detail-item-content">
-                      <span className="detail-item-label">Email</span>
-                      <a
-                        href={`mailto:${
-                          company.contactPersonEmail || company.companyEmail
-                        }`}
-                        className="detail-item-value link"
-                      >
-                        {company.contactPersonEmail || company.companyEmail}
-                      </a>
-                    </div>
-                  </div>
-                )}
-                {company.contactPersonPhone && (
-                  <div className="detail-item">
-                    <IoCallOutline className="detail-item-icon" />
-                    <div className="detail-item-content">
-                      <span className="detail-item-label">Phone</span>
-                      <a
-                        href={`tel:${company.contactPersonPhone}`}
-                        className="detail-item-value link"
-                      >
-                        {company.contactPersonPhone}
-                      </a>
-                    </div>
-                  </div>
-                )}
+          <div className="detail-section">
+            <h3 className="detail-section-title">Contact Person Details</h3>
+            <p className="detail-section-desc">Representative name, email, and phone</p>
+            <div className="detail-grid">
+              <div className="detail-item">
+                <IoPersonOutline className="detail-item-icon" />
+                <div className="detail-item-content">
+                  <span className="detail-item-label">Name</span>
+                  <span className="detail-item-value">
+                    {company.contactPersonName || <span className="empty-value">Not set</span>}
+                  </span>
+                </div>
+              </div>
+              <div className="detail-item">
+                <IoMailOutline className="detail-item-icon" />
+                <div className="detail-item-content">
+                  <span className="detail-item-label">Email</span>
+                  {company.contactPersonEmail || company.companyEmail ? (
+                    <a
+                      href={`mailto:${
+                        company.contactPersonEmail || company.companyEmail
+                      }`}
+                      className="detail-item-value link"
+                    >
+                      {company.contactPersonEmail || company.companyEmail}
+                    </a>
+                  ) : (
+                    <span className="detail-item-value empty-value">Not set</span>
+                  )}
+                </div>
+              </div>
+              <div className="detail-item">
+                <IoCallOutline className="detail-item-icon" />
+                <div className="detail-item-content">
+                  <span className="detail-item-label">Phone</span>
+                  {company.contactPersonPhone ? (
+                    <a
+                      href={`tel:${company.contactPersonPhone}`}
+                      className="detail-item-value link"
+                    >
+                      {company.contactPersonPhone}
+                    </a>
+                  ) : (
+                    <span className="detail-item-value empty-value">Not set</span>
+                  )}
+                </div>
               </div>
             </div>
-          )}
+          </div>
 
           {/* Fields */}
-          {company.fields &&
-            Array.isArray(company.fields) &&
-            company.fields.length > 0 && (
-              <div className="detail-section">
-                <h3 className="detail-section-title">Fields</h3>
-                <div className="detail-tags">
-                  {company.fields.map((field, index) => (
-                    <span key={index} className="detail-tag field-tag">
-                      {field}
-                    </span>
-                  ))}
-                </div>
+          <div className="detail-section">
+            <h3 className="detail-section-title">Fields</h3>
+            {company.fields && Array.isArray(company.fields) && company.fields.length > 0 ? (
+              <div className="detail-tags">
+                {company.fields.map((field, index) => (
+                  <span key={index} className="detail-tag field-tag">
+                    {field}
+                  </span>
+                ))}
               </div>
+            ) : (
+              <p className="detail-section-content empty-value">No fields specified</p>
             )}
+          </div>
 
           {/* Skills Required */}
-          {company.skillsREq &&
-            Array.isArray(company.skillsREq) &&
-            company.skillsREq.length > 0 && (
-              <div className="detail-section">
-                <h3 className="detail-section-title">Skills Required</h3>
-                <div className="detail-tags">
-                  {company.skillsREq.map((skill, index) => (
-                    <span key={index} className="detail-tag skill-tag">
-                      {skill}
-                    </span>
-                  ))}
-                </div>
+          <div className="detail-section">
+            <h3 className="detail-section-title">Skills Required</h3>
+            {company.skillsREq && Array.isArray(company.skillsREq) && company.skillsREq.length > 0 ? (
+              <div className="detail-tags">
+                {company.skillsREq.map((skill, index) => (
+                  <span key={index} className="detail-tag skill-tag">
+                    {skill}
+                  </span>
+                ))}
               </div>
+            ) : (
+              <p className="detail-section-content empty-value">No skills required specified</p>
             )}
+          </div>
 
           {/* Mode of Work */}
-          {company.modeOfWork &&
-            Array.isArray(company.modeOfWork) &&
-            company.modeOfWork.length > 0 && (
-              <div className="detail-section">
-                <h3 className="detail-section-title">Mode of Work</h3>
-                <div className="detail-tags">
-                  {company.modeOfWork.map((mode, index) => (
-                    <span
-                      key={index}
-                      className={`detail-tag mode-tag mode-${mode
-                        .toLowerCase()
-                        .replace(/\s+/g, "-")}`}
-                    >
-                      {mode}
-                    </span>
-                  ))}
-                </div>
+          <div className="detail-section">
+            <h3 className="detail-section-title">Mode of Work</h3>
+            {company.modeOfWork && Array.isArray(company.modeOfWork) && company.modeOfWork.length > 0 ? (
+              <div className="detail-tags">
+                {company.modeOfWork.map((mode, index) => (
+                  <span
+                    key={index}
+                    className={`detail-tag mode-tag mode-${mode
+                      .toLowerCase()
+                      .replace(/\s+/g, "-")}`}
+                  >
+                    {mode}
+                  </span>
+                ))}
               </div>
+            ) : (
+              <p className="detail-section-content empty-value">No mode of work specified</p>
             )}
+          </div>
 
           {/* MOA Information */}
           <div className="detail-section">

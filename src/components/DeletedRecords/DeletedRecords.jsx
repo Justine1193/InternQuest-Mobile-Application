@@ -1,19 +1,19 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { collection, getDocs, doc, setDoc, deleteDoc, getDoc } from "firebase/firestore";
 import { db, auth, realtimeDb } from "../../../firebase";
 import { ref, update as updateRealtime } from "firebase/database";
 import { signOut } from "firebase/auth";
-import { clearAdminSession } from "../../utils/auth";
+import { clearAdminSession, getAdminRole } from "../../utils/auth";
 import { useNavigate } from "react-router-dom";
 import Navbar from "../Navbar/Navbar.jsx";
 import LoadingSpinner from "../LoadingSpinner.jsx";
 import ConfirmModal from "../ConfirmModalComponents/ConfirmModal.jsx";
 import ToastContainer from "../Toast/ToastContainer.jsx";
 import { useToast } from "../../hooks/useToast.js";
-import { activityLoggers } from "../../utils/activityLogger.js";
+import { activityLoggers, logActivity } from "../../utils/activityLogger.js";
 import logger from "../../utils/logger.js";
 import Footer from "../Footer/Footer.jsx";
-import { IoRefreshOutline, IoArchiveOutline, IoSearchOutline, IoPeopleOutline, IoBusinessOutline, IoShieldOutline, IoDocumentTextOutline } from "react-icons/io5";
+import { IoRefreshOutline, IoArchiveOutline, IoSearchOutline, IoPeopleOutline, IoBusinessOutline, IoShieldOutline, IoDocumentTextOutline, IoDownloadOutline, IoOpenOutline, IoCalendarOutline, IoChevronDownOutline, IoChevronUpOutline, IoImageOutline, IoDocumentOutline, IoCloseOutline, IoEyeOutline } from "react-icons/io5";
 import EmptyState from "../EmptyState/EmptyState.jsx";
 import StudentDetailModal from "./StudentDetailModal.jsx";
 import CompanyDetailModal from "../CompanyManageComponents/CompanyDetailModal/CompanyDetailModal.jsx";
@@ -26,10 +26,10 @@ const DeletedRecords = () => {
   const [deletedCompanies, setDeletedCompanies] = useState([]);
   const [deletedAdmins, setDeletedAdmins] = useState([]);
   const [rejectedRequirements, setRejectedRequirements] = useState([]);
-  const [activeTab, setActiveTab] = useState("students"); // students | companies | admins | requirements
+  const [activeTab, setActiveTab] = useState("students"); // students | companies | users | requirements
   const [showConfirm, setShowConfirm] = useState(false);
   const [restoreItem, setRestoreItem] = useState(null);
-  const [restoreType, setRestoreType] = useState(null); // 'student', 'company', 'admin', or 'requirement'
+  const [restoreType, setRestoreType] = useState(null); // 'student', 'company', 'user', or 'requirement'
   const [isRestoring, setIsRestoring] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [showStudentModal, setShowStudentModal] = useState(false);
@@ -48,6 +48,12 @@ const DeletedRecords = () => {
   const [companyFieldFilter, setCompanyFieldFilter] = useState("all");
   const [adminRoleFilter, setAdminRoleFilter] = useState("all");
   const [requirementTypeFilter, setRequirementTypeFilter] = useState("all");
+  const [requirementStudentFilter, setRequirementStudentFilter] = useState("all");
+  const [requirementSortBy, setRequirementSortBy] = useState("rejectedAt"); // "rejectedAt" | "studentName" | "requirementType" | "uploadedAt"
+  const [requirementSortOrder, setRequirementSortOrder] = useState("desc"); // "asc" | "desc"
+  const [expandedReasonId, setExpandedReasonId] = useState(null);
+  const [expandedStudentGroups, setExpandedStudentGroups] = useState(new Set()); // Track which student groups are expanded
+  const [selectedRequirementGroup, setSelectedRequirementGroup] = useState(null); // Selected group for modal view
   const [currentStudentPage, setCurrentStudentPage] = useState(1);
   const [currentCompanyPage, setCurrentCompanyPage] = useState(1);
   const [currentAdminPage, setCurrentAdminPage] = useState(1);
@@ -63,14 +69,76 @@ const DeletedRecords = () => {
     if (!value) return "N/A";
     try {
       // Firestore Timestamp support
+      let date;
       if (typeof value === "object" && typeof value.toDate === "function") {
-        return value.toDate().toLocaleString();
+        date = value.toDate();
+      } else {
+        date = new Date(value);
       }
-      const date = new Date(value);
       if (Number.isNaN(date.getTime())) return String(value);
-      return date.toLocaleString();
+      
+      const now = new Date();
+      const diffMs = now - date;
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      
+      if (diffDays === 0) {
+        return `Today, ${date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`;
+      } else if (diffDays === 1) {
+        return `Yesterday, ${date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`;
+      } else if (diffDays < 7) {
+        return `${diffDays} days ago`;
+      } else {
+        return date.toLocaleDateString('en-US', { 
+          year: 'numeric', 
+          month: 'short', 
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+      }
     } catch (e) {
       return String(value);
+    }
+  };
+
+  const formatFileSize = (bytes) => {
+    if (!bytes || bytes === 0) return "N/A";
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+  };
+
+  const getFileTypeIcon = (fileName, contentType) => {
+    if (!fileName && !contentType) return IoDocumentOutline;
+    const name = (fileName || '').toLowerCase();
+    const type = (contentType || '').toLowerCase();
+    
+    if (name.match(/\.(jpg|jpeg|png|gif|webp|svg)$/) || type.startsWith('image/')) {
+      return IoImageOutline;
+    }
+    if (name.match(/\.(pdf)$/) || type === 'application/pdf') {
+      return IoDocumentTextOutline;
+    }
+    return IoDocumentOutline;
+  };
+
+  const handleDownloadFile = async (url, fileName) => {
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = fileName || 'requirement_file';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+      success(`File "${fileName || 'requirement_file'}" downloaded successfully`);
+    } catch (error) {
+      console.error('Download error:', error);
+      showError('Failed to download file. Please try again.');
     }
   };
 
@@ -152,6 +220,8 @@ const DeletedRecords = () => {
         await restoreCompany(restoreItem);
       } else if (restoreType === "student") {
         await restoreStudent(restoreItem);
+      } else if (restoreType === "user") {
+        await restoreUser(restoreItem);
       }
 
       // Refresh the list
@@ -248,6 +318,42 @@ const DeletedRecords = () => {
     }
   };
 
+  const restoreUser = async (user) => {
+    try {
+      // Check if user is authenticated
+      if (!auth.currentUser) {
+        throw new Error("You must be logged in to restore records. Please log out and log back in.");
+      }
+      
+      // Recreate admin document in adminusers collection with available data
+      const adminData = {
+        username: user.deletedUsername || "",
+        email: user.deletedEmail || "",
+        role: user.deletedRole || "",
+        program: user.deletedProgram || "",
+        firebaseEmail: user.deletedEmail || "",
+        updatedAt: new Date().toISOString(),
+        restoredAt: new Date().toISOString(),
+        restoredBy: getAdminRole(),
+      };
+      
+      // Restore to adminusers collection using deletedAdminId as document ID
+      await setDoc(doc(db, "adminusers", user.deletedAdminId), adminData, { merge: true });
+      
+      // Remove from admin_deletions
+      await deleteDoc(doc(db, "admin_deletions", user.id));
+      
+      // Log activity
+      const userName = user.deletedUsername || user.deletedEmail || "Unknown";
+      await logActivity("restore_admin", "admin", user.deletedAdminId, { userName });
+      
+      success(`User "${userName}" restored successfully`);
+    } catch (err) {
+      logger.error("Restore user error:", err);
+      throw err;
+    }
+  };
+
   const cancelRestore = () => {
     setShowConfirm(false);
     setRestoreItem(null);
@@ -260,6 +366,9 @@ const DeletedRecords = () => {
     if (restoreType === "company") {
       const name = restoreItem.companyName || restoreItem.companyDescription || restoreItem.id;
       return `Are you sure you want to restore company "${name}"?`;
+    } else if (restoreType === "user") {
+      const name = restoreItem.deletedUsername || restoreItem.deletedEmail || restoreItem.id;
+      return `Are you sure you want to restore user "${name}"?`;
     } else {
       const name = `${restoreItem.firstName || ''} ${restoreItem.lastName || ''}`.trim() || restoreItem.id;
       return `Are you sure you want to restore student "${name}"?`;
@@ -287,6 +396,9 @@ const DeletedRecords = () => {
   );
   const requirementTypeOptions = getUniqueOptions(
     rejectedRequirements.map((r) => r.requirementType).filter(Boolean)
+  );
+  const requirementStudentOptions = getUniqueOptions(
+    rejectedRequirements.map((r) => r.studentName).filter(Boolean)
   );
 
   // Filter and paginate students
@@ -348,23 +460,90 @@ const DeletedRecords = () => {
   const adminIndexOfFirst = adminIndexOfLast - itemsPerPage;
   const paginatedAdmins = filteredAdmins.slice(adminIndexOfFirst, adminIndexOfLast);
 
-  // Filter and paginate rejected requirements
-  const filteredRequirements = rejectedRequirements.filter((req) => {
-    if (requirementTypeFilter !== "all") {
-      if ((req.requirementType || "") !== requirementTypeFilter) return false;
-    }
-    if (!requirementSearchQuery) return true;
-    const query = requirementSearchQuery.toLowerCase();
-    const studentName = (req.studentName || '').toLowerCase();
-    const requirementType = (req.requirementType || '').toLowerCase();
-    const fileName = (req.fileName || '').toLowerCase();
-    return studentName.includes(query) || requirementType.includes(query) || fileName.includes(query);
-  });
+  // Filter and sort rejected requirements
+  const filteredRequirements = rejectedRequirements
+    .filter((req) => {
+      if (requirementTypeFilter !== "all") {
+        if ((req.requirementType || "") !== requirementTypeFilter) return false;
+      }
+      if (requirementStudentFilter !== "all") {
+        if ((req.studentName || "") !== requirementStudentFilter) return false;
+      }
+      if (!requirementSearchQuery) return true;
+      const query = requirementSearchQuery.toLowerCase();
+      const studentName = (req.studentName || '').toLowerCase();
+      const requirementType = (req.requirementType || '').toLowerCase();
+      const fileName = (req.fileName || '').toLowerCase();
+      const reason = (req.rejectionReason || '').toLowerCase();
+      return studentName.includes(query) || requirementType.includes(query) || fileName.includes(query) || reason.includes(query);
+    })
+    .sort((a, b) => {
+      let aValue, bValue;
+      switch (requirementSortBy) {
+        case "studentName":
+          aValue = (a.studentName || '').toLowerCase();
+          bValue = (b.studentName || '').toLowerCase();
+          break;
+        case "requirementType":
+          aValue = (a.requirementType || '').toLowerCase();
+          bValue = (b.requirementType || '').toLowerCase();
+          break;
+        case "uploadedAt":
+          aValue = new Date(a.originalUploadedAt || 0).getTime();
+          bValue = new Date(b.originalUploadedAt || 0).getTime();
+          break;
+        case "rejectedAt":
+        default:
+          aValue = new Date(a.rejectedAt || 0).getTime();
+          bValue = new Date(b.rejectedAt || 0).getTime();
+          break;
+      }
+      
+      if (requirementSortOrder === "asc") {
+        return aValue > bValue ? 1 : aValue < bValue ? -1 : 0;
+      } else {
+        return aValue < bValue ? 1 : aValue > bValue ? -1 : 0;
+      }
+    });
 
-  const requirementTotalPages = Math.ceil(filteredRequirements.length / itemsPerPage);
+  // Group requirements by student name
+  const groupedRequirements = useMemo(() => {
+    const groups = {};
+    filteredRequirements.forEach((req) => {
+      const studentKey = req.studentName || "Unknown Student";
+      if (!groups[studentKey]) {
+        groups[studentKey] = {
+          studentName: studentKey,
+          requirements: [],
+          latestRejectedAt: null,
+        };
+      }
+      groups[studentKey].requirements.push(req);
+      // Track latest rejection date for sorting
+      const rejectedAt = new Date(req.rejectedAt || 0).getTime();
+      if (!groups[studentKey].latestRejectedAt || rejectedAt > groups[studentKey].latestRejectedAt) {
+        groups[studentKey].latestRejectedAt = rejectedAt;
+      }
+    });
+    
+    // Convert to array and sort
+    return Object.values(groups).sort((a, b) => {
+      if (requirementSortBy === "studentName") {
+        const comparison = a.studentName.localeCompare(b.studentName);
+        return requirementSortOrder === "asc" ? comparison : -comparison;
+      }
+      // Default: sort by latest rejected date
+      return requirementSortOrder === "asc" 
+        ? (a.latestRejectedAt - b.latestRejectedAt)
+        : (b.latestRejectedAt - a.latestRejectedAt);
+    });
+  }, [filteredRequirements, requirementSortBy, requirementSortOrder]);
+
+  // Paginate groups instead of individual requirements
+  const requirementTotalPages = Math.ceil(groupedRequirements.length / itemsPerPage);
   const requirementIndexOfLast = currentRequirementPage * itemsPerPage;
   const requirementIndexOfFirst = requirementIndexOfLast - itemsPerPage;
-  const paginatedRequirements = filteredRequirements.slice(requirementIndexOfFirst, requirementIndexOfLast);
+  const paginatedGroups = groupedRequirements.slice(requirementIndexOfFirst, requirementIndexOfLast);
 
   return (
     <div className="deleted-records-page">
@@ -378,7 +557,7 @@ const DeletedRecords = () => {
             </div>
             <div>
               <h1>Archive Management</h1>
-              <p>View and restore archived records, students, companies, and rejected requirements</p>
+              <p>View and restore archived records, students, companies, users, and rejected requirements</p>
             </div>
           </div>
           <div className="header-stats">
@@ -487,7 +666,7 @@ const DeletedRecords = () => {
             onClick={() => setActiveTab("admins")}
           >
             <IoShieldOutline className="tab-icon" />
-            Admins
+            Users
             <span className="tab-badge">{deletedAdmins.length}</span>
           </button>
           <button
@@ -920,10 +1099,10 @@ const DeletedRecords = () => {
             <div className="section-header">
               <div className="section-title-wrapper">
                 <IoShieldOutline className="section-icon" />
-                <h2>Archived Admins</h2>
+                <h2>Archived Users</h2>
                 <span className="section-count">({deletedAdmins.length})</span>
               </div>
-              <div className="filters-wrapper" aria-label="Admin archive filters">
+              <div className="filters-wrapper" aria-label="User archive filters">
                 <select
                   className="filter-select"
                   value={adminRoleFilter}
@@ -931,7 +1110,7 @@ const DeletedRecords = () => {
                     setAdminRoleFilter(e.target.value);
                     setCurrentAdminPage(1);
                   }}
-                  aria-label="Filter by admin role"
+                  aria-label="Filter by user role"
                 >
                   <option value="all">All Roles</option>
                   {adminRoleOptions.map((r) => (
@@ -948,7 +1127,7 @@ const DeletedRecords = () => {
                     setAdminSearchQuery("");
                     setCurrentAdminPage(1);
                   }}
-                  title="Clear admin filters"
+                  title="Clear user filters"
                 >
                   Clear
                 </button>
@@ -958,7 +1137,7 @@ const DeletedRecords = () => {
                 <input
                   type="text"
                   className="search-input"
-                  placeholder="Search admins..."
+                  placeholder="Search users..."
                   value={adminSearchQuery}
                   onChange={(e) => {
                     setAdminSearchQuery(e.target.value);
@@ -990,27 +1169,28 @@ const DeletedRecords = () => {
                     <th>Created At</th>
                     <th>Archived At</th>
                     <th>Archived By</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {deletedAdmins.length === 0 ? (
                     <tr>
-                      <td colSpan="7" style={{ padding: 0, border: "none" }}>
+                      <td colSpan="8" style={{ padding: 0, border: "none" }}>
                         <EmptyState
                           type="document"
-                          title="No archived admins"
-                          message="There are no archived admin records at this time."
+                          title="No archived users"
+                          message="There are no archived user records at this time."
                           icon={IoShieldOutline}
                         />
                       </td>
                     </tr>
                   ) : filteredAdmins.length === 0 ? (
                     <tr>
-                      <td colSpan="7" style={{ padding: 0, border: "none" }}>
+                      <td colSpan="8" style={{ padding: 0, border: "none" }}>
                         <EmptyState
                           type="search"
-                          title="No admins found"
-                          message="No archived admins match your search criteria."
+                          title="No users found"
+                          message="No archived users match your search criteria."
                           icon={IoShieldOutline}
                         />
                       </td>
@@ -1029,6 +1209,21 @@ const DeletedRecords = () => {
                           {formatDateTime(admin.deletedAt)}
                         </td>
                         <td>{admin.deletedByRole || "N/A"}</td>
+                        <td>
+                          <button
+                            type="button"
+                            className="restore-btn"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRestoreClick(admin, "user");
+                            }}
+                            disabled={isRestoring}
+                            title="Restore user"
+                          >
+                            <IoRefreshOutline />
+                            Restore
+                          </button>
+                        </td>
                       </tr>
                     ))
                   )}
@@ -1114,12 +1309,58 @@ const DeletedRecords = () => {
                     </option>
                   ))}
                 </select>
+                <select
+                  className="filter-select"
+                  value={requirementStudentFilter}
+                  onChange={(e) => {
+                    setRequirementStudentFilter(e.target.value);
+                    setCurrentRequirementPage(1);
+                  }}
+                  aria-label="Filter by student"
+                >
+                  <option value="all">All Students</option>
+                  {requirementStudentOptions.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  className="filter-select"
+                  value={requirementSortBy}
+                  onChange={(e) => {
+                    setRequirementSortBy(e.target.value);
+                    setCurrentRequirementPage(1);
+                  }}
+                  aria-label="Sort by"
+                >
+                  <option value="rejectedAt">Sort by Rejected Date</option>
+                  <option value="uploadedAt">Sort by Uploaded Date</option>
+                  <option value="studentName">Sort by Student Name</option>
+                  <option value="requirementType">Sort by Requirement Type</option>
+                </select>
+                <button
+                  type="button"
+                  className="filter-select"
+                  onClick={() => {
+                    setRequirementSortOrder(prev => prev === "asc" ? "desc" : "asc");
+                    setCurrentRequirementPage(1);
+                  }}
+                  title={`Sort ${requirementSortOrder === "asc" ? "Descending" : "Ascending"}`}
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}
+                >
+                  {requirementSortOrder === "asc" ? <IoChevronUpOutline /> : <IoChevronDownOutline />}
+                  {requirementSortOrder === "asc" ? "Asc" : "Desc"}
+                </button>
                 <button
                   type="button"
                   className="filter-clear-btn"
                   onClick={() => {
                     setRequirementTypeFilter("all");
+                    setRequirementStudentFilter("all");
                     setRequirementSearchQuery("");
+                    setRequirementSortBy("rejectedAt");
+                    setRequirementSortOrder("desc");
                     setCurrentRequirementPage(1);
                   }}
                   title="Clear requirement filters"
@@ -1158,19 +1399,15 @@ const DeletedRecords = () => {
                 <thead>
                   <tr>
                     <th>Student</th>
-                    <th>Requirement Type</th>
-                    <th>File Name</th>
-                    <th>Uploaded At</th>
-                    <th>Rejected At</th>
-                    <th>Rejected By</th>
-                    <th>Reason</th>
+                    <th>Requirements</th>
+                    <th>Latest Rejection</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rejectedRequirements.length === 0 ? (
                     <tr>
-                      <td colSpan="8" style={{ padding: 0, border: "none" }}>
+                      <td colSpan="4" style={{ padding: 0, border: "none" }}>
                         <EmptyState
                           type="document"
                           title="No rejected requirements"
@@ -1179,9 +1416,9 @@ const DeletedRecords = () => {
                         />
                       </td>
                     </tr>
-                  ) : filteredRequirements.length === 0 ? (
+                  ) : groupedRequirements.length === 0 ? (
                     <tr>
-                      <td colSpan="8" style={{ padding: 0, border: "none" }}>
+                      <td colSpan="4" style={{ padding: 0, border: "none" }}>
                         <EmptyState
                           type="search"
                           title="No requirements found"
@@ -1191,54 +1428,40 @@ const DeletedRecords = () => {
                       </td>
                     </tr>
                   ) : (
-                    paginatedRequirements.map((req) => (
-                      <tr key={req.id}>
-                        <td>{req.studentName || "Unknown"}</td>
-                        <td>{req.requirementType || "N/A"}</td>
-                        <td>
-                          {req.archiveURL ? (
-                            <a
-                              href={req.archiveURL}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="file-link"
-                              onClick={(e) => e.stopPropagation()}
+                    paginatedGroups.map((group) => {
+                      return (
+                        <tr key={group.studentName} className="requirement-group-row">
+                          <td>
+                            <div className="group-student-cell">
+                              <IoPeopleOutline className="student-icon" />
+                              <span className="group-student-name">{group.studentName}</span>
+                            </div>
+                          </td>
+                          <td>
+                            <span className="group-requirement-count-badge">
+                              {group.requirements.length} requirement{group.requirements.length !== 1 ? 's' : ''}
+                            </span>
+                          </td>
+                          <td>
+                            <div className="date-cell">
+                              <IoCalendarOutline className="date-icon" />
+                              <span>{formatDateTime(group.latestRejectedAt ? new Date(group.latestRejectedAt) : null)}</span>
+                            </div>
+                          </td>
+                          <td>
+                            <button
+                              type="button"
+                              className="view-details-btn"
+                              onClick={() => setSelectedRequirementGroup(group)}
+                              title="View requirement details"
                             >
-                              {req.fileName || "N/A"}
-                            </a>
-                          ) : (
-                            req.fileName || "N/A"
-                          )}
-                        </td>
-                        <td>
-                          {formatDateTime(req.originalUploadedAt)}
-                        </td>
-                        <td>
-                          {formatDateTime(req.rejectedAt)}
-                        </td>
-                        <td>{req.rejectedBy || "N/A"}</td>
-                        <td>
-                          <span className="rejection-reason-text" title={req.rejectionReason || "No reason provided"}>
-                            {req.rejectionReason || "No reason provided"}
-                          </span>
-                        </td>
-                        <td>
-                          {req.archiveURL && (
-                            <a
-                              href={req.archiveURL}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="view-file-btn"
-                              onClick={(e) => e.stopPropagation()}
-                              title="View archived file"
-                            >
-                              <IoDocumentTextOutline />
-                              View
-                            </a>
-                          )}
-                        </td>
-                      </tr>
-                    ))
+                              <IoEyeOutline />
+                              <span>View Details</span>
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
@@ -1246,7 +1469,7 @@ const DeletedRecords = () => {
             {requirementTotalPages > 1 && (
               <div className="pagination">
                 <div className="pagination-info">
-                  Showing {requirementIndexOfFirst + 1} to {Math.min(requirementIndexOfLast, filteredRequirements.length)} of {filteredRequirements.length}
+                  Showing {requirementIndexOfFirst + 1} to {Math.min(requirementIndexOfLast, groupedRequirements.length)} of {groupedRequirements.length} group{groupedRequirements.length !== 1 ? 's' : ''} ({filteredRequirements.length} total requirement{filteredRequirements.length !== 1 ? 's' : ''})
                 </div>
                 <div className="pagination-controls">
                   <button
@@ -1334,6 +1557,143 @@ const DeletedRecords = () => {
         confirmButtonText="Yes, restore it!"
         confirmButtonClass="confirm-btn restore-confirm-btn"
       />
+      
+      {/* Requirement Group Details Modal */}
+      {selectedRequirementGroup && (
+        <div 
+          className="requirement-group-modal-backdrop"
+          onClick={() => setSelectedRequirementGroup(null)}
+        >
+          <div 
+            className="requirement-group-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="requirement-group-modal-header">
+              <div className="modal-header-content">
+                <h2>
+                  <IoPeopleOutline className="header-icon" />
+                  {selectedRequirementGroup.studentName}
+                </h2>
+                <p className="modal-subtitle">
+                  {selectedRequirementGroup.requirements.length} rejected requirement{selectedRequirementGroup.requirements.length !== 1 ? 's' : ''}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="modal-close-btn"
+                onClick={() => setSelectedRequirementGroup(null)}
+                aria-label="Close modal"
+              >
+                <IoCloseOutline />
+              </button>
+            </div>
+            
+            <div className="requirement-group-modal-body">
+              <div className="requirements-list">
+                {selectedRequirementGroup.requirements.map((req) => {
+                  const FileIcon = getFileTypeIcon(req.fileName, req.contentType);
+                  const isReasonExpanded = expandedReasonId === req.id;
+                  const reasonText = req.rejectionReason || "No reason provided";
+                  const shouldTruncateReason = reasonText.length > 50;
+                  
+                  return (
+                    <div key={req.id} className="requirement-item-card">
+                      <div className="requirement-item-header">
+                        <div className="requirement-item-title">
+                          <FileIcon className="file-type-icon" />
+                          <div className="requirement-item-info">
+                            <span className="requirement-type-badge">{req.requirementType || "N/A"}</span>
+                            <span className="requirement-file-name">{req.fileName || "N/A"}</span>
+                            {req.fileSize && (
+                              <span className="requirement-file-size">{formatFileSize(req.fileSize)}</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="requirement-item-actions">
+                          {req.archiveURL && (
+                            <>
+                              <button
+                                type="button"
+                                className="action-btn view-btn"
+                                onClick={() => window.open(req.archiveURL, '_blank', 'noopener,noreferrer')}
+                                title="View file"
+                              >
+                                <IoOpenOutline />
+                              </button>
+                              <button
+                                type="button"
+                                className="action-btn download-btn"
+                                onClick={() => handleDownloadFile(req.archiveURL, req.fileName)}
+                                title="Download file"
+                              >
+                                <IoDownloadOutline />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      
+                      <div className="requirement-item-details">
+                        <div className="detail-row">
+                          <span className="detail-label">
+                            <IoCalendarOutline />
+                            Uploaded At:
+                          </span>
+                          <span className="detail-value">{formatDateTime(req.originalUploadedAt)}</span>
+                        </div>
+                        <div className="detail-row">
+                          <span className="detail-label">
+                            <IoCalendarOutline />
+                            Rejected At:
+                          </span>
+                          <span className="detail-value">{formatDateTime(req.rejectedAt)}</span>
+                        </div>
+                        <div className="detail-row">
+                          <span className="detail-label">Rejected By:</span>
+                          <span className="detail-value rejected-by-badge">{req.rejectedBy || "N/A"}</span>
+                        </div>
+                        <div className="detail-row reason-row">
+                          <span className="detail-label">Rejection Reason:</span>
+                          <div className="reason-content">
+                            {shouldTruncateReason ? (
+                              <>
+                                <span className={`rejection-reason-text ${isReasonExpanded ? 'expanded' : ''}`}>
+                                  {isReasonExpanded ? reasonText : reasonText.substring(0, 50) + '...'}
+                                </span>
+                                <button
+                                  type="button"
+                                  className="expand-reason-btn"
+                                  onClick={() => setExpandedReasonId(isReasonExpanded ? null : req.id)}
+                                  title={isReasonExpanded ? "Collapse reason" : "Expand reason"}
+                                >
+                                  {isReasonExpanded ? <IoChevronUpOutline /> : <IoChevronDownOutline />}
+                                </button>
+                              </>
+                            ) : (
+                              <span className="rejection-reason-text">{reasonText}</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            
+            <div className="requirement-group-modal-footer">
+              <button
+                type="button"
+                className="modal-close-button"
+                onClick={() => setSelectedRequirementGroup(null)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
       <ToastContainer toasts={toasts} removeToast={removeToast} />
     </div>
   );

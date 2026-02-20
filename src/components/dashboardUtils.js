@@ -8,7 +8,7 @@ import { db, auth, realtimeDb } from '../../firebase';
 import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc, getDoc, setDoc } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { ref, update as updateRealtime, remove as removeRealtime } from 'firebase/database';
-import { clearAdminSession } from '../utils/auth';
+import { clearAdminSession, getAdminSession } from '../utils/auth';
 import logger from '../utils/logger';
 import { activityLoggers } from '../utils/activityLogger';
 
@@ -194,7 +194,7 @@ export const dashboardHandlers = {
   /**
    * Adds a new company entry to Firestore
    */
-  handleAddEntry: async (formData, fields, skills, setIsLoading, setTableData, setIsModalOpen, setFormData, setSkills, setFields, setError) => {
+  handleAddEntry: async (formData, fields, skills, setIsLoading, setTableData, setIsModalOpen, setFormData, setSkills, setFields, setError, onSuccess) => {
     try {
       // Validate required fields
       const requiredFields = {
@@ -240,6 +240,13 @@ export const dashboardHandlers = {
       const expirationDate = new Date(startDate);
       expirationDate.setFullYear(expirationDate.getFullYear() + Number(formData.moaValidityYears));
       
+      // Get creator info
+      const session = getAdminSession();
+      const createdBy = session ? {
+        username: session.username || "Unknown",
+        role: session.role || "Unknown",
+      } : null;
+
       const newCompany = {
         companyName: formData.companyName,
         companyDescription: formData.description,
@@ -258,12 +265,17 @@ export const dashboardHandlers = {
         createdAt: new Date().toISOString(),
         fields: fields,
         contactPersonName: formData.contactPersonName || "",
-        contactPersonEmail: formData.email || "",
+        contactPersonEmail: (formData.contactPersonEmail && formData.contactPersonEmail.trim()) ? formData.contactPersonEmail.trim() : (formData.email || ""),
         contactPersonPhone: formData.contactPersonPhone || "",
         endorsedByCollege: formData.endorsedByCollege || "",
         isVisibleToMobile: true, // Visible to mobile app by default
         moaStatus: 'valid', // Initial status
       };
+
+      // Add createdBy if available
+      if (createdBy) {
+        newCompany.createdBy = createdBy;
+      }
 
       const docRef = await addDoc(collection(db, 'companies'), newCompany);
       await syncMoaValidityToRealtime(docRef.id, {
@@ -313,9 +325,16 @@ export const dashboardHandlers = {
         moaFileName: "",
         moaStoragePath: "",
         endorsedByCollege: "",
+        contactPersonName: "",
+        contactPersonEmail: "",
+        contactPersonPhone: "",
       });
       setSkills([]);
       setFields([]);
+
+      if (typeof onSuccess === 'function') {
+        onSuccess(newCompany.companyName);
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -382,7 +401,7 @@ export const dashboardHandlers = {
         modeOfWork: Array.isArray(formData.modeOfWork) ? formData.modeOfWork : [formData.modeOfWork].filter(Boolean),
         fields: fields,
         contactPersonName: formData.contactPersonName || "",
-        contactPersonEmail: formData.email || "",
+        contactPersonEmail: (formData.contactPersonEmail && formData.contactPersonEmail.trim()) ? formData.contactPersonEmail.trim() : (formData.email || ""),
         contactPersonPhone: formData.contactPersonPhone || "",
         endorsedByCollege: formData.endorsedByCollege || "",
       };

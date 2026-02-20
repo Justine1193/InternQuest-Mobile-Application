@@ -57,6 +57,7 @@ import {
   IoImageOutline,
   IoAttachOutline,
   IoCloseCircleOutline,
+  IoWarningOutline,
 } from "react-icons/io5";
 import logo from "../../assets/InternQuest_Logo.png";
 import { signOut, createUserWithEmailAndPassword, onAuthStateChanged } from "firebase/auth";
@@ -100,6 +101,7 @@ import { activityLoggers } from "../../utils/activityLogger.js";
 import logger from "../../utils/logger.js";
 import "./StudentDashboard.css";
 import "../DashboardOverview/DashboardOverview.css";
+import "../DashboardPageHeader/DashboardPageHeader.css";
 import "./NotificationSection.css";
 import "../dashboardTheme.css";
 import Footer from "../Footer/Footer.jsx";
@@ -131,7 +133,7 @@ const StudentDashboard = () => {
     document.title = "Student Dashboard | InternQuest Admin";
   }, []);
 
-  // Handle CSV import for students
+  // Handle CSV import for students - step 1: parse and show preview
   const handleImportStudents = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -151,6 +153,7 @@ const StudentDashboard = () => {
 
       if (students.length === 0) {
         showError("No valid students found in CSV file");
+        setIsImporting(false);
         return;
       }
 
@@ -186,22 +189,47 @@ const StudentDashboard = () => {
             "\n"
           )}\n\nOnly the first occurrence will be imported.`
         );
-        // Continue with import - duplicates will be skipped during import
+        // Continue – duplicates will be skipped during import
       }
 
+      setPreviewStudents(students);
+      setPreviewErrors(errors || []);
+      setShowStudentImportPreview(true);
       setImportProgress({ current: 0, total: students.length });
+    } catch (err) {
+      logger.error("Import error:", err);
+      showError(
+        err.message || "Failed to import CSV file. Please check the format."
+      );
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  // Step 2: execute actual import after user confirms preview
+  const executeStudentImport = async () => {
+    if (!previewStudents || previewStudents.length === 0) {
+      showError("No students to import.");
+      return;
+    }
+
+    try {
+      setIsImporting(true);
+      setImportProgress({ current: 0, total: previewStudents.length });
 
       // Track which student IDs have been imported in this batch
       const importedInBatch = new Set();
 
-      // Batch import students
       let successCount = 0;
       let errorCount = 0;
       const importErrors = [];
 
-      for (let i = 0; i < students.length; i++) {
+      for (let i = 0; i < previewStudents.length; i++) {
         try {
-          const student = students[i];
+          const student = previewStudents[i];
 
           // Check if student ID already exists
           const importStudentIdValue = student.studentId || "";
@@ -225,7 +253,6 @@ const StudentDashboard = () => {
             }
 
             // Then check if it exists in Firestore database
-            // Check studentId field
             const studentIdQuery = query(
               collection(db, "users"),
               where("studentId", "==", trimmedId)
@@ -266,12 +293,11 @@ const StudentDashboard = () => {
           // Create Firebase Auth account with actual student email
           let firebaseUser;
           try {
-            // Normalize email (lowercase, trimmed)
             const normalizedEmail = trimmedEmail.toLowerCase();
 
             const userCredential = await createUserWithEmailAndPassword(
               auth,
-              normalizedEmail, // Use normalized email for Firebase Auth
+              normalizedEmail,
               password
             );
             firebaseUser = userCredential.user;
@@ -287,7 +313,6 @@ const StudentDashboard = () => {
                 "Password is too weak. Password must be at least 6 characters long."
               );
             }
-            // Log full error for debugging
             console.error("Firebase Auth error during CSV import:", {
               code: authError.code,
               message: authError.message,
@@ -298,16 +323,15 @@ const StudentDashboard = () => {
             );
           }
 
-          // Normalize email (lowercase, trimmed) - same format used for Firebase Auth
           const normalizedEmail = trimmedEmail.toLowerCase();
 
           const newStudent = {
             studentId: trimmedId || importStudentIdValue?.trim() || "",
             firstName: student.firstName,
             lastName: student.lastName,
-            email: normalizedEmail, // Store institutional email (same as authEmail - both use normalized email)
-            authEmail: normalizedEmail, // Store email used for Firebase Auth (same as email - both use institutional email)
-            uid: firebaseUser.uid, // Link to Firebase Auth UID
+            email: normalizedEmail,
+            authEmail: normalizedEmail,
+            uid: firebaseUser.uid,
             section: student.section || "",
             college: student.college || "",
             program: student.program,
@@ -317,7 +341,6 @@ const StudentDashboard = () => {
             status: student.status || false,
             createdAt: student.createdAt || new Date().toISOString(),
             updatedAt: student.updatedAt || new Date().toISOString(),
-            // Track who created this student
             createdBy: (() => {
               const session = getAdminSession();
               return session
@@ -332,12 +355,10 @@ const StudentDashboard = () => {
 
           const docRef = await addDoc(collection(db, "users"), newStudent);
 
-          // Mark this student ID as imported in this batch
           if (importStudentIdValue) {
             importedInBatch.add(trimmedId);
           }
 
-          // Log activity
           await activityLoggers.createStudent(
             docRef.id,
             `${newStudent.firstName} ${newStudent.lastName}`
@@ -347,19 +368,18 @@ const StudentDashboard = () => {
         } catch (err) {
           errorCount++;
           importErrors.push({
-            student: `${students[i].firstName} ${students[i].lastName}`,
+            student: `${previewStudents[i].firstName} ${previewStudents[i].lastName}`,
             error: err.message,
           });
           logger.error(
-            `Failed to import student ${students[i].firstName} ${students[i].lastName}:`,
+            `Failed to import student ${previewStudents[i].firstName} ${previewStudents[i].lastName}:`,
             err
           );
         }
 
-        setImportProgress({ current: i + 1, total: students.length });
+        setImportProgress({ current: i + 1, total: previewStudents.length });
       }
 
-      // Show results
       if (successCount > 0) {
         success(`Successfully imported ${successCount} student/students`);
         if (errorCount > 0) {
@@ -367,8 +387,8 @@ const StudentDashboard = () => {
             `${errorCount} student/students failed to import. Check console for details.`
           );
         }
-        if (errors.length > 0) {
-          logger.warn(`CSV parsing errors:`, errors);
+        if (previewErrors.length > 0) {
+          logger.warn(`CSV parsing errors:`, previewErrors);
         }
       } else {
         showError(
@@ -376,14 +396,18 @@ const StudentDashboard = () => {
         );
       }
 
-      // Reset file input
+      setShowStudentImportPreview(false);
+      setPreviewStudents([]);
+      setPreviewErrors([]);
+
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
     } catch (err) {
-      logger.error("Import error:", err);
+      logger.error("Import error during executeStudentImport:", err);
       showError(
-        err.message || "Failed to import CSV file. Please check the format."
+        err.message ||
+          "Failed to import students from CSV. Please check the format."
       );
     } finally {
       setIsImporting(false);
@@ -716,6 +740,10 @@ const StudentDashboard = () => {
     current: 0,
     total: 0,
   });
+  const [showStudentImportPreview, setShowStudentImportPreview] =
+    useState(false);
+  const [previewStudents, setPreviewStudents] = useState([]);
+  const [previewErrors, setPreviewErrors] = useState([]);
   const fileInputRef = useRef(null);
   const [studentSubmittedRequirements, setStudentSubmittedRequirements] =
     useState({}); // { studentId: [requirementTypes] }
@@ -804,8 +832,6 @@ const StudentDashboard = () => {
   const fetchPendingStudentsWithRequirements = useCallback(async () => {
     setIsLoadingPendingStudents(true);
     try {
-      const pendingStudents = [];
-
       // Filter students who are not approved (status !== true) within role scope
       const scopedStudents = (() => {
         // Adviser: scope by section(s)
@@ -873,19 +899,21 @@ const StudentDashboard = () => {
         return students;
       })();
 
+      const isHiredStatus = (s) =>
+        s.status === true ||
+        (typeof s.status === "string" && s.status.toLowerCase() === "hired");
       const unapprovedStudents = scopedStudents.filter(
-        (student) => student.status !== true
+        (student) => !isHiredStatus(student)
       );
 
-      // Check each unapproved student for requirements
-      for (const student of unapprovedStudents) {
-        const hasRequirements = await checkStudentHasRequirements(student.id);
-        if (hasRequirements) {
-          pendingStudents.push(student);
-        }
-      }
-
-      setPendingStudentsWithRequirements(pendingStudents);
+      // Check all unapproved students in parallel (was sequential — caused slow load)
+      const results = await Promise.all(
+        unapprovedStudents.map(async (student) => {
+          const hasRequirements = await checkStudentHasRequirements(student.id);
+          return hasRequirements ? student : null;
+        })
+      );
+      setPendingStudentsWithRequirements(results.filter(Boolean));
     } catch (error) {
       logger.error("Error fetching pending students with requirements:", error);
       setError("Failed to fetch pending students with requirements.");
@@ -980,7 +1008,7 @@ const StudentDashboard = () => {
         setOverviewStats((prev) => ({
           ...prev,
           totalCompanies: companiesData.length,
-          totalStudents: studentsData.length,
+          // totalStudents will be set by the useEffect that calculates based on role scope
         }));
 
         // Auto-migrate avatars in background (silently)
@@ -1033,12 +1061,19 @@ const StudentDashboard = () => {
     fetchData();
   }, [authUser?.uid]);
 
-  // Fetch pending students when view mode changes or students data changes
+  // Fetch pending students as soon as students (and admin scope) are available — no need to click Pending tab
   useEffect(() => {
-    if (viewMode === "pending" && students.length > 0) {
+    if (students.length > 0) {
       fetchPendingStudentsWithRequirements();
     }
-  }, [viewMode, students.length, fetchPendingStudentsWithRequirements]);
+  }, [
+    students.length,
+    fetchPendingStudentsWithRequirements,
+    // Re-run when admin scope loads so stat is correct before user clicks Pending tab
+    adminSection,
+    adminPrograms,
+    adminCollegeCode,
+  ]);
 
   // Helper: get time in ms from Firestore appliedAt/approvedAt (Timestamp, string, or number)
   const getApplicationTime = (val) => {
@@ -1591,26 +1626,8 @@ const StudentDashboard = () => {
         );
       }
 
-      // Coordinator: if has assigned sections, use them; else use programs/college mapping
+      // Coordinator: filter by programs from their college
       if (currentRole === ROLES.COORDINATOR) {
-        const coordinatorSections = adminSection
-          ? Array.isArray(adminSection)
-            ? adminSection
-            : [adminSection]
-          : [];
-        const sectionSet = new Set(
-          coordinatorSections
-            .filter((s) => typeof s === "string" && s.trim())
-            .map((s) => s.trim().toLowerCase())
-        );
-        if (sectionSet.size > 0) {
-          return students.filter(
-            (s) =>
-              typeof s.section === "string" &&
-              sectionSet.has(s.section.trim().toLowerCase())
-          );
-        }
-
         let allowedPrograms = Array.isArray(adminPrograms) ? adminPrograms : [];
         if (allowedPrograms.length === 0 && adminCollegeCode) {
           allowedPrograms = Object.entries(programToCollegeMap)
@@ -1644,7 +1661,12 @@ const StudentDashboard = () => {
       };
     }
 
-    const hiredCount = statsStudents.filter((s) => s.status === true).length;
+    // Count as hired: boolean true, or string "hired" (UI displays hired for both)
+    const hiredCount = statsStudents.filter(
+      (s) =>
+        s.status === true ||
+        (typeof s.status === "string" && s.status.toLowerCase() === "hired")
+    ).length;
     let pendingCount = 0;
     let approvedCount = 0;
     let totalReqs = 0;
@@ -1696,12 +1718,19 @@ const StudentDashboard = () => {
   useEffect(() => {
     setOverviewStats((prev) => ({
       ...prev,
-      pendingRequirements: enhancedStats.pendingCount,
       approvedRequirements: enhancedStats.approvedCount,
       totalRequirements: enhancedStats.totalReqs,
       hiredStudents: enhancedStats.hiredCount,
     }));
   }, [enhancedStats]);
+
+  // Pending Review stat = number of students with pending requirements (matches table count)
+  useEffect(() => {
+    setOverviewStats((prev) => ({
+      ...prev,
+      pendingRequirements: pendingStudentsWithRequirements.length,
+    }));
+  }, [pendingStudentsWithRequirements]);
 
   // Update active filter chips
   useEffect(() => {
@@ -2409,7 +2438,7 @@ const StudentDashboard = () => {
       ...prev,
       totalStudents,
     }));
-  }, [baseStudents.length, students.length, currentRole]);
+  }, [baseStudents, students, currentRole]);
 
   // Get unique sections from students - memoized
   // For advisers, only show their assigned sections
@@ -2506,14 +2535,18 @@ const StudentDashboard = () => {
           return true; // Show all if no filter or "All" selected
         }
         if (activeFilterValues.hired === "Yes") {
-          return student.status === true;
+          return (
+            student.status === true ||
+            (typeof student.status === "string" &&
+              student.status.toLowerCase() === "hired")
+          );
         }
         if (activeFilterValues.hired === "No") {
-          return (
-            student.status === false ||
-            student.status === undefined ||
-            student.status === null
-          );
+          const isHired =
+            student.status === true ||
+            (typeof student.status === "string" &&
+              student.status.toLowerCase() === "hired");
+          return !isHired;
         }
         return true; // Default: show all
       })();
@@ -3274,24 +3307,23 @@ const StudentDashboard = () => {
       />
       <Navbar onLogout={handleLogoutClick} />
       <div className="dashboard-content">
-        {/* Page Header */}
-        <div className="student-page-header">
-          <h1>Manage Students</h1>
-          <p>Track student progress and manage internship requirements</p>
-        </div>
-
-        {/* Stats Cards Row */}
-        <div className="iq-stats-wrapper">
-          <div className="iq-stats-grid">
-            <div className="iq-stat-card iq-stat--purple">
-              <div className="iq-stat-icon-wrapper" aria-hidden="true">
-                <IoPeopleOutline className="iq-stat-icon" />
-              </div>
-              <div className="iq-stat-content">
-                <div className="iq-stat-value">
-                  {overviewStats.totalStudents || 0}
-                </div>
-                <div className="iq-stat-label">
+        {/* Page Header (Archive Management style) */}
+        <div className="dashboard-page-header">
+          <div className="dashboard-header-content">
+            <div className="dashboard-header-icon-wrapper dashboard-header-icon--purple" aria-hidden="true">
+              <IoPeopleOutline className="dashboard-header-icon dashboard-header-icon--purple" />
+            </div>
+            <div>
+              <h1>Manage Students</h1>
+              <p>Track student progress and manage internship requirements</p>
+            </div>
+          </div>
+          <div className="dashboard-header-stats dashboard-stat-count-3">
+            <div className="dashboard-stat-card">
+              <IoPeopleOutline className="dashboard-stat-icon" />
+              <div className="dashboard-stat-content">
+                <span className="dashboard-stat-value">{overviewStats.totalStudents || 0}</span>
+                <span className="dashboard-stat-label">
                   {currentRole === ROLES.SUPER_ADMIN ||
                   currentRole === "super_admin"
                     ? "Total Students"
@@ -3307,29 +3339,21 @@ const StudentDashboard = () => {
                     : currentRole === ROLES.ADVISER
                     ? "Students (Your Section)"
                     : "Total Students"}
-                </div>
+                </span>
               </div>
             </div>
-            <div className="iq-stat-card iq-stat--warning">
-              <div className="iq-stat-icon-wrapper" aria-hidden="true">
-                <IoTimeOutline className="iq-stat-icon" />
-              </div>
-              <div className="iq-stat-content">
-                <div className="iq-stat-value">
-                  {overviewStats.pendingRequirements || 0}
-                </div>
-                <div className="iq-stat-label">Pending Review</div>
+            <div className="dashboard-stat-card">
+              <IoTimeOutline className="dashboard-stat-icon" />
+              <div className="dashboard-stat-content">
+                <span className="dashboard-stat-value">{overviewStats.pendingRequirements || 0}</span>
+                <span className="dashboard-stat-label">Pending Review</span>
               </div>
             </div>
-            <div className="iq-stat-card iq-stat--success">
-              <div className="iq-stat-icon-wrapper" aria-hidden="true">
-                <IoCheckmarkCircle className="iq-stat-icon" />
-              </div>
-              <div className="iq-stat-content">
-                <div className="iq-stat-value">
-                  {overviewStats.hiredStudents || 0}
-                </div>
-                <div className="iq-stat-label">Hired Students</div>
+            <div className="dashboard-stat-card">
+              <IoCheckmarkCircle className="dashboard-stat-icon" />
+              <div className="dashboard-stat-content">
+                <span className="dashboard-stat-value">{overviewStats.hiredStudents || 0}</span>
+                <span className="dashboard-stat-label">Hired Students</span>
               </div>
             </div>
           </div>
@@ -3877,7 +3901,7 @@ const StudentDashboard = () => {
 
                 {isLoadingApplications ? (
                   <div className="applications-loading">
-                    <LoadingSpinner message="Loading applications..." />
+                    <LoadingSpinner isLoading={isLoadingApplications} message="Loading applications..." />
                   </div>
                 ) : applicationsList.length === 0 ? (
                   <div className="applications-empty">
@@ -5485,6 +5509,151 @@ const StudentDashboard = () => {
 
       <ToastContainer toasts={toasts} removeToast={removeToast} />
       <Footer />
+      {/* CSV Import Preview Modal for Students */}
+      {showStudentImportPreview && (
+        <div
+          className="import-preview-modal-backdrop"
+          onClick={() => {
+            setShowStudentImportPreview(false);
+            setPreviewStudents([]);
+            setPreviewErrors([]);
+            if (fileInputRef.current) {
+              fileInputRef.current.value = "";
+            }
+          }}
+        >
+          <div
+            className="import-preview-modal-content"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="import-preview-header">
+              <h2>Student CSV Import Preview</h2>
+              <p className="import-preview-subtitle">
+                Review {previewStudents.length} student
+                {previewStudents.length !== 1 ? "s" : ""} before importing
+              </p>
+              <button
+                type="button"
+                className="import-preview-close"
+                onClick={() => {
+                  setShowStudentImportPreview(false);
+                  setPreviewStudents([]);
+                  setPreviewErrors([]);
+                  if (fileInputRef.current) {
+                    fileInputRef.current.value = "";
+                  }
+                }}
+                aria-label="Close"
+              >
+                <IoCloseOutline />
+              </button>
+            </div>
+            {previewErrors.length > 0 && (
+              <div className="import-preview-errors">
+                <IoWarningOutline className="error-icon" />
+                <div>
+                  <strong>
+                    Parsing Warnings ({previewErrors.length} row
+                    {previewErrors.length !== 1 ? "s" : ""}):
+                  </strong>
+                  <ul>
+                    {previewErrors.slice(0, 5).map((err, idx) => (
+                      <li key={idx}>
+                        Row {err.row}: {err.error}
+                      </li>
+                    ))}
+                    {previewErrors.length > 5 && (
+                      <li>... and {previewErrors.length - 5} more</li>
+                    )}
+                  </ul>
+                </div>
+              </div>
+            )}
+            <div className="import-preview-table-wrapper">
+              <table className="import-preview-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Student ID</th>
+                    <th>First Name</th>
+                    <th>Last Name</th>
+                    <th>Email</th>
+                    <th>Section</th>
+                    <th>College</th>
+                    <th>Program</th>
+                    <th>Year Level</th>
+                    <th>Field</th>
+                    <th>Contact Number</th>
+                    <th>Company</th>
+                    <th>Hired</th>
+                    <th>Skills</th>
+                    <th>Location Preference</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {previewStudents.map((student, index) => (
+                    <tr key={index}>
+                      <td>{index + 1}</td>
+                      <td>{student.studentId || ""}</td>
+                      <td>{student.firstName || ""}</td>
+                      <td>{student.lastName || ""}</td>
+                      <td>{student.email || ""}</td>
+                      <td>{student.section || ""}</td>
+                      <td>{student.college || ""}</td>
+                      <td>{student.program || ""}</td>
+                      <td>{student.yearLevel || ""}</td>
+                      <td>{student.field || ""}</td>
+                      <td>{student.contact || ""}</td>
+                      <td>{student.companyName || ""}</td>
+                      <td>{student.status ? "Yes" : "No"}</td>
+                      <td>
+                        {Array.isArray(student.skills)
+                          ? student.skills.join("; ")
+                          : ""}
+                      </td>
+                      <td>
+                        {student.locationPreference &&
+                        typeof student.locationPreference === "object"
+                          ? Object.entries(student.locationPreference)
+                              .filter(([, value]) => Boolean(value))
+                              .map(([key]) => key)
+                              .join("; ")
+                          : ""}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="import-preview-actions">
+              <button
+                type="button"
+                className="import-preview-btn cancel"
+                onClick={() => {
+                  setShowStudentImportPreview(false);
+                  setPreviewStudents([]);
+                  setPreviewErrors([]);
+                  if (fileInputRef.current) {
+                    fileInputRef.current.value = "";
+                  }
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="import-preview-btn confirm"
+                onClick={executeStudentImport}
+                disabled={isImporting}
+              >
+                {isImporting
+                  ? `${importProgress.current}/${importProgress.total}`
+                  : "Confirm & Import"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

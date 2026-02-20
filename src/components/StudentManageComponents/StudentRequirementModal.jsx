@@ -1173,7 +1173,8 @@ const StudentRequirementModal = ({
                     </div>
                   </div>
                 </div>
-                {creatorInfo && (
+                {creatorInfo &&
+                  hasAnyRole([ROLES.SUPER_ADMIN, ROLES.COORDINATOR]) && (
                   <div className="profile-meta">
                     <span className="meta-label">Added by</span>
                     <span className="meta-value">{creatorInfo.username}</span>

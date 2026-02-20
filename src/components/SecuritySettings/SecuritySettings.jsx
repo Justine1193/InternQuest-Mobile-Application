@@ -1,6 +1,6 @@
 /**
- * SecuritySettings - Component for managing security settings
- * Includes PIN management and password change
+ * SecuritySettings - Component for managing security settings,
+ * password change, and admin password migration
  */
 
 import React, { useState, useEffect } from "react";
@@ -266,9 +266,9 @@ const SecuritySettings = () => {
               <IoShieldCheckmarkOutline className="security-settings-header-icon" />
             </div>
             <div>
-              <h1>Security Settings</h1>
+              <h1>Change Password</h1>
               <p className="security-settings-subtitle">
-                Manage your account security settings including password
+                Manage your account password settings
               </p>
             </div>
           </div>

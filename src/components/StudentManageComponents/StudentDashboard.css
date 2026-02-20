@@ -332,6 +332,11 @@
 }
 
 /* ===== TABLE SECTION ===== */
+/* Page header matches table-section width (80%) and background */
+.dashboard-content .dashboard-page-header {
+  width: 80%;
+}
+
 .table-section {
   margin: 1.5rem auto;
   background: var(--iq-surface);
@@ -3073,4 +3078,323 @@
   .notification-header-actions {
     grid-column: 1;
   }
+}
+
+/* ===== STUDENT CSV IMPORT PREVIEW MODAL STYLES ===== */
+/* Base modal styling (clone of company preview modal) */
+.import-preview-modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3000;
+  padding: 2rem;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.import-preview-modal-content {
+  background: #fff;
+  border-radius: 16px;
+  max-width: 900px;
+  width: 100%;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  animation: slideUp 0.3s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.import-preview-header {
+  padding: 1.5rem 2rem;
+  border-bottom: 2px solid #e3f2fd;
+  background: #f5faff;
+  border-radius: 16px 16px 0 0;
+  position: relative;
+}
+
+.import-preview-header h2 {
+  margin: 0 0 0.35rem 0;
+  font-size: 1.35rem;
+  color: #1e2a39;
+}
+
+.import-preview-subtitle {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #5a6c7d;
+}
+
+.import-preview-close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: none;
+  border: none;
+  padding: 0.35rem;
+  cursor: pointer;
+  color: #5a6c7d;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, color 0.2s;
+  font-size: 1.25rem;
+}
+
+.import-preview-close:hover {
+  background: #e0e7ef;
+  color: #1e2a39;
+}
+
+.import-preview-errors {
+  margin: 1rem 2rem;
+  padding: 1rem;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.import-preview-errors .error-icon {
+  color: #dc2626;
+  font-size: 1.25rem;
+  flex-shrink: 0;
+  margin-top: 0.125rem;
+}
+
+.import-preview-errors div {
+  flex: 1;
+}
+
+.import-preview-errors strong {
+  color: #991b1b;
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+.import-preview-errors ul {
+  margin: 0;
+  padding-left: 1.25rem;
+  color: #7f1d1d;
+  font-size: 0.875rem;
+}
+
+.import-preview-errors li {
+  margin-bottom: 0.25rem;
+}
+
+.import-preview-table-wrapper {
+  flex: 1;
+  overflow: auto;
+  padding: 1.5rem 2rem;
+}
+
+.import-preview-table {
+  width: 100%;
+  min-width: 1200px;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.import-preview-table thead {
+  background: #f9fafb;
+}
+
+.import-preview-table th {
+  padding: 0.75rem 1rem;
+  text-align: left;
+  font-weight: 600;
+  color: #6b7280;
+  border-bottom: 2px solid #e5e7eb;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.import-preview-table th:first-child {
+  width: 50px;
+}
+
+.import-preview-table td {
+  padding: 0.875rem 1rem;
+  border-bottom: 1px solid #f3f4f6;
+  color: #374151;
+  font-size: 0.875rem;
+  vertical-align: top;
+  max-width: 200px;
+  word-wrap: break-word;
+  white-space: normal;
+}
+
+.import-preview-table tbody tr:hover {
+  background-color: #f9fafb;
+}
+
+.import-preview-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.import-preview-actions {
+  padding: 1.25rem 2rem;
+  border-top: 1px solid #e5e7eb;
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  background: #fafafa;
+  border-radius: 0 0 16px 16px;
+}
+
+.import-preview-btn {
+  padding: 0.6rem 1.25rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.import-preview-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.import-preview-btn.cancel {
+  background: #fff;
+  border: 1px solid #d0d7de;
+  color: #374151;
+}
+
+.import-preview-btn.cancel:hover:not(:disabled) {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+}
+
+.import-preview-btn.confirm {
+  background: #1976d2;
+  border: none;
+  color: #fff;
+}
+
+.import-preview-btn.confirm:hover:not(:disabled) {
+  background: #1565c0;
+}
+
+/* Student-specific overrides: wider modal & more columns */
+.dashboard-container .import-preview-modal-content {
+  max-width: 1400px;
+  width: 95%;
+}
+
+.dashboard-container .import-preview-table-wrapper {
+  overflow-x: auto;
+  overflow-y: auto;
+}
+
+.dashboard-container .import-preview-table {
+  min-width: 1400px;
+  width: 100%;
+  table-layout: auto;
+}
+
+.dashboard-container .import-preview-table th:nth-child(1) {
+  width: 50px;
+  min-width: 50px;
+}
+
+.dashboard-container .import-preview-table th:nth-child(2) {
+  width: 120px;
+  min-width: 120px;
+}
+
+.dashboard-container .import-preview-table th:nth-child(3),
+.dashboard-container .import-preview-table th:nth-child(4) {
+  width: 100px;
+  min-width: 100px;
+}
+
+.dashboard-container .import-preview-table th:nth-child(5) {
+  width: 180px;
+  min-width: 180px;
+}
+
+.dashboard-container .import-preview-table th:nth-child(6) {
+  width: 100px;
+  min-width: 100px;
+}
+
+.dashboard-container .import-preview-table th:nth-child(7) {
+  width: 200px;
+  min-width: 200px;
+}
+
+.dashboard-container .import-preview-table th:nth-child(8) {
+  width: 80px;
+  min-width: 80px;
+}
+
+.dashboard-container .import-preview-table th:nth-child(9) {
+  width: 90px;
+  min-width: 90px;
+}
+
+.dashboard-container .import-preview-table th:nth-child(10) {
+  width: 120px;
+  min-width: 120px;
+}
+
+.dashboard-container .import-preview-table th:nth-child(11) {
+  width: 130px;
+  min-width: 130px;
+}
+
+.dashboard-container .import-preview-table th:nth-child(12) {
+  width: 150px;
+  min-width: 150px;
+}
+
+.dashboard-container .import-preview-table th:nth-child(13) {
+  width: 70px;
+  min-width: 70px;
+}
+
+.dashboard-container .import-preview-table th:nth-child(14) {
+  width: 150px;
+  min-width: 150px;
+}
+
+.dashboard-container .import-preview-table th:nth-child(15) {
+  width: 150px;
+  min-width: 150px;
 }

@@ -92,8 +92,8 @@ const Table = ({
                 </div>
               </th>
             )}
-            <th 
-              className={getSortClass('companyName')}
+            <th
+              className={`company-name-header ${getSortClass('companyName')}`}
               onClick={() => handleHeaderClick('companyName')}
             >
               Company Name
@@ -106,12 +106,6 @@ const Table = ({
             </th>
             <th>Skills required</th>
             <th>Mode of work</th>
-            <th 
-              className={getSortClass('moa')}
-              onClick={() => handleHeaderClick('moa')}
-            >
-              MOA
-            </th>
             <th 
               className={getSortClass('moaValidityYears')}
               onClick={() => handleHeaderClick('moaValidityYears')}
@@ -132,7 +126,7 @@ const Table = ({
         <tbody>
           {data.length === 0 ? (
             <tr>
-              <td colSpan={isReadOnly ? (selectionMode ? 9 : 8) : (selectionMode ? 10 : 9)} style={{ padding: 0, border: 'none' }}>
+              <td colSpan={isReadOnly ? (selectionMode ? 8 : 7) : (selectionMode ? 9 : 8)} style={{ padding: 0, border: 'none' }}>
                 <EmptyState
                   type={onClearFilters ? "search" : "document"}
                   title={onClearFilters ? "No companies found" : "No companies yet"}

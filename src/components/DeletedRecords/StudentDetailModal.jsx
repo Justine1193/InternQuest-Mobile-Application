@@ -1,5 +1,5 @@
 import React from "react";
-import { IoCloseOutline, IoPersonOutline, IoMailOutline, IoCallOutline, IoSchoolOutline, IoBusinessOutline, IoDocumentTextOutline, IoCalendarOutline, IoRefreshOutline } from "react-icons/io5";
+import { IoCloseOutline, IoPersonOutline, IoMailOutline, IoCallOutline, IoSchoolOutline, IoBusinessOutline, IoDocumentTextOutline, IoCalendarOutline, IoRefreshOutline, IoTimeOutline } from "react-icons/io5";
 import "./StudentDetailModal.css";
 
 const StudentDetailModal = ({ open, student, onClose, onRestore }) => {
@@ -35,6 +35,21 @@ const StudentDetailModal = ({ open, student, onClose, onRestore }) => {
             <div className="student-detail-title-group">
               <h2 className="student-detail-title">{studentName}</h2>
               <p className="student-detail-subtitle">Student ID: {studentId}</p>
+              <div className="student-status-badges" style={{ marginTop: '8px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                {student.is_blocked ? (
+                  <span className="status-badge blocked" style={{ padding: '4px 8px', borderRadius: '4px', fontSize: '12px', backgroundColor: '#fee', color: '#c33' }}>Blocked</span>
+                ) : (
+                  <span className="status-badge active" style={{ padding: '4px 8px', borderRadius: '4px', fontSize: '12px', backgroundColor: '#efe', color: '#3c3' }}>Active</span>
+                )}
+                {student.status === "hired" ? (
+                  <span className="status-badge hired" style={{ padding: '4px 8px', borderRadius: '4px', fontSize: '12px', backgroundColor: '#eef', color: '#33c' }}>Hired</span>
+                ) : (
+                  <span className="status-badge not-hired" style={{ padding: '4px 8px', borderRadius: '4px', fontSize: '12px', backgroundColor: '#ffe', color: '#cc3' }}>Not Hired</span>
+                )}
+                {student.section && (
+                  <span className="status-badge section" style={{ padding: '4px 8px', borderRadius: '4px', fontSize: '12px', backgroundColor: '#f0f0f0', color: '#666' }}>{student.section}</span>
+                )}
+              </div>
             </div>
           </div>
           <div className="student-detail-header-right">
@@ -87,29 +102,31 @@ const StudentDetailModal = ({ open, student, onClose, onRestore }) => {
                 <span className="detail-item-label">Last Name</span>
                 <span className="detail-item-value">{student.lastName || "N/A"}</span>
               </div>
-              {student.email && (
-                <div className="detail-item">
-                  <IoMailOutline className="detail-item-icon" />
-                  <div className="detail-item-content">
-                    <span className="detail-item-label">Email</span>
+              <div className="detail-item">
+                <IoMailOutline className="detail-item-icon" />
+                <div className="detail-item-content">
+                  <span className="detail-item-label">Email</span>
+                  {student.email && !student.email.includes("@student.internquest.local") ? (
                     <a 
                       href={`mailto:${student.email}`}
                       className="detail-item-value link"
                     >
                       {student.email}
                     </a>
-                  </div>
+                  ) : (
+                    <span className="detail-item-value empty-value">Not set</span>
+                  )}
                 </div>
-              )}
-              {student.contact && (
-                <div className="detail-item">
-                  <IoCallOutline className="detail-item-icon" />
-                  <div className="detail-item-content">
-                    <span className="detail-item-label">Contact Number</span>
-                    <span className="detail-item-value">{student.contact}</span>
-                  </div>
+              </div>
+              <div className="detail-item">
+                <IoCallOutline className="detail-item-icon" />
+                <div className="detail-item-content">
+                  <span className="detail-item-label">Contact Number</span>
+                  <span className="detail-item-value">
+                    {student.contact || <span className="empty-value">Not set</span>}
+                  </span>
                 </div>
-              )}
+              </div>
             </div>
           </div>
 
@@ -120,96 +137,98 @@ const StudentDetailModal = ({ open, student, onClose, onRestore }) => {
               Academic Information
             </h3>
             <div className="detail-grid">
-              {student.program && (
-                <div className="detail-item">
-                  <span className="detail-item-label">Program</span>
-                  <span className="detail-item-value">{student.program}</span>
-                </div>
-              )}
-              {student.field && (
-                <div className="detail-item">
-                  <span className="detail-item-label">Field</span>
-                  <span className="detail-item-value">
+              <div className="detail-item">
+                <span className="detail-item-label">Program</span>
+                <span className="detail-item-value">
+                  {student.program || <span className="empty-value">Not set</span>}
+                </span>
+              </div>
+              <div className="detail-item">
+                <span className="detail-item-label">College</span>
+                <span className="detail-item-value">
+                  {student.college || <span className="empty-value">Not set</span>}
+                </span>
+              </div>
+              <div className="detail-item">
+                <span className="detail-item-label">Field</span>
+                <span className="detail-item-value">
+                  {student.field ? (
                     <span className="field-tag">{student.field}</span>
-                  </span>
-                </div>
-              )}
+                  ) : (
+                    <span className="empty-value">Not set</span>
+                  )}
+                </span>
+              </div>
               {student.section && (
                 <div className="detail-item">
                   <span className="detail-item-label">Section</span>
                   <span className="detail-item-value">{student.section}</span>
                 </div>
               )}
+              {student.createdAt && (
+                <div className="detail-item">
+                  <IoTimeOutline className="detail-item-icon" />
+                  <div className="detail-item-content">
+                    <span className="detail-item-label">Created At</span>
+                    <span className="detail-item-value">
+                      {(() => {
+                        try {
+                          const date = new Date(student.createdAt);
+                          return date.toLocaleString();
+                        } catch (e) {
+                          return <span className="empty-value">Invalid date</span>;
+                        }
+                      })()}
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Company Application */}
-          {(student.selectedCompany || student.company || student.companyName || student.applicationDate || student.companyApplicationDate || student.appliedDate) && (
-            <div className="detail-section">
-              <h3 className="detail-section-title">
-                <IoBusinessOutline className="detail-section-icon" />
-                Company Application
-              </h3>
-              <div className="detail-grid">
+          {/* Company Information */}
+          <div className="detail-section">
+            <h3 className="detail-section-title">
+              <IoBusinessOutline className="detail-section-icon" />
+              Company Information
+            </h3>
+            <div className="detail-grid">
+              <div className="detail-item">
+                <span className="detail-item-label">Company</span>
+                <span className="detail-item-value">
+                  {student.company || student.companyName || student.selectedCompany || (
+                    <span className="empty-value">Not assigned</span>
+                  )}
+                </span>
+              </div>
+              {(student.applicationDate || student.companyApplicationDate || student.appliedDate || student.selectedCompanyDate || 
+                ((student.selectedCompany || student.company || student.companyName) && student.createdAt)) && (
                 <div className="detail-item">
-                  <span className="detail-item-label">Applied Company</span>
-                  <span className="detail-item-value">
-                    {student.selectedCompany || student.company || student.companyName || "Not specified"}
-                  </span>
-                </div>
-                {(student.applicationDate || student.companyApplicationDate || student.appliedDate || student.selectedCompanyDate) && (
-                  <div className="detail-item">
-                    <IoCalendarOutline className="detail-item-icon" />
-                    <div className="detail-item-content">
-                      <span className="detail-item-label">Application Date</span>
-                      <span className="detail-item-value">
-                        {formatDate(
-                          student.applicationDate || 
-                          student.companyApplicationDate || 
-                          student.appliedDate || 
-                          student.selectedCompanyDate
-                        )}
-                      </span>
-                    </div>
+                  <IoCalendarOutline className="detail-item-icon" />
+                  <div className="detail-item-content">
+                    <span className="detail-item-label">Application Date</span>
+                    <span className="detail-item-value">
+                      {formatDate(
+                        student.applicationDate || 
+                        student.companyApplicationDate || 
+                        student.appliedDate || 
+                        student.selectedCompanyDate ||
+                        ((student.selectedCompany || student.company || student.companyName) ? student.createdAt : null)
+                      )}
+                    </span>
                   </div>
-                )}
-                {!student.applicationDate && !student.companyApplicationDate && !student.appliedDate && !student.selectedCompanyDate && student.createdAt && (student.selectedCompany || student.company || student.companyName) && (
-                  <div className="detail-item">
-                    <IoCalendarOutline className="detail-item-icon" />
-                    <div className="detail-item-content">
-                      <span className="detail-item-label">Application Date</span>
-                      <span className="detail-item-value">{formatDate(student.createdAt)}</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Company Assignment (if different from application) */}
-          {(student.company || student.companyName) && 
-           !(student.selectedCompany || student.applicationDate || student.companyApplicationDate) && (
-            <div className="detail-section">
-              <h3 className="detail-section-title">
-                <IoBusinessOutline className="detail-section-icon" />
-                Company Assignment
-              </h3>
-              <div className="detail-grid">
-                <div className="detail-item full-width">
-                  <span className="detail-item-label">Company</span>
-                  <span className="detail-item-value">{student.company || student.companyName || "Not assigned"}</span>
                 </div>
-              </div>
+              )}
             </div>
-          )}
+          </div>
 
           {/* Skills */}
-          {student.skills && Array.isArray(student.skills) && student.skills.length > 0 && (
-            <div className="detail-section">
-              <h3 className="detail-section-title">
-                <IoDocumentTextOutline className="detail-section-icon" />
-                Skills
-              </h3>
+          <div className="detail-section">
+            <h3 className="detail-section-title">
+              <IoDocumentTextOutline className="detail-section-icon" />
+              Skills
+            </h3>
+            {student.skills && Array.isArray(student.skills) && student.skills.length > 0 ? (
               <div className="skills-container">
                 {student.skills.map((skill, index) => (
                   <span key={index} className="skill-tag">
@@ -217,8 +236,10 @@ const StudentDetailModal = ({ open, student, onClose, onRestore }) => {
                   </span>
                 ))}
               </div>
-            </div>
-          )}
+            ) : (
+              <p className="req-empty">No skills recorded for this archived student.</p>
+            )}
+          </div>
 
           {/* Submitted Requirements (from archive snapshot) */}
           <div className="detail-section">

@@ -1,0 +1,274 @@
+.renew-moa-modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  padding: 2rem;
+  animation: renewMoaFadeIn 0.2s ease;
+}
+
+@keyframes renewMoaFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.renew-moa-modal-content {
+  background: #fff;
+  border-radius: 16px;
+  max-width: 480px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  animation: renewMoaSlideUp 0.3s ease;
+}
+
+@keyframes renewMoaSlideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.renew-moa-modal-header {
+  padding: 1.5rem 2rem;
+  border-bottom: 2px solid #e3f2fd;
+  background: #f5faff;
+  border-radius: 16px 16px 0 0;
+  position: relative;
+}
+
+.renew-moa-modal-header h2 {
+  margin: 0 0 0.35rem 0;
+  font-size: 1.35rem;
+  color: #1e2a39;
+}
+
+.renew-moa-modal-subtitle {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #5a6c7d;
+  line-height: 1.4;
+}
+
+.renew-moa-modal-subtitle strong {
+  color: #1e2a39;
+}
+
+.renew-moa-modal-close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: none;
+  border: none;
+  padding: 0.35rem;
+  cursor: pointer;
+  color: #5a6c7d;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, color 0.2s;
+}
+
+.renew-moa-modal-close:hover {
+  background: #e0e7ef;
+  color: #1e2a39;
+}
+
+.renew-moa-form {
+  padding: 1.5rem 2rem 2rem;
+}
+
+.renew-moa-error {
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  background: #fef2f2;
+  color: #b91c1c;
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+
+.renew-moa-field {
+  margin-bottom: 1.25rem;
+}
+
+.renew-moa-field label {
+  display: block;
+  font-weight: 600;
+  color: #1e2a39;
+  margin-bottom: 0.4rem;
+  font-size: 0.9rem;
+}
+
+.renew-moa-field .required {
+  color: #b91c1c;
+}
+
+.renew-moa-input {
+  width: 100%;
+  padding: 0.65rem 0.9rem;
+  border: 1px solid #d0d7de;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  color: #1e2a39;
+  box-sizing: border-box;
+}
+
+.renew-moa-input:focus {
+  outline: none;
+  border-color: #1976d2;
+  box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.2);
+}
+
+.renew-moa-input:disabled {
+  background: #f1f5f9;
+  cursor: not-allowed;
+}
+
+.renew-moa-file-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.renew-moa-file-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem;
+  border: 2px dashed #94a3b8;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s, color 0.2s;
+}
+
+.renew-moa-file-label:hover:not(.uploading) {
+  border-color: #1976d2;
+  background: #e3f2fd;
+  color: #1976d2;
+}
+
+.renew-moa-file-label.uploading {
+  cursor: not-allowed;
+  opacity: 0.8;
+}
+
+.renew-moa-upload-icon {
+  font-size: 1.1rem;
+}
+
+.renew-moa-file-preview {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  font-size: 0.875rem;
+}
+
+.renew-moa-file-icon {
+  color: #16a34a;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.renew-moa-file-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #166534;
+}
+
+.renew-moa-file-remove {
+  background: none;
+  border: none;
+  padding: 0.25rem;
+  cursor: pointer;
+  color: #6b7280;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, color 0.2s;
+}
+
+.renew-moa-file-remove:hover:not(:disabled) {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.renew-moa-file-remove:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.renew-moa-file-hint {
+  margin: 0.35rem 0 0;
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.renew-moa-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  margin-top: 1.75rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid #e5e7eb;
+}
+
+.renew-moa-btn {
+  padding: 0.6rem 1.25rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.renew-moa-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.renew-moa-btn.cancel {
+  background: #fff;
+  border: 1px solid #d0d7de;
+  color: #374151;
+}
+
+.renew-moa-btn.cancel:hover:not(:disabled) {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+}
+
+.renew-moa-btn.submit {
+  background: #1976d2;
+  border: none;
+  color: #fff;
+}
+
+.renew-moa-btn.submit:hover:not(:disabled) {
+  background: #1565c0;
+}

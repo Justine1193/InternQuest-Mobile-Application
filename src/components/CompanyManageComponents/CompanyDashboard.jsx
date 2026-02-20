@@ -7,7 +7,7 @@
  * <CompanyDashboard />
  */
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import "./CompanyDashboard.css";
 import "../DashboardPageHeader/DashboardPageHeader.css";
 import Navbar from "../Navbar/Navbar.jsx";
@@ -16,6 +16,7 @@ import SearchBar from "../SearchBar/SearchBar.jsx";
 import Table from "./Table/Table.jsx";
 import CompanyModal from "./CompanyModal/CompanyModal.jsx";
 import CompanyDetailModal from "./CompanyDetailModal/CompanyDetailModal.jsx";
+import RenewMoaModal from "./RenewMoaModal/RenewMoaModal.jsx";
 import ConfirmModal from "../ConfirmModalComponents/ConfirmModal.jsx";
 import ConfirmAction from "../ConfirmAction/ConfirmAction.jsx";
 import LoadingSpinner from "../LoadingSpinner.jsx";
@@ -62,10 +63,11 @@ import {
   IoAlertCircleOutline,
   IoAddOutline,
   IoTrashOutline,
+  IoCloseOutline,
 } from "react-icons/io5";
 import logger from "../../utils/logger.js";
 import Footer from "../Footer/Footer.jsx";
-import { getAdminRole, ROLES, isAdviserOnly } from "../../utils/auth.js";
+import { getAdminRole, ROLES, isAdviserOnly, getAdminSession, hasAnyRole, getAdminCollegeCode } from "../../utils/auth.js";
 import { loadColleges } from "../../utils/collegeUtils.js";
 
 // --- Company Dashboard Main Component ---
@@ -75,6 +77,8 @@ const Dashboard = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [selectedCompany, setSelectedCompany] = useState(null);
+  const [companyToRenewMoa, setCompanyToRenewMoa] = useState(null);
+  const [isRenewMoaModalOpen, setIsRenewMoaModalOpen] = useState(false);
   const [formData, setFormData] = useState({
     companyName: "",
     description: "",
@@ -100,6 +104,7 @@ const Dashboard = () => {
   const [error, setError] = useState(null);
   const [selectedItems, setSelectedItems] = useState([]);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [allCompanies, setAllCompanies] = useState([]); // Raw companies from Firestore
   const [tableData, setTableData] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -132,6 +137,9 @@ const Dashboard = () => {
     total: 0,
   });
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [showImportPreview, setShowImportPreview] = useState(false);
+  const [previewCompanies, setPreviewCompanies] = useState([]);
+  const [previewErrors, setPreviewErrors] = useState([]);
   const fileInputRef = useRef(null);
   const { toasts, removeToast, success, error: showError } = useToast();
 
@@ -139,6 +147,7 @@ const Dashboard = () => {
   const suggestionSkills = useSuggestionSkills();
   const suggestionFields = useSuggestionFields();
   const [collegeOptions, setCollegeOptions] = useState([]);
+  const [adminCollegeName, setAdminCollegeName] = useState(null);
 
   useEffect(() => {
     loadColleges()
@@ -148,6 +157,142 @@ const Dashboard = () => {
         setCollegeOptions([]);
       });
   }, []);
+
+  // Load admin's college name if they are coordinator/adviser
+  useEffect(() => {
+    const loadAdminCollege = async () => {
+      const currentRole = getAdminRole();
+      if (
+        hasAnyRole([ROLES.COORDINATOR, ROLES.ADVISER]) &&
+        !hasAnyRole([ROLES.SUPER_ADMIN])
+      ) {
+        const adminCollegeCode = getAdminCollegeCode();
+        if (adminCollegeCode) {
+          try {
+            const colleges = await loadColleges();
+            const college = colleges.find(
+              (c) => c.college_code === adminCollegeCode
+            );
+            if (college) {
+              setAdminCollegeName(college.college_name);
+            } else {
+              setAdminCollegeName(null);
+            }
+          } catch (error) {
+            logger.error("Error loading admin college:", error);
+            setAdminCollegeName(null);
+          }
+        } else {
+          setAdminCollegeName(null);
+        }
+      } else {
+        setAdminCollegeName(null);
+      }
+    };
+
+    loadAdminCollege();
+  }, []);
+
+  // Filter companies based on role and college endorsement
+  const filteredCompanies = useMemo(() => {
+    const currentRole = getAdminRole();
+    
+    // Only admin can see all companies
+    if (hasAnyRole([ROLES.SUPER_ADMIN])) {
+      return allCompanies;
+    }
+
+    // Coordinators/advisers can only see companies endorsed by their college
+    if (hasAnyRole([ROLES.COORDINATOR, ROLES.ADVISER])) {
+      // If college name is not loaded yet, return empty array (will update when loaded)
+      if (!adminCollegeName) {
+        return [];
+      }
+
+      return allCompanies.filter((company) => {
+        // Only show companies where endorsedByCollege matches admin's college
+        if (!company.endorsedByCollege) {
+          return false; // Hide companies without endorsement
+        }
+        // Compare case-insensitively
+        return (
+          company.endorsedByCollege.trim().toLowerCase() ===
+          adminCollegeName.trim().toLowerCase()
+        );
+      });
+    }
+
+    // Other roles: hide all
+    return [];
+  }, [allCompanies, adminCollegeName]);
+
+  // Update tableData and stats when filteredCompanies changes
+  useEffect(() => {
+    setTableData(filteredCompanies);
+
+    // Recalculate stats based on filtered companies
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const filteredExpiringSoon = filteredCompanies.filter((company) => {
+      if (company.moa === "Yes" && company.moaExpirationDate) {
+        try {
+          const expirationDate = new Date(company.moaExpirationDate);
+          const expDate = new Date(expirationDate);
+          expDate.setHours(0, 0, 0, 0);
+          const daysUntilExpiration = Math.ceil(
+            (expDate - today) / (1000 * 60 * 60 * 24),
+          );
+          return daysUntilExpiration > 0 && daysUntilExpiration <= MOA_EXPIRING_SOON_DAYS;
+        } catch (e) {
+          return false;
+        }
+      }
+      return false;
+    }).length;
+
+    const filteredExpired = filteredCompanies.filter((company) => {
+      if (company.moa === "Yes" && company.moaExpirationDate) {
+        try {
+          const expirationDate = new Date(company.moaExpirationDate);
+          const expDate = new Date(expirationDate);
+          expDate.setHours(0, 0, 0, 0);
+          const daysUntilExpiration = Math.ceil(
+            (expDate - today) / (1000 * 60 * 60 * 24),
+          );
+          return daysUntilExpiration < 0;
+        } catch (e) {
+          return false;
+        }
+      }
+      return false;
+    }).length;
+
+    const filteredValid = filteredCompanies.filter((company) => {
+      if (company.moa === "Yes" && company.moaExpirationDate) {
+        try {
+          const expirationDate = new Date(company.moaExpirationDate);
+          const expDate = new Date(expirationDate);
+          expDate.setHours(0, 0, 0, 0);
+          const daysUntilExpiration = Math.ceil(
+            (expDate - today) / (1000 * 60 * 60 * 24),
+          );
+          return daysUntilExpiration > MOA_EXPIRING_SOON_DAYS;
+        } catch (e) {
+          return false;
+        }
+      }
+      return false;
+    }).length;
+
+    setOverviewStats((prev) => ({
+      ...prev,
+      totalCompanies: filteredCompanies.length,
+      moaExpiringSoon: filteredExpiringSoon,
+      moaExpired: filteredExpired,
+      moaValid: filteredValid,
+    }));
+  }, [filteredCompanies]);
 
   // Clear all filters and search
   const handleClearAllFilters = () => {
@@ -432,15 +577,8 @@ const Dashboard = () => {
           });
         }
 
-        setTableData(companies);
-
-        setOverviewStats((prev) => ({
-          ...prev,
-          totalCompanies: companies.length,
-          moaExpiringSoon: expiringSoon,
-          moaExpired: expired,
-          moaValid: valid,
-        }));
+        // Store raw companies - filtering will happen in useMemo
+        setAllCompanies(companies);
         setIsLoading(false);
         logger.debug("Companies updated:", companies.length);
       },
@@ -498,15 +636,12 @@ const Dashboard = () => {
     document.title = "Dashboard | InternQuest Admin";
   }, []);
 
-  // Handle CSV import
+  // Handle CSV import - preview step
   const handleImportCompanies = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     try {
-      setIsImporting(true);
-      setImportProgress({ current: 0, total: 0 });
-
       // Read CSV file
       const csvText = await readCSVFile(file);
 
@@ -518,24 +653,52 @@ const Dashboard = () => {
 
       if (companies.length === 0) {
         showError("No valid companies found in CSV file");
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+        }
         return;
       }
 
       if (!auth.currentUser) {
         showError("You must be signed in to import companies. Please sign in and try again.");
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+        }
         return;
       }
 
-      setImportProgress({ current: 0, total: companies.length });
+      // Show preview modal
+      setPreviewCompanies(companies);
+      setPreviewErrors(errors);
+      setShowImportPreview(true);
+    } catch (err) {
+      logger.error("Import preview error:", err);
+      showError(
+        err.message || "Failed to parse CSV file. Please check the format.",
+      );
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
+
+  // Actual import execution after confirmation
+  const executeImport = async () => {
+    if (previewCompanies.length === 0) return;
+
+    try {
+      setIsImporting(true);
+      setShowImportPreview(false);
+      setImportProgress({ current: 0, total: previewCompanies.length });
 
       // Batch import companies
       let successCount = 0;
       let errorCount = 0;
       const importErrors = [];
 
-      for (let i = 0; i < companies.length; i++) {
+      for (let i = 0; i < previewCompanies.length; i++) {
         try {
-          const company = companies[i];
+          const company = previewCompanies[i];
 
           // Compute MOA expiration from start date + validity years when provided
           let moaStartDate = company.moaStartDate || "";
@@ -549,6 +712,13 @@ const Dashboard = () => {
             } catch (_) {}
           }
 
+          // Get creator info
+          const session = getAdminSession();
+          const createdBy = session ? {
+            username: session.username || "Unknown",
+            role: session.role || "Unknown",
+          } : null;
+
           // Map to Firestore format
           const newCompany = {
             companyName: company.companyName,
@@ -559,8 +729,6 @@ const Dashboard = () => {
             skillsREq: company.skills,
             moa: "Yes", // MOA is always required
             moaValidityYears: company.moaValidityYears || 1,
-            moaStartDate: moaStartDate || undefined,
-            moaExpirationDate: moaExpirationDate || undefined,
             moaFileUrl: company.moaFileUrl || "",
             moaFileName: company.moaFileName || "",
             modeOfWork: company.modeOfWork,
@@ -571,6 +739,19 @@ const Dashboard = () => {
             createdAt: company.createdAt || new Date().toISOString(),
             updatedAt: company.updatedAt || new Date().toISOString(),
           };
+
+          // Only include MOA dates if they have values (Firestore doesn't allow undefined)
+          if (moaStartDate) {
+            newCompany.moaStartDate = moaStartDate;
+          }
+          if (moaExpirationDate) {
+            newCompany.moaExpirationDate = moaExpirationDate;
+          }
+
+          // Add createdBy if available
+          if (createdBy) {
+            newCompany.createdBy = createdBy;
+          }
 
           const docRef = await addDoc(collection(db, "companies"), newCompany);
 
@@ -598,16 +779,16 @@ const Dashboard = () => {
             ? "Permission denied. Please sign out, sign in again, and retry the import."
             : err.message;
           importErrors.push({
-            company: companies[i].companyName,
+            company: previewCompanies[i].companyName,
             error: userMessage,
           });
           logger.error(
-            `Failed to import company ${companies[i].companyName}:`,
+            `Failed to import company ${previewCompanies[i].companyName}:`,
             err,
           );
         }
 
-        setImportProgress({ current: i + 1, total: companies.length });
+        setImportProgress({ current: i + 1, total: previewCompanies.length });
       }
 
       // Show results
@@ -618,8 +799,8 @@ const Dashboard = () => {
             `${errorCount} company/companies failed to import. Check console for details.`,
           );
         }
-        if (errors.length > 0) {
-          logger.warn(`CSV parsing errors:`, errors);
+        if (previewErrors.length > 0) {
+          logger.warn(`CSV parsing errors:`, previewErrors);
         }
       } else {
         showError(
@@ -627,10 +808,12 @@ const Dashboard = () => {
         );
       }
 
-      // Reset file input
+      // Reset file input and preview
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
+      setPreviewCompanies([]);
+      setPreviewErrors([]);
     } catch (err) {
       logger.error("Import error:", err);
       showError(
@@ -1028,6 +1211,7 @@ const Dashboard = () => {
               setSkills,
               setFields,
               setError,
+              (companyName) => success(`Company "${companyName}" added successfully.`),
             )
           }
           handleUpdateEntry={dashboardHandlers.handleUpdateEntry}
@@ -1054,56 +1238,9 @@ const Dashboard = () => {
           setIsDetailModalOpen(false);
           setSelectedCompany(null);
         }}
-        onRenewMoa={async (company) => {
-          if (!company || !company.id) return;
-
-          try {
-            setIsLoading(true);
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-
-            // Calculate new expiration date based on current validity years
-            const validityYears = company.moaValidityYears || 1;
-            const newExpirationDate = new Date(today);
-            newExpirationDate.setFullYear(
-              newExpirationDate.getFullYear() + validityYears,
-            );
-
-            // Update company in Firestore
-            await updateDoc(doc(db, "companies", company.id), {
-              moaStartDate: today.toISOString(),
-              moaExpirationDate: newExpirationDate.toISOString(),
-              isVisibleToMobile: true, // Make visible to mobile app after renewal
-              moaStatus: "valid", // Set status to valid
-              updatedAt: new Date().toISOString(),
-            });
-
-            // Sync to Realtime DB
-            await updateRealtime(ref(realtimeDb, `companies/${company.id}`), {
-              updatedAt: new Date().toISOString(),
-            });
-
-            // Log activity
-            await activityLoggers.updateCompany(
-              company.id,
-              company.companyName,
-              {
-                moaStartDate: today.toISOString(),
-                moaExpirationDate: newExpirationDate.toISOString(),
-              },
-            );
-
-            success(
-              `MOA renewed for ${company.companyName}. New expiration: ${newExpirationDate.toLocaleDateString()}`,
-            );
-            setIsDetailModalOpen(false);
-            setSelectedCompany(null);
-          } catch (err) {
-            logger.error("Error renewing MOA:", err);
-            showError("Failed to renew MOA. Please try again.");
-          } finally {
-            setIsLoading(false);
-          }
+        onRenewMoa={(company) => {
+          setCompanyToRenewMoa(company);
+          setIsRenewMoaModalOpen(true);
         }}
         onEdit={(company) => {
           dashboardHandlers.handleEdit(
@@ -1116,6 +1253,62 @@ const Dashboard = () => {
             setFields,
           );
           setIsDetailModalOpen(false);
+        }}
+      />
+      <RenewMoaModal
+        open={isRenewMoaModalOpen}
+        company={companyToRenewMoa}
+        onClose={() => {
+          setIsRenewMoaModalOpen(false);
+          setCompanyToRenewMoa(null);
+        }}
+        isSubmitting={isLoading}
+        onSubmit={async (payload) => {
+          const company = companyToRenewMoa;
+          if (!company || !company.id) return;
+
+          try {
+            setIsLoading(true);
+            await updateDoc(doc(db, "companies", company.id), {
+              moaStartDate: payload.startDate,
+              moaExpirationDate: payload.expirationDate,
+              moaValidityYears: payload.validityYears,
+              moaFileUrl: payload.moaFileUrl,
+              moaFileName: payload.moaFileName,
+              moaStoragePath: payload.moaStoragePath,
+              isVisibleToMobile: true,
+              moaStatus: "valid",
+              updatedAt: new Date().toISOString(),
+            });
+
+            await updateRealtime(ref(realtimeDb, `companies/${company.id}`), {
+              updatedAt: new Date().toISOString(),
+            });
+
+            await activityLoggers.updateCompany(
+              company.id,
+              company.companyName,
+              {
+                moaStartDate: payload.startDate,
+                moaExpirationDate: payload.expirationDate,
+                moaValidityYears: payload.validityYears,
+              },
+            );
+
+            const expDate = new Date(payload.expirationDate);
+            success(
+              `MOA renewed for ${company.companyName}. New expiration: ${expDate.toLocaleDateString()}`,
+            );
+            setIsRenewMoaModalOpen(false);
+            setCompanyToRenewMoa(null);
+            setIsDetailModalOpen(false);
+            setSelectedCompany(null);
+          } catch (err) {
+            logger.error("Error renewing MOA:", err);
+            showError("Failed to renew MOA. Please try again.");
+          } finally {
+            setIsLoading(false);
+          }
         }}
       />
       <ConfirmModal
@@ -1144,6 +1337,136 @@ const Dashboard = () => {
         }}
         onCancel={() => dashboardHandlers.cancelDelete(setShowConfirm)}
       />
+      {/* CSV Import Preview Modal */}
+      {showImportPreview && (
+        <div className="import-preview-modal-backdrop" onClick={() => {
+          setShowImportPreview(false);
+          setPreviewCompanies([]);
+          setPreviewErrors([]);
+          if (fileInputRef.current) {
+            fileInputRef.current.value = "";
+          }
+        }}>
+          <div className="import-preview-modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="import-preview-header">
+              <h2>CSV Import Preview</h2>
+              <p className="import-preview-subtitle">
+                Review {previewCompanies.length} company/companies before importing
+              </p>
+              <button
+                type="button"
+                className="import-preview-close"
+                onClick={() => {
+                  setShowImportPreview(false);
+                  setPreviewCompanies([]);
+                  setPreviewErrors([]);
+                  if (fileInputRef.current) {
+                    fileInputRef.current.value = "";
+                  }
+                }}
+                aria-label="Close"
+              >
+                <IoCloseOutline />
+              </button>
+            </div>
+            {previewErrors.length > 0 && (
+              <div className="import-preview-errors">
+                <IoWarningOutline className="error-icon" />
+                <div>
+                  <strong>Parsing Warnings ({previewErrors.length}):</strong>
+                  <ul>
+                    {previewErrors.slice(0, 5).map((err, idx) => (
+                      <li key={idx}>{err}</li>
+                    ))}
+                    {previewErrors.length > 5 && (
+                      <li>... and {previewErrors.length - 5} more</li>
+                    )}
+                  </ul>
+                </div>
+              </div>
+            )}
+            <div className="import-preview-table-wrapper">
+              <table className="import-preview-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Company Name</th>
+                    <th>Description</th>
+                    <th>Email</th>
+                    <th>Website</th>
+                    <th>Address</th>
+                    <th>Fields</th>
+                    <th>Skills</th>
+                    <th>Mode of Work</th>
+                    <th>Endorsed by College</th>
+                    <th>Contact Person Name</th>
+                    <th>Contact Number</th>
+                    <th>MOA</th>
+                    <th>MOA Validity Years</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {previewCompanies.map((company, index) => (
+                    <tr key={index}>
+                      <td>{index + 1}</td>
+                      <td>{company.companyName || "N/A"}</td>
+                      <td className="preview-description-cell" title={company.description || "N/A"}>
+                        {company.description ? (company.description.length > 50 ? company.description.substring(0, 50) + "..." : company.description) : "N/A"}
+                      </td>
+                      <td>{company.email || "N/A"}</td>
+                      <td>{company.companyWebsite || "N/A"}</td>
+                      <td>{company.address || "N/A"}</td>
+                      <td>{Array.isArray(company.fields) ? company.fields.join(", ") : (company.fields || "N/A")}</td>
+                      <td>{Array.isArray(company.skills) ? company.skills.join(", ") : (company.skills || "N/A")}</td>
+                      <td>{Array.isArray(company.modeOfWork) ? company.modeOfWork.join(", ") : (company.modeOfWork || "N/A")}</td>
+                      <td>{company.endorsedByCollege || "N/A"}</td>
+                      <td>{company.contactPersonName || "N/A"}</td>
+                      <td>{company.contactPersonPhone || "N/A"}</td>
+                      <td>{company.moa ? "Yes" : "No"}</td>
+                      <td>{company.moaValidityYears || (company.moa ? "1 (default)" : "N/A")}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="import-preview-actions">
+              <button
+                type="button"
+                className="import-preview-btn cancel"
+                onClick={() => {
+                  setShowImportPreview(false);
+                  setPreviewCompanies([]);
+                  setPreviewErrors([]);
+                  if (fileInputRef.current) {
+                    fileInputRef.current.value = "";
+                  }
+                }}
+                disabled={isImporting}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="import-preview-btn confirm"
+                onClick={executeImport}
+                disabled={isImporting}
+              >
+                {isImporting ? (
+                  <>
+                    <span className="spinner"></span>
+                    Importing... ({importProgress.current}/{importProgress.total})
+                  </>
+                ) : (
+                  <>
+                    <IoCheckmarkCircleOutline />
+                    Confirm & Import ({previewCompanies.length})
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <ToastContainer toasts={toasts} removeToast={removeToast} />
       <Footer />
     </div>

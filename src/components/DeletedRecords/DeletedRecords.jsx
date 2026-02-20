@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { collection, getDocs, doc, setDoc, deleteDoc, getDoc } from "firebase/firestore";
 import { db, auth, realtimeDb } from "../../../firebase";
 import { ref, update as updateRealtime } from "firebase/database";
@@ -13,7 +13,7 @@ import { useToast } from "../../hooks/useToast.js";
 import { activityLoggers, logActivity } from "../../utils/activityLogger.js";
 import logger from "../../utils/logger.js";
 import Footer from "../Footer/Footer.jsx";
-import { IoRefreshOutline, IoArchiveOutline, IoSearchOutline, IoPeopleOutline, IoBusinessOutline, IoShieldOutline, IoDocumentTextOutline, IoDownloadOutline, IoOpenOutline, IoCalendarOutline, IoChevronDownOutline, IoChevronUpOutline, IoImageOutline, IoDocumentOutline } from "react-icons/io5";
+import { IoRefreshOutline, IoArchiveOutline, IoSearchOutline, IoPeopleOutline, IoBusinessOutline, IoShieldOutline, IoDocumentTextOutline, IoDownloadOutline, IoOpenOutline, IoCalendarOutline, IoChevronDownOutline, IoChevronUpOutline, IoImageOutline, IoDocumentOutline, IoCloseOutline, IoEyeOutline } from "react-icons/io5";
 import EmptyState from "../EmptyState/EmptyState.jsx";
 import StudentDetailModal from "./StudentDetailModal.jsx";
 import CompanyDetailModal from "../CompanyManageComponents/CompanyDetailModal/CompanyDetailModal.jsx";
@@ -52,6 +52,8 @@ const DeletedRecords = () => {
   const [requirementSortBy, setRequirementSortBy] = useState("rejectedAt"); // "rejectedAt" | "studentName" | "requirementType" | "uploadedAt"
   const [requirementSortOrder, setRequirementSortOrder] = useState("desc"); // "asc" | "desc"
   const [expandedReasonId, setExpandedReasonId] = useState(null);
+  const [expandedStudentGroups, setExpandedStudentGroups] = useState(new Set()); // Track which student groups are expanded
+  const [selectedRequirementGroup, setSelectedRequirementGroup] = useState(null); // Selected group for modal view
   const [currentStudentPage, setCurrentStudentPage] = useState(1);
   const [currentCompanyPage, setCurrentCompanyPage] = useState(1);
   const [currentAdminPage, setCurrentAdminPage] = useState(1);
@@ -504,10 +506,44 @@ const DeletedRecords = () => {
       }
     });
 
-  const requirementTotalPages = Math.ceil(filteredRequirements.length / itemsPerPage);
+  // Group requirements by student name
+  const groupedRequirements = useMemo(() => {
+    const groups = {};
+    filteredRequirements.forEach((req) => {
+      const studentKey = req.studentName || "Unknown Student";
+      if (!groups[studentKey]) {
+        groups[studentKey] = {
+          studentName: studentKey,
+          requirements: [],
+          latestRejectedAt: null,
+        };
+      }
+      groups[studentKey].requirements.push(req);
+      // Track latest rejection date for sorting
+      const rejectedAt = new Date(req.rejectedAt || 0).getTime();
+      if (!groups[studentKey].latestRejectedAt || rejectedAt > groups[studentKey].latestRejectedAt) {
+        groups[studentKey].latestRejectedAt = rejectedAt;
+      }
+    });
+    
+    // Convert to array and sort
+    return Object.values(groups).sort((a, b) => {
+      if (requirementSortBy === "studentName") {
+        const comparison = a.studentName.localeCompare(b.studentName);
+        return requirementSortOrder === "asc" ? comparison : -comparison;
+      }
+      // Default: sort by latest rejected date
+      return requirementSortOrder === "asc" 
+        ? (a.latestRejectedAt - b.latestRejectedAt)
+        : (b.latestRejectedAt - a.latestRejectedAt);
+    });
+  }, [filteredRequirements, requirementSortBy, requirementSortOrder]);
+
+  // Paginate groups instead of individual requirements
+  const requirementTotalPages = Math.ceil(groupedRequirements.length / itemsPerPage);
   const requirementIndexOfLast = currentRequirementPage * itemsPerPage;
   const requirementIndexOfFirst = requirementIndexOfLast - itemsPerPage;
-  const paginatedRequirements = filteredRequirements.slice(requirementIndexOfFirst, requirementIndexOfLast);
+  const paginatedGroups = groupedRequirements.slice(requirementIndexOfFirst, requirementIndexOfLast);
 
   return (
     <div className="deleted-records-page">
@@ -1363,19 +1399,15 @@ const DeletedRecords = () => {
                 <thead>
                   <tr>
                     <th>Student</th>
-                    <th>Requirement Type</th>
-                    <th>File</th>
-                    <th>Uploaded At</th>
-                    <th>Rejected At</th>
-                    <th>Rejected By</th>
-                    <th>Reason</th>
+                    <th>Requirements</th>
+                    <th>Latest Rejection</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rejectedRequirements.length === 0 ? (
                     <tr>
-                      <td colSpan="8" style={{ padding: 0, border: "none" }}>
+                      <td colSpan="4" style={{ padding: 0, border: "none" }}>
                         <EmptyState
                           type="document"
                           title="No rejected requirements"
@@ -1384,9 +1416,9 @@ const DeletedRecords = () => {
                         />
                       </td>
                     </tr>
-                  ) : filteredRequirements.length === 0 ? (
+                  ) : groupedRequirements.length === 0 ? (
                     <tr>
-                      <td colSpan="8" style={{ padding: 0, border: "none" }}>
+                      <td colSpan="4" style={{ padding: 0, border: "none" }}>
                         <EmptyState
                           type="search"
                           title="No requirements found"
@@ -1396,117 +1428,36 @@ const DeletedRecords = () => {
                       </td>
                     </tr>
                   ) : (
-                    paginatedRequirements.map((req) => {
-                      const FileIcon = getFileTypeIcon(req.fileName, req.contentType);
-                      const isReasonExpanded = expandedReasonId === req.id;
-                      const reasonText = req.rejectionReason || "No reason provided";
-                      const shouldTruncateReason = reasonText.length > 50;
-                      
+                    paginatedGroups.map((group) => {
                       return (
-                        <tr key={req.id} className="requirement-row">
+                        <tr key={group.studentName} className="requirement-group-row">
                           <td>
-                            <div className="student-cell">
+                            <div className="group-student-cell">
                               <IoPeopleOutline className="student-icon" />
-                              <span>{req.studentName || "Unknown"}</span>
+                              <span className="group-student-name">{group.studentName}</span>
                             </div>
                           </td>
                           <td>
-                            <span className="requirement-type-badge">{req.requirementType || "N/A"}</span>
-                          </td>
-                          <td>
-                            <div className="file-info-cell">
-                              <FileIcon className="file-type-icon" />
-                              <div className="file-details">
-                                <div className="file-name">
-                                  {req.archiveURL ? (
-                                    <a
-                                      href={req.archiveURL}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="file-link"
-                                      onClick={(e) => e.stopPropagation()}
-                                      title={req.fileName || "N/A"}
-                                    >
-                                      {req.fileName || "N/A"}
-                                    </a>
-                                  ) : (
-                                    <span title={req.fileName || "N/A"}>{req.fileName || "N/A"}</span>
-                                  )}
-                                </div>
-                                {req.fileSize && (
-                                  <div className="file-size">{formatFileSize(req.fileSize)}</div>
-                                )}
-                              </div>
-                            </div>
+                            <span className="group-requirement-count-badge">
+                              {group.requirements.length} requirement{group.requirements.length !== 1 ? 's' : ''}
+                            </span>
                           </td>
                           <td>
                             <div className="date-cell">
                               <IoCalendarOutline className="date-icon" />
-                              <span>{formatDateTime(req.originalUploadedAt)}</span>
+                              <span>{formatDateTime(group.latestRejectedAt ? new Date(group.latestRejectedAt) : null)}</span>
                             </div>
                           </td>
                           <td>
-                            <div className="date-cell">
-                              <IoCalendarOutline className="date-icon" />
-                              <span>{formatDateTime(req.rejectedAt)}</span>
-                            </div>
-                          </td>
-                          <td>
-                            <span className="rejected-by-badge">{req.rejectedBy || "N/A"}</span>
-                          </td>
-                          <td>
-                            <div className="reason-cell">
-                              {shouldTruncateReason ? (
-                                <>
-                                  <span className={`rejection-reason-text ${isReasonExpanded ? 'expanded' : ''}`}>
-                                    {isReasonExpanded ? reasonText : reasonText.substring(0, 50) + '...'}
-                                  </span>
-                                  <button
-                                    type="button"
-                                    className="expand-reason-btn"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setExpandedReasonId(isReasonExpanded ? null : req.id);
-                                    }}
-                                    title={isReasonExpanded ? "Collapse reason" : "Expand reason"}
-                                  >
-                                    {isReasonExpanded ? <IoChevronUpOutline /> : <IoChevronDownOutline />}
-                                  </button>
-                                </>
-                              ) : (
-                                <span className="rejection-reason-text">{reasonText}</span>
-                              )}
-                            </div>
-                          </td>
-                          <td>
-                            <div className="requirement-actions">
-                              {req.archiveURL && (
-                                <>
-                                  <button
-                                    type="button"
-                                    className="action-btn view-btn"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      window.open(req.archiveURL, '_blank', 'noopener,noreferrer');
-                                    }}
-                                    title="View file"
-                                  >
-                                    <IoOpenOutline />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="action-btn download-btn"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleDownloadFile(req.archiveURL, req.fileName);
-                                    }}
-                                    title="Download file"
-                                  >
-                                    <IoDownloadOutline />
-                                  </button>
-                                </>
-                              )}
-                            </div>
+                            <button
+                              type="button"
+                              className="view-details-btn"
+                              onClick={() => setSelectedRequirementGroup(group)}
+                              title="View requirement details"
+                            >
+                              <IoEyeOutline />
+                              <span>View Details</span>
+                            </button>
                           </td>
                         </tr>
                       );
@@ -1518,7 +1469,7 @@ const DeletedRecords = () => {
             {requirementTotalPages > 1 && (
               <div className="pagination">
                 <div className="pagination-info">
-                  Showing {requirementIndexOfFirst + 1} to {Math.min(requirementIndexOfLast, filteredRequirements.length)} of {filteredRequirements.length}
+                  Showing {requirementIndexOfFirst + 1} to {Math.min(requirementIndexOfLast, groupedRequirements.length)} of {groupedRequirements.length} group{groupedRequirements.length !== 1 ? 's' : ''} ({filteredRequirements.length} total requirement{filteredRequirements.length !== 1 ? 's' : ''})
                 </div>
                 <div className="pagination-controls">
                   <button
@@ -1606,6 +1557,143 @@ const DeletedRecords = () => {
         confirmButtonText="Yes, restore it!"
         confirmButtonClass="confirm-btn restore-confirm-btn"
       />
+      
+      {/* Requirement Group Details Modal */}
+      {selectedRequirementGroup && (
+        <div 
+          className="requirement-group-modal-backdrop"
+          onClick={() => setSelectedRequirementGroup(null)}
+        >
+          <div 
+            className="requirement-group-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="requirement-group-modal-header">
+              <div className="modal-header-content">
+                <h2>
+                  <IoPeopleOutline className="header-icon" />
+                  {selectedRequirementGroup.studentName}
+                </h2>
+                <p className="modal-subtitle">
+                  {selectedRequirementGroup.requirements.length} rejected requirement{selectedRequirementGroup.requirements.length !== 1 ? 's' : ''}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="modal-close-btn"
+                onClick={() => setSelectedRequirementGroup(null)}
+                aria-label="Close modal"
+              >
+                <IoCloseOutline />
+              </button>
+            </div>
+            
+            <div className="requirement-group-modal-body">
+              <div className="requirements-list">
+                {selectedRequirementGroup.requirements.map((req) => {
+                  const FileIcon = getFileTypeIcon(req.fileName, req.contentType);
+                  const isReasonExpanded = expandedReasonId === req.id;
+                  const reasonText = req.rejectionReason || "No reason provided";
+                  const shouldTruncateReason = reasonText.length > 50;
+                  
+                  return (
+                    <div key={req.id} className="requirement-item-card">
+                      <div className="requirement-item-header">
+                        <div className="requirement-item-title">
+                          <FileIcon className="file-type-icon" />
+                          <div className="requirement-item-info">
+                            <span className="requirement-type-badge">{req.requirementType || "N/A"}</span>
+                            <span className="requirement-file-name">{req.fileName || "N/A"}</span>
+                            {req.fileSize && (
+                              <span className="requirement-file-size">{formatFileSize(req.fileSize)}</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="requirement-item-actions">
+                          {req.archiveURL && (
+                            <>
+                              <button
+                                type="button"
+                                className="action-btn view-btn"
+                                onClick={() => window.open(req.archiveURL, '_blank', 'noopener,noreferrer')}
+                                title="View file"
+                              >
+                                <IoOpenOutline />
+                              </button>
+                              <button
+                                type="button"
+                                className="action-btn download-btn"
+                                onClick={() => handleDownloadFile(req.archiveURL, req.fileName)}
+                                title="Download file"
+                              >
+                                <IoDownloadOutline />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      
+                      <div className="requirement-item-details">
+                        <div className="detail-row">
+                          <span className="detail-label">
+                            <IoCalendarOutline />
+                            Uploaded At:
+                          </span>
+                          <span className="detail-value">{formatDateTime(req.originalUploadedAt)}</span>
+                        </div>
+                        <div className="detail-row">
+                          <span className="detail-label">
+                            <IoCalendarOutline />
+                            Rejected At:
+                          </span>
+                          <span className="detail-value">{formatDateTime(req.rejectedAt)}</span>
+                        </div>
+                        <div className="detail-row">
+                          <span className="detail-label">Rejected By:</span>
+                          <span className="detail-value rejected-by-badge">{req.rejectedBy || "N/A"}</span>
+                        </div>
+                        <div className="detail-row reason-row">
+                          <span className="detail-label">Rejection Reason:</span>
+                          <div className="reason-content">
+                            {shouldTruncateReason ? (
+                              <>
+                                <span className={`rejection-reason-text ${isReasonExpanded ? 'expanded' : ''}`}>
+                                  {isReasonExpanded ? reasonText : reasonText.substring(0, 50) + '...'}
+                                </span>
+                                <button
+                                  type="button"
+                                  className="expand-reason-btn"
+                                  onClick={() => setExpandedReasonId(isReasonExpanded ? null : req.id)}
+                                  title={isReasonExpanded ? "Collapse reason" : "Expand reason"}
+                                >
+                                  {isReasonExpanded ? <IoChevronUpOutline /> : <IoChevronDownOutline />}
+                                </button>
+                              </>
+                            ) : (
+                              <span className="rejection-reason-text">{reasonText}</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            
+            <div className="requirement-group-modal-footer">
+              <button
+                type="button"
+                className="modal-close-button"
+                onClick={() => setSelectedRequirementGroup(null)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
       <ToastContainer toasts={toasts} removeToast={removeToast} />
     </div>
   );

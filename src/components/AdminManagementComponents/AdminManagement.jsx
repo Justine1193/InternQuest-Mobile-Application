@@ -29,6 +29,7 @@ import {
   canCreateAccounts,
   getAdminCollegeCode,
   ROLES,
+  hasAnyRole,
 } from "../../utils/auth";
 import {
   loadColleges,
@@ -250,10 +251,10 @@ const AdminManagement = () => {
 
       // Only admin can see admin/coordinator accounts
       // Coordinators and advisers should NOT see admin/coordinator accounts
-      if (currentRole !== "admin" && currentRole !== "super_admin") {
+      if (!hasAnyRole([ROLES.SUPER_ADMIN])) {
         // Filter out admin and coordinator accounts (support legacy super_admin during migration)
         adminsList = adminsList.filter((admin) => {
-          // Hide admin and coordinator accounts
+          // Hide admin and coordinator accounts for non-admin users
           if (
             admin.role === "admin" ||
             admin.role === "super_admin" ||
@@ -262,9 +263,14 @@ const AdminManagement = () => {
             return false;
           }
 
-          // Only show advisers from their college (for coordinators)
+          // For coordinators: Only show advisers from their college
           if (isCoordinator && adminCollegeCode && admin.role === "adviser") {
-            // 1) Prefer explicit creator college (for newly created accounts)
+            // Check 1: Direct college_code match
+            if (admin.college_code === adminCollegeCode) {
+              return true;
+            }
+
+            // Check 2: createdByCollegeCode match (for newly created accounts)
             if (
               admin.createdByCollegeCode &&
               admin.createdByCollegeCode === adminCollegeCode
@@ -272,42 +278,36 @@ const AdminManagement = () => {
               return true;
             }
 
-            // 2) Fallback: check if their sections contain programs from coordinator's college
-            // If we don't have program-to-college mapping yet, don't try to infer; show adviser
-            if (
-              !programToCollegeMap ||
-              Object.keys(programToCollegeMap).length === 0
-            ) {
-              return true;
-            }
-
-            const adminSections =
-              admin.sections || (admin.section ? [admin.section] : []);
-            if (adminSections.length === 0) {
-              // No sections: we already handled createdByCollegeCode above.
-              // Without sections, we can't infer college; safest is to hide.
-              return false;
-            }
-
-            // Check if any section's program belongs to coordinator's college
-            for (const section of adminSections) {
-              const programCode = extractProgramCodeFromSection(section);
-              if (programCode) {
-                const programCollegeCode = programToCollegeMap[programCode];
-                if (programCollegeCode === adminCollegeCode) {
-                  return true; // Found a matching program
+            // Check 3: Check sections/programs mapping (only if mapping is loaded)
+            if (programToCollegeMap && Object.keys(programToCollegeMap).length > 0) {
+              const adminSections =
+                admin.sections || (admin.section ? [admin.section] : []);
+              
+              if (adminSections.length > 0) {
+                // Check if any section's program belongs to coordinator's college
+                for (const section of adminSections) {
+                  const programCode = extractProgramCodeFromSection(section);
+                  if (programCode) {
+                    const programCollegeCode = programToCollegeMap[programCode];
+                    if (programCollegeCode === adminCollegeCode) {
+                      return true; // Found a matching program
+                    }
+                  }
                 }
               }
             }
-            return false; // No matching programs found
+
+            // If none of the checks passed, hide this adviser
+            return false;
           }
 
-          // For advisers, they shouldn't see any other accounts
+          // For advisers: they shouldn't see any other accounts
           if (currentRole === "adviser") {
             return false;
           }
 
-          return true;
+          // Default: hide for non-admin roles
+          return false;
         });
       }
 

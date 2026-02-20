@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   IoCloseOutline,
   IoBusinessOutline,
@@ -17,6 +17,13 @@ import {
   IoTimeOutline,
 } from "react-icons/io5";
 import { checkMoaExpiration } from "../../../utils/moaUtils";
+import {
+  getAdminRole,
+  getAdminCollegeCode,
+  ROLES,
+  hasAnyRole,
+} from "../../../utils/auth";
+import { loadColleges } from "../../../utils/collegeUtils";
 import "./CompanyDetailModal.css";
 
 const CompanyDetailModal = ({
@@ -27,6 +34,70 @@ const CompanyDetailModal = ({
   onEdit,
   onRestore,
 }) => {
+  const [adminCollegeName, setAdminCollegeName] = useState(null);
+
+  // Load admin's college name if they are coordinator/adviser
+  useEffect(() => {
+    const loadAdminCollege = async () => {
+      const currentRole = getAdminRole();
+      if (
+        hasAnyRole([ROLES.COORDINATOR, ROLES.ADVISER]) &&
+        !hasAnyRole([ROLES.SUPER_ADMIN])
+      ) {
+        const adminCollegeCode = getAdminCollegeCode();
+        if (adminCollegeCode) {
+          try {
+            const colleges = await loadColleges();
+            const college = colleges.find(
+              (c) => c.college_code === adminCollegeCode
+            );
+            if (college) {
+              setAdminCollegeName(college.college_name);
+            } else {
+              setAdminCollegeName(null);
+            }
+          } catch (error) {
+            console.error("Error loading colleges:", error);
+            setAdminCollegeName(null);
+          }
+        } else {
+          setAdminCollegeName(null);
+        }
+      } else {
+        setAdminCollegeName(null);
+      }
+    };
+
+    if (open && company) {
+      loadAdminCollege();
+    }
+  }, [open, company]);
+
+  // Determine if "Created By" should be visible
+  const shouldShowCreatedBy = () => {
+    const currentRole = getAdminRole();
+    
+    // Admin can see all
+    if (hasAnyRole([ROLES.SUPER_ADMIN])) {
+      return true;
+    }
+
+    // Coordinator/Adviser can only see if company is endorsed by their college
+    if (hasAnyRole([ROLES.COORDINATOR, ROLES.ADVISER])) {
+      if (!company.endorsedByCollege || !adminCollegeName) {
+        return false;
+      }
+      // Compare case-insensitively
+      return (
+        company.endorsedByCollege.trim().toLowerCase() ===
+        adminCollegeName.trim().toLowerCase()
+      );
+    }
+
+    // Other roles cannot see
+    return false;
+  };
+
   if (!open || !company) return null;
 
   const formatDate = (dateString) => {
@@ -179,35 +250,11 @@ const CompanyDetailModal = ({
             </p>
           </div>
 
-          {/* Contact Information */}
+          {/* Contact Information (company-level) */}
           <div className="detail-section">
             <h3 className="detail-section-title">Contact Information</h3>
+            <p className="detail-section-desc">Company address, email, and website</p>
             <div className="detail-grid">
-              <div className="detail-item">
-                <IoPersonOutline className="detail-item-icon" />
-                <div className="detail-item-content">
-                  <span className="detail-item-label">Name</span>
-                  <span className="detail-item-value">
-                    {company.contactPersonName || <span className="empty-value">Not set</span>}
-                  </span>
-                </div>
-              </div>
-              <div className="detail-item">
-                <IoCallOutline className="detail-item-icon" />
-                <div className="detail-item-content">
-                  <span className="detail-item-label">Contact Number</span>
-                  {company.contactPersonPhone || company.companyContactNumber ? (
-                    <a
-                      href={`tel:${company.contactPersonPhone || company.companyContactNumber}`}
-                      className="detail-item-value link"
-                    >
-                      {company.contactPersonPhone || company.companyContactNumber}
-                    </a>
-                  ) : (
-                    <span className="detail-item-value empty-value">Not set</span>
-                  )}
-                </div>
-              </div>
               <div className="detail-item">
                 <IoLocationOutline className="detail-item-icon" />
                 <div className="detail-item-content">
@@ -273,12 +320,27 @@ const CompanyDetailModal = ({
                   </div>
                 </div>
               )}
+              {company.createdBy && shouldShowCreatedBy() && (
+                <div className="detail-item">
+                  <IoPersonOutline className="detail-item-icon" />
+                  <div className="detail-item-content">
+                    <span className="detail-item-label">Created By</span>
+                    <span className="detail-item-value">
+                      {company.createdBy.username || "Unknown"}
+                      {company.createdBy.role && (
+                        <span className="created-by-role"> ({company.createdBy.role})</span>
+                      )}
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
           {/* Contact Person Information */}
           <div className="detail-section">
-            <h3 className="detail-section-title">Contact Person</h3>
+            <h3 className="detail-section-title">Contact Person Details</h3>
+            <p className="detail-section-desc">Representative name, email, and phone</p>
             <div className="detail-grid">
               <div className="detail-item">
                 <IoPersonOutline className="detail-item-icon" />

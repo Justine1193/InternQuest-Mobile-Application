@@ -173,9 +173,16 @@
   font-size: 1.1rem;
   font-weight: 600;
   color: #1976d2;
-  margin-bottom: 1rem;
+  margin-bottom: 0.35rem;
   padding-bottom: 0.5rem;
   border-bottom: 2px solid #e3f2fd;
+}
+
+.detail-section-desc {
+  font-size: 0.85rem;
+  color: #6b7280;
+  margin: 0 0 0.75rem 0;
+  line-height: 1.4;
 }
 
 .detail-section-icon {
@@ -241,6 +248,13 @@
 .detail-item-value.link:hover {
   color: #1565c0;
   text-decoration: underline;
+}
+
+.created-by-role {
+  color: #6b7280;
+  font-size: 0.85em;
+  font-weight: 500;
+  margin-left: 0.25rem;
 }
 
 .detail-item-subvalue {

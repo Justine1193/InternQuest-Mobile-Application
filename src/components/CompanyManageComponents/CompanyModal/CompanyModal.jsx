@@ -541,6 +541,23 @@ function CompanyModal({
           </div>
 
           <div className="form-group">
+            <label htmlFor="address">
+              <span className="label-text">Address</span>
+              <span className="required-asterisk">*</span>
+            </label>
+            <input
+              id="address"
+              type="text"
+              name="address"
+              value={formData.address}
+              onChange={handleInputChange}
+              placeholder="e.g., 123 Business St., City, Country"
+              className="form-input"
+              required
+            />
+          </div>
+
+          <div className="form-group">
             <label htmlFor="endorsedByCollege">
               <span className="label-text">Endorsed by College</span>
               <span className="required-asterisk">*</span>
@@ -681,33 +698,16 @@ function CompanyModal({
               <div className="skills-limit">{fields.length}/5 fields added</div>
             </div>
           </div>
-          {/* Contact Information Section */}
+          {/* Contact Person & Email Section */}
           <div className="form-section-divider"></div>
           <div className="form-section-header">
-            <h3 className="form-section-title">Contact Information</h3>
-            <p className="form-section-subtitle">Company's primary contact details</p>
-          </div>
-          
-          <div className="form-group">
-            <label htmlFor="address">
-              <span className="label-text">Address</span>
-              <span className="required-asterisk">*</span>
-            </label>
-            <input
-              id="address"
-              type="text"
-              name="address"
-              value={formData.address}
-              onChange={handleInputChange}
-              placeholder="e.g., 123 Business St., City, Country"
-              className="form-input"
-              required
-            />
+            <h3 className="form-section-title">Contact Person Information</h3>
+            <p className="form-section-subtitle">Company email (required) and representative details</p>
           </div>
           
           <div className="form-group">
             <label htmlFor="email">
-              <span className="label-text">Email</span>
+              <span className="label-text">Company Email</span>
               <span className="required-asterisk">*</span>
             </label>
             <input
@@ -728,13 +728,7 @@ function CompanyModal({
                 <span className="feedback-success">✓ Valid email address</span>
               )}
             </div>
-            <p className="field-hint">This email will be used for both company and contact person communication</p>
-          </div>
-          {/* Contact Person Section */}
-          <div className="form-section-divider"></div>
-          <div className="form-section-header">
-            <h3 className="form-section-title">Contact Person Information</h3>
-            <p className="form-section-subtitle">Optional contact details for the company representative</p>
+            <p className="field-hint">Primary company email for official correspondence</p>
           </div>
           
           <div className="contact-person-grid">
@@ -1044,7 +1038,7 @@ function CompanyModal({
                   moaStartDate: "",
                   modeOfWork: "",
                   contactPersonName: "",
-                  contactPersonTitle: "",
+                  contactPersonEmail: "",
                   contactPersonPhone: "",
                 });
                 setSkills([]);

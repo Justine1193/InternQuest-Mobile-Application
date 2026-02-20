@@ -37,6 +37,7 @@ import {
   addDoc,
   updateDoc,
   doc,
+  where,
 } from "firebase/firestore";
 import { ref, update as updateRealtime } from "firebase/database";
 import { auth, db, realtimeDb } from "../../../firebase.js";
@@ -695,10 +696,66 @@ const Dashboard = () => {
       let successCount = 0;
       let errorCount = 0;
       const importErrors = [];
+      
+      // Track which company names/emails have been imported in this batch (for duplicate detection within CSV)
+      const importedInBatch = {
+        companyNames: new Set(),
+        companyEmails: new Set(),
+      };
 
       for (let i = 0; i < previewCompanies.length; i++) {
         try {
           const company = previewCompanies[i];
+          
+          // Check for duplicates within the CSV file itself
+          const companyNameLower = (company.companyName || "").trim().toLowerCase();
+          const companyEmailLower = (company.email || "").trim().toLowerCase();
+          
+          if (companyNameLower) {
+            if (importedInBatch.companyNames.has(companyNameLower)) {
+              throw new Error(
+                `Duplicate company name in CSV file - "${company.companyName}" already imported earlier in this batch`
+              );
+            }
+          }
+          
+          if (companyEmailLower) {
+            if (importedInBatch.companyEmails.has(companyEmailLower)) {
+              throw new Error(
+                `Duplicate company email in CSV file - "${company.email}" already imported earlier in this batch`
+              );
+            }
+          }
+          
+          // Check if company name or email already exists in database (case-insensitive)
+          // Use existing allCompanies state if available, otherwise fetch once
+          const companiesToCheck = allCompanies.length > 0 
+            ? allCompanies 
+            : (await getDocs(collection(db, "companies"))).docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          
+          if (companyNameLower) {
+            const existingByName = companiesToCheck.find(
+              (comp) => comp.companyName?.toLowerCase() === companyNameLower
+            );
+            
+            if (existingByName) {
+              throw new Error(
+                `Company name "${company.companyName}" already exists in database`
+              );
+            }
+          }
+          
+          if (companyEmailLower) {
+            const existingByEmail = companiesToCheck.find(
+              (comp) => comp.companyEmail?.toLowerCase() === companyEmailLower
+            );
+            
+            if (existingByEmail) {
+              throw new Error(
+                `Company email "${company.email}" already exists in database`
+              );
+            }
+          }
 
           // Compute MOA expiration from start date + validity years when provided
           let moaStartDate = company.moaStartDate || "";
@@ -754,6 +811,14 @@ const Dashboard = () => {
           }
 
           const docRef = await addDoc(collection(db, "companies"), newCompany);
+          
+          // Track this company as imported in this batch
+          if (companyNameLower) {
+            importedInBatch.companyNames.add(companyNameLower);
+          }
+          if (companyEmailLower) {
+            importedInBatch.companyEmails.add(companyEmailLower);
+          }
 
           // Sync to Realtime DB
           await updateRealtime(ref(realtimeDb, `companies/${docRef.id}`), {

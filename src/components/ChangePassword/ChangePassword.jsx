@@ -1,6 +1,6 @@
 /**
- * SecuritySettings - Component for managing security settings,
- * password change, and admin password migration
+ * ChangePassword - Component for changing account password
+ * and admin password migration
  */
 
 import React, { useState, useEffect } from "react";
@@ -19,9 +19,9 @@ import { IoShieldCheckmarkOutline, IoLockClosedOutline, IoKeyOutline } from "rea
 import Navbar from "../Navbar/Navbar.jsx";
 import { getAdminRole, clearAdminSession } from "../../utils/auth";
 import LoadingSpinner from "../LoadingSpinner.jsx";
-import "./SecuritySettings.css";
+import "./ChangePassword.css";
 
-const SecuritySettings = () => {
+const ChangePassword = () => {
   const navigate = useNavigate();
   const currentRole = getAdminRole();
   const [isLoading, setIsLoading] = useState(false);
@@ -256,18 +256,18 @@ const SecuritySettings = () => {
   };
 
   return (
-    <div className="security-settings-page">
+    <div className="change-password-page">
       <LoadingSpinner isLoading={isLoading} message="Processing request..." />
       <Navbar onLogout={handleLogout} />
-      <div className="security-settings-container">
-        <div className="security-settings-header">
-          <div className="security-settings-header-content">
-            <div className="security-settings-header-icon-wrapper" aria-hidden="true">
-              <IoShieldCheckmarkOutline className="security-settings-header-icon" />
+      <div className="change-password-container">
+        <div className="change-password-header">
+          <div className="change-password-header-content">
+            <div className="change-password-header-icon-wrapper" aria-hidden="true">
+              <IoShieldCheckmarkOutline className="change-password-header-icon" />
             </div>
             <div>
               <h1>Change Password</h1>
-              <p className="security-settings-subtitle">
+              <p className="change-password-subtitle">
                 Manage your account password settings
               </p>
             </div>
@@ -292,7 +292,7 @@ const SecuritySettings = () => {
           </div>
         )}
 
-        <div className="security-settings-content">
+        <div className="change-password-content">
           {/* Admin password migration warning (legacy admin only) */}
           {isAdmin && needsAdminMigration && (
             <div className="security-section">
@@ -502,4 +502,4 @@ const SecuritySettings = () => {
   );
 };
 
-export default SecuritySettings;
+export default ChangePassword;

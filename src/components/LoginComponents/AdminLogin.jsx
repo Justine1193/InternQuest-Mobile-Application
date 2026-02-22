@@ -342,21 +342,10 @@ const AdminLogin = () => {
         mustChangePassword: adminData.mustChangePassword || false,
       });
 
-      if (adminData.mustChangePassword) {
-        navigate("/change-password", {
-          replace: true,
-          state: {
-            adminId: adminDoc.id,
-            username: trimmedUsername,
-            fromLogin: true,
-          },
-        });
+      if (adminRole === "adviser" || adminRole === ROLES.ADVISER) {
+        navigate("/StudentDashboard", { replace: true });
       } else {
-        if (adminRole === "adviser" || adminRole === ROLES.ADVISER) {
-          navigate("/StudentDashboard", { replace: true });
-        } else {
-          navigate("/dashboard", { replace: true });
-        }
+        navigate("/dashboard", { replace: true });
       }
     } catch (err) {
       console.error("Login error:", err);

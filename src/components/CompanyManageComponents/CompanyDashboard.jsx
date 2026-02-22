@@ -1,10 +1,5 @@
 /**
- * CompanyDashboard - Admin dashboard for managing companies
- * Fetches and displays company/student data, supports search, filter, selection, notification, and CRUD operations.
- *
- * @component
- * @example
- * <CompanyDashboard />
+ * Company management dashboard: list, search, filter, CRUD, MOA, import/export.
  */
 
 import React, { useState, useRef, useEffect, useMemo } from "react";
@@ -71,10 +66,8 @@ import Footer from "../Footer/Footer.jsx";
 import { getAdminRole, ROLES, isAdviserOnly, getAdminSession, hasAnyRole, getAdminCollegeCode } from "../../utils/auth.js";
 import { loadColleges } from "../../utils/collegeUtils.js";
 
-// --- Company Dashboard Main Component ---
 const Dashboard = () => {
   const isAdviser = isAdviserOnly();
-  // --- State declarations ---
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [selectedCompany, setSelectedCompany] = useState(null);
@@ -88,7 +81,7 @@ const Dashboard = () => {
     address: "",
     email: "",
     skills: "",
-    moa: true, // MOA is now required
+    moa: true,
     moaValidityYears: "",
     moaStartDate: "",
     moaFileUrl: "",
@@ -105,7 +98,7 @@ const Dashboard = () => {
   const [error, setError] = useState(null);
   const [selectedItems, setSelectedItems] = useState([]);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [allCompanies, setAllCompanies] = useState([]); // Raw companies from Firestore
+  const [allCompanies, setAllCompanies] = useState([]);
   const [tableData, setTableData] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);

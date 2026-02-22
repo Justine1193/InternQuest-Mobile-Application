@@ -1,6 +1,5 @@
 /**
- * Activity Log Viewer Component
- * Displays admin activity logs for audit trail
+ * Activity Log Viewer – displays admin activity logs for audit trail.
  */
 
 import React, { useState, useEffect } from "react";
@@ -12,18 +11,8 @@ import {
   getDocs,
   startAfter,
 } from "firebase/firestore";
-import { db } from "../../../firebase.js";
-import { useToast } from "../../hooks/useToast.js";
-import ToastContainer from "../Toast/ToastContainer.jsx";
-import LoadingSpinner from "../LoadingSpinner.jsx";
-import logger from "../../utils/logger.js";
-import Navbar from "../Navbar/Navbar.jsx";
-import Footer from "../Footer/Footer.jsx";
 import { signOut } from "firebase/auth";
-import { auth } from "../../../firebase.js";
-import { clearAdminSession, ROLES } from "../../utils/auth";
 import { useNavigate } from "react-router-dom";
-import "./ActivityLogViewer.css";
 import {
   IoTimeOutline,
   IoPersonOutline,
@@ -34,13 +23,20 @@ import {
   IoStatsChartOutline,
   IoCalendarOutline,
 } from "react-icons/io5";
+import { db, auth } from "../../../firebase";
+import { useToast } from "../../hooks/useToast.js";
+import { clearAdminSession, ROLES } from "../../utils/auth";
+import logger from "../../utils/logger.js";
+import ToastContainer from "../Toast/ToastContainer.jsx";
+import LoadingSpinner from "../LoadingSpinner.jsx";
+import Navbar from "../Navbar/Navbar.jsx";
+import Footer from "../Footer/Footer.jsx";
+import "./ActivityLogViewer.css";
 
 const PAGE_SIZE = 20;
 
-// Format role name for display (normalizes legacy 'super_admin' to 'admin')
 const getRoleDisplayName = (role) => {
   if (!role) return "unknown";
-  // Normalize legacy 'super_admin' to 'admin' for display
   const normalizedRole = role === "super_admin" ? "admin" : role;
   switch (normalizedRole) {
     case ROLES.SUPER_ADMIN:
@@ -62,7 +58,7 @@ const ActivityLogViewer = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [lastDoc, setLastDoc] = useState(null);
   const [hasMore, setHasMore] = useState(true);
-  const [filter, setFilter] = useState("all"); // all, success, error
+  const [filter, setFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const { toasts, removeToast, error: showError } = useToast();
@@ -76,8 +72,6 @@ const ActivityLogViewer = () => {
   const fetchActivities = async (loadMore = false) => {
     try {
       setIsLoading(true);
-
-      // Check if user is authenticated
       if (!auth.currentUser) {
         showError("You must be logged in to view activity logs.");
         setIsLoading(false);
@@ -87,31 +81,24 @@ const ActivityLogViewer = () => {
       let q = query(
         collection(db, "activity_logs"),
         orderBy("timestamp", "desc"),
-        limit(20)
+        limit(PAGE_SIZE)
       );
-
       if (loadMore && lastDoc) {
         q = query(
           collection(db, "activity_logs"),
           orderBy("timestamp", "desc"),
           startAfter(lastDoc),
-          limit(20)
+          limit(PAGE_SIZE)
         );
       }
 
       const snapshot = await getDocs(q);
       const newActivities = snapshot.docs.map((doc) => {
         const data = doc.data();
-        return {
-          id: doc.id,
-          ...data,
-          // Ensure timestamp is available
-          timestamp:
-            data.timestamp ||
-            (data.createdAt
-              ? { toDate: () => new Date(data.createdAt) }
-              : null),
-        };
+        const ts =
+          data.timestamp ??
+          (data.createdAt ? { toDate: () => new Date(data.createdAt) } : null);
+        return { id: doc.id, ...data, timestamp: ts };
       });
 
       if (loadMore) {
@@ -120,16 +107,13 @@ const ActivityLogViewer = () => {
         setActivities(newActivities);
       }
 
-      if (snapshot.docs.length < 20) {
-        setHasMore(false);
-      } else {
-        setLastDoc(snapshot.docs[snapshot.docs.length - 1]);
-        setHasMore(true);
+      const docCount = snapshot.docs.length;
+      setHasMore(docCount >= PAGE_SIZE);
+      if (docCount >= PAGE_SIZE) {
+        setLastDoc(snapshot.docs[docCount - 1]);
       }
     } catch (err) {
       logger.error("Error fetching activity logs:", err);
-
-      // Check if it's a permissions error or index error
       if (err.code === "permission-denied") {
         showError(
           "Permission denied. Please make sure you're logged in and have access to view activity logs."
@@ -168,12 +152,11 @@ const ActivityLogViewer = () => {
     }
   };
 
-  const formatAction = (action) => {
-    return action
+  const formatAction = (action) =>
+    (action || "")
       .split("_")
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
       .join(" ");
-  };
 
   const formatRelativeTime = (timestamp) => {
     if (!timestamp) return "Unknown time";
@@ -183,15 +166,11 @@ const ActivityLogViewer = () => {
         date = timestamp.toDate();
       } else if (timestamp instanceof Date) {
         date = timestamp;
-      } else if (
-        typeof timestamp === "string" ||
-        typeof timestamp === "number"
-      ) {
+      } else if (typeof timestamp === "string" || typeof timestamp === "number") {
         date = new Date(timestamp);
       } else {
         return "Unknown time";
       }
-
       if (isNaN(date.getTime())) return "Unknown time";
 
       const now = new Date();
@@ -217,7 +196,7 @@ const ActivityLogViewer = () => {
         hour: "2-digit",
         minute: "2-digit",
       });
-    } catch (e) {
+    } catch {
       return "Unknown time";
     }
   };
@@ -230,33 +209,27 @@ const ActivityLogViewer = () => {
   };
 
   const filteredActivities = activities.filter((activity) => {
-    // Filter by status
     if (filter !== "all" && activity.status !== filter) return false;
+    if (!searchQuery.trim()) return true;
 
-    // Filter by search query
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      const action = formatAction(activity.action || "").toLowerCase();
-      const entityType = (activity.entityType || "").toLowerCase();
-      const adminUsername = (activity.adminUsername || "").toLowerCase();
-      const adminRole = (activity.adminRole || "").toLowerCase();
-      const entityId = (activity.entityId || "").toLowerCase();
+    const searchLower = searchQuery.toLowerCase();
+    const action = formatAction(activity.action).toLowerCase();
+    const entityType = (activity.entityType || "").toLowerCase();
+    const adminUsername = (activity.adminUsername || "").toLowerCase();
+    const adminRole = (activity.adminRole || "").toLowerCase();
+    const entityId = (activity.entityId || "").toLowerCase();
 
-      return (
-        action.includes(query) ||
-        entityType.includes(query) ||
-        adminUsername.includes(query) ||
-        adminRole.includes(query) ||
-        entityId.includes(query) ||
-        (activity.details &&
-          JSON.stringify(activity.details).toLowerCase().includes(query))
-      );
-    }
-
-    return true;
+    return (
+      action.includes(searchLower) ||
+      entityType.includes(searchLower) ||
+      adminUsername.includes(searchLower) ||
+      adminRole.includes(searchLower) ||
+      entityId.includes(searchLower) ||
+      (activity.details &&
+        JSON.stringify(activity.details).toLowerCase().includes(searchLower))
+    );
   });
 
-  // Reset pagination when filters/search change
   useEffect(() => {
     setCurrentPage(1);
   }, [filter, searchQuery]);
@@ -268,15 +241,13 @@ const ActivityLogViewer = () => {
   const pageStart = (currentPage - 1) * PAGE_SIZE;
   const pageEnd = pageStart + PAGE_SIZE;
   const visibleActivities = filteredActivities.slice(pageStart, pageEnd);
+  const stats = getStats();
 
   const handleNextPage = async () => {
-    // If we already have enough items loaded for the next page, just paginate locally
     if (currentPage < totalPages) {
       setCurrentPage((p) => p + 1);
       return;
     }
-
-    // Otherwise, fetch more from Firestore if available
     if (hasMore && !isLoading) {
       await fetchActivities(true);
       setCurrentPage((p) => p + 1);
@@ -288,24 +259,19 @@ const ActivityLogViewer = () => {
   };
 
   const getPageButtons = () => {
-    // Show a compact pager: 1 ... (current-1) current (current+1) ... last
     const buttons = [];
     const last = totalPages;
-    const push = (n) => buttons.push(n);
-
     if (last <= 7) {
-      for (let i = 1; i <= last; i++) push(i);
+      for (let i = 1; i <= last; i++) buttons.push(i);
       return buttons;
     }
-
-    push(1);
-    if (currentPage > 3) push("ellipsis-left");
+    buttons.push(1);
+    if (currentPage > 3) buttons.push("ellipsis-left");
     const start = Math.max(2, currentPage - 1);
     const end = Math.min(last - 1, currentPage + 1);
-    for (let i = start; i <= end; i++) push(i);
-    if (currentPage < last - 2) push("ellipsis-right");
-    push(last);
-
+    for (let i = start; i <= end; i++) buttons.push(i);
+    if (currentPage < last - 2) buttons.push("ellipsis-right");
+    buttons.push(last);
     return buttons;
   };
 
@@ -313,7 +279,6 @@ const ActivityLogViewer = () => {
     <div className="activity-log-container">
       <Navbar onLogout={handleLogout} />
       <div className="activity-log-content">
-        {/* Header Section */}
         <div className="activity-log-header-section">
           <div className="activity-header-content">
             <div className="activity-header-icon-wrapper">
@@ -328,45 +293,38 @@ const ActivityLogViewer = () => {
           </div>
         </div>
 
-        {/* Statistics Cards */}
-        {(() => {
-          const stats = getStats();
-          return (
-            <div className="activity-stats-wrapper">
-              <div className="activity-stats">
-                <div className="activity-stat-card stat-total">
-                  <div className="stat-icon-wrapper">
-                    <IoInformationCircle className="stat-icon" />
-                  </div>
-                  <div className="stat-content">
-                    <div className="stat-value">{stats.total}</div>
-                    <div className="stat-label">Total Activities</div>
-                  </div>
-                </div>
-                <div className="activity-stat-card stat-success">
-                  <div className="stat-icon-wrapper">
-                    <IoCheckmarkCircle className="stat-icon" />
-                  </div>
-                  <div className="stat-content">
-                    <div className="stat-value">{stats.success}</div>
-                    <div className="stat-label">Successful</div>
-                  </div>
-                </div>
-                <div className="activity-stat-card stat-error">
-                  <div className="stat-icon-wrapper">
-                    <IoCloseCircle className="stat-icon" />
-                  </div>
-                  <div className="stat-content">
-                    <div className="stat-value">{stats.errors}</div>
-                    <div className="stat-label">Errors</div>
-                  </div>
-                </div>
+        <div className="activity-stats-wrapper">
+          <div className="activity-stats">
+            <div className="activity-stat-card stat-total">
+              <div className="stat-icon-wrapper">
+                <IoInformationCircle className="stat-icon" />
+              </div>
+              <div className="stat-content">
+                <div className="stat-value">{stats.total}</div>
+                <div className="stat-label">Total Activities</div>
               </div>
             </div>
-          );
-        })()}
+            <div className="activity-stat-card stat-success">
+              <div className="stat-icon-wrapper">
+                <IoCheckmarkCircle className="stat-icon" />
+              </div>
+              <div className="stat-content">
+                <div className="stat-value">{stats.success}</div>
+                <div className="stat-label">Successful</div>
+              </div>
+            </div>
+            <div className="activity-stat-card stat-error">
+              <div className="stat-icon-wrapper">
+                <IoCloseCircle className="stat-icon" />
+              </div>
+              <div className="stat-content">
+                <div className="stat-value">{stats.errors}</div>
+                <div className="stat-label">Errors</div>
+              </div>
+            </div>
+          </div>
+        </div>
 
-        {/* Search and Filters */}
         <div className="activity-controls-section">
           <div className="activity-search-wrapper">
             <IoSearchOutline className="search-icon" />
@@ -437,9 +395,7 @@ const ActivityLogViewer = () => {
             visibleActivities.map((activity) => {
               const timestamp = activity.createdAt
                 ? new Date(activity.createdAt)
-                : activity.timestamp
-                ? activity.timestamp.toDate()
-                : null;
+                : activity.timestamp?.toDate?.() ?? null;
 
               return (
                 <div
@@ -465,7 +421,7 @@ const ActivityLogViewer = () => {
                       </div>
                       <span className="activity-time">
                         <IoTimeOutline />
-                        {formatRelativeTime(timestamp || activity.timestamp)}
+                        {formatRelativeTime(timestamp ?? activity.timestamp)}
                       </span>
                     </div>
                     <div className="activity-details">
@@ -522,7 +478,6 @@ const ActivityLogViewer = () => {
           )}
         </div>
 
-        {/* Pagination */}
         {filteredActivities.length > 0 && (
           <div className="activity-pagination">
             <div className="activity-pagination-left">
@@ -540,7 +495,6 @@ const ActivityLogViewer = () => {
                 </span>
               )}
             </div>
-
             <div
               className="activity-pagination-controls"
               role="navigation"
@@ -555,7 +509,6 @@ const ActivityLogViewer = () => {
               >
                 ‹
               </button>
-
               <div className="activity-page-numbers" aria-label="Page numbers">
                 {getPageButtons().map((item) => {
                   if (typeof item === "string" && item.startsWith("ellipsis")) {
@@ -587,7 +540,6 @@ const ActivityLogViewer = () => {
                   );
                 })}
               </div>
-
               <button
                 type="button"
                 className="activity-page-btn"

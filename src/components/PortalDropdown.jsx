@@ -1,6 +1,5 @@
 /**
- * PortalDropdown - A portal-based dropdown component that positions itself relative to an anchor element
- * Uses ReactDOM.createPortal to render the dropdown outside the normal DOM hierarchy
+ * Portal dropdown positioned under an anchor; closes on outside click.
  */
 
 import React, { useEffect, useRef, useState } from "react";
@@ -15,7 +14,6 @@ const PortalDropdown = ({ anchorRef, open, children, onClose }) => {
   const dropdownRef = useRef();
   const [position, setPosition] = useState({ top: 0, left: 0 });
 
-  // Update dropdown position when open or anchor position changes
   useEffect(() => {
     if (!open || !anchorRef.current) return;
 
@@ -33,8 +31,6 @@ const PortalDropdown = ({ anchorRef, open, children, onClose }) => {
     };
 
     updatePosition();
-
-    // Update position on scroll and resize
     window.addEventListener("scroll", updatePosition, true);
     window.addEventListener("resize", updatePosition);
 
@@ -44,7 +40,6 @@ const PortalDropdown = ({ anchorRef, open, children, onClose }) => {
     };
   }, [open, anchorRef]);
 
-  // Handle clicks outside dropdown
   useEffect(() => {
     if (!open) return;
 

@@ -1,10 +1,8 @@
 /**
- * FilterDropdown - A component that renders a filter dropdown with various filter options
- * Supports different filter types for companies and students
- * Renders via Portal into document.body so it is not clipped by table or scroll containers.
+ * Filter dropdown (company/student) with portal positioning; applies and resets filters.
  */
 
-import React, { useState, useCallback, useEffect, useLayoutEffect } from "react";
+import React, { useState, useCallback, useLayoutEffect } from "react";
 import ReactDOM from "react-dom";
 import PropTypes from "prop-types";
 import CustomDropdown from "../CustomDropdown.jsx";
@@ -31,15 +29,17 @@ const FilterDropdown = ({
   const [showSkillsDropdown, setShowSkillsDropdown] = useState(false);
   const [position, setPosition] = useState({ top: 0, right: 0 });
 
-  // All skills for company filter (exclude "All" for the suggestion list)
   const skillsList = (skillsFilterOptions || []).filter((s) => s !== "All");
   const filteredSkills = skillsList.filter((skill) =>
     (pendingFilterValues.skills || "")
-      ? skill.toLowerCase().includes((pendingFilterValues.skills || "").trim().toLowerCase())
+      ? skill
+          .toLowerCase()
+          .includes(
+            (pendingFilterValues.skills || "").trim().toLowerCase()
+          )
       : true
   );
 
-  // Position dropdown below anchor when using portal (outside table/scroll)
   const updatePosition = useCallback(() => {
     if (!anchorRef?.current) return;
     const rect = anchorRef.current.getBoundingClientRect();
@@ -60,7 +60,6 @@ const FilterDropdown = ({
     };
   }, [anchorRef, updatePosition]);
 
-  // Filter field suggestions based on input
   const filteredFields = fieldSuggestions.filter(
     (field) =>
       field
@@ -69,7 +68,6 @@ const FilterDropdown = ({
       field !== pendingFilterValues.field
   );
 
-  // Filter section suggestions based on input
   const filteredSections = sectionSuggestions.filter(
     (section) =>
       section
@@ -78,7 +76,6 @@ const FilterDropdown = ({
       section !== pendingFilterValues.section
   );
 
-  // Filter program suggestions based on input
   const filteredPrograms = (programSuggestions || []).filter(
     (program) =>
       program
@@ -87,7 +84,6 @@ const FilterDropdown = ({
       program !== pendingFilterValues.program
   );
 
-  // Handle field input change
   const handleFieldChange = useCallback(
     (e) => {
       setPendingFilterValues((f) => ({ ...f, field: e.target.value }));
@@ -96,7 +92,6 @@ const FilterDropdown = ({
     [setPendingFilterValues]
   );
 
-  // Handle field selection
   const handleFieldSelect = useCallback(
     (field) => {
       setPendingFilterValues((f) => ({ ...f, field }));
@@ -105,7 +100,6 @@ const FilterDropdown = ({
     [setPendingFilterValues]
   );
 
-  // Handle section input change
   const handleSectionChange = useCallback(
     (e) => {
       setPendingFilterValues((f) => ({ ...f, section: e.target.value }));
@@ -114,7 +108,6 @@ const FilterDropdown = ({
     [setPendingFilterValues]
   );
 
-  // Handle section selection
   const handleSectionSelect = useCallback(
     (section) => {
       setPendingFilterValues((f) => ({ ...f, section }));
@@ -123,7 +116,6 @@ const FilterDropdown = ({
     [setPendingFilterValues]
   );
 
-  // Handle program input change
   const handleProgramChange = useCallback(
     (e) => {
       setPendingFilterValues((f) => ({ ...f, program: e.target.value }));
@@ -132,7 +124,6 @@ const FilterDropdown = ({
     [setPendingFilterValues]
   );
 
-  // Handle program selection
   const handleProgramSelect = useCallback(
     (program) => {
       setPendingFilterValues((f) => ({ ...f, program }));
@@ -141,7 +132,6 @@ const FilterDropdown = ({
     [setPendingFilterValues]
   );
 
-  // Handle skills input change (typable)
   const handleSkillsChange = useCallback(
     (e) => {
       setPendingFilterValues((f) => ({ ...f, skills: e.target.value }));
@@ -150,7 +140,6 @@ const FilterDropdown = ({
     [setPendingFilterValues]
   );
 
-  // Handle skills selection from dropdown
   const handleSkillsSelect = useCallback(
     (skill) => {
       setPendingFilterValues((f) => ({ ...f, skills: skill }));
@@ -159,7 +148,6 @@ const FilterDropdown = ({
     [setPendingFilterValues]
   );
 
-  // Handle dropdown value change
   const handleDropdownChange = useCallback(
     (key, value) => {
       setPendingFilterValues((f) => ({
@@ -188,8 +176,7 @@ const FilterDropdown = ({
       }
     >
       <div className="new-filter-dropdown-scroll">
-      {/* Field Input */}
-      <div style={{ position: "relative" }}>
+        <div style={{ position: "relative" }}>
         <label className="new-filter-label" htmlFor="field-input">
           Field:
         </label>
@@ -225,10 +212,9 @@ const FilterDropdown = ({
             ))}
           </div>
         )}
-      </div>
+        </div>
 
-      {/* Skills (company only, below Field) */}
-      {type === "company" && (
+        {type === "company" && (
         <div style={{ position: "relative" }}>
           <label className="new-filter-label" htmlFor="skills-input">
             Skills:
@@ -266,10 +252,9 @@ const FilterDropdown = ({
             </div>
           )}
         </div>
-      )}
+        )}
 
-      {/* Student-specific filters */}
-      {type === "student" && (
+        {type === "student" && (
         <>
           <div style={{ position: "relative" }}>
             <label className="new-filter-label" htmlFor="program-input">
@@ -381,10 +366,9 @@ const FilterDropdown = ({
             />
           </div>
         </>
-      )}
+        )}
 
-      {/* Company-specific filters */}
-      {type === "company" && (
+        {type === "company" && (
         <>
           <div>
             <label className="new-filter-label" htmlFor="mode-dropdown">
@@ -429,10 +413,8 @@ const FilterDropdown = ({
             />
           </div>
         </>
-      )}
-
+        )}
       </div>
-      {/* Action Buttons - always visible at bottom */}
       <div className="filter-actions">
         <button
           className="new-filter-btn"

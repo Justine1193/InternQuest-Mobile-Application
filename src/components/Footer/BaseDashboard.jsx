@@ -68,7 +68,6 @@ const BaseDashboard = ({
         ) : (
           <DashboardOverview stats={overviewStats} />
         )}
-
         <div className="table-section">
           <h2>{title}</h2>
           <SearchBar
@@ -78,7 +77,6 @@ const BaseDashboard = ({
             filterValues={filterValues}
             setFilterValues={setFilterValues}
           />
-
           <div className="table-container">
             <TableComponent
               data={currentItems}
@@ -95,13 +93,11 @@ const BaseDashboard = ({
               setSelectionMode={setSelectionMode}
             />
           </div>
-
           <Pagination
             currentPage={currentPage}
             totalPages={totalPages}
             onPageChange={setCurrentPage}
           />
-
           <div className="table-actions">
             {onAdd && (
               <button className="add-entry table-action-btn" onClick={onAdd}>
@@ -134,7 +130,6 @@ const BaseDashboard = ({
           </div>
         </div>
       </div>
-
       <ConfirmModal
         open={showConfirm}
         message={`Are you sure you want to delete ${selectedItems.length} item(s)?`}

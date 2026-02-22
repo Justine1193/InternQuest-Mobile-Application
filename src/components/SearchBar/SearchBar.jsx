@@ -1,3 +1,7 @@
+/**
+ * Search input with filter dropdown and filter chips.
+ */
+
 import React, { useState, useEffect, useRef } from "react";
 import { FaFilter } from "react-icons/fa";
 import { IoCloseOutline, IoCloseCircle } from "react-icons/io5";
@@ -5,28 +9,51 @@ import "./SearchBar.css";
 import FilterDropdown from "../FilterDropdown/FilterDropdown";
 import { useSuggestionFields } from "../dashboardUtils";
 
-const SearchBar = ({ onSearch, onFilter, type = "company", filterValues = {}, searchInputRef = null, sectionSuggestions = [], programSuggestions = [], endorsedByCollegeOptions = [], skillsFilterOptions = [] }) => {
+const FILTER_LABELS = {
+  field: "Field",
+  modeOfWork: "Mode",
+  moaExpirationStatus: "MOA Status",
+  endorsedByCollege: "Endorsed by College",
+  skills: "Skills",
+  program: "Program",
+  hired: "Hired",
+  blocked: "Blocked",
+  approvedRequirement: "Approved",
+};
+
+const INITIAL_FILTERS = {
+  field: "",
+  modeOfWork: "",
+  moaExpirationStatus: "",
+  endorsedByCollege: "",
+  skills: "",
+  program: "",
+  hired: "",
+  locationPreference: "",
+  approvedRequirement: "",
+  blocked: "",
+};
+
+const SearchBar = ({
+  onSearch,
+  onFilter,
+  type = "company",
+  filterValues = {},
+  searchInputRef = null,
+  sectionSuggestions = [],
+  programSuggestions = [],
+  endorsedByCollegeOptions = [],
+  skillsFilterOptions = [],
+}) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilter, setShowFilter] = useState(false);
   const filterAnchorRef = useRef(null);
-  const [pendingFilterValues, setPendingFilterValues] = useState({
-    field: "",
-    modeOfWork: "",
-    moaExpirationStatus: "",
-    endorsedByCollege: "",
-    skills: "",
-    program: "",
-    hired: "",
-    locationPreference: "",
-    approvedRequirement: "",
-    blocked: "",
-  });
+  const [pendingFilterValues, setPendingFilterValues] = useState(INITIAL_FILTERS);
   const fieldSuggestions = useSuggestionFields();
 
-  // Sync pending filters with active filters
   useEffect(() => {
     if (filterValues) {
-      setPendingFilterValues(prev => ({ ...prev, ...filterValues }));
+      setPendingFilterValues((prev) => ({ ...prev, ...filterValues }));
     }
   }, [filterValues]);
 
@@ -42,32 +69,8 @@ const SearchBar = ({ onSearch, onFilter, type = "company", filterValues = {}, se
   };
 
   const handleFilterReset = () => {
-    const reset = type === "student" 
-      ? {
-          field: "",
-          modeOfWork: "",
-          moaExpirationStatus: "",
-          program: "",
-          section: "",
-          hired: "",
-          locationPreference: "",
-          approvedRequirement: "",
-          blocked: "",
-        }
-      : {
-          field: "",
-          modeOfWork: "",
-          moaExpirationStatus: "",
-          endorsedByCollege: "",
-          skills: "",
-          program: "",
-          hired: "",
-          locationPreference: "",
-          approvedRequirement: "",
-          blocked: "",
-        };
-    setPendingFilterValues(reset);
-    onFilter(reset);
+    setPendingFilterValues(INITIAL_FILTERS);
+    onFilter(INITIAL_FILTERS);
     setShowFilter(false);
   };
 
@@ -76,16 +79,18 @@ const SearchBar = ({ onSearch, onFilter, type = "company", filterValues = {}, se
     onSearch("");
   };
 
-  // Get active filters for display
-  const activeFilters = Object.entries(filterValues || {}).filter(([key, value]) => {
-    if (key === 'locationPreference') return false; // Skip old locationPreference
-    return value && value !== "" && value !== "All";
-  });
+  const activeFilters = Object.entries(filterValues || {}).filter(
+    ([key, value]) => {
+      if (key === "locationPreference") return false;
+      return value && value !== "" && value !== "All";
+    }
+  );
 
   const removeFilter = (filterKey) => {
-    const updated = { ...filterValues, [filterKey]: "" };
-    onFilter(updated);
+    onFilter({ ...filterValues, [filterKey]: "" });
   };
+
+  const getFilterLabel = (key) => FILTER_LABELS[key] ?? key;
 
   return (
     <div className="new-searchbar-wrapper">
@@ -104,7 +109,9 @@ const SearchBar = ({ onSearch, onFilter, type = "company", filterValues = {}, se
           type="text"
           className="new-searchbar-input"
           placeholder={
-            type === "student" ? "Search students... (Ctrl+F)" : "Search companies, location... (Ctrl+F)"
+            type === "student"
+              ? "Search students... (Ctrl+F)"
+              : "Search companies, location... (Ctrl+F)"
           }
           value={searchQuery}
           onChange={handleSearch}
@@ -121,7 +128,9 @@ const SearchBar = ({ onSearch, onFilter, type = "company", filterValues = {}, se
         )}
         <div className="filter-dropdown-container" ref={filterAnchorRef}>
           <button
-            className={`new-searchbar-btn filter-btn ${activeFilters.length > 0 ? 'has-filters' : ''}`}
+            className={`new-searchbar-btn filter-btn ${
+              activeFilters.length > 0 ? "has-filters" : ""
+            }`}
             type="button"
             onClick={() => setShowFilter((prev) => !prev)}
             title="Filter"
@@ -153,15 +162,7 @@ const SearchBar = ({ onSearch, onFilter, type = "company", filterValues = {}, se
           {activeFilters.map(([key, value]) => (
             <span key={key} className="filter-chip">
               <span className="filter-chip-label">
-                {key === 'field' ? 'Field' : 
-                 key === 'modeOfWork' ? 'Mode' :
-                 key === 'moaExpirationStatus' ? 'MOA Status' :
-                 key === 'endorsedByCollege' ? 'Endorsed by College' :
-                 key === 'skills' ? 'Skills' :
-                 key === 'program' ? 'Program' :
-                 key === 'hired' ? 'Hired' :
-                 key === 'blocked' ? 'Blocked' :
-                 key === 'approvedRequirement' ? 'Approved' : key}: {value}
+                {getFilterLabel(key)}: {value}
               </span>
               <button
                 type="button"

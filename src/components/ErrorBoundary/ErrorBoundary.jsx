@@ -1,6 +1,5 @@
 /**
- * Error Boundary Component
- * Catches React errors and displays a fallback UI
+ * Catches React errors and renders a fallback UI.
  */
 
 import React from "react";
@@ -14,22 +13,15 @@ class ErrorBoundary extends React.Component {
     this.state = { hasError: false, error: null, errorInfo: null };
   }
 
-  static getDerivedStateFromError(error) {
+  static getDerivedStateFromError() {
     return { hasError: true };
   }
 
   componentDidCatch(error, errorInfo) {
-    // Log error to console in development
     if (import.meta.env.DEV) {
       console.error("ErrorBoundary caught an error:", error, errorInfo);
     }
-    
-    this.setState({
-      error,
-      errorInfo,
-    });
-
-    // TODO: Send error to error tracking service (e.g., Sentry)
+    this.setState({ error, errorInfo });
   }
 
   handleReset = () => {
@@ -57,7 +49,10 @@ class ErrorBoundary extends React.Component {
               </details>
             )}
             <div className="error-boundary-actions">
-              <button onClick={this.handleReset} className="error-boundary-button">
+              <button
+                onClick={this.handleReset}
+                className="error-boundary-button"
+              >
                 Try Again
               </button>
               <button
@@ -71,7 +66,6 @@ class ErrorBoundary extends React.Component {
         </div>
       );
     }
-
     return this.props.children;
   }
 }
@@ -81,4 +75,3 @@ ErrorBoundary.propTypes = {
 };
 
 export default ErrorBoundary;
-

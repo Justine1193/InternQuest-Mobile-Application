@@ -10,15 +10,13 @@ import { ROLES } from "../utils/auth";
 // Code splitting - lazy load components for better performance
 const Dashboard = lazy(() => import("../components/CompanyManageComponents/CompanyDashboard.jsx"));
 const StudentDashboard = lazy(() => import("../components/StudentManageComponents/StudentDashboard.jsx"));
-const ResourceManagementDashboard = lazy(() => import("../components/HelpDeskComponents/ResourceManagementDashboard.jsx"));
-const AdminManagement = lazy(() => import("../components/AdminManagementComponents/AdminManagement.jsx"));
+const ResourceManagementDashboard = lazy(() => import("../components/ResourceManagementComponents/ResourceManagementDashboard.jsx"));
+const UserRoleManagement = lazy(() => import("../components/UserRoleManagementComponents/UserRoleManagement.jsx"));
 const DeletedRecords = lazy(() => import("../components/DeletedRecords/DeletedRecords.jsx"));
 const ActivityLogViewer = lazy(() => import("../components/ActivityLog/ActivityLogViewer.jsx"));
-const PasswordChange = lazy(() => import("../components/PasswordChange/PasswordChange.jsx"));
 const ForgotPassword = lazy(() => import("../components/ForgotPassword/ForgotPassword.jsx"));
-const SecuritySettings = lazy(() => import("../components/SecuritySettings/SecuritySettings.jsx"));
+const ChangePassword = lazy(() => import("../components/ChangePassword/ChangePassword.jsx"));
 const PlatformData = lazy(() => import("../components/PlatformData/PlatformData.jsx"));
-// const SignatureManagement = lazy(() => import("../components/SignatureManagement/SignatureManagement.jsx")); // Removed
 
 // Loading fallback component
 const PageLoader = () => (
@@ -47,10 +45,6 @@ function App() {
             <Route
               path="/forgot-password"
               element={<ForgotPassword />}
-            />
-            <Route
-              path="/change-password"
-              element={<PasswordChange />}
             />
           <Route
             path="/dashboard"
@@ -106,7 +100,7 @@ function App() {
               <ProtectedRoute
                 allowedRoles={[ROLES.SUPER_ADMIN, ROLES.COORDINATOR]}
               >
-                <AdminManagement />
+                <UserRoleManagement />
               </ProtectedRoute>
             }
           />
@@ -146,7 +140,7 @@ function App() {
             path="/security-settings"
             element={
               <ProtectedRoute>
-                <SecuritySettings />
+                <ChangePassword />
               </ProtectedRoute>
             }
           />

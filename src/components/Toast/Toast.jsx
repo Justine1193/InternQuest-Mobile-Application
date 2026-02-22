@@ -1,27 +1,26 @@
 /**
- * Toast Notification Component
- * Displays temporary success/error/info messages with progress indicator
+ * Toast notification with optional progress and action.
  */
 
 import React, { useEffect, useState, useRef } from "react";
 import PropTypes from "prop-types";
-import { 
-  IoCheckmarkCircle, 
-  IoCloseCircle, 
-  IoInformationCircle, 
+import {
+  IoCheckmarkCircle,
+  IoCloseCircle,
+  IoInformationCircle,
   IoWarning,
-  IoClose 
+  IoClose,
 } from "react-icons/io5";
 import "./Toast.css";
 
-const Toast = ({ 
-  message, 
-  type = "info", 
-  duration = 3000, 
+const Toast = ({
+  message,
+  type = "info",
+  duration = 3000,
   onClose,
   actionLabel,
   onAction,
-  showProgress = true
+  showProgress = true,
 }) => {
   const [progress, setProgress] = useState(100);
   const [isPaused, setIsPaused] = useState(false);
@@ -35,25 +34,18 @@ const Toast = ({
       const updateProgress = () => {
         const elapsed = Date.now() - startTimeRef.current;
         const remaining = Math.max(0, remainingTimeRef.current - elapsed);
-        const progressPercent = (remaining / duration) * 100;
-        
-        setProgress(progressPercent);
-        
-        if (remaining <= 0) {
-          onClose();
-        }
+        setProgress((remaining / duration) * 100);
+        if (remaining <= 0) onClose();
       };
-
       progressIntervalRef.current = setInterval(updateProgress, 50);
       return () => {
         if (progressIntervalRef.current) {
           clearInterval(progressIntervalRef.current);
         }
       };
-    } else if (duration > 0 && !showProgress) {
-      const timer = setTimeout(() => {
-        onClose();
-      }, duration);
+    }
+    if (duration > 0 && !showProgress) {
+      const timer = setTimeout(onClose, duration);
       return () => clearTimeout(timer);
     }
   }, [duration, onClose, showProgress, isPaused]);
@@ -62,7 +54,10 @@ const Toast = ({
     if (duration > 0 && showProgress) {
       setIsPaused(true);
       const elapsed = Date.now() - startTimeRef.current;
-      remainingTimeRef.current = Math.max(0, remainingTimeRef.current - elapsed);
+      remainingTimeRef.current = Math.max(
+        0,
+        remainingTimeRef.current - elapsed
+      );
     }
   };
 
@@ -87,17 +82,15 @@ const Toast = ({
   };
 
   return (
-    <div 
-      className={`toast toast-${type}`} 
+    <div
+      className={`toast toast-${type}`}
       role="alert"
       ref={toastRef}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
       <div className="toast-content">
-        <div className="toast-icon-wrapper">
-          {getIcon()}
-        </div>
+        <div className="toast-icon-wrapper">{getIcon()}</div>
         <div className="toast-message-wrapper">
           <span className="toast-message">{message}</span>
           {onAction && actionLabel && (
@@ -120,7 +113,7 @@ const Toast = ({
       </div>
       {showProgress && duration > 0 && (
         <div className="toast-progress-bar">
-          <div 
+          <div
             className="toast-progress-fill"
             style={{ width: `${progress}%` }}
           />
@@ -141,4 +134,3 @@ Toast.propTypes = {
 };
 
 export default Toast;
-

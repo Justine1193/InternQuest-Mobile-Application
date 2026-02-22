@@ -1,10 +1,5 @@
 /**
- * Navbar - Left sidebar navigation for the admin dashboard
- * Modern sidebar design with collapsible menu
- *
- * @component
- * @example
- * <Navbar onLogout={() => handleLogout()} />
+ * Sidebar navigation with collapsible menu and role-based links.
  */
 
 import React, { useState, useEffect } from "react";
@@ -108,9 +103,7 @@ const Navbar = ({ onLogout }) => {
     };
   }, [collegeCode, sessionCollegeName]);
 
-  // Format role name for display
   const getRoleDisplayName = (role) => {
-    // Normalize legacy 'super_admin' to 'admin' for display
     const normalizedRole = role === "super_admin" ? "admin" : role;
     switch (normalizedRole) {
       case ROLES.SUPER_ADMIN:
@@ -140,13 +133,9 @@ const Navbar = ({ onLogout }) => {
     return location.pathname.startsWith(path);
   };
 
-  // Toggle sidebar collapse
   const toggleSidebar = () => setIsCollapsed((prev) => !prev);
-
-  // Toggle settings submenu
   const toggleSettingsMenu = () => setShowSettingsMenu((prev) => !prev);
 
-  // Close settings menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (showSettingsMenu && !event.target.closest(".settings-section")) {
@@ -160,7 +149,6 @@ const Navbar = ({ onLogout }) => {
     };
   }, [showSettingsMenu]);
 
-  // Close settings on ESC key
   useEffect(() => {
     const handleEscKey = (event) => {
       if (event.key === "Escape") {
@@ -174,7 +162,6 @@ const Navbar = ({ onLogout }) => {
     };
   }, []);
 
-  // Save collapsed state to localStorage
   useEffect(() => {
     const savedState = localStorage.getItem("sidebarCollapsed");
     if (savedState !== null) {
@@ -184,7 +171,6 @@ const Navbar = ({ onLogout }) => {
 
   useEffect(() => {
     localStorage.setItem("sidebarCollapsed", JSON.stringify(isCollapsed));
-    // Update body class for dashboard content adjustment
     if (isCollapsed) {
       document.body.classList.add("sidebar-collapsed");
     } else {
@@ -198,7 +184,6 @@ const Navbar = ({ onLogout }) => {
       role="navigation"
       aria-label="Main navigation"
     >
-      {/* Logo Section */}
       <div className="sidebar-header">
         <div className="logo-container">
           <img
@@ -216,8 +201,6 @@ const Navbar = ({ onLogout }) => {
           <span className="collapse-icon">{isCollapsed ? "»" : "«"}</span>
         </button>
       </div>
-
-      {/* Main Navigation Links */}
       <div className="sidebar-menu">
         <div className="menu-section">
           {!isCollapsed && <span className="menu-label">Main Menu</span>}
@@ -245,7 +228,6 @@ const Navbar = ({ onLogout }) => {
           </a>
         </div>
 
-        {/* Settings Section – dropdown with animation */}
         <div
           className={`menu-section settings-section ${
             showSettingsMenu ? "is-open" : ""
@@ -283,7 +265,6 @@ const Navbar = ({ onLogout }) => {
                 aria-labelledby="settings-trigger"
               >
                 <div className="settings-dropdown-inner">
-                  {/* 1. User & Role Management */}
                   {canCreate && (
                     <a
                       href="/adminManagement"
@@ -297,7 +278,6 @@ const Navbar = ({ onLogout }) => {
                     </a>
                   )}
 
-                  {/* 2. Change Password */}
                   <a
                     href="/security-settings"
                     className={`sidebar-link ${
@@ -309,7 +289,6 @@ const Navbar = ({ onLogout }) => {
                     <span>Change Password</span>
                   </a>
 
-                  {/* 3. Guide (Resource / Help Desk) */}
                   {canViewDash && (
                     <a
                       href="/resource-management"
@@ -326,7 +305,6 @@ const Navbar = ({ onLogout }) => {
                     </a>
                   )}
 
-                  {/* 4. Platform Data (super admin only) */}
                   {isSuperAdmin && (
                     <a
                       href="/platform-data"
@@ -340,7 +318,6 @@ const Navbar = ({ onLogout }) => {
                     </a>
                   )}
 
-                  {/* 5. Activity Log (super admin only) */}
                   {isSuperAdmin && (
                     <a
                       href="/activityLog"
@@ -354,7 +331,6 @@ const Navbar = ({ onLogout }) => {
                     </a>
                   )}
 
-                  {/* 6. Archive Management (super admin only) */}
                   {isSuperAdmin && (
                     <a
                       href="/archive"
@@ -386,19 +362,17 @@ const Navbar = ({ onLogout }) => {
                 </a>
               )}
 
-              {/* 2. Security */}
               <a
                 href="/security-settings"
                 className={`sidebar-link ${
                   isActive("/security-settings") ? "active" : ""
                 }`}
-                title="Security Settings"
+                title="Change Password"
               >
                 <IoLockClosedOutline className="sidebar-icon" />
-                {!isCollapsed && <span>Security</span>}
+                {!isCollapsed && <span>Change Password</span>}
               </a>
 
-              {/* 3. Guide */}
               {canViewDash && (
                 <a
                   href="/resource-management"
@@ -414,7 +388,6 @@ const Navbar = ({ onLogout }) => {
                 </a>
               )}
 
-              {/* 4. Platform Data */}
               {isSuperAdmin && (
                 <a
                   href="/platform-data"
@@ -428,7 +401,6 @@ const Navbar = ({ onLogout }) => {
                 </a>
               )}
 
-              {/* 5. Activity Log */}
               {isSuperAdmin && (
                 <a
                   href="/activityLog"
@@ -442,7 +414,6 @@ const Navbar = ({ onLogout }) => {
                 </a>
               )}
 
-              {/* 6. Archive */}
               {isSuperAdmin && (
                 <a
                   href="/deleted"
@@ -460,7 +431,6 @@ const Navbar = ({ onLogout }) => {
         </div>
       </div>
 
-      {/* User Profile Section */}
       <div className="sidebar-footer">
         <div className={`user-profile ${isCollapsed ? "collapsed" : ""}`}>
           <div className="user-avatar-container">

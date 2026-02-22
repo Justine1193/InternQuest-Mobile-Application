@@ -1,18 +1,19 @@
 /**
- * Tooltip Component
- * Displays a tooltip on hover for any element
+ * Tooltip on hover/focus with configurable position and delay.
  */
 
 import React, { useState, useRef, useEffect } from "react";
 import PropTypes from "prop-types";
 import "./Tooltip.css";
 
-const Tooltip = ({ 
-  children, 
-  content, 
+const PADDING = 8;
+
+const Tooltip = ({
+  children,
+  content,
   position = "top",
   delay = 200,
-  disabled = false 
+  disabled = false,
 }) => {
   const [isVisible, setIsVisible] = useState(false);
   const [tooltipPosition, setTooltipPosition] = useState({});
@@ -22,7 +23,6 @@ const Tooltip = ({
 
   const showTooltip = () => {
     if (disabled || !content) return;
-    
     timeoutRef.current = setTimeout(() => {
       setIsVisible(true);
       calculatePosition();
@@ -30,9 +30,7 @@ const Tooltip = ({
   };
 
   const hideTooltip = () => {
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-    }
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
     setIsVisible(false);
   };
 
@@ -49,55 +47,67 @@ const Tooltip = ({
 
     switch (position) {
       case "top":
-        top = wrapperRect.top + scrollY - tooltipRect.height - 8;
-        left = wrapperRect.left + scrollX + (wrapperRect.width / 2) - (tooltipRect.width / 2);
+        top = wrapperRect.top + scrollY - tooltipRect.height - PADDING;
+        left =
+          wrapperRect.left +
+          scrollX +
+          wrapperRect.width / 2 -
+          tooltipRect.width / 2;
         break;
       case "bottom":
-        top = wrapperRect.bottom + scrollY + 8;
-        left = wrapperRect.left + scrollX + (wrapperRect.width / 2) - (tooltipRect.width / 2);
+        top = wrapperRect.bottom + scrollY + PADDING;
+        left =
+          wrapperRect.left +
+          scrollX +
+          wrapperRect.width / 2 -
+          tooltipRect.width / 2;
         break;
       case "left":
-        top = wrapperRect.top + scrollY + (wrapperRect.height / 2) - (tooltipRect.height / 2);
-        left = wrapperRect.left + scrollX - tooltipRect.width - 8;
+        top =
+          wrapperRect.top +
+          scrollY +
+          wrapperRect.height / 2 -
+          tooltipRect.height / 2;
+        left = wrapperRect.left + scrollX - tooltipRect.width - PADDING;
         break;
       case "right":
-        top = wrapperRect.top + scrollY + (wrapperRect.height / 2) - (tooltipRect.height / 2);
-        left = wrapperRect.right + scrollX + 8;
+        top =
+          wrapperRect.top +
+          scrollY +
+          wrapperRect.height / 2 -
+          tooltipRect.height / 2;
+        left = wrapperRect.right + scrollX + PADDING;
         break;
       default:
-        top = wrapperRect.top + scrollY - tooltipRect.height - 8;
-        left = wrapperRect.left + scrollX + (wrapperRect.width / 2) - (tooltipRect.width / 2);
+        top = wrapperRect.top + scrollY - tooltipRect.height - PADDING;
+        left =
+          wrapperRect.left +
+          scrollX +
+          wrapperRect.width / 2 -
+          tooltipRect.width / 2;
     }
 
-    // Keep tooltip within viewport
-    const padding = 8;
-    if (left < padding) left = padding;
-    if (left + tooltipRect.width > window.innerWidth - padding) {
-      left = window.innerWidth - tooltipRect.width - padding;
-    }
-    if (top < padding) top = padding + scrollY;
-    if (top + tooltipRect.height > window.innerHeight + scrollY - padding) {
-      top = window.innerHeight + scrollY - tooltipRect.height - padding;
-    }
+    left = Math.max(PADDING, Math.min(left, window.innerWidth - tooltipRect.width - PADDING));
+    top = Math.max(
+      PADDING + scrollY,
+      Math.min(top, window.innerHeight + scrollY - tooltipRect.height - PADDING)
+    );
 
     setTooltipPosition({ top, left });
   };
 
   useEffect(() => {
-    if (isVisible) {
-      calculatePosition();
-      window.addEventListener("scroll", calculatePosition);
-      window.addEventListener("resize", calculatePosition);
-      return () => {
-        window.removeEventListener("scroll", calculatePosition);
-        window.removeEventListener("resize", calculatePosition);
-      };
-    }
+    if (!isVisible) return;
+    calculatePosition();
+    window.addEventListener("scroll", calculatePosition);
+    window.addEventListener("resize", calculatePosition);
+    return () => {
+      window.removeEventListener("scroll", calculatePosition);
+      window.removeEventListener("resize", calculatePosition);
+    };
   }, [isVisible]);
 
-  if (!content || disabled) {
-    return <>{children}</>;
-  }
+  if (!content || disabled) return <>{children}</>;
 
   return (
     <>
@@ -135,4 +145,3 @@ Tooltip.propTypes = {
 };
 
 export default Tooltip;
-

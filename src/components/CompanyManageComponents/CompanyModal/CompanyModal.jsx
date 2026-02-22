@@ -48,6 +48,7 @@ function CompanyModal({
   const [moaFileUploading, setMoaFileUploading] = useState(false);
   const [moaFilePreview, setMoaFilePreview] = useState(formData.moaFileUrl || null);
   const moaFileInputRef = useRef(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Initialize audio context (only once)
   useEffect(() => {
@@ -193,10 +194,14 @@ function CompanyModal({
     return true;
   };
 
-  // Handle Add/Update with validation
-  const handleValidatedAdd = () => {
-    if (validateForm()) {
-      handleAddEntry();
+  const handleValidatedAdd = async () => {
+    if (isSubmitting || isLoading) return;
+    if (!validateForm()) return;
+    setIsSubmitting(true);
+    try {
+      await handleAddEntry();
+    } finally {
+      setIsSubmitting(false);
     }
   };
   const handleValidatedUpdate = () => {
@@ -1070,9 +1075,9 @@ function CompanyModal({
                 type="button"
                 className={`modal-btn primary${localError ? " error" : ""}`}
                 onClick={handleValidatedAdd}
-                disabled={isLoading}
+                disabled={isLoading || isSubmitting}
               >
-                {isLoading ? (
+                {isLoading || isSubmitting ? (
                   <>
                     <span className="spinner"></span>
                     Adding...

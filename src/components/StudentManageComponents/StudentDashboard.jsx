@@ -1,10 +1,5 @@
 /**
- * StudentDashboard - Admin dashboard for managing students
- * Fetches and displays student/company data, supports search, filter, selection, notification, and deletion.
- *
- * @component
- * @example
- * <StudentDashboard />
+ * Student management dashboard: list, search, filter, import/export, notifications.
  */
 
 import React, {
@@ -106,7 +101,6 @@ import "./NotificationSection.css";
 import "../dashboardTheme.css";
 import Footer from "../Footer/Footer.jsx";
 
-// --- Student Dashboard Main Component ---
 const StudentDashboard = () => {
   const currentRole = getAdminRole();
   const isAdviser = isAdviserOnly();
@@ -115,12 +109,10 @@ const StudentDashboard = () => {
   const [adminSection, setAdminSection] = useState(null);
   const adminCollegeCode = getAdminCollegeCode();
   const [programToCollegeMap, setProgramToCollegeMap] = useState({});
-  const [adminPrograms, setAdminPrograms] = useState([]); // coordinator scope (programs)
+  const [adminPrograms, setAdminPrograms] = useState([]);
   const [adminCollegeName, setAdminCollegeName] = useState(null);
-  // Auth user from Firebase (only set after onAuthStateChanged fires so Firestore has token)
   const [authUser, setAuthUser] = useState(null);
 
-  // Sync auth state so Firestore requests run only after token is available
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setAuthUser(user ?? null);

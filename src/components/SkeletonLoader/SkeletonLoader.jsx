@@ -1,6 +1,5 @@
 /**
- * SkeletonLoader Component
- * Displays skeleton loading placeholders
+ * Skeleton placeholders for table, card, or default layout.
  */
 
 import React from "react";
@@ -12,13 +11,13 @@ const SkeletonLoader = ({ type = "table", rows = 5, columns = 5 }) => {
     return (
       <div className="skeleton-table">
         <div className="skeleton-header">
-          {Array.from({ length: columns }).map((_, i) => (
+          {Array.from({ length: columns }, (_, i) => (
             <div key={i} className="skeleton-cell skeleton-header-cell" />
           ))}
         </div>
-        {Array.from({ length: rows }).map((_, rowIndex) => (
+        {Array.from({ length: rows }, (_, rowIndex) => (
           <div key={rowIndex} className="skeleton-row">
-            {Array.from({ length: columns }).map((_, colIndex) => (
+            {Array.from({ length: columns }, (_, colIndex) => (
               <div key={colIndex} className="skeleton-cell" />
             ))}
           </div>
@@ -55,4 +54,3 @@ SkeletonLoader.propTypes = {
 };
 
 export default SkeletonLoader;
-

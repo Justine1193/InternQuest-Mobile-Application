@@ -1,11 +1,5 @@
 /**
- * DashboardOverview - Displays dashboard statistics and a notification sender
- *
- * @component
- * @param {object} stats - Dashboard statistics (totalCompanies, totalStudents)
- * @param {function} onSendNotification - Handler for sending notifications
- * @example
- * <DashboardOverview stats={{ totalCompanies: 10, totalStudents: 50 }} onSendNotification={handleSend} />
+ * Dashboard stats and notification sender (all / student / section).
  */
 
 import React, { useState, useEffect, useRef } from "react";
@@ -41,9 +35,8 @@ const DashboardOverview = ({
   students = null,
   showNotifications = true,
 }) => {
-  // State for notification input
   const [notificationText, setNotificationText] = useState("");
-  const [notificationType, setNotificationType] = useState("all"); // "all", "student", "section"
+  const [notificationType, setNotificationType] = useState("all");
   const [selectedNotificationStudent, setSelectedNotificationStudent] =
     useState("");
   const [selectedNotificationSection, setSelectedNotificationSection] =

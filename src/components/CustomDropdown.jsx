@@ -1,17 +1,18 @@
 /**
- * CustomDropdown - A reusable dropdown component for filter options
- * Supports keyboard navigation and accessibility features.
- * Renders the options list in a portal so it is not clipped by parent overflow (e.g. filter panel).
+ * Reusable dropdown with keyboard navigation and portal-rendered list.
  */
 
 import React, { useRef, useState, useEffect, useLayoutEffect } from "react";
 import ReactDOM from "react-dom";
 import PropTypes from "prop-types";
 
-// --- CustomDropdown: A custom dropdown component for filter options ---
 function CustomDropdown({ options, value = "", onChange }) {
   const [open, setOpen] = useState(false);
-  const [listPosition, setListPosition] = useState({ top: 0, left: 0, width: 0 });
+  const [listPosition, setListPosition] = useState({
+    top: 0,
+    left: 0,
+    width: 0,
+  });
   const ref = useRef();
   const triggerRef = useRef();
 
@@ -36,24 +37,19 @@ function CustomDropdown({ options, value = "", onChange }) {
     };
   }, [open]);
 
-  // Handle clicks outside dropdown (trigger is in ref, list is in portal so check both)
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (!ref.current) return;
       const triggerEl = ref.current.querySelector(".custom-dropdown-selected");
       const listEl = document.querySelector(".custom-dropdown-list-portaled");
-      const inTrigger = triggerEl && triggerEl.contains(event.target);
-      const inList = listEl && listEl.contains(event.target);
-      if (!inTrigger && !inList) {
-        setOpen(false);
-      }
+      const inTrigger = triggerEl?.contains(event.target);
+      const inList = listEl?.contains(event.target);
+      if (!inTrigger && !inList) setOpen(false);
     };
-
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Handle keyboard navigation
   const handleKeyDown = (e) => {
     switch (e.key) {
       case "Enter":
@@ -90,13 +86,12 @@ function CustomDropdown({ options, value = "", onChange }) {
       }}
     >
       {options.map((option) => {
-        const isSelected = value === option || (!value && option === options[0]);
+        const isSelected =
+          value === option || (!value && option === options[0]);
         return (
           <div
             key={option}
-            className={`custom-dropdown-option${
-              isSelected ? " selected" : ""
-            }`}
+            className={`custom-dropdown-option${isSelected ? " selected" : ""}`}
             onClick={() => handleOptionClick(option)}
             role="option"
             aria-selected={isSelected}
@@ -133,8 +128,7 @@ function CustomDropdown({ options, value = "", onChange }) {
       >
         {value || options[0]}
       </div>
-
-      {open && typeof document !== "undefined" && document.body
+      {open && document?.body
         ? ReactDOM.createPortal(listContent, document.body)
         : null}
     </div>
@@ -142,11 +136,8 @@ function CustomDropdown({ options, value = "", onChange }) {
 }
 
 CustomDropdown.propTypes = {
-  /** Array of options to display in the dropdown */
   options: PropTypes.arrayOf(PropTypes.string).isRequired,
-  /** Currently selected value */
   value: PropTypes.string,
-  /** Callback when an option is selected */
   onChange: PropTypes.func.isRequired,
 };
 

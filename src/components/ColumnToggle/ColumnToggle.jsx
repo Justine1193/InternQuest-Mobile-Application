@@ -1,47 +1,55 @@
 /**
- * ColumnToggle Component
- * Allows users to show/hide table columns
+ * Show/hide table columns with optional essential columns.
  */
 
 import React, { useState, useRef, useEffect } from "react";
 import PropTypes from "prop-types";
-import {
-  IoEyeOutline,
-  IoChevronDownOutline,
-} from "react-icons/io5";
+import { IoEyeOutline, IoChevronDownOutline } from "react-icons/io5";
 import Tooltip from "../Tooltip/Tooltip";
 import "./ColumnToggle.css";
 
-const ColumnToggle = ({ 
-  columns, 
-  visibleColumns, 
+const ColumnToggle = ({
+  columns,
+  visibleColumns,
   onToggleColumn,
-  essentialColumnKeys = [] // Allow customizing which columns are essential/required
+  essentialColumnKeys = [],
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
 
   useEffect(() => {
+    if (!isOpen) return;
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setIsOpen(false);
       }
     };
-
-    if (isOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-      return () =>
-        document.removeEventListener("mousedown", handleClickOutside);
-    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [isOpen]);
 
-  const handleToggle = (columnKey) => {
-    onToggleColumn(columnKey);
-  };
-
-  // Calculate visible count
   const visibleCount = visibleColumns.length;
   const totalCount = columns.length;
+
+  const nonEssentialColumns = columns.filter(
+    (col) => !essentialColumnKeys.includes(col.key)
+  );
+  const nonEssentialVisible = visibleColumns.filter(
+    (key) => !essentialColumnKeys.includes(key)
+  );
+  const allNonEssentialVisible =
+    nonEssentialVisible.length === nonEssentialColumns.length;
+
+  const handleShowHideAll = () => {
+    nonEssentialColumns.forEach((col) => {
+      const isVisible = visibleColumns.includes(col.key);
+      if (allNonEssentialVisible && isVisible) {
+        onToggleColumn(col.key);
+      } else if (!allNonEssentialVisible && !isVisible) {
+        onToggleColumn(col.key);
+      }
+    });
+  };
 
   return (
     <div className="column-toggle-container" ref={dropdownRef}>
@@ -61,56 +69,20 @@ const ColumnToggle = ({
           />
         </button>
       </Tooltip>
-
       {isOpen && (
         <div className="column-toggle-dropdown">
           <div className="column-toggle-header">
             <span>Show/Hide Columns</span>
             <button
               className="column-toggle-select-all"
-              onClick={() => {
-                // Get non-essential columns
-                const nonEssentialColumns = columns.filter(
-                  (col) => !essentialColumnKeys.includes(col.key)
-                );
-                const nonEssentialVisible = visibleColumns.filter(
-                  (key) => !essentialColumnKeys.includes(key)
-                );
-
-                // Toggle all non-essential columns
-                const allNonEssentialVisible =
-                  nonEssentialVisible.length === nonEssentialColumns.length;
-
-                // Toggle each non-essential column
-                nonEssentialColumns.forEach((col) => {
-                  const isCurrentlyVisible = visibleColumns.includes(col.key);
-                  if (allNonEssentialVisible && isCurrentlyVisible) {
-                    // Hide it
-                    handleToggle(col.key);
-                  } else if (!allNonEssentialVisible && !isCurrentlyVisible) {
-                    // Show it
-                    handleToggle(col.key);
-                  }
-                });
-              }}
+              onClick={handleShowHideAll}
             >
-              {(() => {
-                const nonEssentialColumns = columns.filter(
-                  (col) => !essentialColumnKeys.includes(col.key)
-                );
-                const nonEssentialVisible = visibleColumns.filter(
-                  (key) => !essentialColumnKeys.includes(key)
-                );
-                return nonEssentialVisible.length === nonEssentialColumns.length
-                  ? "Hide All"
-                  : "Show All";
-              })()}
+              {allNonEssentialVisible ? "Hide All" : "Show All"}
             </button>
           </div>
           <div className="column-toggle-list">
             {columns.map((column) => {
               const isEssential = essentialColumnKeys.includes(column.key);
-              // Essential columns are always visible, so always show as checked
               const isVisible = isEssential
                 ? true
                 : visibleColumns.includes(column.key);
@@ -125,7 +97,9 @@ const ColumnToggle = ({
                   <input
                     type="checkbox"
                     checked={isVisible}
-                    onChange={() => !isEssential && handleToggle(column.key)}
+                    onChange={() =>
+                      !isEssential && onToggleColumn(column.key)
+                    }
                     disabled={isEssential}
                     aria-label={`Toggle ${column.label} column`}
                   />

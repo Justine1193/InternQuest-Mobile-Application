@@ -26,10 +26,10 @@ const DeletedRecords = () => {
   const [deletedCompanies, setDeletedCompanies] = useState([]);
   const [deletedAdmins, setDeletedAdmins] = useState([]);
   const [rejectedRequirements, setRejectedRequirements] = useState([]);
-  const [activeTab, setActiveTab] = useState("students"); // students | companies | users | requirements
+  const [activeTab, setActiveTab] = useState("students");
   const [showConfirm, setShowConfirm] = useState(false);
   const [restoreItem, setRestoreItem] = useState(null);
-  const [restoreType, setRestoreType] = useState(null); // 'student', 'company', 'user', or 'requirement'
+  const [restoreType, setRestoreType] = useState(null);
   const [isRestoring, setIsRestoring] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [showStudentModal, setShowStudentModal] = useState(false);
@@ -37,8 +37,7 @@ const DeletedRecords = () => {
   const [showCompanyModal, setShowCompanyModal] = useState(false);
   const { toasts, removeToast, success, error: showError } = useToast();
   const navigate = useNavigate();
-  
-  // Search and filter state
+
   const [studentSearchQuery, setStudentSearchQuery] = useState("");
   const [companySearchQuery, setCompanySearchQuery] = useState("");
   const [adminSearchQuery, setAdminSearchQuery] = useState("");

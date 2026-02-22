@@ -1,6 +1,5 @@
 /**
- * EmptyState Component
- * Displays a friendly empty state with illustration and actionable message
+ * Empty state with icon, title, message, and optional action.
  */
 
 import React from "react";

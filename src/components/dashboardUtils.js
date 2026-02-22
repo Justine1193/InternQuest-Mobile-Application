@@ -287,11 +287,6 @@ export const dashboardHandlers = {
       
       // Log activity
       await activityLoggers.createCompany(docRef.id, newCompany.companyName);
-      
-      setTableData(prev => Array.isArray(prev) 
-        ? [...prev, { id: docRef.id, ...newCompany }] 
-        : [{ id: docRef.id, ...newCompany }]
-      );
 
       // Notify all students that a new company is available
       try {

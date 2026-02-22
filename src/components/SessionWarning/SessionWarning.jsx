@@ -1,59 +1,58 @@
 /**
- * SessionWarning - Component to show session expiration warning
- * Displays a modal when session is about to expire
+ * Modal shown when session is about to expire; offers extend or logout.
  */
 
-import React, { useState } from 'react';
-import PropTypes from 'prop-types';
-import { IoTimeOutline, IoRefreshOutline } from 'react-icons/io5';
-import { getAdminSession, createAdminSession } from '../../utils/auth';
-import './SessionWarning.css';
+import React, { useState, useEffect } from "react";
+import PropTypes from "prop-types";
+import { IoTimeOutline, IoRefreshOutline } from "react-icons/io5";
+import { getAdminSession, createAdminSession } from "../../utils/auth";
+import "./SessionWarning.css";
+
+const WARNING_MS = 2 * 60 * 1000;
+const EXTEND_MS = 30 * 60 * 1000;
 
 const SessionWarning = ({ onExtend, onLogout }) => {
   const [isVisible, setIsVisible] = useState(false);
-  const [timeRemaining, setTimeRemaining] = useState('');
+  const [timeRemaining, setTimeRemaining] = useState("");
 
-  React.useEffect(() => {
+  useEffect(() => {
     const checkSession = () => {
       const session = getAdminSession();
-      if (!session || !session.expiresAt) return;
+      if (!session?.expiresAt) return;
 
       const remaining = session.expiresAt - Date.now();
-      const warningTime = 2 * 60 * 1000; // 2 minutes
-
-      if (remaining > 0 && remaining <= warningTime) {
+      if (remaining > 0 && remaining <= WARNING_MS) {
         const minutes = Math.floor(remaining / 60000);
         const seconds = Math.floor((remaining % 60000) / 1000);
-        setTimeRemaining(`${minutes}:${seconds.toString().padStart(2, '0')}`);
+        setTimeRemaining(
+          `${minutes}:${seconds.toString().padStart(2, "0")}`
+        );
         setIsVisible(true);
-      } else if (remaining > warningTime) {
+      } else if (remaining > WARNING_MS) {
         setIsVisible(false);
       }
     };
 
     checkSession();
     const interval = setInterval(checkSession, 1000);
-
     return () => clearInterval(interval);
   }, []);
 
   const handleExtend = () => {
     const session = getAdminSession();
     if (session) {
-      // Extend session by 30 minutes
-      const extendedExpiresAt = Date.now() + 30 * 60 * 1000;
       createAdminSession({
         ...session,
-        expiresAt: extendedExpiresAt,
+        expiresAt: Date.now() + EXTEND_MS,
       });
       setIsVisible(false);
-      if (onExtend) onExtend();
+      onExtend?.();
     }
   };
 
   const handleLogout = () => {
     setIsVisible(false);
-    if (onLogout) onLogout();
+    onLogout?.();
   };
 
   if (!isVisible) return null;
@@ -65,7 +64,9 @@ const SessionWarning = ({ onExtend, onLogout }) => {
           <IoTimeOutline />
         </div>
         <h3>Session Expiring Soon</h3>
-        <p>Your session will expire in <strong>{timeRemaining}</strong></p>
+        <p>
+          Your session will expire in <strong>{timeRemaining}</strong>
+        </p>
         <p className="session-warning-subtitle">
           Would you like to extend your session?
         </p>
@@ -95,4 +96,3 @@ SessionWarning.propTypes = {
 };
 
 export default SessionWarning;
-

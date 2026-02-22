@@ -1,11 +1,5 @@
 /**
- * AdminManagement - Component for managing admin accounts
- * Admin can create Coordinator and Adviser accounts
- * Coordinator can create Adviser accounts
- *
- * @component
- * @example
- * <AdminManagement />
+ * Admin account management: create/edit/delete Coordinator and Adviser accounts.
  */
 
 import React, { useState, useEffect } from "react";
@@ -40,7 +34,7 @@ import { FaRegEye, FaRegEyeSlash } from "react-icons/fa";
 import { signOut } from "firebase/auth";
 import { clearAdminSession } from "../../utils/auth";
 import { useNavigate } from "react-router-dom";
-import "./AdminManagement.css";
+import "./UserRoleManagement.css";
 import LoadingSpinner from "../LoadingSpinner.jsx";
 import ConfirmModal from "../ConfirmModalComponents/ConfirmModal.jsx";
 import EmptyState from "../EmptyState/EmptyState.jsx";
@@ -52,10 +46,8 @@ import {
   IoPeopleCircleOutline,
 } from "react-icons/io5";
 
-// Format role name for display (normalizes legacy 'super_admin' to 'admin')
 const getRoleDisplayName = (role) => {
   if (!role) return "";
-  // Normalize legacy 'super_admin' to 'admin' for display
   const normalizedRole = role === "super_admin" ? "admin" : role;
   switch (normalizedRole) {
     case ROLES.SUPER_ADMIN:
@@ -72,7 +64,7 @@ const getRoleDisplayName = (role) => {
   }
 };
 
-const AdminManagement = () => {
+const UserRoleManagement = () => {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
@@ -111,11 +103,9 @@ const AdminManagement = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [pendingDeleteAdmin, setPendingDeleteAdmin] = useState(null);
   const [currentAdminSections, setCurrentAdminSections] = useState([]);
-  // Search and filter state
   const [searchQuery, setSearchQuery] = useState("");
   const [filterRole, setFilterRole] = useState("");
   const [filterCollege, setFilterCollege] = useState("");
-  // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const currentRole = getAdminRole();
@@ -125,7 +115,6 @@ const AdminManagement = () => {
   const adminCollegeCode = getAdminCollegeCode();
   const [showPassword, setShowPassword] = useState(false);
 
-  // Load program-to-college mapping for coordinators
   useEffect(() => {
     if (isCoordinator && adminCollegeCode) {
       loadProgramToCollegeMap()
@@ -139,7 +128,7 @@ const AdminManagement = () => {
   }, [isCoordinator, adminCollegeCode]);
 
   useEffect(() => {
-    document.title = "Admin Management | InternQuest Admin";
+    document.title = "User & Role Management | InternQuest Admin";
     if (!canCreate) {
       navigate("/dashboard", { replace: true });
     }
@@ -157,14 +146,12 @@ const AdminManagement = () => {
     programToCollegeMap,
   ]);
 
-  // Load current admin's profile to get their sections (for coordinators)
   const loadCurrentAdminProfile = async () => {
     if (!isCoordinator || !auth.currentUser) {
       return { sections: [] };
     }
 
     try {
-      // Find the current admin's document by email
       const adminsRef = collection(db, "adminusers");
       const emailQuery = query(
         adminsRef,
@@ -175,7 +162,6 @@ const AdminManagement = () => {
       if (!emailSnapshot.empty) {
         const adminDoc = emailSnapshot.docs[0];
         const adminData = adminDoc.data();
-        // Check if coordinator also has sections (coordinator who is also an adviser)
         const sections =
           adminData.sections &&
           Array.isArray(adminData.sections) &&
@@ -198,14 +184,12 @@ const AdminManagement = () => {
     }
   };
 
-  // Scroll to top when error occurs
   useEffect(() => {
     if (error) {
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
   }, [error]);
 
-  // Auto-fill sections when coordinator's profile is loaded and modal is open
   useEffect(() => {
     if (showCreateModal && isCoordinator && formData.role === "adviser") {
       if (currentAdminSections.length > 0 && formData.sections.length === 0) {
@@ -223,16 +207,12 @@ const AdminManagement = () => {
     formData.sections,
   ]);
 
-  // Helper function to extract program code from section string (e.g., "4BSIT-2" -> "BSIT")
   const extractProgramCodeFromSection = (section) => {
     if (!section || typeof section !== "string") return null;
-    // Section format: "4BSIT-2" or "2024BSIT-A"
-    // Extract the program code part (letters between year and dash/number)
     const match = section.match(/^\d+([A-Z]+)/);
     if (match && match[1]) {
       return match[1].toUpperCase();
     }
-    // Fallback: try to find program code pattern
     const programMatch = section.match(/([A-Z]{2,})/);
     if (programMatch && programMatch[1]) {
       return programMatch[1].toUpperCase();
@@ -249,12 +229,8 @@ const AdminManagement = () => {
         ...doc.data(),
       }));
 
-      // Only admin can see admin/coordinator accounts
-      // Coordinators and advisers should NOT see admin/coordinator accounts
       if (!hasAnyRole([ROLES.SUPER_ADMIN])) {
-        // Filter out admin and coordinator accounts (support legacy super_admin during migration)
         adminsList = adminsList.filter((admin) => {
-          // Hide admin and coordinator accounts for non-admin users
           if (
             admin.role === "admin" ||
             admin.role === "super_admin" ||
@@ -263,50 +239,36 @@ const AdminManagement = () => {
             return false;
           }
 
-          // For coordinators: Only show advisers from their college
           if (isCoordinator && adminCollegeCode && admin.role === "adviser") {
-            // Check 1: Direct college_code match
             if (admin.college_code === adminCollegeCode) {
               return true;
             }
-
-            // Check 2: createdByCollegeCode match (for newly created accounts)
             if (
               admin.createdByCollegeCode &&
               admin.createdByCollegeCode === adminCollegeCode
             ) {
               return true;
             }
-
-            // Check 3: Check sections/programs mapping (only if mapping is loaded)
             if (programToCollegeMap && Object.keys(programToCollegeMap).length > 0) {
               const adminSections =
                 admin.sections || (admin.section ? [admin.section] : []);
-              
               if (adminSections.length > 0) {
-                // Check if any section's program belongs to coordinator's college
                 for (const section of adminSections) {
                   const programCode = extractProgramCodeFromSection(section);
                   if (programCode) {
                     const programCollegeCode = programToCollegeMap[programCode];
                     if (programCollegeCode === adminCollegeCode) {
-                      return true; // Found a matching program
+                      return true;
                     }
                   }
                 }
               }
             }
-
-            // If none of the checks passed, hide this adviser
             return false;
           }
-
-          // For advisers: they shouldn't see any other accounts
           if (currentRole === "adviser") {
             return false;
           }
-
-          // Default: hide for non-admin roles
           return false;
         });
       }
@@ -335,7 +297,6 @@ const AdminManagement = () => {
     setSuccess("");
     setDeletingId(admin.id);
     try {
-      // Delete Firestore document
       await deleteDoc(doc(db, "adminusers", admin.id));
       await addDoc(collection(db, "admin_deletions"), {
         deletedAdminId: admin.id,
@@ -363,16 +324,12 @@ const AdminManagement = () => {
     setPendingDeleteAdmin(null);
   };
 
-  // Handle edit admin
   const handleEditAdmin = (admin) => {
     editAdminAction(admin);
   };
 
   const editAdminAction = (admin) => {
-    // Parse sections from admin data
     const sections = admin.sections || (admin.section ? [admin.section] : []);
-
-    // Parse first section to populate currentSection
     let parsedSection = {
       sectionYear: "",
       sectionProgram: "",
@@ -381,7 +338,6 @@ const AdminManagement = () => {
 
     if (sections.length > 0) {
       const firstSection = sections[0];
-      // Parse section format: [Year][ProgramCode]-[SectionNumber]
       const match = firstSection.match(/^(\d+)([A-Z]+)-([A-Z0-9]+)$/i);
       if (match) {
         parsedSection = {
@@ -395,7 +351,7 @@ const AdminManagement = () => {
     setFormData({
       name: admin.name || "",
       username: admin.username || "",
-      password: "", // Password not stored in Firestore - managed via Firebase Auth
+      password: "",
       email: admin.email || admin.firebaseEmail || "",
       role: admin.role || "adviser",
       sections: sections,
@@ -405,17 +361,14 @@ const AdminManagement = () => {
     setEditingAdmin(admin);
     setShowCreateModal(true);
 
-    // Initialize filtered program codes based on college (if editing)
     if (admin.college_code) {
       const availableCodes = getAvailableProgramCodes(admin.college_code);
       setFilteredProgramCodes(availableCodes);
     } else {
-      // If no college, show all program codes
       setFilteredProgramCodes(programCodeOptions);
     }
   };
 
-  // Handle cancel edit/create (keep error/success alerts visible after closing modal)
   const handleCancelModal = () => {
     setShowCreateModal(false);
     setEditingAdmin(null);
@@ -434,12 +387,10 @@ const AdminManagement = () => {
       sectionNumber: "",
     });
     setShowPassword(false);
-    // Do not clear error/success so alerts remain visible after closing the modal
   };
 
   const loadPrograms = async () => {
     try {
-      // Load programs from meta/programs document
       const metaDocRef = doc(db, "meta", "programs");
       const metaSnap = await getDoc(metaDocRef);
       if (!metaSnap.exists()) {
@@ -449,7 +400,6 @@ const AdminManagement = () => {
       const data = metaSnap.data();
       let allPrograms = [];
 
-      // Check if data is organized by college (college names as keys, arrays as values)
       const isCollegeOrganized = Object.keys(data).some((key) => {
         const value = data[key];
         return (
@@ -460,7 +410,6 @@ const AdminManagement = () => {
       });
 
       if (isCollegeOrganized) {
-        // Structure: { "College Name": ["Program 1", "Program 2", ...] }
         Object.keys(data).forEach((collegeName) => {
           const programs = data[collegeName];
           if (Array.isArray(programs)) {
@@ -471,18 +420,15 @@ const AdminManagement = () => {
           }
         });
       } else if (Array.isArray(data.list)) {
-        // Fallback: flat array structure
         allPrograms = data.list
           .filter((p) => typeof p === "string" && p.trim().length > 0)
           .map((p) => p.trim());
       } else {
-        // Fallback: use all field values
         allPrograms = Object.values(data || {})
           .filter((p) => typeof p === "string" && p.trim().length > 0)
           .map((p) => p.trim());
       }
 
-      // Remove duplicates and sort
       allPrograms = [...new Set(allPrograms)].sort((a, b) =>
         a.localeCompare(b)
       );
@@ -496,7 +442,6 @@ const AdminManagement = () => {
 
   const loadProgramCodes = async () => {
     try {
-      // Load program codes from meta/program_code document
       const programCodeDocRef = doc(db, "meta", "program_code");
       const programCodeSnap = await getDoc(programCodeDocRef);
       if (programCodeSnap.exists()) {
@@ -504,7 +449,6 @@ const AdminManagement = () => {
         const codesByCollege = {};
         let allProgramCodes = [];
 
-        // Check if data is organized by college (college names as keys, arrays as values)
         const isCollegeOrganized = Object.keys(codeData).some((key) => {
           const value = codeData[key];
           return (
@@ -515,7 +459,6 @@ const AdminManagement = () => {
         });
 
         if (isCollegeOrganized) {
-          // Structure: { "College Name": ["BSIT", "BSCS", ...] }
           Object.keys(codeData).forEach((collegeName) => {
             const codes = codeData[collegeName];
             if (Array.isArray(codes)) {
@@ -529,13 +472,11 @@ const AdminManagement = () => {
             }
           });
         } else if (Array.isArray(codeData.list)) {
-          // Fallback: flat array structure
           allProgramCodes = codeData.list
             .filter((c) => typeof c === "string" && c.trim().length > 0)
             .map((c) => c.trim().toUpperCase())
             .sort((a, b) => a.localeCompare(b));
         } else {
-          // Fallback: use all field values
           allProgramCodes = Object.values(codeData || {})
             .filter((c) => typeof c === "string" && c.trim().length > 0)
             .map((c) => c.trim().toUpperCase())
@@ -545,9 +486,7 @@ const AdminManagement = () => {
         setProgramCodesByCollege(codesByCollege);
         setProgramCodeOptions([...new Set(allProgramCodes)].sort());
       } else {
-        // Fallback: try to extract codes from programs list
         const programsList = programOptions.map((p) => {
-          // Try to extract code from program name
           const words = p.split(" ");
           const code = words
             .map((w) => w[0])
@@ -566,7 +505,6 @@ const AdminManagement = () => {
 
   const loadSections = async () => {
     try {
-      // Load sections from existing students
       const usersRef = collection(db, "users");
       const usersSnapshot = await getDocs(usersRef);
       const sectionsSet = new Set();
@@ -602,14 +540,10 @@ const AdminManagement = () => {
     }
   };
 
-  // Get available program codes based on selected college
   const getAvailableProgramCodes = (collegeCode = null) => {
-    // Use provided collegeCode or fall back to formData.college_code
     const selectedCollegeCode = collegeCode || formData.college_code;
 
-    // If a college is selected and we have program codes organized by college
     if (selectedCollegeCode && Object.keys(programCodesByCollege).length > 0) {
-      // Find the college name that matches the selected college_code
       const selectedCollege = collegeOptions.find(
         (college) => college.college_code === selectedCollegeCode
       );
@@ -617,21 +551,18 @@ const AdminManagement = () => {
       if (selectedCollege) {
         const collegeName = selectedCollege.college_name;
 
-        // Normalize function to handle common variations
         const normalizeCollegeName = (name) => {
           return name
             .toLowerCase()
             .trim()
             .replace(/&/g, "and") // Replace & with "and"
-            .replace(/\s+/g, " "); // Normalize whitespace
+            .replace(/\s+/g, " ");
         };
 
-        // Try exact match first
         if (programCodesByCollege[collegeName]) {
           return programCodesByCollege[collegeName];
         }
 
-        // Try case-insensitive match
         const matchingKey = Object.keys(programCodesByCollege).find(
           (key) => key.toLowerCase().trim() === collegeName.toLowerCase().trim()
         );
@@ -639,7 +570,6 @@ const AdminManagement = () => {
           return programCodesByCollege[matchingKey];
         }
 
-        // Try normalized match (handles "and" vs "&" variations)
         const normalizedCollegeName = normalizeCollegeName(collegeName);
         const normalizedMatch = Object.keys(programCodesByCollege).find(
           (key) => {
@@ -651,11 +581,9 @@ const AdminManagement = () => {
           return programCodesByCollege[normalizedMatch];
         }
 
-        // Try partial match (in case of slight variations in naming)
         const partialMatch = Object.keys(programCodesByCollege).find((key) => {
           const keyLower = normalizeCollegeName(key);
           const nameLower = normalizedCollegeName;
-          // Check if one contains the other (for variations like "College of..." vs just the name)
           return keyLower.includes(nameLower) || nameLower.includes(keyLower);
         });
         if (partialMatch) {
@@ -664,12 +592,10 @@ const AdminManagement = () => {
 
       }
 
-      // Fallback: try to match by college_code directly (if college name is the code)
       if (programCodesByCollege[selectedCollegeCode]) {
         return programCodesByCollege[selectedCollegeCode];
       }
 
-      // Try case-insensitive match by college_code
       const matchingKeyByCode = Object.keys(programCodesByCollege).find(
         (key) =>
           key.toLowerCase().trim() === selectedCollegeCode.toLowerCase().trim()
@@ -679,27 +605,20 @@ const AdminManagement = () => {
       }
     }
 
-    // If no college selected or no match found, return empty array instead of all codes
-    // This ensures that if a college is selected but no match is found,
-    // the user knows something is wrong rather than seeing all codes
     if (selectedCollegeCode) {
       return [];
     }
-
-    // If no college selected, return all program codes
     return programCodeOptions;
   };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
 
-    // Handle section inputs separately (except sectionProgram which needs college filtering)
     if (name === "sectionYear" || name === "sectionNumber") {
-      // Validate Year field - max value is 5
       if (name === "sectionYear") {
         const numValue = parseInt(value, 10);
         if (value !== "" && (isNaN(numValue) || numValue < 1 || numValue > 5)) {
-          return; // Don't update if invalid
+          return;
         }
         setCurrentSection((prev) => ({
           ...prev,
@@ -708,7 +627,6 @@ const AdminManagement = () => {
         return;
       }
 
-      // Make sectionNumber uppercase
       if (name === "sectionNumber") {
         const upperValue = value.toUpperCase();
         setCurrentSection((prev) => ({
@@ -719,45 +637,35 @@ const AdminManagement = () => {
       }
     }
 
-    // Handle program code autocomplete (needs to access formData.college_code)
     if (name === "sectionProgram") {
       const upperValue = value.toUpperCase().trim();
-      // Update currentSection with uppercase immediately
       setCurrentSection((prev) => ({
         ...prev,
         sectionProgram: upperValue,
       }));
 
-      // Clear error when user starts typing
       if (sectionProgramError) {
         setSectionProgramError("");
       }
 
-      // Get available program codes based on selected college
       const availableCodes = getAvailableProgramCodes();
 
       if (upperValue.length > 0) {
         const searchUpper = upperValue;
 
-        // Filter and sort by relevance (same logic as program field)
         const filtered = availableCodes
           .map((code) => {
             const codeUpper = code.toUpperCase();
             let score = 0;
             let matched = false;
 
-            // Exact match gets highest priority (score 0)
             if (codeUpper === searchUpper) {
               score = 0;
               matched = true;
-            }
-            // Starts with gets second priority (score 1)
-            else if (codeUpper.startsWith(searchUpper)) {
+            } else if (codeUpper.startsWith(searchUpper)) {
               score = 1;
               matched = true;
-            }
-            // Contains gets third priority (score 2)
-            else if (codeUpper.includes(searchUpper)) {
+            } else if (codeUpper.includes(searchUpper)) {
               score = 2;
               matched = true;
             }
@@ -766,15 +674,8 @@ const AdminManagement = () => {
           })
           .filter((item) => item !== null)
           .sort((a, b) => {
-            // First sort by score (lower is better)
-            if (a.score !== b.score) {
-              return a.score - b.score;
-            }
-            // If same score and both start with, shorter codes first
-            if (a.score === 1 && b.score === 1) {
-              return a.length - b.length;
-            }
-            // Otherwise, sort alphabetically
+            if (a.score !== b.score) return a.score - b.score;
+            if (a.score === 1 && b.score === 1) return a.length - b.length;
             return a.code.localeCompare(b.code);
           })
           .map((item) => item.code);
@@ -782,22 +683,18 @@ const AdminManagement = () => {
         setFilteredProgramCodes(filtered);
         setShowProgramCodeSuggestions(true);
       } else {
-        // When empty, show all available options (filtered by college if selected)
         setFilteredProgramCodes(availableCodes);
         setShowProgramCodeSuggestions(true);
       }
-      return; // Return early after handling sectionProgram
+      return;
     }
 
-    // When college changes, reset program code and update available options
     if (name === "college_code") {
-      // Update formData first
       setFormData((prev) => ({
         ...prev,
         [name]: value,
       }));
 
-      // Clear the current section program code when college changes
       setCurrentSection((prev) => ({
         ...prev,
         sectionProgram: "",
@@ -805,8 +702,6 @@ const AdminManagement = () => {
       setSectionProgramError("");
       setShowProgramCodeSuggestions(false);
 
-      // Update filtered program codes based on new college selection
-      // Pass the new value directly since formData hasn't updated yet
       const availableCodes = getAvailableProgramCodes(value);
       setFilteredProgramCodes(availableCodes);
 
@@ -815,7 +710,6 @@ const AdminManagement = () => {
       return;
     }
 
-    // Update formData for other fields
     setFormData((prev) => ({
       ...prev,
       [name]: value,
@@ -823,7 +717,6 @@ const AdminManagement = () => {
     setError("");
     setSuccess("");
 
-    // Handle role autocomplete
     if (name === "role") {
       const roleOptions = canCreateCoord
         ? ["OJT Adviser", "OJT Coordinator"]
@@ -840,56 +733,48 @@ const AdminManagement = () => {
       }
     }
 
-    // Handle program autocomplete
     if (name === "program") {
       const searchValue = value.trim();
       if (searchValue.length > 0) {
         const searchLower = searchValue.toLowerCase();
         const searchUpper = searchValue.toUpperCase();
 
-        // Filter programs by name or by program code
         const filtered = programOptions
           .map((p) => {
             const pLower = p.toLowerCase();
             let score = 0;
             let matched = false;
 
-            // First, check if it matches program name
             if (pLower === searchLower) {
-              score = 0; // Exact program name match
+              score = 0;
               matched = true;
             } else if (pLower.startsWith(searchLower)) {
-              score = 1; // Program name starts with
+              score = 1;
               matched = true;
             } else if (pLower.includes(searchLower)) {
-              score = 2; // Program name contains
+              score = 2;
               matched = true;
             }
 
-            // Also check if search value matches a program code
-            // Extract code from program name (first letter of each word)
             const words = p.split(" ").filter((w) => w.length > 0);
             const extractedCode = words
               .map((w) => w[0])
               .join("")
               .toUpperCase();
 
-            // Check if typed value matches the extracted code
             if (!matched) {
               if (extractedCode === searchUpper) {
-                score = 1; // Exact code match - highest priority for codes
+                score = 1;
                 matched = true;
               } else if (extractedCode.startsWith(searchUpper)) {
-                score = 2; // Code starts with
+                score = 2;
                 matched = true;
               } else if (extractedCode.includes(searchUpper)) {
-                score = 3; // Code contains
+                score = 3;
                 matched = true;
               }
             }
 
-            // Also check if the typed value is in the programCodeOptions list
-            // and matches the extracted code
             if (!matched && programCodeOptions.includes(searchUpper)) {
               if (extractedCode === searchUpper) {
                 score = 1;
@@ -901,11 +786,7 @@ const AdminManagement = () => {
           })
           .filter((item) => item !== null)
           .sort((a, b) => {
-            // Sort by score (lower is better)
-            if (a.score !== b.score) {
-              return a.score - b.score;
-            }
-            // If same score, sort alphabetically
+            if (a.score !== b.score) return a.score - b.score;
             return a.program.localeCompare(b.program);
           })
           .map((item) => item.program);
@@ -926,16 +807,13 @@ const AdminManagement = () => {
     }));
     setShowProgramCodeSuggestions(false);
     setFilteredProgramCodes([]);
-    // Clear error when selecting from dropdown
     setSectionProgramError("");
   };
 
   const handleProgramCodeBlur = () => {
-    // Delay hiding suggestions to allow click events
     setTimeout(() => {
       setShowProgramCodeSuggestions(false);
 
-      // Validate program code when field loses focus
       if (
         currentSection.sectionProgram &&
         currentSection.sectionProgram.trim().length > 0
@@ -959,7 +837,6 @@ const AdminManagement = () => {
   };
 
   const handleAddSection = () => {
-    // Validate current section inputs
     if (
       !currentSection.sectionYear ||
       !currentSection.sectionProgram ||
@@ -969,7 +846,6 @@ const AdminManagement = () => {
       return;
     }
 
-    // Validate program code exists in available codes (filtered by college)
     const enteredCode = currentSection.sectionProgram.toUpperCase().trim();
     const availableCodes = getAvailableProgramCodes();
     const codeExists = availableCodes.some(
@@ -982,18 +858,15 @@ const AdminManagement = () => {
       return;
     }
 
-    // Build section string
     const sectionString = `${currentSection.sectionYear.trim()}${currentSection.sectionProgram
       .trim()
       .toUpperCase()}-${currentSection.sectionNumber.trim().toUpperCase()}`;
 
-    // Check if section already exists in current form
     if (formData.sections.includes(sectionString)) {
       setSectionProgramError("This section has already been added.");
       return;
     }
 
-    // Check if section is already assigned to another user (only one user per section)
     const normalizedNew = sectionString.trim().toUpperCase();
     const currentEditingId = editingAdmin?.id || null;
     for (const admin of admins) {
@@ -1014,13 +887,11 @@ const AdminManagement = () => {
       }
     }
 
-    // Add to sections array
     setFormData((prev) => ({
       ...prev,
       sections: [...prev.sections, sectionString],
     }));
 
-    // Clear current section inputs
     setCurrentSection({
       sectionYear: "",
       sectionProgram: "",
@@ -1037,16 +908,13 @@ const AdminManagement = () => {
   };
 
   const handleProgramCodeFocus = () => {
-    // Get available program codes based on selected college
     const availableCodes = getAvailableProgramCodes();
 
     if (availableCodes.length > 0) {
-      // If there's already text, filter it; otherwise show all available options
       if (
         currentSection.sectionProgram &&
         currentSection.sectionProgram.trim().length > 0
       ) {
-        // Re-apply filtering with current value
         const searchUpper = currentSection.sectionProgram.toUpperCase();
         const filtered = availableCodes
           .map((code) => {
@@ -1080,7 +948,6 @@ const AdminManagement = () => {
           .map((item) => item.code);
         setFilteredProgramCodes(filtered);
       } else {
-        // Show all available options when empty (filtered by college if selected)
         setFilteredProgramCodes(availableCodes);
       }
       setShowProgramCodeSuggestions(true);
@@ -1149,7 +1016,6 @@ const AdminManagement = () => {
       loadedSections = profile.sections;
     }
 
-    // Auto-fill sections and college when coordinator opens modal to create adviser
     if (isCoordinator && formData.role === "adviser") {
       setFormData((prev) => ({
         ...prev,
@@ -1160,7 +1026,6 @@ const AdminManagement = () => {
     }
     setShowCreateModal(true);
 
-    // Initialize filtered program codes (will be filtered by college if one is selected)
     const availableCodes = getAvailableProgramCodes();
     setFilteredProgramCodes(availableCodes);
   };
@@ -2290,9 +2155,7 @@ const AdminManagement = () => {
               />
             ) : (
               (() => {
-                // Filter admins based on search and filters
                 const filteredAdmins = admins.filter((admin) => {
-                  // Search filter
                   const matchesSearch =
                     !searchQuery ||
                     admin.name
@@ -2308,10 +2171,8 @@ const AdminManagement = () => {
                       ?.toLowerCase()
                       .includes(searchQuery.toLowerCase());
 
-                  // Role filter
                   const matchesRole = !filterRole || admin.role === filterRole;
 
-                  // College filter (for coordinators)
                   const matchesCollege =
                     !filterCollege ||
                     admin.role !== "coordinator" ||
@@ -2320,7 +2181,6 @@ const AdminManagement = () => {
                   return matchesSearch && matchesRole && matchesCollege;
                 });
 
-                // Pagination
                 const totalPages = Math.ceil(
                   filteredAdmins.length / itemsPerPage
                 );
@@ -2421,7 +2281,6 @@ const AdminManagement = () => {
                                 </td>
                                 <td>
                                   {(() => {
-                                    // Check if admin also has coordinator attributes (support legacy super_admin during migration)
                                     const isAdminRole =
                                       admin.role === "admin" ||
                                       admin.role === "super_admin";
@@ -2688,4 +2547,4 @@ const AdminManagement = () => {
   );
 };
 
-export default AdminManagement;
+export default UserRoleManagement;

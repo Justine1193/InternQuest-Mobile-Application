@@ -1,36 +1,31 @@
 /**
- * ConfirmAction - Reusable confirmation dialog component
- * Used for destructive actions like delete, logout, etc.
+ * Confirmation dialog for destructive or important actions.
  */
 
-import React from 'react';
-import PropTypes from 'prop-types';
-import { IoWarningOutline, IoCloseOutline } from 'react-icons/io5';
-import './ConfirmAction.css';
+import React from "react";
+import PropTypes from "prop-types";
+import { IoWarningOutline, IoCloseOutline } from "react-icons/io5";
+import "./ConfirmAction.css";
 
 const ConfirmAction = ({
   isOpen,
   onClose,
   onConfirm,
-  title = 'Confirm Action',
-  message = 'Are you sure you want to proceed?',
-  confirmText = 'Confirm',
-  cancelText = 'Cancel',
-  type = 'danger', // 'danger', 'warning', 'info'
+  title = "Confirm Action",
+  message = "Are you sure you want to proceed?",
+  confirmText = "Confirm",
+  cancelText = "Cancel",
+  type = "danger",
   isLoading = false,
 }) => {
   if (!isOpen) return null;
 
   const handleBackdropClick = (e) => {
-    if (e.target === e.currentTarget) {
-      onClose();
-    }
+    if (e.target === e.currentTarget) onClose();
   };
 
   const handleConfirm = () => {
-    if (!isLoading) {
-      onConfirm();
-    }
+    if (!isLoading) onConfirm();
   };
 
   return (
@@ -44,14 +39,11 @@ const ConfirmAction = ({
         >
           <IoCloseOutline />
         </button>
-        
         <div className={`confirm-action-icon confirm-action-icon-${type}`}>
           <IoWarningOutline />
         </div>
-        
         <h3 className="confirm-action-title">{title}</h3>
         <p className="confirm-action-message">{message}</p>
-        
         <div className="confirm-action-actions">
           <button
             className="confirm-action-btn confirm-action-btn-cancel"
@@ -67,7 +59,7 @@ const ConfirmAction = ({
           >
             {isLoading ? (
               <>
-                <span className="spinner-small"></span>
+                <span className="spinner-small" aria-hidden="true" />
                 Processing...
               </>
             ) : (
@@ -88,9 +80,8 @@ ConfirmAction.propTypes = {
   message: PropTypes.string,
   confirmText: PropTypes.string,
   cancelText: PropTypes.string,
-  type: PropTypes.oneOf(['danger', 'warning', 'info']),
+  type: PropTypes.oneOf(["danger", "warning", "info"]),
   isLoading: PropTypes.bool,
 };
 
 export default ConfirmAction;
-

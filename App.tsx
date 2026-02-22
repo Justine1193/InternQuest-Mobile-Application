@@ -5,6 +5,7 @@ import { createStackNavigator, CardStyleInterpolators } from '@react-navigation/
 import { Host } from 'react-native-portalize';
 import { Provider as PaperProvider } from 'react-native-paper';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from './firebase/config';
 import { doc, getDoc, getDocs, query, collection, where, setDoc, serverTimestamp, deleteDoc, onSnapshot } from 'firebase/firestore';
@@ -34,6 +35,7 @@ import OJTTrackerScreen from './screens/OJTTrackerScreen';
 import WeeklyReportScreen from './screens/WeeklyReportScreen';
 import CompanyProfileScreen from './screens/CompanyProfileScreen';
 import RequirementsChecklistScreen from './screens/RequirementsChecklistScreen';
+import PrivacyPolicyScreen from './screens/PrivacyPolicyScreen';
 import BottomNavbar from './components/BottomNav';
 
 // Shared Post Type
@@ -65,6 +67,7 @@ export type RootStackParamList = {
   ForgotPassword: { email?: string } | undefined;
   SetupAccount: undefined;
   ForceChangePassword: undefined;
+  PrivacyPolicy: { onContinue?: () => void; continueLabel?: string; requireAcknowledgement?: boolean } | undefined;
   InternshipDetails: { post: Post };
   CompanyProfile: { companyId: string };
   RequirementsChecklist: undefined;
@@ -77,6 +80,9 @@ export type RootStackParamList = {
 };
 
 const Stack = createStackNavigator<RootStackParamList>();
+
+const profileCompleteKeyForUser = (uid: string) => `@InternQuest_profileComplete_${uid}`;
+const passwordChangedKeyForUser = (uid: string) => `@InternQuest_passwordChanged_${uid}`;
 
 const AppInner: React.FC = () => {
   const insets = useSafeAreaInsets();
@@ -325,6 +331,18 @@ const AppInner: React.FC = () => {
             const passwordStatus = data?.passwordStatus;
             const passwordChangedAt = data?.passwordChangedAt;
 
+            // Also self-heal from local cache in case the Firestore write failed after a successful password change.
+            if (effectiveMustChangePassword) {
+              try {
+                const cachedPasswordChanged = await AsyncStorage.getItem(passwordChangedKeyForUser(user.uid));
+                if (cachedPasswordChanged === 'true') {
+                  effectiveMustChangePassword = false;
+                }
+              } catch (e) {
+                // best-effort
+              }
+            }
+
             if (
               effectiveMustChangePassword &&
               (
@@ -353,21 +371,50 @@ const AppInner: React.FC = () => {
 
             setMustChangePassword(effectiveMustChangePassword);
 
+            // Cache password-changed on device (per-user) so we can avoid re-gating
+            // if Firestore flags are missing or a temporary fetch issue occurs.
+            if (!effectiveMustChangePassword) {
+              try {
+                void AsyncStorage.setItem(passwordChangedKeyForUser(user.uid), 'true');
+              } catch (e) {
+                // best-effort
+              }
+            }
+
             const profileStatus = data?.profileStatus;
             const flagComplete =
               !!data?.isProfileComplete ||
               !!profileStatus?.isComplete ||
               !!profileStatus?.setupCompletedAt;
-            const hasBasics =
-              !!(data?.firstName || data?.lastName || data?.name) &&
-              !!(data?.program || data?.course) &&
-              !!data?.field &&
-              Array.isArray(data?.skills) &&
-              data.skills.length > 0;
+
+            // Legacy / flexible completeness detection (older docs may use different keys or shapes)
+            const hasName = !!(data?.firstName || data?.lastName || data?.name || data?.fullName || data?.displayName);
+            const programValue = (data?.program || data?.course || data?.courseOrProgram || data?.programName);
+            const hasProgram = !!programValue;
+
+            const rawField = (data?.field ?? data?.fields ?? data?.preferredField ?? data?.interestField);
+            const hasField = Array.isArray(rawField) ? rawField.length > 0 : !!rawField;
+
+            const rawSkills = (data?.skills ?? data?.skill ?? data?.skillSet ?? data?.skillsCsv ?? data?.userSkills);
+            const hasSkills =
+              Array.isArray(rawSkills) ? rawSkills.length > 0 :
+              (typeof rawSkills === 'string') ? rawSkills.trim().length > 0 :
+              false;
+
+            const hasBasics = hasName && hasProgram && hasField && hasSkills;
 
             const computedComplete = flagComplete || hasBasics;
             setIsProfileComplete(computedComplete);
             console.log('📋 Profile complete:', computedComplete);
+
+            // Cache profile completion on device (per-user) as a fallback.
+            if (computedComplete) {
+              try {
+                void AsyncStorage.setItem(profileCompleteKeyForUser(user.uid), 'true');
+              } catch (e) {
+                // best-effort
+              }
+            }
 
             // Self-heal: if the profile looks complete but the legacy flag is missing, set it.
             if (computedComplete && !data?.isProfileComplete) {
@@ -401,8 +448,25 @@ const AppInner: React.FC = () => {
               console.log('Failed to fetch debug token / info:', debugErr);
             }
           }
-          setIsProfileComplete(false);
-          setMustChangePassword(false);
+          // Fallback to local cache so finished accounts aren't forced to redo setup/password
+          // when Firestore is temporarily unavailable (offline, transient errors, etc.).
+          try {
+            const [cachedProfile, cachedPasswordChanged] = await Promise.all([
+              AsyncStorage.getItem(profileCompleteKeyForUser(user.uid)),
+              AsyncStorage.getItem(passwordChangedKeyForUser(user.uid)),
+            ]);
+
+            // If we *know* the profile is complete, keep it complete. Otherwise leave unknown
+            // so we don't incorrectly force SetupAccount due to transient errors.
+            setIsProfileComplete(cachedProfile === 'true' ? true : null);
+
+            // Only disable the password gate when we *know* it's already been changed.
+            // Otherwise leave unknown (null) to avoid re-forcing the flow when we can't verify.
+            setMustChangePassword(cachedPasswordChanged === 'true' ? false : null);
+          } catch (cacheErr) {
+            setIsProfileComplete(false);
+            setMustChangePassword(false);
+          }
         }
 
         // If biometric unlock is enabled, stay on biometric gate until user passes (don't go to home yet)
@@ -518,6 +582,17 @@ const AppInner: React.FC = () => {
                 // Update Firestore (best-effort) and local state
                 setIsProfileComplete(true);
                 setMustChangePassword(true);
+
+                // Local cache so we don't re-show SetupAccount for this user.
+                if (auth.currentUser) {
+                  try {
+                    void AsyncStorage.setItem(profileCompleteKeyForUser(auth.currentUser.uid), 'true');
+                    void AsyncStorage.removeItem(passwordChangedKeyForUser(auth.currentUser.uid));
+                  } catch (e) {
+                    // best-effort
+                  }
+                }
+
                 if (auth.currentUser) {
                   try {
                     await setDoc(
@@ -542,7 +617,20 @@ const AppInner: React.FC = () => {
           {props => (
             <ForceChangePasswordScreen
               {...props}
-              onPasswordChangeComplete={() => setMustChangePassword(false)}
+              onPasswordChangeComplete={(nextScreen?: string) => {
+                setMustChangePassword(false);
+
+                if (nextScreen === 'PrivacyPolicy') {
+                  // Wait a tick for the navigator to re-register main screens.
+                  setTimeout(() => {
+                    try {
+                      navigationRef.current?.navigate?.(nextScreen as any, { requireAcknowledgement: true });
+                    } catch (e) {
+                      // best-effort
+                    }
+                  }, 0);
+                }
+              }}
             />
           )}
         </Stack.Screen>
@@ -573,6 +661,7 @@ const AppInner: React.FC = () => {
           component={SettingsScreen}
           options={{ gestureEnabled: false }}
         />
+        <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
         <Stack.Screen
           name="InternshipDetails"
           component={InternshipDetailsScreen}

@@ -11,6 +11,7 @@ import {
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
 import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { auth, firestore } from '../firebase/config';
 import { colors, radii, shadows, spacing } from '../ui/theme';
 import { Screen } from '../ui/components/Screen';
@@ -18,7 +19,7 @@ import { AppHeader } from '../ui/components/AppHeader';
 
 type Props = {
   navigation: any;
-  onPasswordChangeComplete?: () => void;
+  onPasswordChangeComplete?: (nextScreen?: string) => void;
 };
 
 const ForceChangePasswordScreen: React.FC<Props> = ({ navigation, onPasswordChangeComplete }) => {
@@ -97,7 +98,18 @@ const ForceChangePasswordScreen: React.FC<Props> = ({ navigation, onPasswordChan
       setNewPassword('');
       setConfirmNewPassword('');
 
-      onPasswordChangeComplete?.();
+      // Local fallback: helps prevent re-showing this gate on devices
+      // where Firestore flags may be missing or temporarily unreadable.
+      try {
+        if (auth.currentUser?.uid) {
+          void AsyncStorage.setItem(`@InternQuest_passwordChanged_${auth.currentUser.uid}`, 'true');
+          void AsyncStorage.setItem(`@InternQuest_profileComplete_${auth.currentUser.uid}`, 'true');
+        }
+      } catch (e) {
+        // best-effort
+      }
+
+      onPasswordChangeComplete?.('PrivacyPolicy');
 
       // Allow leaving this screen once we have succeeded.
       allowExitRef.current = true;

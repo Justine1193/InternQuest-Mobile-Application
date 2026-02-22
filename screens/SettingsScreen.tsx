@@ -14,6 +14,7 @@ import {
   Switch,
   Linking,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { signOut, updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
@@ -341,7 +342,9 @@ const SettingsScreen: React.FC = () => {
       {/* ABOUT */}
       <View style={styles.sectionCard}>
         <Text style={styles.sectionHeader}>About</Text>
-        {renderSettingRow('information-outline', colors.warning, 'Version, Privacy & Terms', () => setShowAboutModal(true))}
+        {renderSettingRow('information-outline', colors.warning, 'Version', () => setShowAboutModal(true))}
+        <View style={styles.rowDivider} />
+        {renderSettingRow('shield-account-outline', colors.primary, 'Privacy Policy', () => navigation.navigate('PrivacyPolicy'))}
       </View>
 
       {/* Log Out */}
@@ -470,9 +473,8 @@ const SettingsScreen: React.FC = () => {
             <TouchableOpacity style={styles.closeIcon} onPress={() => setShowAboutModal(false)}>
               <Icon name="close" size={24} color={colors.textMuted} />
             </TouchableOpacity>
-            <Text style={styles.modalTitle}>About InternQuest</Text>
-            <Text style={styles.modalBodyText}>Version 1.3.6</Text>
-            <Text style={[styles.modalBodyText, { marginTop: 8 }]}>Privacy Policy | Terms of Service</Text>
+            <Text style={styles.modalTitle}>Version</Text>
+            <Text style={styles.modalBodyText}>Version 2.5.0</Text>
           </View>
         </View>
       </Modal>
@@ -847,6 +849,25 @@ const SettingsScreen: React.FC = () => {
                     setCurrentPassword('');
                     setNewPassword('');
                     setConfirmNewPassword('');
+
+                    // Local fallback cache.
+                    try {
+                      if (auth.currentUser?.uid) {
+                        void AsyncStorage.setItem(`@InternQuest_passwordChanged_${auth.currentUser.uid}`, 'true');
+                      }
+                    } catch (e) {
+                      // best-effort
+                    }
+
+                    // Show Privacy Policy after password change.
+                    setChangePasswordModalVisible(false);
+                    setTimeout(() => {
+                      try {
+                        navigation.navigate('PrivacyPolicy', { requireAcknowledgement: true });
+                      } catch (e) {
+                        // best-effort
+                      }
+                    }, 0);
                   } catch (error: any) {
                     let msg = 'Failed to change password.';
                     if (error.code === 'auth/wrong-password') {

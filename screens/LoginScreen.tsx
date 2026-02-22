@@ -253,7 +253,7 @@ const LoginScreen: React.FC<LoginProps> = ({ setIsLoggedIn, gateMode, onBiometri
               </View>
             </View>
 
-            <Text style={styles.title}>InterQuest</Text>
+            <Text style={styles.title}>InternQuest</Text>
             <Text style={styles.subtitle}>Sign in with your Student ID</Text>
           </View>
 

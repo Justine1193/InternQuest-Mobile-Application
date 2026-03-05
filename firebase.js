@@ -12,7 +12,7 @@ const firebaseConfig = {
   databaseURL:
     "https://neuinternshipdb-default-rtdb.asia-southeast1.firebasedatabase.app",
   projectId: "neuinternshipdb",
-  // IMPORTANT: use the correct Storage bucket domain (firebasestorage.app)
+  // Storage bucket name from Firebase console (usually <projectId>.appspot.com)
   storageBucket: "neuinternshipdb.firebasestorage.app",
   messagingSenderId: "918910739132",
   appId: "1:918910739132:web:bacbcd219ee7228542a6b9",

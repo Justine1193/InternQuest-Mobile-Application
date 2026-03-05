@@ -2,9 +2,8 @@
   {
     "origin": [
       "http://localhost:5173",
-      "http://localhost:3000",
-      "https://*.netlify.app",
-      "https://internship-quest.netlify.app"
+      "https://internship-quest.netlify.app",
+      "https://neuinternshipdb.firebaseapp.com"
     ],
     "method": ["GET", "HEAD", "OPTIONS"],
     "responseHeader": ["Content-Type", "Content-Length", "Content-Range", "Accept-Ranges"],

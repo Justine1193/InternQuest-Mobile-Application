@@ -276,10 +276,17 @@ const StudentDashboard = () => {
             throw new Error("Email address is too long");
           }
 
-          // Validate password
-          const password = student.password || "DefaultPassword123!";
+          // Validate password - use student ID as default password
+          const studentIdForPassword = (student.studentId || "").trim();
+          const csvPassword = (student.password || "").trim();
+
+          // Prefer student ID as password; fall back to CSV password if needed
+          const password = studentIdForPassword || csvPassword;
+
           if (!password || password.length < 6) {
-            throw new Error("Password must be at least 6 characters long");
+            throw new Error(
+              "Password must be at least 6 characters long and Student ID must not be empty"
+            );
           }
 
           // Create Firebase Auth account with actual student email

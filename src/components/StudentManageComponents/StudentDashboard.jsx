@@ -1083,6 +1083,34 @@ const StudentDashboard = () => {
     return 0;
   };
 
+  // Resolve student for an application: by userId (doc id or auth uid), then email, then full name
+  const getStudentForApplication = (app, studentsList) => {
+    if (!app || !studentsList?.length) return null;
+    const byId = studentsList.find(
+      (s) => s.id === app.userId || s.uid === app.userId
+    );
+    if (byId) return byId;
+    const email = (app.userProfile?.email || "").trim().toLowerCase();
+    if (email) {
+      const byEmail = studentsList.find(
+        (s) =>
+          (s.email || s.authEmail || "").trim().toLowerCase() === email
+      );
+      if (byEmail) return byEmail;
+    }
+    const profileName = (app.userProfile?.name || "").trim().replace(/\s+/g, " ").toLowerCase();
+    if (!profileName) return null;
+    return (
+      studentsList.find((s) => {
+        const first = (s.firstName || "").trim().toLowerCase();
+        const last = (s.lastName || "").trim().toLowerCase();
+        const fullForward = `${first} ${last}`.trim();
+        const fullReverse = `${last} ${first}`.trim();
+        return fullForward === profileName || fullReverse === profileName;
+      }) || null
+    );
+  };
+
   // Fetch company applications (for Applications tab) — uses Firestore applications collection
   const fetchApplications = useCallback(async () => {
     try {
@@ -1125,7 +1153,7 @@ const StudentDashboard = () => {
       .trim()
       .toLowerCase();
     return applicationsList.filter((app) => {
-      const student = students.find((s) => s.id === app.userId);
+      const student = getStudentForApplication(app, students);
       const studentName = (
         app.userProfile?.name ||
         app.userProfile?.email ||
@@ -1201,7 +1229,7 @@ const StudentDashboard = () => {
   const applicationsSections = useMemo(() => {
     const set = new Set();
     applicationsList.forEach((app) => {
-      const student = students.find((s) => s.id === app.userId);
+      const student = getStudentForApplication(app, students);
       const section = (
         student?.section ??
         app.userProfile?.section ??
@@ -1225,7 +1253,7 @@ const StudentDashboard = () => {
   // Send a notification to the student when their application is accepted, denied, or removed
   const sendApplicationStatusNotification = async (app, status) => {
     if (!app?.userId) return;
-    const student = students.find((s) => s.id === app.userId);
+    const student = getStudentForApplication(app, students);
     const studentName =
       app.userProfile?.name?.trim() ||
       app.userProfile?.email ||
@@ -3957,9 +3985,7 @@ const StudentDashboard = () => {
                           {applicationsPaginated.map((app) => {
                             const profileName = app.userProfile?.name?.trim();
                             const profileEmail = app.userProfile?.email;
-                            const student = students.find(
-                              (s) => s.id === app.userId
-                            );
+                            const student = getStudentForApplication(app, students);
                             const studentName =
                               profileName ||
                               profileEmail ||
@@ -5242,7 +5268,7 @@ const StudentDashboard = () => {
             <div className="application-detail-modal-body">
               {(() => {
                 const app = selectedApplication;
-                const student = students.find((s) => s.id === app.userId);
+                const student = getStudentForApplication(app, students);
                 const studentName =
                   app.userProfile?.name?.trim() ||
                   app.userProfile?.email ||
@@ -5471,7 +5497,7 @@ const StudentDashboard = () => {
         message={(() => {
           if (!applicationStatusConfirm?.app) return "";
           const { app, action } = applicationStatusConfirm;
-          const student = students.find((s) => s.id === app.userId);
+          const student = getStudentForApplication(app, students);
           const studentName =
             app.userProfile?.name?.trim() ||
             app.userProfile?.email ||

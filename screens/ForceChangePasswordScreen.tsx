@@ -109,7 +109,7 @@ const ForceChangePasswordScreen: React.FC<Props> = ({ navigation, onPasswordChan
         // best-effort
       }
 
-      onPasswordChangeComplete?.('PrivacyPolicy');
+      onPasswordChangeComplete?.();
 
       // Allow leaving this screen once we have succeeded.
       allowExitRef.current = true;

@@ -96,6 +96,7 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
   const [skillLoading, setSkillLoading] = useState(false);
   const [focusedField, setFocusedField] = useState<string | null>(null);
   const [successOpen, setSuccessOpen] = useState(false);
+  const [policyAccepted, setPolicyAccepted] = useState(false);
 
   // If the admin created the user doc under a different document ID than auth.uid,
   // we remember that legacy doc id so we can migrate it and avoid duplicates.
@@ -1030,14 +1031,60 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
             </View>
             </View>
 
+            <View style={styles.policyCard}>
+              <TouchableOpacity
+                style={styles.policyRow}
+                activeOpacity={0.85}
+                onPress={() => setPolicyAccepted((v) => !v)}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: policyAccepted }}
+                accessibilityLabel="I understand and agree with the Terms & Conditions and Privacy Policy"
+              >
+                <View style={[styles.policyBox, policyAccepted && styles.policyBoxChecked]}>
+                  {policyAccepted ? <Icon name="check" size={14} color={colors.onPrimary} /> : null}
+                </View>
+                <Text style={styles.policyText}>
+                  I understand and agree with the{' '}
+                  <Text
+                    style={styles.policyLink}
+                    onPress={() => {
+                      try {
+                        navigation?.navigate?.('UserAgreement');
+                      } catch (err) {
+                        // best-effort
+                      }
+                    }}
+                    accessibilityRole="link"
+                  >
+                    Terms & Conditions
+                  </Text>
+                  {' '}and{' '}
+                  <Text
+                    style={styles.policyLink}
+                    onPress={() => {
+                      try {
+                        navigation?.navigate?.('PrivacyPolicy');
+                      } catch (err) {
+                        // best-effort
+                      }
+                    }}
+                    accessibilityRole="link"
+                  >
+                    Privacy Policy
+                  </Text>
+                  .
+                </Text>
+              </TouchableOpacity>
+            </View>
+
             <TouchableOpacity
               style={[
                 styles.primaryButton,
-                (!gender || !program || !field || skills.length === 0) &&
+                (!gender || !program || !field || skills.length === 0 || !policyAccepted) &&
                 styles.primaryButtonDisabled
               ]}
               onPress={finishSetup}
-              disabled={!gender || !program || !field || skills.length === 0 || saving}
+              disabled={!gender || !program || !field || skills.length === 0 || !policyAccepted || saving}
               activeOpacity={0.9}
             >
               {saving ? (
@@ -1337,6 +1384,47 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 8 },
     elevation: 3,
+  },
+  policyCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radii.xl,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.card,
+    marginBottom: spacing.md,
+    marginHorizontal: spacing.lg,
+  },
+  policyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  policyBox: {
+    width: 18,
+    height: 18,
+    borderRadius: 5,
+    borderWidth: 2,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+    backgroundColor: colors.surface,
+  },
+  policyBoxChecked: {
+    borderColor: BRAND_BLUE,
+    backgroundColor: BRAND_BLUE,
+  },
+  policyText: {
+    flex: 1,
+    color: colors.text,
+    fontSize: 12.5,
+    lineHeight: 17,
+    fontWeight: '700',
+  },
+  policyLink: {
+    color: BRAND_BLUE,
+    textDecorationLine: 'underline',
+    fontWeight: '900',
   },
   primaryButtonText: { fontSize: 14, color: BRAND_BLUE, fontWeight: '900' },
   primaryButtonDisabled: {

@@ -36,6 +36,7 @@ import WeeklyReportScreen from './screens/WeeklyReportScreen';
 import CompanyProfileScreen from './screens/CompanyProfileScreen';
 import RequirementsChecklistScreen from './screens/RequirementsChecklistScreen';
 import PrivacyPolicyScreen from './screens/PrivacyPolicyScreen';
+import UserAgreementScreen from './screens/UserAgreementScreen';
 import BottomNavbar from './components/BottomNav';
 
 // Shared Post Type
@@ -68,6 +69,7 @@ export type RootStackParamList = {
   SetupAccount: undefined;
   ForceChangePassword: undefined;
   PrivacyPolicy: { onContinue?: () => void; continueLabel?: string; requireAcknowledgement?: boolean } | undefined;
+  UserAgreement: undefined;
   InternshipDetails: { post: Post };
   CompanyProfile: { companyId: string };
   RequirementsChecklist: undefined;
@@ -574,14 +576,15 @@ const AppInner: React.FC = () => {
 
     if (isProfileComplete === false) {
       return (
-            <Stack.Screen name="SetupAccount">
-          {props => (
-            <SetupAccountScreen
-              {...props}
-              onSetupComplete={async () => {
-                // Update Firestore (best-effort) and local state
-                setIsProfileComplete(true);
-                setMustChangePassword(true);
+        <>
+          <Stack.Screen name="SetupAccount">
+            {props => (
+              <SetupAccountScreen
+                {...props}
+                onSetupComplete={async () => {
+                  // Update Firestore (best-effort) and local state
+                  setIsProfileComplete(true);
+                  setMustChangePassword(true);
 
                 // Local cache so we don't re-show SetupAccount for this user.
                 if (auth.currentUser) {
@@ -593,21 +596,24 @@ const AppInner: React.FC = () => {
                   }
                 }
 
-                if (auth.currentUser) {
-                  try {
-                    await setDoc(
-                      doc(firestore, 'users', auth.currentUser.uid),
-                      { isProfileComplete: true, mustChangePassword: true },
-                      { merge: true }
-                    );
-                  } catch (e) {
-                    // best-effort
+                  if (auth.currentUser) {
+                    try {
+                      await setDoc(
+                        doc(firestore, 'users', auth.currentUser.uid),
+                        { isProfileComplete: true, mustChangePassword: true },
+                        { merge: true }
+                      );
+                    } catch (e) {
+                      // best-effort
+                    }
                   }
-                }
-              }}
-            />
-          )}
-        </Stack.Screen>
+                }}
+              />
+            )}
+          </Stack.Screen>
+          <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
+          <Stack.Screen name="UserAgreement" component={UserAgreementScreen} />
+        </>
       );
     }
 
@@ -662,6 +668,7 @@ const AppInner: React.FC = () => {
           options={{ gestureEnabled: false }}
         />
         <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
+        <Stack.Screen name="UserAgreement" component={UserAgreementScreen} />
         <Stack.Screen
           name="InternshipDetails"
           component={InternshipDetailsScreen}

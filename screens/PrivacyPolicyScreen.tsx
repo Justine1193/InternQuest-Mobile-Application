@@ -17,16 +17,23 @@ type RouteParams = {
   requireAcknowledgement?: boolean;
 } | undefined;
 
+type Props = {
+  onAccepted?: () => void;
+  continueLabel?: string;
+  requireAcknowledgement?: boolean;
+};
+
 type Nav = StackNavigationProp<RootStackParamList, 'PrivacyPolicy'>;
 
-export default function PrivacyPolicyScreen() {
+export default function PrivacyPolicyScreen(props: Props) {
   const route = useRoute<any>();
   const navigation = useNavigation<Nav>();
 
   const params: RouteParams = (route?.params && typeof route.params === 'object') ? route.params : undefined;
   const onContinue = params?.onContinue;
-  const continueLabel = params?.continueLabel || 'Continue';
-  const requireAcknowledgement = params?.requireAcknowledgement === true;
+  const onAccepted = props?.onAccepted;
+  const continueLabel = props?.continueLabel || params?.continueLabel || 'Continue';
+  const requireAcknowledgement = (props?.requireAcknowledgement ?? params?.requireAcknowledgement) === true;
 
   const [ackChecked, setAckChecked] = useState(false);
   const [ackLoaded, setAckLoaded] = useState(!requireAcknowledgement);
@@ -96,16 +103,42 @@ export default function PrivacyPolicyScreen() {
           onPress={() => setAckChecked((v) => !v)}
           accessibilityRole="checkbox"
           accessibilityState={{ checked: ackChecked }}
-          accessibilityLabel="I have read and agree to the Privacy Policy"
+          accessibilityLabel="I understand and agree with the Terms & Conditions and Privacy Policy"
         >
           <View style={[styles.ackBox, ackChecked && styles.ackBoxChecked]}>
             {ackChecked ? <Icon name="check" size={14} color={colors.onPrimary} /> : null}
           </View>
-          <Text style={styles.ackText}>I have read and agree to the Privacy Policy.</Text>
+          <Text style={styles.ackText}>
+            I understand and agree with the{' '}
+            <Text
+              style={styles.linkText}
+              onPress={() => {
+                try {
+                  (navigation as any).navigate?.('UserAgreement');
+                } catch (e) {
+                  // best-effort
+                }
+              }}
+              accessibilityRole="link"
+            >
+              Terms & Conditions
+            </Text>
+            {' '}and{' '}
+            <Text
+              style={styles.linkText}
+              onPress={() => {
+                // Already on the Privacy Policy screen.
+              }}
+              accessibilityRole="link"
+            >
+              Privacy Policy
+            </Text>
+            .
+          </Text>
         </TouchableOpacity>
       ) : null}
 
-      {(onContinue || requireAcknowledgement) ? (
+      {(onAccepted || onContinue || requireAcknowledgement) ? (
         <TouchableOpacity
           style={[
             styles.primaryButton,
@@ -115,22 +148,27 @@ export default function PrivacyPolicyScreen() {
           disabled={requireAcknowledgement ? (!ackLoaded || !ackChecked) : false}
           onPress={async () => {
             if (requireAcknowledgement && (!ackLoaded || !ackChecked)) return;
-            try {
-              if (requireAcknowledgement && ackKey) {
-                try {
-                  await AsyncStorage.setItem(ackKey, 'true');
-                } catch (e) {
-                  // best-effort
-                }
+            if (requireAcknowledgement && ackKey) {
+              try {
+                await AsyncStorage.setItem(ackKey, 'true');
+              } catch (e) {
+                // best-effort
               }
-              if (onContinue) {
-                onContinue();
-              }
-            } finally {
-              // If the caller navigated here as a one-time step, try to avoid leaving this screen stuck.
-              if (navigation.canGoBack()) navigation.goBack();
-              else (navigation as any).navigate?.('Home');
             }
+
+            if (onAccepted) {
+              onAccepted();
+              return;
+            }
+
+            if (onContinue) {
+              onContinue();
+              return;
+            }
+
+            // If the caller navigated here as a one-time step, try to avoid leaving this screen stuck.
+            if (navigation.canGoBack()) navigation.goBack();
+            else (navigation as any).navigate?.('Home');
           }}
           accessibilityRole="button"
           accessibilityLabel={continueLabel}
@@ -212,5 +250,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     fontWeight: '700',
+  },
+  linkText: {
+    color: colors.primary,
+    textDecorationLine: 'underline',
+    fontWeight: '800',
   },
 });

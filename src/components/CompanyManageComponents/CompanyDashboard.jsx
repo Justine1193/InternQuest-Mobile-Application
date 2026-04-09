@@ -46,10 +46,7 @@ import {
   convertCSVToCompanies,
 } from "../../utils/importUtils.js";
 import { activityLoggers } from "../../utils/activityLogger.js";
-import {
-  checkMoaExpiration,
-  MOA_EXPIRING_SOON_DAYS,
-} from "../../utils/moaUtils.js";
+import { checkMoaExpiration, MOA_EXPIRING_SOON_DAYS } from "../../utils/moaUtils.js";
 import {
   IoDownloadOutline,
   IoCloudUploadOutline,
@@ -57,12 +54,14 @@ import {
   IoCheckmarkCircleOutline,
   IoWarningOutline,
   IoAlertCircleOutline,
+  IoRemoveCircleOutline,
   IoAddOutline,
   IoTrashOutline,
   IoCloseOutline,
 } from "react-icons/io5";
 import logger from "../../utils/logger.js";
 import Footer from "../Footer/Footer.jsx";
+import AdviserDeletionAlertBanner from "../AdviserDeletionAlertBanner/AdviserDeletionAlertBanner.jsx";
 import { getAdminRole, ROLES, isAdviserOnly, getAdminSession, hasAnyRole, getAdminCollegeCode } from "../../utils/auth.js";
 import { loadColleges } from "../../utils/collegeUtils.js";
 
@@ -120,6 +119,7 @@ const Dashboard = () => {
     totalStudents: 0,
     moaExpiringSoon: 0,
     moaExpired: 0,
+    moaNoMoa: 0,
     moaValid: 0,
   });
   const [selectedRowId, setSelectedRowId] = useState(null);
@@ -224,67 +224,31 @@ const Dashboard = () => {
   useEffect(() => {
     setTableData(filteredCompanies);
 
-    // Recalculate stats based on filtered companies
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    let moaValid = 0;
+    let moaExpiringSoon = 0;
+    let moaExpired = 0;
+    let moaNoMoa = 0;
 
-    const filteredExpiringSoon = filteredCompanies.filter((company) => {
-      if (company.moa === "Yes" && company.moaExpirationDate) {
-        try {
-          const expirationDate = new Date(company.moaExpirationDate);
-          const expDate = new Date(expirationDate);
-          expDate.setHours(0, 0, 0, 0);
-          const daysUntilExpiration = Math.ceil(
-            (expDate - today) / (1000 * 60 * 60 * 24),
-          );
-          return daysUntilExpiration > 0 && daysUntilExpiration <= MOA_EXPIRING_SOON_DAYS;
-        } catch (e) {
-          return false;
-        }
+    filteredCompanies.forEach((company) => {
+      const { status } = checkMoaExpiration(company);
+      if (status === "valid") {
+        moaValid += 1;
+      } else if (status === "expiring-soon") {
+        moaExpiringSoon += 1;
+      } else if (status === "expired") {
+        moaExpired += 1;
+      } else {
+        moaNoMoa += 1;
       }
-      return false;
-    }).length;
-
-    const filteredExpired = filteredCompanies.filter((company) => {
-      if (company.moa === "Yes" && company.moaExpirationDate) {
-        try {
-          const expirationDate = new Date(company.moaExpirationDate);
-          const expDate = new Date(expirationDate);
-          expDate.setHours(0, 0, 0, 0);
-          const daysUntilExpiration = Math.ceil(
-            (expDate - today) / (1000 * 60 * 60 * 24),
-          );
-          return daysUntilExpiration < 0;
-        } catch (e) {
-          return false;
-        }
-      }
-      return false;
-    }).length;
-
-    const filteredValid = filteredCompanies.filter((company) => {
-      if (company.moa === "Yes" && company.moaExpirationDate) {
-        try {
-          const expirationDate = new Date(company.moaExpirationDate);
-          const expDate = new Date(expirationDate);
-          expDate.setHours(0, 0, 0, 0);
-          const daysUntilExpiration = Math.ceil(
-            (expDate - today) / (1000 * 60 * 60 * 24),
-          );
-          return daysUntilExpiration > MOA_EXPIRING_SOON_DAYS;
-        } catch (e) {
-          return false;
-        }
-      }
-      return false;
-    }).length;
+    });
 
     setOverviewStats((prev) => ({
       ...prev,
       totalCompanies: filteredCompanies.length,
-      moaExpiringSoon: filteredExpiringSoon,
-      moaExpired: filteredExpired,
-      moaValid: filteredValid,
+      moaExpiringSoon,
+      moaExpired,
+      moaNoMoa,
+      moaValid,
     }));
   }, [filteredCompanies]);
 
@@ -308,6 +272,47 @@ const Dashboard = () => {
       direction = "desc";
     }
     setSortConfig({ key, direction });
+  };
+
+  /** Stat cards set MOA Status filter; Total clears it. Click same card again to clear. */
+  const handleMoaStatCardClick = (filterKey) => {
+    const valueMap = {
+      all: "",
+      valid: "Valid",
+      expiringSoon: "Expiring Soon",
+      expired: "Expired",
+      noMoa: "No MOA",
+    };
+    const value = valueMap[filterKey];
+    if (filterKey === "all") {
+      setFilterValues((prev) => ({ ...prev, moaExpirationStatus: "" }));
+      setCurrentPage(1);
+      return;
+    }
+    setFilterValues((prev) => ({
+      ...prev,
+      moaExpirationStatus: prev.moaExpirationStatus === value ? "" : value,
+    }));
+    setCurrentPage(1);
+  };
+
+  const isMoaStatCardActive = (filterKey) => {
+    const status = filterValues.moaExpirationStatus || "";
+    if (filterKey === "all") return status === "";
+    const map = {
+      valid: "Valid",
+      expiringSoon: "Expiring Soon",
+      expired: "Expired",
+      noMoa: "No MOA",
+    };
+    return status === map[filterKey];
+  };
+
+  const onMoaStatCardKeyDown = (e, filterKey) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      handleMoaStatCardClick(filterKey);
+    }
   };
 
   // Unique "Endorsed by College" values from current companies (for filter dropdown)
@@ -379,32 +384,16 @@ const Dashboard = () => {
             })()
           : true;
 
-        // MOA Expiration Status filter
+        // MOA Expiration Status filter (aligned with checkMoaExpiration / stat cards)
         const matchesMoaExpiration = filterValues.moaExpirationStatus
           ? (() => {
-              if (row.moa !== "Yes" || !row.moaExpirationDate) {
-                return false;
-              }
-              try {
-                const expirationDate = new Date(row.moaExpirationDate);
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-                const expDate = new Date(expirationDate);
-                expDate.setHours(0, 0, 0, 0);
-                const daysUntilExpiration = Math.ceil(
-                  (expDate - today) / (1000 * 60 * 60 * 24),
-                );
-
-                if (daysUntilExpiration < 0) {
-                  return filterValues.moaExpirationStatus === "Expired";
-                } else if (daysUntilExpiration <= MOA_EXPIRING_SOON_DAYS) {
-                  return filterValues.moaExpirationStatus === "Expiring Soon";
-                } else {
-                  return filterValues.moaExpirationStatus === "Valid";
-                }
-              } catch (e) {
-                return false;
-              }
+              const st = checkMoaExpiration(row).status;
+              const f = filterValues.moaExpirationStatus;
+              if (f === "Valid") return st === "valid";
+              if (f === "Expiring Soon") return st === "expiring-soon";
+              if (f === "Expired") return st === "expired";
+              if (f === "No MOA") return st === "no-moa" || st === "unknown";
+              return true;
             })()
           : true;
 
@@ -885,7 +874,7 @@ const Dashboard = () => {
 
   // --- Render ---
   return (
-    <div className="dashboard-container">
+    <div className="dashboard-container company-dashboard">
       <LoadingSpinner
         isLoading={isLoading}
         message="Loading dashboard data..."
@@ -909,6 +898,7 @@ const Dashboard = () => {
         type="warning"
       />
       <div className="dashboard-content">
+        <AdviserDeletionAlertBanner />
         {/* Page Header (Archive Management style) */}
         <div className="dashboard-page-header">
           <div className="dashboard-header-content">
@@ -916,41 +906,88 @@ const Dashboard = () => {
               <IoBusinessOutline className="dashboard-header-icon dashboard-header-icon--blue" />
             </div>
             <div>
-              <h1>{isAdviser ? "View Companies" : "Manage Companies"}</h1>
+              <h1>{isAdviser ? "Company directory" : "Company management"}</h1>
               <p>
                 {isAdviser
-                  ? "View partner companies and their MOA status"
-                  : "View and manage partner companies and their MOA status"}
+                  ? "Browse partner companies, MOA status, and contact details in one place."
+                  : "Search, filter, and maintain partner companies, MOA records, imports, and exports from a single workspace."}
               </p>
             </div>
           </div>
           <div className="dashboard-header-stats">
-            <div className="dashboard-stat-card">
+            <div
+              role="button"
+              tabIndex={0}
+              className={`dashboard-stat-card dashboard-stat-card--clickable${isMoaStatCardActive("all") ? " dashboard-stat-card--active" : ""}`}
+              onClick={() => handleMoaStatCardClick("all")}
+              onKeyDown={(e) => onMoaStatCardKeyDown(e, "all")}
+              aria-pressed={isMoaStatCardActive("all")}
+              aria-label="Show all companies"
+            >
               <IoBusinessOutline className="dashboard-stat-icon" />
               <div className="dashboard-stat-content">
                 <span className="dashboard-stat-value">{overviewStats.totalCompanies || 0}</span>
                 <span className="dashboard-stat-label">Total Companies</span>
               </div>
             </div>
-            <div className="dashboard-stat-card">
+            <div
+              role="button"
+              tabIndex={0}
+              className={`dashboard-stat-card dashboard-stat-card--clickable${isMoaStatCardActive("valid") ? " dashboard-stat-card--active" : ""}`}
+              onClick={() => handleMoaStatCardClick("valid")}
+              onKeyDown={(e) => onMoaStatCardKeyDown(e, "valid")}
+              aria-pressed={isMoaStatCardActive("valid")}
+              aria-label="Filter by active MOA"
+            >
               <IoCheckmarkCircleOutline className="dashboard-stat-icon" />
               <div className="dashboard-stat-content">
                 <span className="dashboard-stat-value">{overviewStats.moaValid || 0}</span>
                 <span className="dashboard-stat-label">Active MOA</span>
               </div>
             </div>
-            <div className="dashboard-stat-card">
+            <div
+              role="button"
+              tabIndex={0}
+              className={`dashboard-stat-card dashboard-stat-card--clickable${isMoaStatCardActive("expiringSoon") ? " dashboard-stat-card--active" : ""}`}
+              onClick={() => handleMoaStatCardClick("expiringSoon")}
+              onKeyDown={(e) => onMoaStatCardKeyDown(e, "expiringSoon")}
+              aria-pressed={isMoaStatCardActive("expiringSoon")}
+              aria-label="Filter by MOA expiring soon"
+            >
               <IoWarningOutline className="dashboard-stat-icon" />
               <div className="dashboard-stat-content">
                 <span className="dashboard-stat-value">{overviewStats.moaExpiringSoon || 0}</span>
                 <span className="dashboard-stat-label">Expiring Soon</span>
               </div>
             </div>
-            <div className="dashboard-stat-card">
+            <div
+              role="button"
+              tabIndex={0}
+              className={`dashboard-stat-card dashboard-stat-card--clickable${isMoaStatCardActive("expired") ? " dashboard-stat-card--active" : ""}`}
+              onClick={() => handleMoaStatCardClick("expired")}
+              onKeyDown={(e) => onMoaStatCardKeyDown(e, "expired")}
+              aria-pressed={isMoaStatCardActive("expired")}
+              aria-label="Filter by expired MOA"
+            >
               <IoAlertCircleOutline className="dashboard-stat-icon" />
               <div className="dashboard-stat-content">
                 <span className="dashboard-stat-value">{overviewStats.moaExpired || 0}</span>
                 <span className="dashboard-stat-label">Expired MOA</span>
+              </div>
+            </div>
+            <div
+              role="button"
+              tabIndex={0}
+              className={`dashboard-stat-card dashboard-stat-card--clickable${isMoaStatCardActive("noMoa") ? " dashboard-stat-card--active" : ""}`}
+              onClick={() => handleMoaStatCardClick("noMoa")}
+              onKeyDown={(e) => onMoaStatCardKeyDown(e, "noMoa")}
+              aria-pressed={isMoaStatCardActive("noMoa")}
+              aria-label="Filter by companies with no MOA"
+            >
+              <IoRemoveCircleOutline className="dashboard-stat-icon" />
+              <div className="dashboard-stat-content">
+                <span className="dashboard-stat-value">{overviewStats.moaNoMoa || 0}</span>
+                <span className="dashboard-stat-label">No MOA</span>
               </div>
             </div>
           </div>
@@ -968,6 +1005,21 @@ const Dashboard = () => {
                   {overviewStats.moaExpired !== 1 ? "s" : ""}
                 </strong>
                 <span>These companies need MOA renewal before use</span>
+              </div>
+            </div>
+          )}
+          {overviewStats.moaNoMoa > 0 && (
+            <div className="moa-alert-banner no-moa">
+              <IoRemoveCircleOutline className="alert-icon" />
+              <div className="alert-content">
+                <strong>
+                  {overviewStats.moaNoMoa}{" "}
+                  {overviewStats.moaNoMoa === 1
+                    ? "company has"
+                    : "companies have"}{" "}
+                  no MOA on file
+                </strong>
+                <span>Add or complete MOA details before use</span>
               </div>
             </div>
           )}

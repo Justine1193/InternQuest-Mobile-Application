@@ -17,6 +17,7 @@ import { db, auth } from "../../../firebase";
 import { FaRegEye, FaRegEyeSlash } from "react-icons/fa";
 import { IoShieldCheckmarkOutline, IoLockClosedOutline, IoKeyOutline } from "react-icons/io5";
 import Navbar from "../Navbar/Navbar.jsx";
+import AdviserDeletionAlertBanner from "../AdviserDeletionAlertBanner/AdviserDeletionAlertBanner.jsx";
 import { getAdminRole, clearAdminSession } from "../../utils/auth";
 import LoadingSpinner from "../LoadingSpinner.jsx";
 import "./ChangePassword.css";
@@ -260,6 +261,7 @@ const ChangePassword = () => {
       <LoadingSpinner isLoading={isLoading} message="Processing request..." />
       <Navbar onLogout={handleLogout} />
       <div className="change-password-container">
+        <AdviserDeletionAlertBanner />
         <div className="change-password-header">
           <div className="change-password-header-content">
             <div className="change-password-header-icon-wrapper" aria-hidden="true">

@@ -137,7 +137,7 @@ export const prepareCompaniesForExport = (companies) => {
  * @param {Array} students - Array of student objects
  * @returns {Array} Formatted student data
  */
-export const prepareStudentsForExport = (students) => {
+export const prepareStudentsForExport = (students, sectionAdviserMap = {}) => {
   return students.map((student) => {
     const studentIdValue = student?.studentId || "";
     const firstName = student?.firstName || "";
@@ -225,6 +225,15 @@ export const prepareStudentsForExport = (students) => {
         }`
       : "";
 
+    const adviserFromSection =
+      typeof student?.section === "string" && student.section.trim()
+        ? sectionAdviserMap[student.section.trim().toLowerCase()] || ""
+        : "";
+    const adviserDisplay =
+      (typeof student?.adviserName === "string" &&
+        student.adviserName.trim()) ||
+      adviserFromSection;
+
     return {
       "Student ID": studentIdValue,
       "Document ID": student?.id || "",
@@ -233,6 +242,7 @@ export const prepareStudentsForExport = (students) => {
       "Last Name": lastName,
       "Email": student?.email || "",
       "Section": student?.section || "",
+      "Adviser": adviserDisplay,
       "College": student?.college || "",
       "Program": student?.program || "",
       "Year Level": student?.yearLevel || "",

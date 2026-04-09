@@ -365,6 +365,37 @@ const FilterDropdown = ({
               onChange={(val) => handleDropdownChange("blocked", val)}
             />
           </div>
+          <div>
+            <label
+              className="new-filter-label"
+              htmlFor="submitted-req-dropdown"
+            >
+              Requirement files:
+            </label>
+            <CustomDropdown
+              id="submitted-req-dropdown"
+              options={["All", "None submitted", "Has submissions"]}
+              value={
+                pendingFilterValues.submittedRequirements === "None"
+                  ? "None submitted"
+                  : pendingFilterValues.submittedRequirements === "Has"
+                    ? "Has submissions"
+                    : "All"
+              }
+              onChange={(val) => {
+                const v =
+                  val === "All"
+                    ? ""
+                    : val === "None submitted"
+                      ? "None"
+                      : "Has";
+                setPendingFilterValues((f) => ({
+                  ...f,
+                  submittedRequirements: v,
+                }));
+              }}
+            />
+          </div>
         </>
         )}
 
@@ -387,7 +418,7 @@ const FilterDropdown = ({
             </label>
             <CustomDropdown
               id="moa-expiration-dropdown"
-              options={["All", "Valid", "Expiring Soon", "Expired"]}
+              options={["All", "Valid", "Expiring Soon", "Expired", "No MOA"]}
               value={pendingFilterValues.moaExpirationStatus || "All"}
               onChange={(val) => handleDropdownChange("moaExpirationStatus", val)}
             />

@@ -491,13 +491,13 @@ textarea.input-standard.success {
   border-radius: var(--iq-radius-md);
 }
 
-/* Responsive Design - Sidebar becomes top bar on mobile */
+/* Responsive Design - mobile uses fixed top bar + drawer (see Navbar.css) */
 @media (max-width: 768px) {
   .dashboard-container {
     margin-left: 0;
-    padding-top: 70px; /* Space for mobile top nav */
+    padding-top: 52px; /* Match --mobile-nav-bar-height in Navbar.css */
   }
-  
+
   body.sidebar-collapsed .dashboard-container {
     margin-left: 0;
   }

@@ -53,6 +53,7 @@ import "./StudentRequirementModal.css";
 const StudentRequirementModal = ({
   open,
   student,
+  adviserName = "",
   onClose,
   onRequirementUpdated,
   onStudentUpdated,
@@ -1236,6 +1237,20 @@ const StudentRequirementModal = ({
                 </div>
 
                 <div className="detail-item">
+                  <span className="detail-icon">👤</span>
+                  <div className="detail-content">
+                    <span className="detail-label">Adviser</span>
+                    <span className="detail-value">
+                      {adviserName ? (
+                        adviserName
+                      ) : (
+                        <span className="empty-value">Not assigned</span>
+                      )}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="detail-item">
                   <span className="detail-icon">🕒</span>
                   <div className="detail-content">
                     <span className="detail-label">Created At</span>
@@ -2020,6 +2035,7 @@ const StudentRequirementModal = ({
 StudentRequirementModal.propTypes = {
   open: PropTypes.bool.isRequired,
   student: PropTypes.object,
+  adviserName: PropTypes.string,
   onClose: PropTypes.func.isRequired,
   onRequirementUpdated: PropTypes.func,
   onStudentUpdated: PropTypes.func,

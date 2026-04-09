@@ -6,18 +6,19 @@ import { signOut } from "firebase/auth";
 import { clearAdminSession, getAdminRole } from "../../utils/auth";
 import { useNavigate } from "react-router-dom";
 import Navbar from "../Navbar/Navbar.jsx";
+import AdviserDeletionAlertBanner from "../AdviserDeletionAlertBanner/AdviserDeletionAlertBanner.jsx";
 import LoadingSpinner from "../LoadingSpinner.jsx";
 import ConfirmModal from "../ConfirmModalComponents/ConfirmModal.jsx";
 import ToastContainer from "../Toast/ToastContainer.jsx";
 import { useToast } from "../../hooks/useToast.js";
 import { activityLoggers, logActivity } from "../../utils/activityLogger.js";
 import logger from "../../utils/logger.js";
-import Footer from "../Footer/Footer.jsx";
-import { IoRefreshOutline, IoArchiveOutline, IoSearchOutline, IoPeopleOutline, IoBusinessOutline, IoShieldOutline, IoDocumentTextOutline, IoDownloadOutline, IoOpenOutline, IoCalendarOutline, IoChevronDownOutline, IoChevronUpOutline, IoImageOutline, IoDocumentOutline, IoCloseOutline, IoEyeOutline } from "react-icons/io5";
+import { IoRefreshOutline, IoArchiveOutline, IoSearchOutline, IoPeopleOutline, IoBusinessOutline, IoSchoolOutline, IoDocumentTextOutline, IoDownloadOutline, IoOpenOutline, IoCalendarOutline, IoChevronDownOutline, IoChevronUpOutline, IoImageOutline, IoDocumentOutline, IoCloseOutline, IoEyeOutline } from "react-icons/io5";
 import EmptyState from "../EmptyState/EmptyState.jsx";
 import StudentDetailModal from "./StudentDetailModal.jsx";
 import CompanyDetailModal from "../CompanyManageComponents/CompanyDetailModal/CompanyDetailModal.jsx";
 import "./DeletedRecords.css";
+import "../DashboardPageHeader/DashboardPageHeader.css";
 
 const DeletedRecords = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -237,7 +238,8 @@ const DeletedRecords = () => {
       } else if (err.message?.includes('logged in')) {
         showError(err.message);
       } else {
-        showError(`Failed to restore ${restoreType}: ${err.message || 'Unknown error'}. Please try again.`);
+        const restoreLabel = restoreType === "user" ? "OJT faculty account" : restoreType;
+        showError(`Failed to restore ${restoreLabel}: ${err.message || 'Unknown error'}. Please try again.`);
       }
     } finally {
       setIsRestoring(false);
@@ -346,7 +348,7 @@ const DeletedRecords = () => {
       const userName = user.deletedUsername || user.deletedEmail || "Unknown";
       await logActivity("restore_admin", "admin", user.deletedAdminId, { userName });
       
-      success(`User "${userName}" restored successfully`);
+      success(`OJT faculty "${userName}" restored successfully`);
     } catch (err) {
       logger.error("Restore user error:", err);
       throw err;
@@ -367,7 +369,7 @@ const DeletedRecords = () => {
       return `Are you sure you want to restore company "${name}"?`;
     } else if (restoreType === "user") {
       const name = restoreItem.deletedUsername || restoreItem.deletedEmail || restoreItem.id;
-      return `Are you sure you want to restore user "${name}"?`;
+      return `Are you sure you want to restore OJT faculty "${name}"?`;
     } else {
       const name = `${restoreItem.firstName || ''} ${restoreItem.lastName || ''}`.trim() || restoreItem.id;
       return `Are you sure you want to restore student "${name}"?`;
@@ -545,23 +547,30 @@ const DeletedRecords = () => {
   const paginatedGroups = groupedRequirements.slice(requirementIndexOfFirst, requirementIndexOfLast);
 
   return (
-    <div className="deleted-records-page">
+    <div className="deleted-records-page dashboard-container">
       <LoadingSpinner isLoading={isLoading || isRestoring} message={isRestoring ? "Restoring..." : "Loading archive..."} />
       <Navbar onLogout={handleLogout} />
-      <div className="deleted-records-container">
-        <div className="deleted-records-header">
-          <div className="header-content">
-            <div className="header-icon-wrapper">
-              <IoArchiveOutline className="header-icon" />
+      <div className="dashboard-content">
+        <AdviserDeletionAlertBanner />
+        <div className="dashboard-page-header">
+          <div className="dashboard-header-content">
+            <div
+              className="dashboard-header-icon-wrapper dashboard-header-icon--blue"
+              aria-hidden="true"
+            >
+              <IoArchiveOutline className="dashboard-header-icon dashboard-header-icon--blue" />
             </div>
             <div>
               <h1>Archive Management</h1>
-              <p>View and restore archived records, students, companies, users, and rejected requirements</p>
+              <p>
+                View and restore archived records, students, companies, OJT
+                faculties, and rejected requirements
+              </p>
             </div>
           </div>
-          <div className="header-stats">
+          <div className="dashboard-header-stats dashboard-stat-count-4">
             <div
-              className={`stat-card clickable ${activeTab === "students" ? "active" : ""}`}
+              className={`dashboard-stat-card dashboard-stat-card--clickable${activeTab === "students" ? " dashboard-stat-card--active" : ""}`}
               role="button"
               tabIndex={0}
               onClick={() => setActiveTab("students")}
@@ -570,14 +579,14 @@ const DeletedRecords = () => {
               }}
               title="View archived students"
             >
-              <IoPeopleOutline className="stat-icon" />
-              <div>
-                <span className="stat-value">{deletedStudents.length}</span>
-                <span className="stat-label">Archived Students</span>
+              <IoPeopleOutline className="dashboard-stat-icon" />
+              <div className="dashboard-stat-content">
+                <span className="dashboard-stat-value">{deletedStudents.length}</span>
+                <span className="dashboard-stat-label">Archived Students</span>
               </div>
             </div>
             <div
-              className={`stat-card clickable ${activeTab === "companies" ? "active" : ""}`}
+              className={`dashboard-stat-card dashboard-stat-card--clickable${activeTab === "companies" ? " dashboard-stat-card--active" : ""}`}
               role="button"
               tabIndex={0}
               onClick={() => setActiveTab("companies")}
@@ -586,30 +595,30 @@ const DeletedRecords = () => {
               }}
               title="View archived companies"
             >
-              <IoBusinessOutline className="stat-icon" />
-              <div>
-                <span className="stat-value">{deletedCompanies.length}</span>
-                <span className="stat-label">Archived Companies</span>
+              <IoBusinessOutline className="dashboard-stat-icon" />
+              <div className="dashboard-stat-content">
+                <span className="dashboard-stat-value">{deletedCompanies.length}</span>
+                <span className="dashboard-stat-label">Archived Companies</span>
               </div>
             </div>
             <div
-              className={`stat-card clickable ${activeTab === "admins" ? "active" : ""}`}
+              className={`dashboard-stat-card dashboard-stat-card--clickable${activeTab === "admins" ? " dashboard-stat-card--active" : ""}`}
               role="button"
               tabIndex={0}
               onClick={() => setActiveTab("admins")}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") setActiveTab("admins");
               }}
-              title="View archived admins"
+              title="View archived OJT faculties"
             >
-              <IoShieldOutline className="stat-icon" />
-              <div>
-                <span className="stat-value">{deletedAdmins.length}</span>
-                <span className="stat-label">Archived Admins</span>
+              <IoSchoolOutline className="dashboard-stat-icon" />
+              <div className="dashboard-stat-content">
+                <span className="dashboard-stat-value">{deletedAdmins.length}</span>
+                <span className="dashboard-stat-label">Archived OJT faculties</span>
               </div>
             </div>
             <div
-              className={`stat-card clickable ${activeTab === "requirements" ? "active" : ""}`}
+              className={`dashboard-stat-card dashboard-stat-card--clickable${activeTab === "requirements" ? " dashboard-stat-card--active" : ""}`}
               role="button"
               tabIndex={0}
               onClick={() => setActiveTab("requirements")}
@@ -618,10 +627,10 @@ const DeletedRecords = () => {
               }}
               title="View rejected requirements"
             >
-              <IoDocumentTextOutline className="stat-icon" />
-              <div>
-                <span className="stat-value">{rejectedRequirements.length}</span>
-                <span className="stat-label">Rejected Requirements</span>
+              <IoDocumentTextOutline className="dashboard-stat-icon" />
+              <div className="dashboard-stat-content">
+                <span className="dashboard-stat-value">{rejectedRequirements.length}</span>
+                <span className="dashboard-stat-label">Rejected Requirements</span>
               </div>
             </div>
           </div>
@@ -633,8 +642,9 @@ const DeletedRecords = () => {
           </div>
         )}
 
-        {/* Tabs (no scrolling between tables) */}
-        <div className="archive-tabs-wrapper" role="tablist" aria-label="Archive sections">
+        <div className="archive-content-panel">
+          {/* Tabs (no scrolling between tables) */}
+          <div className="archive-tabs-wrapper" role="tablist" aria-label="Archive sections">
           <button
             type="button"
             role="tab"
@@ -664,8 +674,8 @@ const DeletedRecords = () => {
             className={`archive-tab ${activeTab === "admins" ? "active" : ""}`}
             onClick={() => setActiveTab("admins")}
           >
-            <IoShieldOutline className="tab-icon" />
-            Users
+            <IoSchoolOutline className="tab-icon" />
+            OJT faculties
             <span className="tab-badge">{deletedAdmins.length}</span>
           </button>
           <button
@@ -1097,11 +1107,11 @@ const DeletedRecords = () => {
           <section className="deleted-section" role="tabpanel">
             <div className="section-header">
               <div className="section-title-wrapper">
-                <IoShieldOutline className="section-icon" />
-                <h2>Archived Users</h2>
+                <IoSchoolOutline className="section-icon" />
+                <h2>Archived OJT faculties</h2>
                 <span className="section-count">({deletedAdmins.length})</span>
               </div>
-              <div className="filters-wrapper" aria-label="User archive filters">
+              <div className="filters-wrapper" aria-label="OJT faculty archive filters">
                 <select
                   className="filter-select"
                   value={adminRoleFilter}
@@ -1109,7 +1119,7 @@ const DeletedRecords = () => {
                     setAdminRoleFilter(e.target.value);
                     setCurrentAdminPage(1);
                   }}
-                  aria-label="Filter by user role"
+                  aria-label="Filter by faculty role"
                 >
                   <option value="all">All Roles</option>
                   {adminRoleOptions.map((r) => (
@@ -1126,7 +1136,7 @@ const DeletedRecords = () => {
                     setAdminSearchQuery("");
                     setCurrentAdminPage(1);
                   }}
-                  title="Clear user filters"
+                  title="Clear OJT faculty filters"
                 >
                   Clear
                 </button>
@@ -1136,7 +1146,7 @@ const DeletedRecords = () => {
                 <input
                   type="text"
                   className="search-input"
-                  placeholder="Search users..."
+                  placeholder="Search OJT faculties..."
                   value={adminSearchQuery}
                   onChange={(e) => {
                     setAdminSearchQuery(e.target.value);
@@ -1177,9 +1187,9 @@ const DeletedRecords = () => {
                       <td colSpan="8" style={{ padding: 0, border: "none" }}>
                         <EmptyState
                           type="document"
-                          title="No archived users"
-                          message="There are no archived user records at this time."
-                          icon={IoShieldOutline}
+                          title="No archived OJT faculties"
+                          message="There are no archived OJT faculty records at this time."
+                          icon={IoSchoolOutline}
                         />
                       </td>
                     </tr>
@@ -1188,9 +1198,9 @@ const DeletedRecords = () => {
                       <td colSpan="8" style={{ padding: 0, border: "none" }}>
                         <EmptyState
                           type="search"
-                          title="No users found"
-                          message="No archived users match your search criteria."
-                          icon={IoShieldOutline}
+                          title="No OJT faculties found"
+                          message="No archived OJT faculties match your search criteria."
+                          icon={IoSchoolOutline}
                         />
                       </td>
                     </tr>
@@ -1217,7 +1227,7 @@ const DeletedRecords = () => {
                               handleRestoreClick(admin, "user");
                             }}
                             disabled={isRestoring}
-                            title="Restore user"
+                            title="Restore OJT faculty account"
                           >
                             <IoRefreshOutline />
                             Restore
@@ -1518,6 +1528,7 @@ const DeletedRecords = () => {
             )}
           </section>
           )}
+        </div>
         </div>
       </div>
       <StudentDetailModal

@@ -33,3 +33,6 @@ serviceAccountKey.json
 *.swp
 *.swo
 *~
+
+# Local Netlify folder
+.netlify

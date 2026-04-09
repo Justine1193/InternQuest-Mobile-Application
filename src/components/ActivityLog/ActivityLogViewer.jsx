@@ -30,6 +30,7 @@ import logger from "../../utils/logger.js";
 import ToastContainer from "../Toast/ToastContainer.jsx";
 import LoadingSpinner from "../LoadingSpinner.jsx";
 import Navbar from "../Navbar/Navbar.jsx";
+import AdviserDeletionAlertBanner from "../AdviserDeletionAlertBanner/AdviserDeletionAlertBanner.jsx";
 import Footer from "../Footer/Footer.jsx";
 import "./ActivityLogViewer.css";
 
@@ -279,6 +280,7 @@ const ActivityLogViewer = () => {
     <div className="activity-log-container">
       <Navbar onLogout={handleLogout} />
       <div className="activity-log-content">
+        <AdviserDeletionAlertBanner />
         <div className="activity-log-header-section">
           <div className="activity-header-content">
             <div className="activity-header-icon-wrapper">

@@ -4,7 +4,7 @@
 
 import React, { useState, useEffect } from "react";
 import PropTypes from "prop-types";
-import { IoCloseOutline } from "react-icons/io5";
+import { IoCloseOutline, IoPersonOutline } from "react-icons/io5";
 import { db } from "../../../firebase";
 import { doc, getDoc } from "firebase/firestore";
 import { loadColleges } from "../../utils/collegeUtils";
@@ -18,6 +18,17 @@ const formatStudentId = (value) => {
   if (part3) return `${part1}-${part2}-${part3}`;
   if (part2) return `${part1}-${part2}`;
   return part1;
+};
+
+/** Parse combined section e.g. 4BSIT-1A into year / program / section number */
+const parseSectionString = (section) => {
+  if (!section || typeof section !== "string") {
+    return { year: "", program: "", number: "" };
+  }
+  const s = section.trim().toUpperCase().replace(/\s+/g, "");
+  const m = s.match(/^(\d{1,2})([A-Z0-9]+)-(.+)$/);
+  if (!m) return { year: "", program: "", number: "" };
+  return { year: m[1], program: m[2], number: m[3] };
 };
 
 const EMAIL_DOMAIN = "neu.edu.ph";
@@ -49,6 +60,12 @@ const AddStudentModal = ({
   onSubmit,
   isLoading,
   defaultCollege = null,
+  editStudent = null,
+  adviserOptions = [],
+  canAssignAdviser = false,
+  lockedAdviserId = null,
+  lockedAdviserDisplayName = "",
+  autoSelectFirstAdviser = false,
 }) => {
   const [formData, setFormData] = useState({
     studentId: "",
@@ -59,6 +76,7 @@ const AddStudentModal = ({
     sectionProgram: "",
     sectionNumber: "",
     college: "",
+    adviserId: "",
   });
   const [errors, setErrors] = useState({});
   const [collegeOptions, setCollegeOptions] = useState([]);
@@ -240,27 +258,74 @@ const AddStudentModal = ({
     return [];
   };
 
-  // Auto-fill college when defaultCollege is provided
+  // Prefill form when editing an existing student
   useEffect(() => {
-    if (isOpen && defaultCollege) {
+    if (!isOpen || !editStudent) return;
+    const parsed = parseSectionString(editStudent.section);
+    let programCode = parsed.program;
+    if (!programCode && editStudent.program) {
+      programCode = String(editStudent.program).toUpperCase().trim();
+    }
+    setFormData({
+      studentId: editStudent.studentId || "",
+      firstName: editStudent.firstName || "",
+      lastName: editStudent.lastName || "",
+      email: editStudent.email || "",
+      sectionYear: parsed.year || "",
+      sectionProgram: programCode || "",
+      sectionNumber: parsed.number || "",
+      college: editStudent.college || "",
+      adviserId: editStudent.adviserId || "",
+    });
+    setErrors({});
+  }, [isOpen, editStudent]);
+
+  // OJT adviser: always self when logged in as adviser
+  useEffect(() => {
+    if (!isOpen || !lockedAdviserId) return;
+    setFormData((prev) => ({
+      ...prev,
+      adviserId: lockedAdviserId,
+    }));
+  }, [isOpen, lockedAdviserId]);
+
+  // Coordinator add flow: default to first adviser in list
+  useEffect(() => {
+    if (!isOpen || editStudent || !canAssignAdviser || !autoSelectFirstAdviser)
+      return;
+    if (!adviserOptions.length) return;
+    setFormData((prev) => {
+      if (prev.adviserId) return prev;
+      return { ...prev, adviserId: adviserOptions[0].id };
+    });
+  }, [
+    isOpen,
+    editStudent,
+    canAssignAdviser,
+    autoSelectFirstAdviser,
+    adviserOptions,
+  ]);
+
+  // Auto-fill college when defaultCollege is provided (add flow only)
+  useEffect(() => {
+    if (!isOpen || editStudent) return;
+    if (defaultCollege) {
       setFormData((prev) => ({
         ...prev,
         college: defaultCollege,
       }));
-      // Update program codes for the default college
       const availableCodes = getProgramCodesForCollege(defaultCollege);
       if (availableCodes.length > 0) {
         setProgramCodeOptions(availableCodes);
         setFilteredProgramCodes(availableCodes);
       }
-    } else if (isOpen && !defaultCollege) {
-      // Clear college if defaultCollege is not provided
+    } else {
       setFormData((prev) => ({
         ...prev,
         college: "",
       }));
     }
-  }, [isOpen, defaultCollege]);
+  }, [isOpen, defaultCollege, editStudent]);
 
   // Update program codes when college changes
   useEffect(() => {
@@ -764,6 +829,16 @@ const AddStudentModal = ({
       }
     }
 
+    const needsAdviserPicker = canAssignAdviser && !lockedAdviserId;
+    if (needsAdviserPicker) {
+      if (!adviserOptions.length) {
+        newErrors.adviserId =
+          "No OJT advisers are available. Create adviser accounts first.";
+      } else if (!formData.adviserId?.trim()) {
+        newErrors.adviserId = "Please select an OJT adviser";
+      }
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -778,12 +853,20 @@ const AddStudentModal = ({
       const section = `${formData.sectionYear.trim()}${formData.sectionProgram
         .trim()
         .toUpperCase()}-${formData.sectionNumber.trim().toUpperCase()}`;
+      const effectiveAdviserId =
+        lockedAdviserId || formData.adviserId?.trim() || "";
+      const adviserName =
+        adviserOptions.find((o) => o.id === effectiveAdviserId)?.name ||
+        (lockedAdviserId ? lockedAdviserDisplayName : "") ||
+        "";
       onSubmit({
         ...formData,
         studentId: studentIdValue,
         email: formData.email.trim(), // Required for contact purposes
         section: section,
         password: passwordToUse,
+        adviserId: effectiveAdviserId,
+        adviserName,
       });
     }
   };
@@ -798,6 +881,7 @@ const AddStudentModal = ({
       sectionProgram: "",
       sectionNumber: "",
       college: defaultCollege || "",
+      adviserId: "",
     });
     setErrors({});
     onClose();
@@ -809,7 +893,7 @@ const AddStudentModal = ({
     <div className="add-student-modal-backdrop">
       <div className="add-student-modal" onClick={(e) => e.stopPropagation()}>
         <div className="add-student-modal-header">
-          <h2>Add Student Account</h2>
+          <h2>{editStudent ? "Edit Student" : "Add Student Account"}</h2>
           <button
             className="add-student-modal-close"
             onClick={handleClose}
@@ -820,6 +904,7 @@ const AddStudentModal = ({
         </div>
 
         <div className="add-student-modal-body">
+          {!editStudent && (
           <div className="password-notice">
             <p>
               <strong>Note:</strong> The default password for each student account is their <strong>Student ID</strong>.
@@ -851,6 +936,7 @@ const AddStudentModal = ({
               The institutional email is for school records and notifications only.
             </p>
           </div>
+          )}
 
           <form onSubmit={handleSubmit}>
             <div className="form-group">
@@ -898,6 +984,8 @@ const AddStudentModal = ({
                 }
                 placeholder="e.g., 12-12345-678"
                 maxLength={12}
+                disabled={!!editStudent}
+                readOnly={!!editStudent}
               />
               {errors.studentId && (
                 <span className="error-message">{errors.studentId}</span>
@@ -1010,6 +1098,8 @@ const AddStudentModal = ({
                 }
                 placeholder="Enter institutional email (e.g., student@university.edu.ph)"
                 required
+                disabled={!!editStudent}
+                readOnly={!!editStudent}
               />
               {errors.email && (
                 <span className="error-message">{errors.email}</span>
@@ -1175,6 +1265,88 @@ const AddStudentModal = ({
               )}
             </div>
 
+            <div className="form-group adviser-field">
+              <div className="adviser-field-header">
+                <label htmlFor="adviserId" className="adviser-field-label">
+                  OJT adviser <span className="required">*</span>
+                </label>
+                <span className="adviser-field-pill" aria-hidden="true">
+                  Faculty
+                </span>
+              </div>
+              <p className="adviser-field-desc" id="adviser-field-desc">
+                {lockedAdviserId
+                  ? "Students you add are assigned to you for internship supervision and requirement approvals."
+                  : "Choose the faculty member who will supervise this student's internship and approve requirements."}
+              </p>
+              {lockedAdviserId ? (
+                <div
+                  className="adviser-locked-card"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <div className="adviser-locked-card__avatar" aria-hidden="true">
+                    <IoPersonOutline />
+                  </div>
+                  <div className="adviser-locked-card__content">
+                    <span className="adviser-locked-card__name">
+                      {lockedAdviserDisplayName ||
+                        adviserOptions.find((o) => o.id === lockedAdviserId)
+                          ?.name ||
+                        "Your account"}
+                    </span>
+                    <span className="adviser-locked-card__tag">
+                      Assigned to you
+                    </span>
+                    <p className="adviser-locked-card__note">
+                      To assign someone else, an admin or coordinator must create
+                      or edit this student.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="adviser-select-shell">
+                  <select
+                    id="adviserId"
+                    name="adviserId"
+                    value={formData.adviserId}
+                    onChange={handleChange}
+                    className={`adviser-select${
+                      errors.adviserId ? " adviser-select--error" : ""
+                    }`}
+                    aria-label="OJT adviser"
+                    aria-describedby="adviser-field-desc adviser-hint-text"
+                    aria-invalid={Boolean(errors.adviserId)}
+                  >
+                    <option value="">Choose an adviser…</option>
+                    {formData.adviserId &&
+                      !adviserOptions.some((o) => o.id === formData.adviserId) && (
+                        <option value={formData.adviserId}>
+                          {editStudent?.adviserName || "Current assignee"}
+                        </option>
+                      )}
+                    {adviserOptions.map((opt) => (
+                      <option key={opt.id} value={opt.id}>
+                        {opt.name}
+                      </option>
+                    ))}
+                  </select>
+                  {errors.adviserId && (
+                    <span className="adviser-field-error" role="alert">
+                      {errors.adviserId}
+                    </span>
+                  )}
+                  {canAssignAdviser && (
+                    <p className="adviser-field-hint" id="adviser-hint-text">
+                      {autoSelectFirstAdviser
+                        ? "We pre-selected the first adviser in your college—you can change this anytime before saving."
+                        : "Pick the OJT adviser responsible for this student. This appears on exports and requirement workflows."}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+
             <div className="form-actions">
               <button
                 type="button"
@@ -1185,7 +1357,13 @@ const AddStudentModal = ({
                 Cancel
               </button>
               <button type="submit" className="submit-btn" disabled={isLoading}>
-                {isLoading ? "Creating..." : "Create Student Account"}
+                {isLoading
+                  ? editStudent
+                    ? "Saving..."
+                    : "Creating..."
+                  : editStudent
+                  ? "Save Changes"
+                  : "Create Student Account"}
               </button>
             </div>
           </form>
@@ -1200,6 +1378,18 @@ AddStudentModal.propTypes = {
   onClose: PropTypes.func.isRequired,
   onSubmit: PropTypes.func.isRequired,
   isLoading: PropTypes.bool,
+  defaultCollege: PropTypes.string,
+  editStudent: PropTypes.object,
+  adviserOptions: PropTypes.arrayOf(
+    PropTypes.shape({
+      id: PropTypes.string.isRequired,
+      name: PropTypes.string.isRequired,
+    })
+  ),
+  canAssignAdviser: PropTypes.bool,
+  lockedAdviserId: PropTypes.string,
+  lockedAdviserDisplayName: PropTypes.string,
+  autoSelectFirstAdviser: PropTypes.bool,
 };
 
 export default AddStudentModal;

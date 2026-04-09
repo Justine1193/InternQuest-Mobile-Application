@@ -29,15 +29,22 @@ import {
   loadColleges,
   loadProgramToCollegeMap,
 } from "../../utils/collegeUtils";
+import {
+  ADVISER_DELETION_ALERTS,
+  getCollegeCodesForAdmin,
+  normalizeCollegeCodes,
+} from "../../utils/adviserDeletionAlerts";
 import Navbar from "../Navbar/Navbar.jsx";
 import { FaRegEye, FaRegEyeSlash } from "react-icons/fa";
 import { signOut } from "firebase/auth";
 import { clearAdminSession } from "../../utils/auth";
 import { useNavigate } from "react-router-dom";
 import "./UserRoleManagement.css";
+import "../DashboardPageHeader/DashboardPageHeader.css";
 import LoadingSpinner from "../LoadingSpinner.jsx";
 import ConfirmModal from "../ConfirmModalComponents/ConfirmModal.jsx";
 import EmptyState from "../EmptyState/EmptyState.jsx";
+import AdviserDeletionAlertBanner from "../AdviserDeletionAlertBanner/AdviserDeletionAlertBanner.jsx";
 import CustomDropdown from "../CustomDropdown.jsx";
 import {
   IoShieldCheckmarkOutline,
@@ -155,7 +162,7 @@ const UserRoleManagement = () => {
       const adminsRef = collection(db, "adminusers");
       const emailQuery = query(
         adminsRef,
-        where("firebaseEmail", "==", auth.currentUser.email)
+        where("firebaseEmail", "==", auth.currentUser.email),
       );
       const emailSnapshot = await getDocs(emailQuery);
 
@@ -168,8 +175,8 @@ const UserRoleManagement = () => {
           adminData.sections.length > 0
             ? adminData.sections
             : adminData.section
-            ? [adminData.section]
-            : [];
+              ? [adminData.section]
+              : [];
 
         if (sections.length > 0) {
           setCurrentAdminSections(sections);
@@ -249,7 +256,10 @@ const UserRoleManagement = () => {
             ) {
               return true;
             }
-            if (programToCollegeMap && Object.keys(programToCollegeMap).length > 0) {
+            if (
+              programToCollegeMap &&
+              Object.keys(programToCollegeMap).length > 0
+            ) {
               const adminSections =
                 admin.sections || (admin.section ? [admin.section] : []);
               if (adminSections.length > 0) {
@@ -297,6 +307,23 @@ const UserRoleManagement = () => {
     setSuccess("");
     setDeletingId(admin.id);
     try {
+      const isAdviser =
+        admin.role === ROLES.ADVISER || admin.role === "adviser";
+      if (isAdviser) {
+        const collegeCodes = normalizeCollegeCodes(
+          getCollegeCodesForAdmin(admin, programToCollegeMap),
+        );
+        await addDoc(collection(db, ADVISER_DELETION_ALERTS), {
+          collegeCodes,
+          deletedAdviserId: admin.id,
+          deletedAdviserName:
+            admin.name?.trim() ||
+            admin.username?.trim() ||
+            admin.email?.trim() ||
+            "OJT adviser",
+          deletedAt: new Date().toISOString(),
+        });
+      }
       await deleteDoc(doc(db, "adminusers", admin.id));
       await addDoc(collection(db, "admin_deletions"), {
         deletedAdminId: admin.id,
@@ -430,7 +457,7 @@ const UserRoleManagement = () => {
       }
 
       allPrograms = [...new Set(allPrograms)].sort((a, b) =>
-        a.localeCompare(b)
+        a.localeCompare(b),
       );
 
       setProgramOptions(allPrograms);
@@ -521,7 +548,7 @@ const UserRoleManagement = () => {
       });
 
       const sections = Array.from(sectionsSet).sort((a, b) =>
-        a.localeCompare(b)
+        a.localeCompare(b),
       );
       setSectionOptions(sections);
     } catch (err) {
@@ -545,7 +572,7 @@ const UserRoleManagement = () => {
 
     if (selectedCollegeCode && Object.keys(programCodesByCollege).length > 0) {
       const selectedCollege = collegeOptions.find(
-        (college) => college.college_code === selectedCollegeCode
+        (college) => college.college_code === selectedCollegeCode,
       );
 
       if (selectedCollege) {
@@ -564,7 +591,8 @@ const UserRoleManagement = () => {
         }
 
         const matchingKey = Object.keys(programCodesByCollege).find(
-          (key) => key.toLowerCase().trim() === collegeName.toLowerCase().trim()
+          (key) =>
+            key.toLowerCase().trim() === collegeName.toLowerCase().trim(),
         );
         if (matchingKey) {
           return programCodesByCollege[matchingKey];
@@ -575,7 +603,7 @@ const UserRoleManagement = () => {
           (key) => {
             const normalizedKey = normalizeCollegeName(key);
             return normalizedKey === normalizedCollegeName;
-          }
+          },
         );
         if (normalizedMatch) {
           return programCodesByCollege[normalizedMatch];
@@ -589,7 +617,6 @@ const UserRoleManagement = () => {
         if (partialMatch) {
           return programCodesByCollege[partialMatch];
         }
-
       }
 
       if (programCodesByCollege[selectedCollegeCode]) {
@@ -598,7 +625,7 @@ const UserRoleManagement = () => {
 
       const matchingKeyByCode = Object.keys(programCodesByCollege).find(
         (key) =>
-          key.toLowerCase().trim() === selectedCollegeCode.toLowerCase().trim()
+          key.toLowerCase().trim() === selectedCollegeCode.toLowerCase().trim(),
       );
       if (matchingKeyByCode) {
         return programCodesByCollege[matchingKeyByCode];
@@ -723,7 +750,7 @@ const UserRoleManagement = () => {
         : ["OJT Adviser"];
       if (value.trim().length > 0) {
         const filtered = roleOptions.filter((role) =>
-          role.toLowerCase().includes(value.toLowerCase())
+          role.toLowerCase().includes(value.toLowerCase()),
         );
         if (filtered.length > 0) {
           setShowRoleSuggestions(true);
@@ -821,11 +848,11 @@ const UserRoleManagement = () => {
         const enteredCode = currentSection.sectionProgram.toUpperCase().trim();
         const availableCodes = getAvailableProgramCodes();
         const codeExists = availableCodes.some(
-          (code) => code.toUpperCase() === enteredCode
+          (code) => code.toUpperCase() === enteredCode,
         );
         if (!codeExists) {
           setSectionProgramError(
-            "Program code not found. Please select from the dropdown."
+            "Program code not found. Please select from the dropdown.",
           );
         } else {
           setSectionProgramError("");
@@ -849,11 +876,11 @@ const UserRoleManagement = () => {
     const enteredCode = currentSection.sectionProgram.toUpperCase().trim();
     const availableCodes = getAvailableProgramCodes();
     const codeExists = availableCodes.some(
-      (code) => code.toUpperCase() === enteredCode
+      (code) => code.toUpperCase() === enteredCode,
     );
     if (!codeExists) {
       setSectionProgramError(
-        "Program code not found. Please select from the dropdown."
+        "Program code not found. Please select from the dropdown.",
       );
       return;
     }
@@ -878,9 +905,12 @@ const UserRoleManagement = () => {
         const normalizedSec = (sec || "").toString().trim().toUpperCase();
         if (normalizedSec === normalizedNew) {
           const who =
-            admin.name?.trim() || admin.username || admin.email || "another user";
+            admin.name?.trim() ||
+            admin.username ||
+            admin.email ||
+            "another user";
           setSectionProgramError(
-            `This section (${sectionString}) is already assigned to ${who}. Only one user can be assigned per section.`
+            `This section (${sectionString}) is already assigned to ${who}. Only one user can be assigned per section.`,
           );
           return;
         }
@@ -1054,7 +1084,7 @@ const UserRoleManagement = () => {
       // SECURITY: Verify user is authenticated with Firebase Auth
       if (!auth.currentUser) {
         setError(
-          "You must be authenticated to create or edit admin accounts. Please log out and log back in."
+          "You must be authenticated to create or edit admin accounts. Please log out and log back in.",
         );
         setIsLoading(false);
         return;
@@ -1067,7 +1097,7 @@ const UserRoleManagement = () => {
       } catch (tokenError) {
         console.error("Failed to refresh auth token:", tokenError);
         setError(
-          "Authentication token expired or invalid. Please log out and log back in."
+          "Authentication token expired or invalid. Please log out and log back in.",
         );
         setIsLoading(false);
         return;
@@ -1079,13 +1109,13 @@ const UserRoleManagement = () => {
         const adminsRef = collection(db, "adminusers");
         const currentUserQuery = query(
           adminsRef,
-          where("firebaseEmail", "==", auth.currentUser.email)
+          where("firebaseEmail", "==", auth.currentUser.email),
         );
         const currentUserSnapshot = await getDocs(currentUserQuery);
 
         if (currentUserSnapshot.empty) {
           setError(
-            "Your admin account was not found in the database. Please contact support."
+            "Your admin account was not found in the database. Please contact support.",
           );
           setIsLoading(false);
           return;
@@ -1097,7 +1127,7 @@ const UserRoleManagement = () => {
 
         if (currentUserRole !== currentRole) {
           setError(
-            "Your account role has changed. Please log out and log back in."
+            "Your account role has changed. Please log out and log back in.",
           );
           setIsLoading(false);
           return;
@@ -1112,7 +1142,7 @@ const UserRoleManagement = () => {
             currentUserRole !== "super_admin"
           ) {
             setError(
-              "You don't have permission to create coordinator accounts. Only admins can create coordinators."
+              "You don't have permission to create coordinator accounts. Only admins can create coordinators.",
             );
             setIsLoading(false);
             return;
@@ -1133,7 +1163,7 @@ const UserRoleManagement = () => {
       } catch (verifyError) {
         console.error("Error verifying user role:", verifyError);
         setError(
-          "Failed to verify your account permissions. Please try again or contact support."
+          "Failed to verify your account permissions. Please try again or contact support.",
         );
         setIsLoading(false);
         return;
@@ -1169,7 +1199,7 @@ const UserRoleManagement = () => {
       ) {
         const usernameQuery = query(
           adminsRef,
-          where("username", "==", formData.username)
+          where("username", "==", formData.username),
         );
         const usernameSnapshot = await getDocs(usernameQuery);
         if (!usernameSnapshot.empty) {
@@ -1177,7 +1207,7 @@ const UserRoleManagement = () => {
           const existingAdmin = usernameSnapshot.docs[0];
           if (!isEditing || existingAdmin.id !== editingAdmin.id) {
             setError(
-              "Username already exists. Please choose a different username."
+              "Username already exists. Please choose a different username.",
             );
             setIsLoading(false);
             return;
@@ -1245,7 +1275,7 @@ const UserRoleManagement = () => {
           const userCredential = await createUserWithEmailAndPassword(
             auth,
             emailToUse, // Use provided email or auto-generated
-            formData.password
+            formData.password,
           );
           firebaseUser = userCredential.user;
 
@@ -1361,7 +1391,7 @@ const UserRoleManagement = () => {
             setError(
               `The following section(s) are already assigned to another adviser/coordinator: ${list}. ` +
                 (who ? `One or more are assigned to: ${who}. ` : "") +
-                "Please remove these sections or choose different ones."
+                "Please remove these sections or choose different ones.",
             );
             setIsLoading(false);
             return;
@@ -1394,9 +1424,9 @@ const UserRoleManagement = () => {
                 formData.role === "coordinator"
                   ? formData.college_code
                   : formData.role === "adviser"
-                  ? formData.college_code ||
-                    (isCoordinator ? adminCollegeCode : "") // From dropdown or coordinator's college
-                  : "", // Empty for other cases
+                    ? formData.college_code ||
+                      (isCoordinator ? adminCollegeCode : "") // From dropdown or coordinator's college
+                    : "", // Empty for other cases
               firebaseEmail: firebaseUser
                 ? emailToUse
                 : editingAdmin?.firebaseEmail || emailToUse, // Use Firebase Auth email if user was created, otherwise keep existing
@@ -1430,8 +1460,8 @@ const UserRoleManagement = () => {
 
           const cleanAdminData = Object.fromEntries(
             Object.entries(adminData).filter(
-              ([_, value]) => value !== undefined
-            )
+              ([_, value]) => value !== undefined,
+            ),
           );
 
           await updateDoc(adminRef, cleanAdminData);
@@ -1452,13 +1482,13 @@ const UserRoleManagement = () => {
           setError(
             isEditing
               ? "Permission denied. Please make sure Firestore security rules allow authenticated users to update adminusers collection."
-              : "Permission denied. Please make sure Firestore security rules allow authenticated users to write to adminusers collection. The Firebase Auth account was created, but the Firestore document could not be saved."
+              : "Permission denied. Please make sure Firestore security rules allow authenticated users to write to adminusers collection. The Firebase Auth account was created, but the Firestore document could not be saved.",
           );
         } else {
           setError(
             isEditing
               ? `Failed to update admin document in Firestore: ${firestoreError.message}.`
-              : `Failed to save admin document to Firestore: ${firestoreError.message}. The Firebase Auth account was created, but the Firestore document could not be saved.`
+              : `Failed to save admin document to Firestore: ${firestoreError.message}. The Firebase Auth account was created, but the Firestore document could not be saved.`,
           );
         }
         setIsLoading(false);
@@ -1468,11 +1498,11 @@ const UserRoleManagement = () => {
       setSuccess(
         isEditing
           ? `Successfully updated ${getRoleDisplayName(
-              formData.role
+              formData.role,
             )} account: ${formData.username}`
           : `Successfully created ${getRoleDisplayName(
-              formData.role
-            )} account: ${formData.username}`
+              formData.role,
+            )} account: ${formData.username}`,
       );
       setFormData({
         name: "",
@@ -1504,1044 +1534,1138 @@ const UserRoleManagement = () => {
   // Stats derived from admins list
   const totalAccounts = admins.length;
   const adminsCount = admins.filter(
-    (a) => a.role === "admin" || a.role === "super_admin"
+    (a) => a.role === "admin" || a.role === "super_admin",
   ).length;
-  const coordinatorsCount = admins.filter((a) => a.role === "coordinator").length;
+  const coordinatorsCount = admins.filter(
+    (a) => a.role === "coordinator",
+  ).length;
   const advisersCount = admins.filter((a) => a.role === "adviser").length;
 
+  const handleStatCardClick = (key) => {
+    setCurrentPage(1);
+    if (key === "total") {
+      setSearchQuery("");
+      setFilterRole("");
+      setFilterCollege("");
+      return;
+    }
+    if (key === "admins") {
+      setFilterCollege("");
+      setFilterRole((prev) => (prev === "admin" ? "" : "admin"));
+      return;
+    }
+    if (key === "coordinators") {
+      setFilterCollege("");
+      setFilterRole((prev) => (prev === "coordinator" ? "" : "coordinator"));
+      return;
+    }
+    if (key === "advisers") {
+      setFilterCollege("");
+      setFilterRole((prev) => (prev === "adviser" ? "" : "adviser"));
+    }
+  };
+
+  const onStatCardKeyDown = (e, key) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      handleStatCardClick(key);
+    }
+  };
+
+  const isStatCardActive = (key) => {
+    if (key === "total") {
+      return !searchQuery?.trim() && !filterRole && !filterCollege;
+    }
+    if (key === "admins") return filterRole === "admin";
+    if (key === "coordinators") return filterRole === "coordinator";
+    if (key === "advisers") return filterRole === "adviser";
+    return false;
+  };
+
   return (
-    <div className="admin-management-page">
+    <div className="admin-management-page dashboard-container role-management-dashboard">
       <LoadingSpinner isLoading={isLoading} message="Processing request..." />
       <Navbar onLogout={handleLogout} />
-      <div className="admin-management-container">
-        <div className="admin-management-header">
-          <div className="admin-management-header-content">
-            <div className="admin-management-header-icon-wrapper" aria-hidden="true">
-              <IoPeopleOutline className="admin-management-header-icon" />
+      <div className="dashboard-content">
+        <AdviserDeletionAlertBanner />
+        <div className="dashboard-page-header">
+          <div className="dashboard-header-content">
+            <div
+              className="dashboard-header-icon-wrapper dashboard-header-icon--purple"
+              aria-hidden="true"
+            >
+              <IoPeopleOutline className="dashboard-header-icon dashboard-header-icon--purple" />
             </div>
             <div>
-              <h1>User & Role Management</h1>
-              <p className="admin-management-header-subtitle">
-                View and manage admin accounts, coordinators, and advisers
+              <h1>Role & user management</h1>
+              <p>
+                Create accounts, assign roles, and filter coordinators and
+                advisers from one administrative workspace.
               </p>
             </div>
           </div>
-        </div>
-
-        {/* Stats Cards */}
-        <div className="iq-stats-wrapper">
-          <div className="iq-stats-grid">
-            <div className="iq-stat-card iq-stat--info">
-              <div className="iq-stat-icon-wrapper" aria-hidden="true">
-                <IoPeopleOutline className="iq-stat-icon" />
-              </div>
-              <div className="iq-stat-content">
-                <div className="iq-stat-value">{totalAccounts}</div>
-                <div className="iq-stat-label">Total Accounts</div>
-              </div>
-            </div>
-            <div className="iq-stat-card iq-stat--info">
-              <div className="iq-stat-icon-wrapper" aria-hidden="true">
-                <IoShieldCheckmarkOutline className="iq-stat-icon" />
-              </div>
-              <div className="iq-stat-content">
-                <div className="iq-stat-value">{adminsCount}</div>
-                <div className="iq-stat-label">Admins</div>
-              </div>
-            </div>
-            <div className="iq-stat-card iq-stat--success">
-              <div className="iq-stat-icon-wrapper" aria-hidden="true">
-                <IoPeopleCircleOutline className="iq-stat-icon" />
-              </div>
-              <div className="iq-stat-content">
-                <div className="iq-stat-value">{coordinatorsCount}</div>
-                <div className="iq-stat-label">Coordinators</div>
-              </div>
-            </div>
-            <div className="iq-stat-card iq-stat--warning">
-              <div className="iq-stat-icon-wrapper" aria-hidden="true">
-                <IoPersonOutline className="iq-stat-icon" />
-              </div>
-              <div className="iq-stat-content">
-                <div className="iq-stat-value">{advisersCount}</div>
-                <div className="iq-stat-label">Advisers</div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {error && (
-          <div className="error-message" role="alert">
-            {error}
-          </div>
-        )}
-
-        {success && (
-          <div className="success-message" role="alert">
-            {success}
-          </div>
-        )}
-
-        <div className="admin-management-actions">
-          <button
-            type="button"
-            className="create-admin-btn"
-            onClick={async () => {
-              await openCreateModal();
-            }}
-          >
-            + Create New Coordinator/Adviser Account
-          </button>
-        </div>
-
-        {/* Create Admin Modal */}
-        {showCreateModal && (
-          <div className="create-admin-modal-backdrop">
+          <div className="dashboard-header-stats dashboard-stat-count-4">
             <div
-              className="create-admin-modal"
-              onClick={(e) => e.stopPropagation()}
+              role="button"
+              tabIndex={0}
+              className={`dashboard-stat-card dashboard-stat-card--clickable${isStatCardActive("total") ? " dashboard-stat-card--active" : ""}`}
+              onClick={() => handleStatCardClick("total")}
+              onKeyDown={(e) => onStatCardKeyDown(e, "total")}
+              aria-pressed={isStatCardActive("total")}
+              aria-label="Show all accounts — clear filters and search"
             >
-              <div className="create-admin-modal-header">
-                <h2>
-                  {editingAdmin
-                    ? editingAdmin.role === "admin" ||
-                      editingAdmin.role === "admin" ||
-                      editingAdmin.role === "super_admin"
-                      ? "Edit Admin Account"
-                      : "Edit Coordinator/Adviser Account"
-                    : "Create New Coordinator/Adviser Account"}
-                </h2>
-                <button
-                  type="button"
-                  className="close-modal-btn"
-                  onClick={handleCancelModal}
-                  aria-label="Close modal"
-                >
-                  ×
-                </button>
+              <IoPeopleOutline className="dashboard-stat-icon" />
+              <div className="dashboard-stat-content">
+                <span className="dashboard-stat-value">{totalAccounts}</span>
+                <span className="dashboard-stat-label">Total Accounts</span>
               </div>
-              {error && (
-                <div className="error-message" role="alert">
-                  {error}
-                </div>
-              )}
-              <form onSubmit={handleSubmit} className="admin-form">
-                <div className="form-group">
-                  <label htmlFor="modal-name">Name</label>
-                  <input
-                    type="text"
-                    id="modal-name"
-                    name="name"
-                    value={formData.name}
-                    onChange={handleChange}
-                    placeholder="Full name"
-                    disabled={
-                      editingAdmin &&
-                      (editingAdmin.role === "admin" ||
-                        editingAdmin.role === "admin" ||
-                        editingAdmin.role === "super_admin")
-                    }
-                    readOnly={
-                      editingAdmin &&
-                      (editingAdmin.role === "admin" ||
-                        editingAdmin.role === "admin" ||
-                        editingAdmin.role === "super_admin")
-                    }
-                  />
-                  <small className="form-help">
-                    Display name for the account; used for profile icon
-                    initials.
-                  </small>
-                </div>
-
-                <div className="form-group">
-                  <label htmlFor="modal-username">Username</label>
-                  <input
-                    type="text"
-                    id="modal-username"
-                    name="username"
-                    value={formData.username}
-                    onChange={handleChange}
-                    required
-                    placeholder="Enter username"
-                    disabled={
-                      editingAdmin &&
-                      (editingAdmin.role === "admin" ||
-                        editingAdmin.role === "admin" ||
-                        editingAdmin.role === "super_admin")
-                    }
-                    readOnly={
-                      editingAdmin &&
-                      (editingAdmin.role === "admin" ||
-                        editingAdmin.role === "admin" ||
-                        editingAdmin.role === "super_admin")
-                    }
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label htmlFor="modal-email">Email</label>
-                  <input
-                    type="email"
-                    id="modal-email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleChange}
-                    required
-                    placeholder="Enter email address"
-                    disabled={
-                      editingAdmin &&
-                      (editingAdmin.role === "admin" ||
-                        editingAdmin.role === "admin" ||
-                        editingAdmin.role === "super_admin")
-                    }
-                    readOnly={
-                      editingAdmin &&
-                      (editingAdmin.role === "admin" ||
-                        editingAdmin.role === "admin" ||
-                        editingAdmin.role === "super_admin")
-                    }
-                  />
-                </div>
-
-                {!editingAdmin && (
-                  <div className="form-group">
-                    <label htmlFor="modal-password">Password</label>
-                    <div className="password-input-wrapper">
-                      <input
-                        type={showPassword ? "text" : "password"}
-                        id="modal-password"
-                        name="password"
-                        value={formData.password}
-                        onChange={handleChange}
-                        required
-                        placeholder="Enter password (min 6 characters)"
-                        minLength="6"
-                      />
-                      <button
-                        type="button"
-                        className="password-toggle"
-                        onClick={() => setShowPassword((prev) => !prev)}
-                        aria-label={
-                          showPassword ? "Hide password" : "Show password"
-                        }
-                      >
-                        {showPassword ? <FaRegEyeSlash /> : <FaRegEye />}
-                      </button>
-                    </div>
-                    <small className="form-help">
-                      Password is stored securely in Firebase Authentication
-                      only, not in the database.
-                    </small>
-                  </div>
-                )}
-
-                <div className="form-group role-autocomplete-container">
-                  <label htmlFor="modal-role">Role</label>
-                  <div
-                    style={{
-                      position: "relative",
-                      cursor:
-                        editingAdmin &&
-                        (editingAdmin.role === "admin" ||
-                          editingAdmin.role === "admin" ||
-                          editingAdmin.role === "super_admin")
-                          ? "not-allowed"
-                          : "pointer",
-                    }}
-                    onClick={
-                      editingAdmin &&
-                      (editingAdmin.role === "admin" ||
-                        editingAdmin.role === "admin" ||
-                        editingAdmin.role === "super_admin")
-                        ? undefined
-                        : handleRoleFocus
-                    }
-                  >
-                    <input
-                      type="text"
-                      id="modal-role"
-                      name="role"
-                      value={
-                        editingAdmin &&
-                        (editingAdmin.role === "admin" ||
-                          editingAdmin.role === "admin" ||
-                          editingAdmin.role === "super_admin")
-                          ? (() => {
-                              const hasCoordinatorAttributes =
-                                editingAdmin.college_code ||
-                                (editingAdmin.sections &&
-                                  Array.isArray(editingAdmin.sections) &&
-                                  editingAdmin.sections.length > 0) ||
-                                editingAdmin.section;
-                              return hasCoordinatorAttributes
-                                ? "Admin/Coordinator"
-                                : "Admin";
-                            })()
-                          : formData.role === "adviser"
-                          ? "OJT Adviser"
-                          : formData.role === "coordinator"
-                          ? "OJT Coordinator"
-                          : ""
-                      }
-                      onChange={() => {}}
-                      onFocus={handleRoleFocus}
-                      onBlur={handleRoleBlur}
-                      required
-                      placeholder="Select role"
-                      autoComplete="off"
-                      readOnly
-                      style={{ cursor: "pointer" }}
-                      className="role-input-with-icon"
-                    />
-                    <span className="role-dropdown-icon" aria-hidden="true">
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="12"
-                        height="12"
-                        viewBox="0 0 12 12"
-                        fill="none"
-                      >
-                        <path d="M6 9L1 4h10z" fill="currentColor" />
-                      </svg>
-                    </span>
-                    {showRoleSuggestions && (
-                      <div className="role-suggestions-dropdown">
-                        {canCreateCoord && (
-                          <div
-                            className="role-suggestion-item"
-                            onClick={() => handleRoleSelect("OJT Coordinator")}
-                            onMouseDown={(e) => e.preventDefault()}
-                          >
-                            OJT Coordinator
-                          </div>
-                        )}
-                        <div
-                          className="role-suggestion-item"
-                          onClick={() => handleRoleSelect("OJT Adviser")}
-                          onMouseDown={(e) => e.preventDefault()}
-                        >
-                          OJT Adviser
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                  <small className="form-help">
-                    {canCreateCoord
-                      ? "You can create Coordinator and Adviser accounts"
-                      : "You can only create Adviser accounts"}
-                  </small>
-                </div>
-
-                {/* College field for coordinators, advisers, and when editing admin */}
-                {(formData.role === "coordinator" ||
-                  formData.role === "adviser" ||
-                  (editingAdmin &&
-                    (editingAdmin.role === "admin" ||
-                      editingAdmin.role === "admin" ||
-                      editingAdmin.role === "super_admin"))) && (
-                  <div className="form-group">
-                    <label htmlFor="modal-college">College</label>
-                    <select
-                      id="modal-college"
-                      name="college_code"
-                      value={formData.college_code}
-                      onChange={handleChange}
-                      required={
-                        formData.role === "coordinator" ||
-                        formData.role === "adviser"
-                      }
-                      disabled={
-                        isLoading ||
-                        (formData.role === "adviser" && isCoordinator)
-                      }
-                    >
-                      <option value="">Select a college</option>
-                      {collegeOptions.map((college, index) => (
-                        <option
-                          key={`${
-                            college.id || college.college_code || index
-                          }-${college.college_name}`}
-                          value={college.college_code}
-                        >
-                          {college.college_name}
-                        </option>
-                      ))}
-                    </select>
-                    <small className="form-help">
-                      {editingAdmin &&
-                      (editingAdmin.role === "admin" ||
-                        editingAdmin.role === "admin" ||
-                        editingAdmin.role === "super_admin")
-                        ? "Admin college assignment"
-                        : formData.role === "adviser" && isCoordinator
-                        ? "Adviser is assigned to your college. Sections must belong to programs in this college."
-                        : "Coordinators can only see students from programs in their assigned college"}
-                    </small>
-                  </div>
-                )}
-
-                {(formData.role === "adviser" ||
-                  formData.role === "coordinator" ||
-                  (editingAdmin &&
-                    (editingAdmin.role === "admin" ||
-                      editingAdmin.role === "admin" ||
-                      editingAdmin.role === "super_admin"))) && (
-                  <div className="form-group">
-                    <label>Section</label>
-                    <div className="section-input-group">
-                      <div className="section-input-item">
-                        <label
-                          htmlFor="modal-sectionYear"
-                          className="section-label"
-                        >
-                          Year
-                        </label>
-                        <input
-                          type="number"
-                          id="modal-sectionYear"
-                          name="sectionYear"
-                          value={currentSection.sectionYear}
-                          onChange={handleChange}
-                          placeholder="4"
-                          min="1"
-                          max="5"
-                          disabled={isLoading}
-                          style={{ width: "80px" }}
-                        />
-                      </div>
-                      <div className="section-input-item program-code-autocomplete-container">
-                        <label
-                          htmlFor="modal-sectionProgram"
-                          className="section-label"
-                        >
-                          Program Code
-                        </label>
-                        <input
-                          type="text"
-                          id="modal-sectionProgram"
-                          name="sectionProgram"
-                          value={currentSection.sectionProgram}
-                          onChange={handleChange}
-                          onFocus={handleProgramCodeFocus}
-                          onBlur={handleProgramCodeBlur}
-                          placeholder="BSIT"
-                          maxLength={10}
-                          disabled={isLoading}
-                          style={{ width: "120px" }}
-                          autoComplete="off"
-                        />
-                        {showProgramCodeSuggestions &&
-                          filteredProgramCodes.length > 0 &&
-                          programCodeOptions.length > 0 && (
-                            <div className="program-code-suggestions-dropdown">
-                              {filteredProgramCodes.map((code) => (
-                                <div
-                                  key={code}
-                                  className="program-code-suggestion-item"
-                                  onClick={() => handleProgramCodeSelect(code)}
-                                  onMouseDown={(e) => e.preventDefault()}
-                                >
-                                  {code}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                      </div>
-                      <div className="section-input-item">
-                        <label
-                          htmlFor="modal-sectionNumber"
-                          className="section-label"
-                        >
-                          Section
-                        </label>
-                        <input
-                          type="text"
-                          id="modal-sectionNumber"
-                          name="sectionNumber"
-                          value={currentSection.sectionNumber}
-                          onChange={handleChange}
-                          placeholder="2"
-                          maxLength={2}
-                          disabled={isLoading}
-                          style={{ width: "80px" }}
-                        />
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      className="add-section-btn"
-                      onClick={handleAddSection}
-                      disabled={isLoading}
-                    >
-                      + Add Section
-                    </button>
-                    {formData.sections.length > 0 && (
-                      <div className="added-sections-block">
-                        <strong>
-                          Added Sections ({formData.sections.length}):
-                        </strong>
-                        <div className="added-sections-list">
-                          {formData.sections.map((section, index) => (
-                            <span key={index} className="added-section-chip">
-                              {section}
-                              <button
-                                type="button"
-                                className="remove-section-btn"
-                                onClick={() => handleRemoveSection(section)}
-                                disabled={isLoading}
-                                aria-label={"Remove section " + section}
-                              >
-                                ×
-                              </button>
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    <small className="form-help">
-                      Will be combined as:{" "}
-                      <strong>
-                        {currentSection.sectionYear || "?"}
-                        {currentSection.sectionProgram || "???"}-
-                        {currentSection.sectionNumber || "?"}
-                      </strong>{" "}
-                      (e.g., 4BSIT-2).{" "}
-                      {formData.role === "adviser"
-                        ? "Advisers will only see students in their assigned sections."
-                        : "Coordinators with sections will only see students in their assigned sections."}
-                    </small>
-                    {sectionProgramError && (
-                      <div className="section-error-below" role="alert">
-                        {sectionProgramError}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                <div className="modal-form-actions">
-                  <button
-                    type="button"
-                    className="cancel-btn"
-                    onClick={() => setShowCreateModal(false)}
-                    disabled={isLoading}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="submit-button"
-                    disabled={isLoading}
-                  >
-                    {isLoading
-                      ? editingAdmin
-                        ? "Updating..."
-                        : "Creating..."
-                      : editingAdmin
-                      ? "Update Account"
-                      : "Create Account"}
-                  </button>
-                </div>
-              </form>
+            </div>
+            <div
+              role="button"
+              tabIndex={0}
+              className={`dashboard-stat-card dashboard-stat-card--clickable${isStatCardActive("admins") ? " dashboard-stat-card--active" : ""}`}
+              onClick={() => handleStatCardClick("admins")}
+              onKeyDown={(e) => onStatCardKeyDown(e, "admins")}
+              aria-pressed={isStatCardActive("admins")}
+              aria-label="Filter table by Admin role"
+            >
+              <IoShieldCheckmarkOutline className="dashboard-stat-icon" />
+              <div className="dashboard-stat-content">
+                <span className="dashboard-stat-value">{adminsCount}</span>
+                <span className="dashboard-stat-label">Admins</span>
+              </div>
+            </div>
+            <div
+              role="button"
+              tabIndex={0}
+              className={`dashboard-stat-card dashboard-stat-card--clickable${isStatCardActive("coordinators") ? " dashboard-stat-card--active" : ""}`}
+              onClick={() => handleStatCardClick("coordinators")}
+              onKeyDown={(e) => onStatCardKeyDown(e, "coordinators")}
+              aria-pressed={isStatCardActive("coordinators")}
+              aria-label="Filter table by OJT Coordinator role"
+            >
+              <IoPeopleCircleOutline className="dashboard-stat-icon" />
+              <div className="dashboard-stat-content">
+                <span className="dashboard-stat-value">
+                  {coordinatorsCount}
+                </span>
+                <span className="dashboard-stat-label">Coordinators</span>
+              </div>
+            </div>
+            <div
+              role="button"
+              tabIndex={0}
+              className={`dashboard-stat-card dashboard-stat-card--clickable${isStatCardActive("advisers") ? " dashboard-stat-card--active" : ""}`}
+              onClick={() => handleStatCardClick("advisers")}
+              onKeyDown={(e) => onStatCardKeyDown(e, "advisers")}
+              aria-pressed={isStatCardActive("advisers")}
+              aria-label="Filter table by OJT Adviser role"
+            >
+              <IoPersonOutline className="dashboard-stat-icon" />
+              <div className="dashboard-stat-content">
+                <span className="dashboard-stat-value">{advisersCount}</span>
+                <span className="dashboard-stat-label">Advisers</span>
+              </div>
             </div>
           </div>
-        )}
+        </div>
 
-        <div className="admin-management-content">
-          <div className="admins-list">
-            <h2>Existing User Accounts</h2>
+        <div className="admin-management-container">
+          {error && (
+            <div className="error-message" role="alert">
+              {error}
+            </div>
+          )}
 
-            {/* Search and Filter Bar */}
-            <div className="admin-search-filter-bar">
-              <div className="admin-search-wrapper">
-                <input
-                  type="text"
-                  className="admin-search-input"
-                  placeholder="Search by name, username, email, or role..."
-                  value={searchQuery}
-                  onChange={(e) => {
-                    setSearchQuery(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                />
-                {searchQuery && (
+          {success && (
+            <div className="success-message" role="alert">
+              {success}
+            </div>
+          )}
+
+          {/* Create Admin Modal */}
+          {showCreateModal && (
+            <div className="create-admin-modal-backdrop">
+              <div
+                className="create-admin-modal"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="create-admin-modal-header">
+                  <h2>
+                    {editingAdmin
+                      ? editingAdmin.role === "admin" ||
+                        editingAdmin.role === "admin" ||
+                        editingAdmin.role === "super_admin"
+                        ? "Edit Admin Account"
+                        : "Edit Coordinator/Adviser Account"
+                      : "Create New Coordinator/Adviser Account"}
+                  </h2>
                   <button
                     type="button"
-                    className="admin-search-clear"
-                    onClick={() => {
-                      setSearchQuery("");
-                      setCurrentPage(1);
-                    }}
-                    aria-label="Clear search"
+                    className="close-modal-btn"
+                    onClick={handleCancelModal}
+                    aria-label="Close modal"
                   >
                     ×
                   </button>
+                </div>
+                {error && (
+                  <div className="error-message" role="alert">
+                    {error}
+                  </div>
                 )}
-              </div>
+                <form onSubmit={handleSubmit} className="admin-form">
+                  <div className="form-group">
+                    <label htmlFor="modal-name">Name</label>
+                    <input
+                      type="text"
+                      id="modal-name"
+                      name="name"
+                      value={formData.name}
+                      onChange={handleChange}
+                      placeholder="Full name"
+                      disabled={
+                        editingAdmin &&
+                        (editingAdmin.role === "admin" ||
+                          editingAdmin.role === "admin" ||
+                          editingAdmin.role === "super_admin")
+                      }
+                      readOnly={
+                        editingAdmin &&
+                        (editingAdmin.role === "admin" ||
+                          editingAdmin.role === "admin" ||
+                          editingAdmin.role === "super_admin")
+                      }
+                    />
+                    <small className="form-help">
+                      Display name for the account; used for profile icon
+                      initials.
+                    </small>
+                  </div>
 
-              <div className="admin-filter-wrapper">
-                <CustomDropdown
-                  options={["All Roles", "Admin", "OJT Coordinator", "OJT Adviser"]}
-                  value={
-                    filterRole === ""
-                      ? "All Roles"
-                      : filterRole === "admin"
-                        ? "Admin"
-                        : filterRole === "coordinator"
-                          ? "OJT Coordinator"
-                          : filterRole === "adviser"
-                            ? "OJT Adviser"
-                            : "All Roles"
-                  }
-                  onChange={(display) => {
-                    const value =
-                      display === "All Roles"
-                        ? ""
-                        : display === "Admin"
-                          ? "admin"
-                          : display === "OJT Coordinator"
-                            ? "coordinator"
-                            : display === "OJT Adviser"
-                              ? "adviser"
-                              : "";
-                    setFilterRole(value);
-                    setCurrentPage(1);
-                  }}
-                />
+                  <div className="form-group">
+                    <label htmlFor="modal-username">Username</label>
+                    <input
+                      type="text"
+                      id="modal-username"
+                      name="username"
+                      value={formData.username}
+                      onChange={handleChange}
+                      required
+                      placeholder="Enter username"
+                      disabled={
+                        editingAdmin &&
+                        (editingAdmin.role === "admin" ||
+                          editingAdmin.role === "admin" ||
+                          editingAdmin.role === "super_admin")
+                      }
+                      readOnly={
+                        editingAdmin &&
+                        (editingAdmin.role === "admin" ||
+                          editingAdmin.role === "admin" ||
+                          editingAdmin.role === "super_admin")
+                      }
+                    />
+                  </div>
 
-                <CustomDropdown
-                  options={[
-                    "All Colleges",
-                    ...collegeOptions.map((c) => c.college_name),
-                  ]}
-                  value={
-                    filterCollege
-                      ? collegeOptions.find((c) => c.college_code === filterCollege)
-                          ?.college_name ?? "All Colleges"
-                      : "All Colleges"
-                  }
-                  onChange={(display) => {
-                    const value =
-                      display === "All Colleges"
-                        ? ""
-                        : collegeOptions.find((c) => c.college_name === display)
-                            ?.college_code ?? "";
-                    setFilterCollege(value);
-                    setCurrentPage(1);
-                  }}
-                />
+                  <div className="form-group">
+                    <label htmlFor="modal-email">Email</label>
+                    <input
+                      type="email"
+                      id="modal-email"
+                      name="email"
+                      value={formData.email}
+                      onChange={handleChange}
+                      required
+                      placeholder="Enter email address"
+                      disabled={
+                        editingAdmin &&
+                        (editingAdmin.role === "admin" ||
+                          editingAdmin.role === "admin" ||
+                          editingAdmin.role === "super_admin")
+                      }
+                      readOnly={
+                        editingAdmin &&
+                        (editingAdmin.role === "admin" ||
+                          editingAdmin.role === "admin" ||
+                          editingAdmin.role === "super_admin")
+                      }
+                    />
+                  </div>
 
-                {(searchQuery || filterRole || filterCollege) && (
-                  <button
-                    type="button"
-                    className="admin-filter-clear"
-                    onClick={() => {
-                      setSearchQuery("");
-                      setFilterRole("");
-                      setFilterCollege("");
-                      setCurrentPage(1);
-                    }}
-                  >
-                    Clear Filters
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {isLoading ? (
-              <LoadingSpinner
-                isLoading={isLoading}
-                message="Loading admins..."
-              />
-            ) : (
-              (() => {
-                const filteredAdmins = admins.filter((admin) => {
-                  const matchesSearch =
-                    !searchQuery ||
-                    admin.name
-                      ?.toLowerCase()
-                      .includes(searchQuery.toLowerCase()) ||
-                    admin.username
-                      ?.toLowerCase()
-                      .includes(searchQuery.toLowerCase()) ||
-                    admin.email
-                      ?.toLowerCase()
-                      .includes(searchQuery.toLowerCase()) ||
-                    admin.role
-                      ?.toLowerCase()
-                      .includes(searchQuery.toLowerCase());
-
-                  const matchesRole = !filterRole || admin.role === filterRole;
-
-                  const matchesCollege =
-                    !filterCollege ||
-                    admin.role !== "coordinator" ||
-                    admin.college_code === filterCollege;
-
-                  return matchesSearch && matchesRole && matchesCollege;
-                });
-
-                const totalPages = Math.ceil(
-                  filteredAdmins.length / itemsPerPage
-                );
-                const indexOfLastItem = currentPage * itemsPerPage;
-                const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-                const paginatedAdmins = filteredAdmins.slice(
-                  indexOfFirstItem,
-                  indexOfLastItem
-                );
-
-                return (
-                  <>
-                    <div className="admins-table">
-                      <table>
-                        <thead>
-                          <tr>
-                            <th>Name</th>
-                            <th>Username</th>
-                            <th>Email</th>
-                            <th>Role</th>
-                            <th>College</th>
-                            <th>Section</th>
-                            <th>Created At</th>
-                            <th>Created By</th>
-                            <th>Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {filteredAdmins.length === 0 ? (
-                            <tr>
-                              <td
-                                colSpan="9"
-                                style={{ padding: 0, border: "none" }}
-                              >
-                                <EmptyState
-                                  type={
-                                    searchQuery || filterRole || filterCollege
-                                      ? "search"
-                                      : "document"
-                                  }
-                                  title={
-                                    searchQuery || filterRole || filterCollege
-                                      ? "No user accounts match your filters"
-                                      : "No user accounts found"
-                                  }
-                                  message={
-                                    searchQuery || filterRole || filterCollege
-                                      ? "Try adjusting your search criteria or filters to find user accounts. You can also clear all filters to see all accounts."
-                                      : "Get started by creating your first user account. Use the 'Create New Coordinator/Adviser Account' button above."
-                                  }
-                                  icon={IoShieldCheckmarkOutline}
-                                  actionLabel={
-                                    searchQuery || filterRole || filterCollege
-                                      ? "Clear Filters"
-                                      : undefined
-                                  }
-                                  onAction={
-                                    searchQuery || filterRole || filterCollege
-                                      ? () => {
-                                          setSearchQuery("");
-                                          setFilterRole("");
-                                          setFilterCollege("");
-                                          setCurrentPage(1);
-                                        }
-                                      : undefined
-                                  }
-                                />
-                              </td>
-                            </tr>
-                          ) : (
-                            paginatedAdmins.map((admin) => (
-                              <tr key={admin.id}>
-                                <td>
-                                  <span className="admin-name-text">
-                                    {admin.name?.trim() ||
-                                      admin.username ||
-                                      "—"}
-                                  </span>
-                                </td>
-                                <td>{admin.username}</td>
-                                <td>
-                                  {admin.email &&
-                                  !admin.email.includes(
-                                    "@admin.internquest.local"
-                                  ) ? (
-                                    <a
-                                      href={`mailto:${admin.email}`}
-                                      style={{
-                                        color: "#1976d2",
-                                        textDecoration: "underline",
-                                      }}
-                                    >
-                                      {admin.email}
-                                    </a>
-                                  ) : (
-                                    "—"
-                                  )}
-                                </td>
-                                <td>
-                                  {(() => {
-                                    const isAdminRole =
-                                      admin.role === "admin" ||
-                                      admin.role === "super_admin";
-                                    const isAdminWithCoordinator =
-                                      isAdminRole &&
-                                      (admin.college_code ||
-                                        (admin.sections &&
-                                          Array.isArray(admin.sections) &&
-                                          admin.sections.length > 0) ||
-                                        admin.section);
-
-                                    return (
-                                      <span
-                                        className={`role-badge role-${
-                                          isAdminRole ? "admin" : admin.role
-                                        } ${
-                                          isAdminWithCoordinator
-                                            ? "role-admin-coordinator"
-                                            : ""
-                                        }`}
-                                      >
-                                        {isAdminRole
-                                          ? isAdminWithCoordinator
-                                            ? "Admin/Coordinator"
-                                            : "Admin"
-                                          : admin.role === "coordinator"
-                                          ? "OJT Coordinator"
-                                          : "OJT Adviser"}
-                                      </span>
-                                    );
-                                  })()}
-                                </td>
-                                <td>
-                                  {admin.college_code
-                                    ? collegeOptions.find(
-                                        (c) =>
-                                          c.college_code === admin.college_code
-                                      )?.college_name || admin.college_code
-                                    : "—"}
-                                </td>
-                                <td>
-                                  {admin.sections &&
-                                  Array.isArray(admin.sections) &&
-                                  admin.sections.length > 0
-                                    ? admin.sections
-                                        .map((s) => s.toUpperCase())
-                                        .join(", ")
-                                    : admin.section
-                                    ? admin.section.toUpperCase()
-                                    : "—"}
-                                </td>
-                                <td>
-                                  {admin.createdAt
-                                    ? new Date(
-                                        admin.createdAt
-                                      ).toLocaleDateString()
-                                    : "N/A"}
-                                </td>
-                                <td>
-                                  {admin.createdBy
-                                    ? admin.createdBy === "admin" ||
-                                      admin.createdBy === "super_admin"
-                                      ? "Admin"
-                                      : admin.createdBy === "coordinator"
-                                      ? "OJT Coordinator"
-                                      : admin.createdBy === "adviser"
-                                      ? "OJT Adviser"
-                                      : admin.createdBy
-                                    : "N/A"}
-                                </td>
-                                <td>
-                                  <div className="admin-actions-buttons">
-                                    <button
-                                      className="edit-admin-btn"
-                                      onClick={() => handleEditAdmin(admin)}
-                                      title={
-                                        admin.role === "admin" ||
-                                        admin.role === "super_admin"
-                                          ? "Edit admin (only college and section can be changed)"
-                                          : "Edit admin"
-                                      }
-                                      aria-label={`Edit admin ${
-                                        admin.username || ""
-                                      }`}
-                                    >
-                                      <IoPencilOutline />
-                                      <span className="admin-action-label">
-                                        Edit
-                                      </span>
-                                    </button>
-                                    <button
-                                      className="delete-admin-btn"
-                                      onClick={() => handleDeleteAdmin(admin)}
-                                      disabled={
-                                        deletingId === admin.id ||
-                                        admin.role === "admin" ||
-                                        admin.role === "super_admin"
-                                      }
-                                      title={
-                                        admin.role === "admin" ||
-                                        admin.role === "super_admin"
-                                          ? "Cannot delete admin"
-                                          : "Delete admin"
-                                      }
-                                      aria-label={
-                                        admin.role === "admin" ||
-                                        admin.role === "super_admin"
-                                          ? "Cannot delete admin"
-                                          : `Delete admin ${
-                                              admin.username || ""
-                                            }`
-                                      }
-                                    >
-                                      {deletingId === admin.id ? (
-                                        "..."
-                                      ) : (
-                                        <>
-                                          <IoTrashOutline />
-                                          <span className="admin-action-label">
-                                            Delete
-                                          </span>
-                                        </>
-                                      )}
-                                    </button>
-                                  </div>
-                                </td>
-                              </tr>
-                            ))
-                          )}
-                        </tbody>
-                      </table>
+                  {!editingAdmin && (
+                    <div className="form-group">
+                      <label htmlFor="modal-password">Password</label>
+                      <div className="password-input-wrapper">
+                        <input
+                          type={showPassword ? "text" : "password"}
+                          id="modal-password"
+                          name="password"
+                          value={formData.password}
+                          onChange={handleChange}
+                          required
+                          placeholder="Enter password (min 6 characters)"
+                          minLength="6"
+                        />
+                        <button
+                          type="button"
+                          className="password-toggle"
+                          onClick={() => setShowPassword((prev) => !prev)}
+                          aria-label={
+                            showPassword ? "Hide password" : "Show password"
+                          }
+                        >
+                          {showPassword ? <FaRegEyeSlash /> : <FaRegEye />}
+                        </button>
+                      </div>
+                      <small className="form-help">
+                        Password is stored securely in Firebase Authentication
+                        only, not in the database.
+                      </small>
                     </div>
+                  )}
 
-                    {/* Pagination */}
-                    {filteredAdmins.length > 0 && (
-                      <div className="admin-pagination">
-                        <div className="admin-pagination-left">
-                          <div className="admin-pagination-info">
-                            <span className="pagination-text">
-                              Showing <strong>{indexOfFirstItem + 1}</strong> to{" "}
-                              <strong>
-                                {Math.min(
-                                  indexOfLastItem,
-                                  filteredAdmins.length
-                                )}
-                              </strong>{" "}
-                              of <strong>{filteredAdmins.length}</strong> admin
-                              {filteredAdmins.length !== 1 ? "s" : ""}
-                            </span>
-                          </div>
-                          <div className="admin-pagination-items-per-page">
-                            <label htmlFor="items-per-page">Show:</label>
-                            <select
-                              id="items-per-page"
-                              value={itemsPerPage}
-                              onChange={(e) => {
-                                setItemsPerPage(Number(e.target.value));
-                                setCurrentPage(1);
-                              }}
-                              className="items-per-page-select"
-                              aria-label="Items per page"
+                  <div className="form-group role-autocomplete-container">
+                    <label htmlFor="modal-role">Role</label>
+                    <div
+                      style={{
+                        position: "relative",
+                        cursor:
+                          editingAdmin &&
+                          (editingAdmin.role === "admin" ||
+                            editingAdmin.role === "admin" ||
+                            editingAdmin.role === "super_admin")
+                            ? "not-allowed"
+                            : "pointer",
+                      }}
+                      onClick={
+                        editingAdmin &&
+                        (editingAdmin.role === "admin" ||
+                          editingAdmin.role === "admin" ||
+                          editingAdmin.role === "super_admin")
+                          ? undefined
+                          : handleRoleFocus
+                      }
+                    >
+                      <input
+                        type="text"
+                        id="modal-role"
+                        name="role"
+                        value={
+                          editingAdmin &&
+                          (editingAdmin.role === "admin" ||
+                            editingAdmin.role === "admin" ||
+                            editingAdmin.role === "super_admin")
+                            ? (() => {
+                                const hasCoordinatorAttributes =
+                                  editingAdmin.college_code ||
+                                  (editingAdmin.sections &&
+                                    Array.isArray(editingAdmin.sections) &&
+                                    editingAdmin.sections.length > 0) ||
+                                  editingAdmin.section;
+                                return hasCoordinatorAttributes
+                                  ? "Admin/Coordinator"
+                                  : "Admin";
+                              })()
+                            : formData.role === "adviser"
+                              ? "OJT Adviser"
+                              : formData.role === "coordinator"
+                                ? "OJT Coordinator"
+                                : ""
+                        }
+                        onChange={() => {}}
+                        onFocus={handleRoleFocus}
+                        onBlur={handleRoleBlur}
+                        required
+                        placeholder="Select role"
+                        autoComplete="off"
+                        readOnly
+                        style={{ cursor: "pointer" }}
+                        className="role-input-with-icon"
+                      />
+                      <span className="role-dropdown-icon" aria-hidden="true">
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="12"
+                          height="12"
+                          viewBox="0 0 12 12"
+                          fill="none"
+                        >
+                          <path d="M6 9L1 4h10z" fill="currentColor" />
+                        </svg>
+                      </span>
+                      {showRoleSuggestions && (
+                        <div className="role-suggestions-dropdown">
+                          {canCreateCoord && (
+                            <div
+                              className="role-suggestion-item"
+                              onClick={() =>
+                                handleRoleSelect("OJT Coordinator")
+                              }
+                              onMouseDown={(e) => e.preventDefault()}
                             >
-                              <option value="5">5</option>
-                              <option value="10">10</option>
-                              <option value="20">20</option>
-                              <option value="50">50</option>
-                            </select>
-                            <span className="items-per-page-label">
-                              per page
-                            </span>
+                              OJT Coordinator
+                            </div>
+                          )}
+                          <div
+                            className="role-suggestion-item"
+                            onClick={() => handleRoleSelect("OJT Adviser")}
+                            onMouseDown={(e) => e.preventDefault()}
+                          >
+                            OJT Adviser
                           </div>
                         </div>
-                        {totalPages > 0 && (
-                          <div className="admin-pagination-controls">
-                            <button
-                              className="admin-pagination-btn admin-pagination-btn-nav"
-                              onClick={() =>
-                                setCurrentPage((prev) => Math.max(1, prev - 1))
-                              }
-                              disabled={currentPage === 1}
-                              aria-label="Previous page"
-                              title="Previous page"
-                            >
-                              <span className="pagination-icon">‹</span>
-                            </button>
-                            {[...Array(totalPages)].map((_, index) => {
-                              const page = index + 1;
-                              if (
-                                page === 1 ||
-                                page === totalPages ||
-                                (page >= currentPage - 1 &&
-                                  page <= currentPage + 1)
-                              ) {
-                                return (
-                                  <button
-                                    key={page}
-                                    className={`admin-pagination-btn admin-pagination-btn-number ${
-                                      currentPage === page ? "active" : ""
-                                    }`}
-                                    onClick={() => setCurrentPage(page)}
-                                    aria-label={`Go to page ${page}`}
-                                    aria-current={
-                                      currentPage === page ? "page" : undefined
-                                    }
-                                  >
-                                    {page}
-                                  </button>
-                                );
-                              } else if (
-                                page === currentPage - 2 ||
-                                page === currentPage + 2
-                              ) {
-                                return (
-                                  <span
-                                    key={page}
-                                    className="admin-pagination-ellipsis"
-                                    aria-hidden="true"
-                                  >
-                                    ...
-                                  </span>
-                                );
-                              }
-                              return null;
-                            })}
-                            <button
-                              className="admin-pagination-btn admin-pagination-btn-nav"
-                              onClick={() =>
-                                setCurrentPage((prev) =>
-                                  Math.min(totalPages, prev + 1)
-                                )
-                              }
-                              disabled={currentPage === totalPages}
-                              aria-label="Next page"
-                              title="Next page"
-                            >
-                              <span className="pagination-icon">›</span>
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </>
-                );
-              })()
-            )}
-          </div>
-        </div>
+                      )}
+                    </div>
+                    <small className="form-help">
+                      {canCreateCoord
+                        ? "You can create Coordinator and Adviser accounts"
+                        : "You can only create Adviser accounts"}
+                    </small>
+                  </div>
 
-        <ConfirmModal
-          open={showDeleteModal}
-          message={
-            pendingDeleteAdmin
-              ? `Delete admin "${pendingDeleteAdmin.username || "account"}"${
-                  pendingDeleteAdmin.role
-                    ? ` (${getRoleDisplayName(pendingDeleteAdmin.role)})`
-                    : ""
-                }?\nThis will remove their admin record and add an entry to deletion history.`: ""
-          }
-          onConfirm={confirmDeleteAdmin}
-          onCancel={cancelDeleteAdmin}
-        />
+                  {/* College field for coordinators, advisers, and when editing admin */}
+                  {(formData.role === "coordinator" ||
+                    formData.role === "adviser" ||
+                    (editingAdmin &&
+                      (editingAdmin.role === "admin" ||
+                        editingAdmin.role === "admin" ||
+                        editingAdmin.role === "super_admin"))) && (
+                    <div className="form-group">
+                      <label htmlFor="modal-college">College</label>
+                      <select
+                        id="modal-college"
+                        name="college_code"
+                        value={formData.college_code}
+                        onChange={handleChange}
+                        required={
+                          formData.role === "coordinator" ||
+                          formData.role === "adviser"
+                        }
+                        disabled={
+                          isLoading ||
+                          (formData.role === "adviser" && isCoordinator)
+                        }
+                      >
+                        <option value="">Select a college</option>
+                        {collegeOptions.map((college, index) => (
+                          <option
+                            key={`${
+                              college.id || college.college_code || index
+                            }-${college.college_name}`}
+                            value={college.college_code}
+                          >
+                            {college.college_name}
+                          </option>
+                        ))}
+                      </select>
+                      <small className="form-help">
+                        {editingAdmin &&
+                        (editingAdmin.role === "admin" ||
+                          editingAdmin.role === "admin" ||
+                          editingAdmin.role === "super_admin")
+                          ? "Admin college assignment"
+                          : formData.role === "adviser" && isCoordinator
+                            ? "Adviser is assigned to your college. Sections must belong to programs in this college."
+                            : "Coordinators can only see students from programs in their assigned college"}
+                      </small>
+                    </div>
+                  )}
+
+                  {(formData.role === "adviser" ||
+                    formData.role === "coordinator" ||
+                    (editingAdmin &&
+                      (editingAdmin.role === "admin" ||
+                        editingAdmin.role === "admin" ||
+                        editingAdmin.role === "super_admin"))) && (
+                    <div className="form-group">
+                      <label>Section</label>
+                      <div className="section-input-group">
+                        <div className="section-input-item">
+                          <label
+                            htmlFor="modal-sectionYear"
+                            className="section-label"
+                          >
+                            Year
+                          </label>
+                          <input
+                            type="number"
+                            id="modal-sectionYear"
+                            name="sectionYear"
+                            value={currentSection.sectionYear}
+                            onChange={handleChange}
+                            placeholder="4"
+                            min="1"
+                            max="5"
+                            disabled={isLoading}
+                            style={{ width: "80px" }}
+                          />
+                        </div>
+                        <div className="section-input-item program-code-autocomplete-container">
+                          <label
+                            htmlFor="modal-sectionProgram"
+                            className="section-label"
+                          >
+                            Program Code
+                          </label>
+                          <input
+                            type="text"
+                            id="modal-sectionProgram"
+                            name="sectionProgram"
+                            value={currentSection.sectionProgram}
+                            onChange={handleChange}
+                            onFocus={handleProgramCodeFocus}
+                            onBlur={handleProgramCodeBlur}
+                            placeholder="BSIT"
+                            maxLength={10}
+                            disabled={isLoading}
+                            style={{ width: "120px" }}
+                            autoComplete="off"
+                          />
+                          {showProgramCodeSuggestions &&
+                            filteredProgramCodes.length > 0 &&
+                            programCodeOptions.length > 0 && (
+                              <div className="program-code-suggestions-dropdown">
+                                {filteredProgramCodes.map((code) => (
+                                  <div
+                                    key={code}
+                                    className="program-code-suggestion-item"
+                                    onClick={() =>
+                                      handleProgramCodeSelect(code)
+                                    }
+                                    onMouseDown={(e) => e.preventDefault()}
+                                  >
+                                    {code}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                        </div>
+                        <div className="section-input-item">
+                          <label
+                            htmlFor="modal-sectionNumber"
+                            className="section-label"
+                          >
+                            Section
+                          </label>
+                          <input
+                            type="text"
+                            id="modal-sectionNumber"
+                            name="sectionNumber"
+                            value={currentSection.sectionNumber}
+                            onChange={handleChange}
+                            placeholder="2"
+                            maxLength={2}
+                            disabled={isLoading}
+                            style={{ width: "80px" }}
+                          />
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className="add-section-btn"
+                        onClick={handleAddSection}
+                        disabled={isLoading}
+                      >
+                        + Add Section
+                      </button>
+                      {formData.sections.length > 0 && (
+                        <div className="added-sections-block">
+                          <strong>
+                            Added Sections ({formData.sections.length}):
+                          </strong>
+                          <div className="added-sections-list">
+                            {formData.sections.map((section, index) => (
+                              <span key={index} className="added-section-chip">
+                                {section}
+                                <button
+                                  type="button"
+                                  className="remove-section-btn"
+                                  onClick={() => handleRemoveSection(section)}
+                                  disabled={isLoading}
+                                  aria-label={"Remove section " + section}
+                                >
+                                  ×
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      <small className="form-help">
+                        Will be combined as:{" "}
+                        <strong>
+                          {currentSection.sectionYear || "?"}
+                          {currentSection.sectionProgram || "???"}-
+                          {currentSection.sectionNumber || "?"}
+                        </strong>{" "}
+                        (e.g., 4BSIT-2).{" "}
+                        {formData.role === "adviser"
+                          ? "Advisers will only see students in their assigned sections."
+                          : "Coordinators with sections will only see students in their assigned sections."}
+                      </small>
+                      {sectionProgramError && (
+                        <div className="section-error-below" role="alert">
+                          {sectionProgramError}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="modal-form-actions">
+                    <button
+                      type="button"
+                      className="cancel-btn"
+                      onClick={() => setShowCreateModal(false)}
+                      disabled={isLoading}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="submit-button"
+                      disabled={isLoading}
+                    >
+                      {isLoading
+                        ? editingAdmin
+                          ? "Updating..."
+                          : "Creating..."
+                        : editingAdmin
+                          ? "Update Account"
+                          : "Create Account"}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          <div className="admin-management-content">
+            <div className="admins-list">
+              <div className="admins-list-header">
+                <h2>Existing User Accounts</h2>
+                <button
+                  type="button"
+                  className="create-admin-btn"
+                  onClick={async () => {
+                    await openCreateModal();
+                  }}
+                >
+                  + Create New Coordinator/Adviser Account
+                </button>
+              </div>
+
+              {/* Search and Filter Bar */}
+              <div className="admin-search-filter-bar">
+                <div className="admin-search-wrapper">
+                  <input
+                    type="text"
+                    className="admin-search-input"
+                    placeholder="Search by name, username, email, or role..."
+                    value={searchQuery}
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                  />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      className="admin-search-clear"
+                      onClick={() => {
+                        setSearchQuery("");
+                        setCurrentPage(1);
+                      }}
+                      aria-label="Clear search"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+
+                <div className="admin-filter-wrapper">
+                  <CustomDropdown
+                    options={[
+                      "All Roles",
+                      "Admin",
+                      "OJT Coordinator",
+                      "OJT Adviser",
+                    ]}
+                    value={
+                      filterRole === ""
+                        ? "All Roles"
+                        : filterRole === "admin"
+                          ? "Admin"
+                          : filterRole === "coordinator"
+                            ? "OJT Coordinator"
+                            : filterRole === "adviser"
+                              ? "OJT Adviser"
+                              : "All Roles"
+                    }
+                    onChange={(display) => {
+                      const value =
+                        display === "All Roles"
+                          ? ""
+                          : display === "Admin"
+                            ? "admin"
+                            : display === "OJT Coordinator"
+                              ? "coordinator"
+                              : display === "OJT Adviser"
+                                ? "adviser"
+                                : "";
+                      setFilterRole(value);
+                      setCurrentPage(1);
+                    }}
+                  />
+
+                  <CustomDropdown
+                    options={[
+                      "All Colleges",
+                      ...collegeOptions.map((c) => c.college_name),
+                    ]}
+                    value={
+                      filterCollege
+                        ? (collegeOptions.find(
+                            (c) => c.college_code === filterCollege,
+                          )?.college_name ?? "All Colleges")
+                        : "All Colleges"
+                    }
+                    onChange={(display) => {
+                      const value =
+                        display === "All Colleges"
+                          ? ""
+                          : (collegeOptions.find(
+                              (c) => c.college_name === display,
+                            )?.college_code ?? "");
+                      setFilterCollege(value);
+                      setCurrentPage(1);
+                    }}
+                  />
+
+                  {(searchQuery || filterRole || filterCollege) && (
+                    <button
+                      type="button"
+                      className="admin-filter-clear"
+                      onClick={() => {
+                        setSearchQuery("");
+                        setFilterRole("");
+                        setFilterCollege("");
+                        setCurrentPage(1);
+                      }}
+                    >
+                      Clear Filters
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {isLoading ? (
+                <LoadingSpinner
+                  isLoading={isLoading}
+                  message="Loading admins..."
+                />
+              ) : (
+                (() => {
+                  const filteredAdmins = admins.filter((admin) => {
+                    const matchesSearch =
+                      !searchQuery ||
+                      admin.name
+                        ?.toLowerCase()
+                        .includes(searchQuery.toLowerCase()) ||
+                      admin.username
+                        ?.toLowerCase()
+                        .includes(searchQuery.toLowerCase()) ||
+                      admin.email
+                        ?.toLowerCase()
+                        .includes(searchQuery.toLowerCase()) ||
+                      admin.role
+                        ?.toLowerCase()
+                        .includes(searchQuery.toLowerCase());
+
+                    const matchesRole =
+                      !filterRole ||
+                      (filterRole === "admin"
+                        ? admin.role === "admin" || admin.role === "super_admin"
+                        : admin.role === filterRole);
+
+                    const matchesCollege =
+                      !filterCollege ||
+                      admin.role !== "coordinator" ||
+                      admin.college_code === filterCollege;
+
+                    return matchesSearch && matchesRole && matchesCollege;
+                  });
+
+                  const totalPages = Math.ceil(
+                    filteredAdmins.length / itemsPerPage,
+                  );
+                  const indexOfLastItem = currentPage * itemsPerPage;
+                  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+                  const paginatedAdmins = filteredAdmins.slice(
+                    indexOfFirstItem,
+                    indexOfLastItem,
+                  );
+
+                  return (
+                    <>
+                      <div className="admins-table">
+                        <table>
+                          <thead>
+                            <tr>
+                              <th>Name</th>
+                              <th>Username</th>
+                              <th>Email</th>
+                              <th>Role</th>
+                              <th>College</th>
+                              <th>Section</th>
+                              <th>Created At</th>
+                              <th>Created By</th>
+                              <th>Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {filteredAdmins.length === 0 ? (
+                              <tr>
+                                <td
+                                  colSpan="9"
+                                  style={{ padding: 0, border: "none" }}
+                                >
+                                  <EmptyState
+                                    type={
+                                      searchQuery || filterRole || filterCollege
+                                        ? "search"
+                                        : "document"
+                                    }
+                                    title={
+                                      searchQuery || filterRole || filterCollege
+                                        ? "No user accounts match your filters"
+                                        : "No user accounts found"
+                                    }
+                                    message={
+                                      searchQuery || filterRole || filterCollege
+                                        ? "Try adjusting your search criteria or filters to find user accounts. You can also clear all filters to see all accounts."
+                                        : "Get started by creating your first user account. Use the 'Create New Coordinator/Adviser Account' button above."
+                                    }
+                                    icon={IoShieldCheckmarkOutline}
+                                    actionLabel={
+                                      searchQuery || filterRole || filterCollege
+                                        ? "Clear Filters"
+                                        : undefined
+                                    }
+                                    onAction={
+                                      searchQuery || filterRole || filterCollege
+                                        ? () => {
+                                            setSearchQuery("");
+                                            setFilterRole("");
+                                            setFilterCollege("");
+                                            setCurrentPage(1);
+                                          }
+                                        : undefined
+                                    }
+                                  />
+                                </td>
+                              </tr>
+                            ) : (
+                              paginatedAdmins.map((admin) => (
+                                <tr key={admin.id}>
+                                  <td>
+                                    <span className="admin-name-text">
+                                      {admin.name?.trim() ||
+                                        admin.username ||
+                                        "—"}
+                                    </span>
+                                  </td>
+                                  <td>{admin.username}</td>
+                                  <td>
+                                    {admin.email &&
+                                    !admin.email.includes(
+                                      "@admin.internquest.local",
+                                    ) ? (
+                                      <a
+                                        href={`mailto:${admin.email}`}
+                                        style={{
+                                          color: "#1976d2",
+                                          textDecoration: "underline",
+                                        }}
+                                      >
+                                        {admin.email}
+                                      </a>
+                                    ) : (
+                                      "—"
+                                    )}
+                                  </td>
+                                  <td>
+                                    {(() => {
+                                      const isAdminRole =
+                                        admin.role === "admin" ||
+                                        admin.role === "super_admin";
+                                      const isAdminWithCoordinator =
+                                        isAdminRole &&
+                                        (admin.college_code ||
+                                          (admin.sections &&
+                                            Array.isArray(admin.sections) &&
+                                            admin.sections.length > 0) ||
+                                          admin.section);
+
+                                      return (
+                                        <span
+                                          className={`role-badge role-${
+                                            isAdminRole ? "admin" : admin.role
+                                          } ${
+                                            isAdminWithCoordinator
+                                              ? "role-admin-coordinator"
+                                              : ""
+                                          }`}
+                                        >
+                                          {isAdminRole
+                                            ? isAdminWithCoordinator
+                                              ? "Admin/Coordinator"
+                                              : "Admin"
+                                            : admin.role === "coordinator"
+                                              ? "OJT Coordinator"
+                                              : "OJT Adviser"}
+                                        </span>
+                                      );
+                                    })()}
+                                  </td>
+                                  <td>
+                                    {admin.college_code
+                                      ? collegeOptions.find(
+                                          (c) =>
+                                            c.college_code ===
+                                            admin.college_code,
+                                        )?.college_name || admin.college_code
+                                      : "—"}
+                                  </td>
+                                  <td>
+                                    {admin.sections &&
+                                    Array.isArray(admin.sections) &&
+                                    admin.sections.length > 0
+                                      ? admin.sections
+                                          .map((s) => s.toUpperCase())
+                                          .join(", ")
+                                      : admin.section
+                                        ? admin.section.toUpperCase()
+                                        : "—"}
+                                  </td>
+                                  <td>
+                                    {admin.createdAt
+                                      ? new Date(
+                                          admin.createdAt,
+                                        ).toLocaleDateString()
+                                      : "N/A"}
+                                  </td>
+                                  <td>
+                                    {admin.createdBy
+                                      ? admin.createdBy === "admin" ||
+                                        admin.createdBy === "super_admin"
+                                        ? "Admin"
+                                        : admin.createdBy === "coordinator"
+                                          ? "OJT Coordinator"
+                                          : admin.createdBy === "adviser"
+                                            ? "OJT Adviser"
+                                            : admin.createdBy
+                                      : "N/A"}
+                                  </td>
+                                  <td>
+                                    <div className="admin-actions-buttons">
+                                      <button
+                                        className="edit-admin-btn"
+                                        onClick={() => handleEditAdmin(admin)}
+                                        title={
+                                          admin.role === "admin" ||
+                                          admin.role === "super_admin"
+                                            ? "Edit admin (only college and section can be changed)"
+                                            : "Edit admin"
+                                        }
+                                        aria-label={`Edit admin ${
+                                          admin.username || ""
+                                        }`}
+                                      >
+                                        <IoPencilOutline />
+                                        <span className="admin-action-label">
+                                          Edit
+                                        </span>
+                                      </button>
+                                      <button
+                                        className="delete-admin-btn"
+                                        onClick={() => handleDeleteAdmin(admin)}
+                                        disabled={
+                                          deletingId === admin.id ||
+                                          admin.role === "admin" ||
+                                          admin.role === "super_admin"
+                                        }
+                                        title={
+                                          admin.role === "admin" ||
+                                          admin.role === "super_admin"
+                                            ? "Cannot delete admin"
+                                            : "Delete admin"
+                                        }
+                                        aria-label={
+                                          admin.role === "admin" ||
+                                          admin.role === "super_admin"
+                                            ? "Cannot delete admin"
+                                            : `Delete admin ${
+                                                admin.username || ""
+                                              }`
+                                        }
+                                      >
+                                        {deletingId === admin.id ? (
+                                          "..."
+                                        ) : (
+                                          <>
+                                            <IoTrashOutline />
+                                            <span className="admin-action-label">
+                                              Delete
+                                            </span>
+                                          </>
+                                        )}
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* Pagination */}
+                      {filteredAdmins.length > 0 && (
+                        <div className="admin-pagination">
+                          <div className="admin-pagination-left">
+                            <div className="admin-pagination-info">
+                              <span className="pagination-text">
+                                Showing <strong>{indexOfFirstItem + 1}</strong>{" "}
+                                to{" "}
+                                <strong>
+                                  {Math.min(
+                                    indexOfLastItem,
+                                    filteredAdmins.length,
+                                  )}
+                                </strong>{" "}
+                                of <strong>{filteredAdmins.length}</strong>{" "}
+                                admin
+                                {filteredAdmins.length !== 1 ? "s" : ""}
+                              </span>
+                            </div>
+                            <div className="admin-pagination-items-per-page">
+                              <label htmlFor="items-per-page">Show:</label>
+                              <select
+                                id="items-per-page"
+                                value={itemsPerPage}
+                                onChange={(e) => {
+                                  setItemsPerPage(Number(e.target.value));
+                                  setCurrentPage(1);
+                                }}
+                                className="items-per-page-select"
+                                aria-label="Items per page"
+                              >
+                                <option value="5">5</option>
+                                <option value="10">10</option>
+                                <option value="20">20</option>
+                                <option value="50">50</option>
+                              </select>
+                              <span className="items-per-page-label">
+                                per page
+                              </span>
+                            </div>
+                          </div>
+                          {totalPages > 0 && (
+                            <div className="admin-pagination-controls">
+                              <button
+                                className="admin-pagination-btn admin-pagination-btn-nav"
+                                onClick={() =>
+                                  setCurrentPage((prev) =>
+                                    Math.max(1, prev - 1),
+                                  )
+                                }
+                                disabled={currentPage === 1}
+                                aria-label="Previous page"
+                                title="Previous page"
+                              >
+                                <span className="pagination-icon">‹</span>
+                              </button>
+                              {[...Array(totalPages)].map((_, index) => {
+                                const page = index + 1;
+                                if (
+                                  page === 1 ||
+                                  page === totalPages ||
+                                  (page >= currentPage - 1 &&
+                                    page <= currentPage + 1)
+                                ) {
+                                  return (
+                                    <button
+                                      key={page}
+                                      className={`admin-pagination-btn admin-pagination-btn-number ${
+                                        currentPage === page ? "active" : ""
+                                      }`}
+                                      onClick={() => setCurrentPage(page)}
+                                      aria-label={`Go to page ${page}`}
+                                      aria-current={
+                                        currentPage === page
+                                          ? "page"
+                                          : undefined
+                                      }
+                                    >
+                                      {page}
+                                    </button>
+                                  );
+                                } else if (
+                                  page === currentPage - 2 ||
+                                  page === currentPage + 2
+                                ) {
+                                  return (
+                                    <span
+                                      key={page}
+                                      className="admin-pagination-ellipsis"
+                                      aria-hidden="true"
+                                    >
+                                      ...
+                                    </span>
+                                  );
+                                }
+                                return null;
+                              })}
+                              <button
+                                className="admin-pagination-btn admin-pagination-btn-nav"
+                                onClick={() =>
+                                  setCurrentPage((prev) =>
+                                    Math.min(totalPages, prev + 1),
+                                  )
+                                }
+                                disabled={currentPage === totalPages}
+                                aria-label="Next page"
+                                title="Next page"
+                              >
+                                <span className="pagination-icon">›</span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  );
+                })()
+              )}
+            </div>
+          </div>
+
+          <ConfirmModal
+            open={showDeleteModal}
+            message={
+              pendingDeleteAdmin
+                ? `Delete admin "${pendingDeleteAdmin.username || "account"}"${
+                    pendingDeleteAdmin.role
+                      ? ` (${getRoleDisplayName(pendingDeleteAdmin.role)})`
+                      : ""
+                  }?\nThis will remove their admin record and add an entry to deletion history.`
+                : ""
+            }
+            onConfirm={confirmDeleteAdmin}
+            onCancel={cancelDeleteAdmin}
+          />
+        </div>
       </div>
     </div>
   );

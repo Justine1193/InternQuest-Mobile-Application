@@ -145,6 +145,19 @@
   color: #10b981;
 }
 
+.dashboard-header-stats.dashboard-stat-count-4 .dashboard-stat-card:nth-child(1) .dashboard-stat-icon {
+  color: #8b5cf6;
+}
+.dashboard-header-stats.dashboard-stat-count-4 .dashboard-stat-card:nth-child(2) .dashboard-stat-icon {
+  color: #f59e0b;
+}
+.dashboard-header-stats.dashboard-stat-count-4 .dashboard-stat-card:nth-child(3) .dashboard-stat-icon {
+  color: #10b981;
+}
+.dashboard-header-stats.dashboard-stat-count-4 .dashboard-stat-card:nth-child(4) .dashboard-stat-icon {
+  color: #dc2626;
+}
+
 .dashboard-stat-card div.dashboard-stat-content {
   display: flex;
   flex-direction: column;

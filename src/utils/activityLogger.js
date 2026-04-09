@@ -65,6 +65,9 @@ export const activityLoggers = {
   createStudent: (studentId, studentName) =>
     logActivity("create_student", "student", studentId, { studentName }),
 
+  updateStudent: (studentId, studentName, changes) =>
+    logActivity("update_student", "student", studentId, { studentName, changes }),
+
   deleteStudent: (studentId, studentName) =>
     logActivity("delete_student", "student", studentId, { studentName }),
 

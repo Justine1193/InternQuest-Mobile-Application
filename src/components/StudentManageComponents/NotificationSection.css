@@ -93,30 +93,6 @@
   font-size: 1.25rem;
 }
 
-.notification-count-badge {
-  background: #ff6b6b;
-  color: white;
-  border-radius: 12px;
-  padding: 0.2rem 0.6rem;
-  font-size: 0.75rem;
-  font-weight: 700;
-  min-width: 22px;
-  text-align: center;
-  box-shadow: 0 2px 4px rgba(255, 107, 107, 0.3);
-  animation: pulse 2s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  0%, 100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  50% {
-    transform: scale(1.05);
-    opacity: 0.9;
-  }
-}
-
 .notification-section-content {
   display: flex;
   flex-direction: column;

@@ -1,5 +1,241 @@
 @import "../dashboardTheme.css";
 
+/* ===== COMPANY MANAGEMENT — PROFESSIONAL SHELL (aligned with student dashboard) ===== */
+.company-dashboard.dashboard-container {
+  background: #f1f5f9;
+}
+
+.company-dashboard .dashboard-content {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 1.5rem 1.25rem 2.5rem;
+}
+
+@media (min-width: 1024px) {
+  .company-dashboard .dashboard-content {
+    padding: 1.75rem 1.75rem 3rem;
+  }
+}
+
+.company-dashboard .dashboard-content .dashboard-page-header {
+  width: 100%;
+  max-width: 1320px;
+  margin: 0 auto 1.5rem;
+  padding: 1.75rem 2rem 2rem;
+  border-radius: 14px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 12px 32px -12px rgba(15, 23, 42, 0.1);
+  position: relative;
+  overflow: hidden;
+}
+
+.company-dashboard .dashboard-content .dashboard-page-header::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #2563eb 0%, #4f46e5 50%, #7c3aed 100%);
+  pointer-events: none;
+}
+
+.company-dashboard .dashboard-content .dashboard-page-header .dashboard-header-content {
+  margin-bottom: 1.75rem;
+}
+
+.company-dashboard .dashboard-content .dashboard-page-header h1 {
+  font-size: 1.625rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: #0f172a;
+}
+
+.company-dashboard .dashboard-content .dashboard-page-header p {
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  color: #64748b;
+  max-width: 42rem;
+}
+
+.company-dashboard .dashboard-content .dashboard-header-icon-wrapper {
+  width: 52px;
+  height: 52px;
+  min-width: 52px;
+  min-height: 52px;
+  border-radius: 14px;
+  border: 1px solid rgba(37, 99, 235, 0.22);
+  background: linear-gradient(
+    145deg,
+    rgba(59, 130, 246, 0.14) 0%,
+    rgba(37, 99, 235, 0.08) 100%
+  );
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.12);
+}
+
+.company-dashboard .dashboard-content .dashboard-header-icon--blue {
+  color: #1d4ed8;
+  font-size: 1.5rem;
+}
+
+.company-dashboard .dashboard-content .dashboard-header-stats .dashboard-stat-card {
+  border-radius: 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease;
+}
+
+.company-dashboard .dashboard-content .dashboard-header-stats .dashboard-stat-card:hover {
+  transform: none;
+  background: #ffffff;
+  border-color: #cbd5e1;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.07);
+}
+
+.company-dashboard .dashboard-content .dashboard-header-stats .dashboard-stat-value {
+  font-variant-numeric: tabular-nums;
+  font-size: 1.625rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.company-dashboard .dashboard-content .dashboard-header-stats .dashboard-stat-label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #64748b;
+  letter-spacing: 0.01em;
+}
+
+.company-dashboard .dashboard-content .dashboard-page-header .dashboard-header-stats .dashboard-stat-card--active {
+  background: #ffffff;
+  border-color: #6366f1;
+  box-shadow:
+    0 0 0 1px rgba(99, 102, 241, 0.35),
+    0 6px 16px rgba(99, 102, 241, 0.12);
+}
+
+.company-dashboard .dashboard-content .dashboard-page-header .dashboard-header-stats .dashboard-stat-card:nth-child(1) .dashboard-stat-icon {
+  color: #2563eb;
+}
+
+.company-dashboard .dashboard-content .dashboard-page-header .dashboard-header-stats .dashboard-stat-card:nth-child(2) .dashboard-stat-icon {
+  color: #10b981;
+}
+
+.company-dashboard .dashboard-content .dashboard-page-header .dashboard-header-stats .dashboard-stat-card:nth-child(3) .dashboard-stat-icon {
+  color: #eab308;
+}
+
+.company-dashboard .dashboard-content .dashboard-page-header .dashboard-header-stats .dashboard-stat-card:nth-child(4) .dashboard-stat-icon {
+  color: #ef4444;
+}
+
+.company-dashboard .dashboard-content .dashboard-page-header .dashboard-header-stats .dashboard-stat-card:nth-child(5) .dashboard-stat-icon {
+  color: #64748b;
+}
+
+.company-dashboard .dashboard-content .dashboard-page-header .dashboard-header-stats .dashboard-stat-card--clickable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.company-dashboard .dashboard-content .dashboard-page-header .dashboard-header-stats .dashboard-stat-card--clickable:focus-visible {
+  outline: 2px solid #6366f1;
+  outline-offset: 2px;
+}
+
+.company-dashboard .table-section {
+  width: 100%;
+  max-width: 1320px;
+  margin: 0 auto 2rem;
+  border-radius: 14px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  box-shadow:
+    0 1px 3px rgba(15, 23, 42, 0.05),
+    0 8px 28px -8px rgba(15, 23, 42, 0.08);
+  overflow: hidden;
+}
+
+.company-dashboard .search-filter-area {
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid #e2e8f0;
+  background: linear-gradient(180deg, #fafbfc 0%, #ffffff 100%);
+}
+
+.company-dashboard .pagination {
+  gap: 0.3rem;
+  padding: 1.25rem 1.5rem 1rem;
+  border-top: 1px solid #e2e8f0;
+  background: #ffffff;
+}
+
+.company-dashboard .pagination-info,
+.company-dashboard .pagination-items-per-page label {
+  color: #64748b;
+  font-size: 0.8125rem;
+}
+
+.company-dashboard .pagination-arrow,
+.company-dashboard .pagination-number {
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  min-width: 38px;
+  height: 38px;
+  color: #334155;
+  font-size: 0.8125rem;
+}
+
+.company-dashboard .pagination-number.active {
+  background: #1e40af;
+  color: #fff;
+  border-color: #1e40af;
+  box-shadow: 0 1px 3px rgba(30, 64, 175, 0.35);
+}
+
+.company-dashboard .pagination-number:hover:not(.active),
+.company-dashboard .pagination-arrow:hover:not(:disabled) {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #0f172a;
+}
+
+.company-dashboard .items-per-page-select {
+  border-color: #e2e8f0;
+  border-radius: 8px;
+}
+
+.company-dashboard .table-actions {
+  padding: 1rem 1.5rem 1.25rem;
+  border-top: 1px solid #e2e8f0;
+  background: linear-gradient(180deg, #fafbfc 0%, #f8fafc 100%);
+  gap: 0.75rem;
+}
+
+.company-dashboard .table-action-btn {
+  border-radius: 8px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  min-height: 38px;
+}
+
+.company-dashboard .table-actions .add-entry {
+  margin-left: 0.5rem;
+}
+
+.company-dashboard .selection-actions {
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+}
+
 /* ===== Company Dashboard - Modern Minimal Design ===== */
 
 /* Page Header */
@@ -160,33 +396,15 @@
   line-height: 1.4;
 }
 
-/* Page header matches table-section width (90%) and background */
-.dashboard-content .dashboard-page-header {
-  width: 90%;
-}
-
-/* Company dashboard stat card icon colors: Total=blue, Active MOA=green, Expiring=yellow, Expired=red */
-.dashboard-content .dashboard-page-header .dashboard-header-stats .dashboard-stat-card:nth-child(1) .dashboard-stat-icon {
-  color: #2563eb;
-}
-.dashboard-content .dashboard-page-header .dashboard-header-stats .dashboard-stat-card:nth-child(2) .dashboard-stat-icon {
-  color: #10b981;
-}
-.dashboard-content .dashboard-page-header .dashboard-header-stats .dashboard-stat-card:nth-child(3) .dashboard-stat-icon {
-  color: #eab308;
-}
-.dashboard-content .dashboard-page-header .dashboard-header-stats .dashboard-stat-card:nth-child(4) .dashboard-stat-icon {
-  color: #ef4444;
-}
-
-/* Table Section */
+/* Table Section (company page — full-width cap, centered) */
 .table-section {
   background: white;
   border-radius: 12px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
   overflow: hidden;
   border: 1px solid #e5e7eb;
-  width: 90%;
+  width: 100%;
+  max-width: 1320px;
   margin-left: auto;
   margin-right: auto;
   margin-top: 1.5rem;
@@ -240,8 +458,9 @@
   box-sizing: border-box;
 }
 
-/* Less top margin when expiring alert follows expired alert */
-.moa-alert-banner.expired + .moa-alert-banner.expiring {
+/* Less top margin when another MOA alert follows */
+.moa-alert-banner.expired + .moa-alert-banner,
+.moa-alert-banner.no-moa + .moa-alert-banner {
   margin-top: 0.5rem;
 }
 
@@ -266,6 +485,12 @@
   background: #fffbeb;
   border: 1px solid #fde68a;
   color: #92400e;
+}
+
+.moa-alert-banner.no-moa {
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  color: #475569;
 }
 
 .moa-alert-banner .alert-icon {
@@ -501,13 +726,9 @@
   font-weight: 500;
 }
 
-/* Table Container Override */
-.table-section .table-container {
+/* Table container — card styling from Table.css under .company-dashboard */
+.company-dashboard .table-section .table-container {
   margin-top: 0;
-  border-radius: 0;
-  box-shadow: none;
-  border: none;
-  border-top: 1px solid #f3f4f6;
 }
 
 /* Legacy table-container class (for backwards compatibility) */
@@ -592,6 +813,15 @@
   .table-actions {
     flex-wrap: wrap;
     justify-content: center;
+  }
+
+  .company-dashboard .table-actions .add-entry {
+    margin-left: 0;
+  }
+
+  .company-dashboard .table-container {
+    margin-left: 1rem;
+    margin-right: 1rem;
   }
 
   .pagination {

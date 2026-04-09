@@ -16,6 +16,7 @@ import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 import { db, auth } from "../../../firebase";
 import { signOut } from "firebase/auth";
 import Navbar from "../Navbar/Navbar.jsx";
+import AdviserDeletionAlertBanner from "../AdviserDeletionAlertBanner/AdviserDeletionAlertBanner.jsx";
 import LoadingSpinner from "../LoadingSpinner.jsx";
 import ToastContainer from "../Toast/ToastContainer.jsx";
 import { useToast } from "../../hooks/useToast.js";
@@ -561,6 +562,7 @@ const PlatformData = () => {
       <Navbar onLogout={handleLogout} />
 
       <main className="platform-data-container">
+        <AdviserDeletionAlertBanner />
         <header className="platform-data-header">
           <div className="platform-data-title">
             <div className="platform-data-title-icon" aria-hidden="true">

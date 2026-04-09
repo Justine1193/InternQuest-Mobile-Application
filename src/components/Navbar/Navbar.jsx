@@ -2,21 +2,22 @@
  * Sidebar navigation with collapsible menu and role-based links.
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useLayoutEffect } from "react";
 import PropTypes from "prop-types";
-import { useLocation } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import {
   IoSettingsOutline,
   IoBriefcaseOutline,
   IoPeopleOutline,
   IoHelpCircleOutline,
-  IoShieldCheckmarkOutline,
   IoTrashOutline,
   IoTimeOutline,
   IoServerOutline,
   IoLockClosedOutline,
   IoChevronDownOutline,
   IoLogOutOutline,
+  IoMenuOutline,
+  IoCloseOutline,
 } from "react-icons/io5";
 import logo from "../../assets/InternQuest_Logo.png";
 import logoIcon from "../../assets/Website_Icon.png";
@@ -25,17 +26,47 @@ import {
   getAdminSession,
   canViewDashboard,
   canCreateAccounts,
-  hasRole,
   ROLES,
 } from "../../utils/auth";
 import { loadColleges } from "../../utils/collegeUtils";
 import "./Navbar.css";
 
+const MOBILE_BREAKPOINT_PX = 768;
+
+function useIsMobile(breakpoint = MOBILE_BREAKPOINT_PX) {
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.matchMedia(`(max-width: ${breakpoint}px)`).matches;
+  });
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${breakpoint}px)`);
+    const onChange = () => setIsMobile(mq.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, [breakpoint]);
+  return isMobile;
+}
+
+const readSidebarCollapsed = () => {
+  if (typeof window === "undefined") return false;
+  try {
+    const saved = window.localStorage.getItem("sidebarCollapsed");
+    if (saved === null) return false;
+    return JSON.parse(saved) === true;
+  } catch {
+    return false;
+  }
+};
+
 const Navbar = ({ onLogout }) => {
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(readSidebarCollapsed);
   const [showSettingsMenu, setShowSettingsMenu] = useState(true);
   const [collegeName, setCollegeName] = useState("");
   const location = useLocation();
+  const isMobile = useIsMobile(MOBILE_BREAKPOINT_PX);
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+  /** On phone/tablet, always show full labels inside the drawer (ignore desktop collapse). */
+  const desktopCollapsed = !isMobile && isCollapsed;
   const currentRole = getAdminRole();
   const canViewDash = canViewDashboard();
   const canCreate = canCreateAccounts();
@@ -121,8 +152,14 @@ const Navbar = ({ onLogout }) => {
   };
 
   const isActive = (path) => {
-    if (path === "/dashboard" || path === "/StudentDashboard") {
-      return location.pathname === path;
+    if (path === "/dashboard") {
+      return location.pathname === "/dashboard";
+    }
+    if (path === "/StudentDashboard") {
+      return (
+        location.pathname === "/StudentDashboard" ||
+        location.pathname === "/students"
+      );
     }
     if (path === "/helpDesk") {
       return (
@@ -153,6 +190,7 @@ const Navbar = ({ onLogout }) => {
     const handleEscKey = (event) => {
       if (event.key === "Escape") {
         setShowSettingsMenu(false);
+        setMobileDrawerOpen(false);
       }
     };
 
@@ -163,14 +201,30 @@ const Navbar = ({ onLogout }) => {
   }, []);
 
   useEffect(() => {
-    const savedState = localStorage.getItem("sidebarCollapsed");
-    if (savedState !== null) {
-      setIsCollapsed(JSON.parse(savedState));
-    }
-  }, []);
+    setMobileDrawerOpen(false);
+  }, [location.pathname]);
 
   useEffect(() => {
-    localStorage.setItem("sidebarCollapsed", JSON.stringify(isCollapsed));
+    if (!isMobile) {
+      document.body.classList.remove("mobile-nav-drawer-open");
+      return undefined;
+    }
+    if (mobileDrawerOpen) {
+      document.body.classList.add("mobile-nav-drawer-open");
+    } else {
+      document.body.classList.remove("mobile-nav-drawer-open");
+    }
+    return () => {
+      document.body.classList.remove("mobile-nav-drawer-open");
+    };
+  }, [isMobile, mobileDrawerOpen]);
+
+  useLayoutEffect(() => {
+    try {
+      localStorage.setItem("sidebarCollapsed", JSON.stringify(isCollapsed));
+    } catch {
+      /* ignore quota / private mode */
+    }
     if (isCollapsed) {
       document.body.classList.add("sidebar-collapsed");
     } else {
@@ -179,53 +233,99 @@ const Navbar = ({ onLogout }) => {
   }, [isCollapsed]);
 
   return (
-    <nav
-      className={`sidebar-nav ${isCollapsed ? "collapsed" : ""}`}
-      role="navigation"
-      aria-label="Main navigation"
-    >
-      <div className="sidebar-header">
-        <div className="logo-container">
+    <>
+      {isMobile && (
+        <header className="mobile-nav-bar" role="banner">
+          <button
+            type="button"
+            className="mobile-nav-menu-btn"
+            onClick={() => setMobileDrawerOpen((open) => !open)}
+            aria-expanded={mobileDrawerOpen}
+            aria-controls="mobile-sidebar-nav"
+            aria-label={
+              mobileDrawerOpen ? "Close navigation menu" : "Open navigation menu"
+            }
+          >
+            {mobileDrawerOpen ? (
+              <IoCloseOutline className="mobile-nav-menu-icon" aria-hidden />
+            ) : (
+              <IoMenuOutline className="mobile-nav-menu-icon" aria-hidden />
+            )}
+          </button>
           <img
-            src={isCollapsed ? logoIcon : logo}
-            alt="InternQuest Logo"
-            className={`sidebar-logo ${isCollapsed ? "collapsed" : ""}`}
+            src={logoIcon}
+            alt=""
+            className="mobile-nav-bar-logo"
+            width={40}
+            height={40}
           />
-        </div>
+          <span className="mobile-nav-bar-title">InternQuest</span>
+        </header>
+      )}
+      {isMobile && mobileDrawerOpen && (
         <button
-          className="collapse-btn"
-          onClick={toggleSidebar}
-          aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-          title={isCollapsed ? "Expand" : "Collapse"}
-        >
-          <span className="collapse-icon">{isCollapsed ? "»" : "«"}</span>
-        </button>
-      </div>
+          type="button"
+          className="mobile-nav-backdrop"
+          aria-label="Close menu"
+          onClick={() => setMobileDrawerOpen(false)}
+        />
+      )}
+      <nav
+        id="mobile-sidebar-nav"
+        className={`sidebar-nav ${desktopCollapsed ? "collapsed" : ""} ${
+          isMobile ? "sidebar-nav--mobile" : ""
+        } ${isMobile && mobileDrawerOpen ? "mobile-drawer-open" : ""}`}
+        role="navigation"
+        aria-label="Main navigation"
+        aria-hidden={isMobile && !mobileDrawerOpen ? true : undefined}
+      >
+        <div className="sidebar-header">
+          <div className="logo-container">
+            <img
+              src={desktopCollapsed ? logoIcon : logo}
+              alt="InternQuest Logo"
+              className={`sidebar-logo ${desktopCollapsed ? "collapsed" : ""}`}
+            />
+          </div>
+          {!isMobile && (
+            <button
+              type="button"
+              className="collapse-btn"
+              onClick={toggleSidebar}
+              aria-label={
+                desktopCollapsed ? "Expand sidebar" : "Collapse sidebar"
+              }
+              title={desktopCollapsed ? "Expand" : "Collapse"}
+            >
+              <span className="collapse-icon">{desktopCollapsed ? "»" : "«"}</span>
+            </button>
+          )}
+        </div>
       <div className="sidebar-menu">
         <div className="menu-section">
-          {!isCollapsed && <span className="menu-label">Main Menu</span>}
+          {!desktopCollapsed && <span className="menu-label">Main Menu</span>}
 
-          <a
-            href="/dashboard"
+          <Link
+            to="/dashboard"
             className={`sidebar-link ${isActive("/dashboard") ? "active" : ""}`}
             title={isAdviser ? "View Companies" : "Manage Company"}
           >
             <IoBriefcaseOutline className="sidebar-icon" />
-            {!isCollapsed && (
+            {!desktopCollapsed && (
               <span>{isAdviser ? "View Companies" : "Manage Company"}</span>
             )}
-          </a>
+          </Link>
 
-          <a
-            href="/StudentDashboard"
+          <Link
+            to="/students"
             className={`sidebar-link ${
               isActive("/StudentDashboard") ? "active" : ""
             }`}
             title="Manage Students"
           >
             <IoPeopleOutline className="sidebar-icon" />
-            {!isCollapsed && <span>Manage Students</span>}
-          </a>
+            {!desktopCollapsed && <span>Manage Students</span>}
+          </Link>
         </div>
 
         <div
@@ -233,7 +333,7 @@ const Navbar = ({ onLogout }) => {
             showSettingsMenu ? "is-open" : ""
           }`}
         >
-          {!isCollapsed ? (
+          {!desktopCollapsed ? (
             <>
               <button
                 type="button"
@@ -266,20 +366,20 @@ const Navbar = ({ onLogout }) => {
               >
                 <div className="settings-dropdown-inner">
                   {canCreate && (
-                    <a
-                      href="/adminManagement"
+                    <Link
+                      to="/adminManagement"
                       className={`sidebar-link ${
                         isActive("/adminManagement") ? "active" : ""
                       }`}
                       title="User & Role Management"
                     >
-                      <IoShieldCheckmarkOutline className="sidebar-icon" />
+                      <IoPeopleOutline className="sidebar-icon" />
                       <span>User & Role Management</span>
-                    </a>
+                    </Link>
                   )}
 
-                  <a
-                    href="/security-settings"
+                  <Link
+                    to="/security-settings"
                     className={`sidebar-link ${
                       isActive("/security-settings") ? "active" : ""
                     }`}
@@ -287,11 +387,11 @@ const Navbar = ({ onLogout }) => {
                   >
                     <IoLockClosedOutline className="sidebar-icon" />
                     <span>Change Password</span>
-                  </a>
+                  </Link>
 
                   {canViewDash && (
-                    <a
-                      href="/resource-management"
+                    <Link
+                      to="/resource-management"
                       className={`sidebar-link ${
                         isActive("/resource-management") ||
                         isActive("/helpDesk")
@@ -302,12 +402,12 @@ const Navbar = ({ onLogout }) => {
                     >
                       <IoHelpCircleOutline className="sidebar-icon" />
                       <span>Guide</span>
-                    </a>
+                    </Link>
                   )}
 
                   {isSuperAdmin && (
-                    <a
-                      href="/platform-data"
+                    <Link
+                      to="/platform-data"
                       className={`sidebar-link ${
                         isActive("/platform-data") ? "active" : ""
                       }`}
@@ -315,12 +415,12 @@ const Navbar = ({ onLogout }) => {
                     >
                       <IoServerOutline className="sidebar-icon" />
                       <span>Platform Data</span>
-                    </a>
+                    </Link>
                   )}
 
                   {isSuperAdmin && (
-                    <a
-                      href="/activityLog"
+                    <Link
+                      to="/activityLog"
                       className={`sidebar-link ${
                         isActive("/activityLog") ? "active" : ""
                       }`}
@@ -328,12 +428,12 @@ const Navbar = ({ onLogout }) => {
                     >
                       <IoTimeOutline className="sidebar-icon" />
                       <span>Activity Log</span>
-                    </a>
+                    </Link>
                   )}
 
                   {isSuperAdmin && (
-                    <a
-                      href="/archive"
+                    <Link
+                      to="/archive"
                       className={`sidebar-link ${
                         isActive("/archive") || isActive("/deleted") ? "active" : ""
                       }`}
@@ -341,7 +441,7 @@ const Navbar = ({ onLogout }) => {
                     >
                       <IoTrashOutline className="sidebar-icon" />
                       <span>Archive</span>
-                    </a>
+                    </Link>
                   )}
                 </div>
               </div>
@@ -350,32 +450,32 @@ const Navbar = ({ onLogout }) => {
             <>
               {/* 1. User & Role Management */}
               {canCreate && (
-                <a
-                  href="/adminManagement"
+                <Link
+                  to="/adminManagement"
                   className={`sidebar-link ${
                     isActive("/adminManagement") ? "active" : ""
                   }`}
                   title="User & Role Management"
                 >
-                  <IoShieldCheckmarkOutline className="sidebar-icon" />
-                  {!isCollapsed && <span>User & Role Management</span>}
-                </a>
+                  <IoPeopleOutline className="sidebar-icon" />
+                  {!desktopCollapsed && <span>User & Role Management</span>}
+                </Link>
               )}
 
-              <a
-                href="/security-settings"
+              <Link
+                to="/security-settings"
                 className={`sidebar-link ${
                   isActive("/security-settings") ? "active" : ""
                 }`}
                 title="Change Password"
               >
                 <IoLockClosedOutline className="sidebar-icon" />
-                {!isCollapsed && <span>Change Password</span>}
-              </a>
+                {!desktopCollapsed && <span>Change Password</span>}
+              </Link>
 
               {canViewDash && (
-                <a
-                  href="/resource-management"
+                <Link
+                  to="/resource-management"
                   className={`sidebar-link ${
                     isActive("/resource-management") || isActive("/helpDesk")
                       ? "active"
@@ -384,47 +484,47 @@ const Navbar = ({ onLogout }) => {
                   title="Guide Management"
                 >
                   <IoHelpCircleOutline className="sidebar-icon" />
-                  {!isCollapsed && <span>Guide</span>}
-                </a>
+                  {!desktopCollapsed && <span>Guide</span>}
+                </Link>
               )}
 
               {isSuperAdmin && (
-                <a
-                  href="/platform-data"
+                <Link
+                  to="/platform-data"
                   className={`sidebar-link ${
                     isActive("/platform-data") ? "active" : ""
                   }`}
                   title="Platform Data"
                 >
                   <IoServerOutline className="sidebar-icon" />
-                  {!isCollapsed && <span>Platform Data</span>}
-                </a>
+                  {!desktopCollapsed && <span>Platform Data</span>}
+                </Link>
               )}
 
               {isSuperAdmin && (
-                <a
-                  href="/activityLog"
+                <Link
+                  to="/activityLog"
                   className={`sidebar-link ${
                     isActive("/activityLog") ? "active" : ""
                   }`}
                   title="Activity Log"
                 >
                   <IoTimeOutline className="sidebar-icon" />
-                  {!isCollapsed && <span>Activity Log</span>}
-                </a>
+                  {!desktopCollapsed && <span>Activity Log</span>}
+                </Link>
               )}
 
               {isSuperAdmin && (
-                <a
-                  href="/deleted"
+                <Link
+                  to="/archive"
                   className={`sidebar-link ${
-                    isActive("/deleted") ? "active" : ""
+                    isActive("/archive") || isActive("/deleted") ? "active" : ""
                   }`}
                   title="Archive Management"
                 >
                   <IoTrashOutline className="sidebar-icon" />
-                  {!isCollapsed && <span>Archive</span>}
-                </a>
+                  {!desktopCollapsed && <span>Archive</span>}
+                </Link>
               )}
             </>
           )}
@@ -432,7 +532,7 @@ const Navbar = ({ onLogout }) => {
       </div>
 
       <div className="sidebar-footer">
-        <div className={`user-profile ${isCollapsed ? "collapsed" : ""}`}>
+        <div className={`user-profile ${desktopCollapsed ? "collapsed" : ""}`}>
           <div className="user-avatar-container">
             <div className="user-avatar-circle">
               <span className="user-avatar-initials">
@@ -446,7 +546,7 @@ const Navbar = ({ onLogout }) => {
             </div>
             <span className="online-indicator"></span>
           </div>
-          {!isCollapsed && (
+          {!desktopCollapsed && (
             <div className="user-info-text">
               <div className="user-info-header">
                 <span className="user-name">{username}</span>
@@ -488,18 +588,27 @@ const Navbar = ({ onLogout }) => {
           )}
         </div>
 
-        <button onClick={onLogout} className="logout-btn" title="Logout">
+        <button
+          type="button"
+          onClick={() => {
+            setMobileDrawerOpen(false);
+            if (typeof onLogout === "function") onLogout();
+          }}
+          className="logout-btn"
+          title="Logout"
+        >
           <IoLogOutOutline className="sidebar-icon" />
-          {!isCollapsed && <span>Logout</span>}
+          {!desktopCollapsed && <span>Logout</span>}
         </button>
       </div>
     </nav>
+    </>
   );
 };
 
 Navbar.propTypes = {
   /** Function to handle logout action */
-  onLogout: PropTypes.func.isRequired,
+  onLogout: PropTypes.func,
 };
 
 export default Navbar;

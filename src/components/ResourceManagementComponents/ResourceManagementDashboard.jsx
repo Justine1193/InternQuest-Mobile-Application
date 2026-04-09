@@ -20,6 +20,7 @@ import { useNavigate } from "react-router-dom";
 
 import { db, auth } from "../../../firebase";
 import Navbar from "../Navbar/Navbar.jsx";
+import AdviserDeletionAlertBanner from "../AdviserDeletionAlertBanner/AdviserDeletionAlertBanner.jsx";
 import LoadingSpinner from "../LoadingSpinner.jsx";
 import { clearAdminSession } from "../../utils/auth";
 import { useToast } from "../../hooks/useToast";
@@ -505,6 +506,7 @@ const ResourceManagementDashboard = () => {
       <ToastContainer toasts={toasts} removeToast={removeToast} />
 
       <div className="dashboard-content">
+        <AdviserDeletionAlertBanner />
         {/* Page Header */}
         <div className="resource-header">
           <div className="resource-header-content">

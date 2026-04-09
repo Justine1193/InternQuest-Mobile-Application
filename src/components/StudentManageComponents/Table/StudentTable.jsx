@@ -13,11 +13,6 @@
  * @param {Function} setOpenMenuId - Setter for openMenuId
  * @param {String|Number|null} selectedRowId - ID of the selected row
  * @param {Function} setSelectedRowId - Setter for selectedRowId
- * @param {Function} setIsEditMode - Setter for edit mode
- * @param {Function} setEditStudentId - Setter for edit student ID
- * @param {Function} setFormData - Setter for form data
- * @param {Function} setSkills - Setter for skills
- * @param {Function} setIsModalOpen - Setter for modal open state
  * @param {Function} setSelectionMode - Setter for selection mode
  * @param {Function} setSelectedItems - Setter for selected items
  * @param {Function} handleDeleteSingle - Handler for deleting a single student
@@ -47,11 +42,6 @@ const StudentTable = ({
   setOpenMenuId,
   selectedRowId,
   setSelectedRowId,
-  setIsEditMode,
-  setEditStudentId,
-  setFormData,
-  setSkills,
-  setIsModalOpen,
   setSelectionMode,
   setSelectedItems,
   handleDeleteSingle,
@@ -176,11 +166,6 @@ const StudentTable = ({
                 setOpenMenuId={setOpenMenuId}
                 selectedRowId={selectedRowId}
                 setSelectedRowId={setSelectedRowId}
-                setIsEditMode={setIsEditMode}
-                setEditStudentId={setEditStudentId}
-                setFormData={setFormData}
-                setSkills={setSkills}
-                setIsModalOpen={setIsModalOpen}
                 setSelectionMode={setSelectionMode}
                 setSelectedItems={setSelectedItems}
                 handleDeleteSingle={handleDeleteSingle}
@@ -210,11 +195,6 @@ StudentTable.propTypes = {
   setOpenMenuId: PropTypes.func,
   selectedRowId: PropTypes.any,
   setSelectedRowId: PropTypes.func,
-  setIsEditMode: PropTypes.func,
-  setEditStudentId: PropTypes.func,
-  setFormData: PropTypes.func,
-  setSkills: PropTypes.func,
-  setIsModalOpen: PropTypes.func,
   setSelectionMode: PropTypes.func,
   setSelectedItems: PropTypes.func,
   handleDeleteSingle: PropTypes.func,

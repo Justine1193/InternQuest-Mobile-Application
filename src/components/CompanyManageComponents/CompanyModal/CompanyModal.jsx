@@ -76,9 +76,11 @@ function CompanyModal({
       // Only scroll modal content to top, not the entire page
       // Use a small delay to ensure modal content is rendered
       setTimeout(() => {
-        const modalContent = document.querySelector('.modal-content');
-        if (modalContent) {
-          modalContent.scrollTo({ top: 0, behavior: 'smooth' });
+        const scrollEl =
+          document.querySelector(".company-modal .company-form") ||
+          document.querySelector(".company-modal .modal-content");
+        if (scrollEl) {
+          scrollEl.scrollTo({ top: 0, behavior: "smooth" });
         }
       }, 100);
     }
@@ -431,18 +433,26 @@ function CompanyModal({
 
   if (!open) return null;
   return (
-    <div className="modal">
+    <div
+      className="company-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="company-modal-title"
+    >
       <div className="modal-content">
         <div className="modal-header">
           <div className="modal-header-content">
-            <h2>{isEditMode ? "Edit Company" : "Add New Company"}</h2>
+            <h2 id="company-modal-title">
+              {isEditMode ? "Edit company" : "Add company"}
+            </h2>
             <p className="modal-subtitle">
-              {isEditMode 
-                ? "Update company information and details" 
-                : "Fill in the details below to add a new company to the system"}
+              {isEditMode
+                ? "Update partner details, MOA, and requirements. Changes sync to the company list and mobile app."
+                : "Enter company profile, endorsement, MOA, and skills. Required fields are marked with *."}
             </p>
           </div>
           <button
+            type="button"
             className="modal-close-btn"
             onClick={() => {
               setIsModalOpen(false);
@@ -455,16 +465,23 @@ function CompanyModal({
           </button>
         </div>
         {(error || localError) && (
-          <div className="modal-error-message error-popup">
+          <div
+            className="modal-error-message error-popup"
+            role="alert"
+            aria-live="assertive"
+          >
             <div className="error-content">
               <div className="error-icon-wrapper">
-                <span className="error-icon-symbol">⚠</span>
+                <span className="error-icon-symbol" aria-hidden="true">
+                  !
+                </span>
               </div>
               <div className="error-text-wrapper">
-                <p className="error-title">Error</p>
+                <p className="error-title">Something needs attention</p>
                 <p className="error-message-text">{error || localError}</p>
               </div>
               <button
+                type="button"
                 className="error-close-btn"
                 onClick={() => {
                   setError && setError("");
@@ -521,7 +538,7 @@ function CompanyModal({
           <div className="form-group">
             <label htmlFor="website">
               <span className="label-text">Website</span>
-              <span className="optional-badge">Optional</span>
+              <span className="required-asterisk">*</span>
             </label>
             <input
               id="website"

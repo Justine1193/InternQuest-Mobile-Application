@@ -91,6 +91,11 @@ export const isAdviserOnly = () => {
   return hasRole(ROLES.ADVISER);
 };
 
+/** Admin and coordinators may pick/change a student's assigned OJT adviser; advisers cannot. */
+export const canAssignStudentAdviser = () => {
+  return hasAnyRole([ROLES.SUPER_ADMIN, ROLES.COORDINATOR]);
+};
+
 // Get the current admin's college code
 export const getAdminCollegeCode = () => {
   const session = getAdminSession();

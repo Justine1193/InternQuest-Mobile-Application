@@ -12,11 +12,6 @@
  * @param {function} setOpenMenuId - Setter for openMenuId
  * @param {any} selectedRowId - ID of the selected row
  * @param {function} setSelectedRowId - Setter for selectedRowId
- * @param {function} setIsEditMode - Setter for edit mode
- * @param {function} setEditStudentId - Setter for edit student ID
- * @param {function} setFormData - Setter for form data
- * @param {function} setSkills - Setter for skills
- * @param {function} setIsModalOpen - Setter for modal open state
  * @param {function} setSelectionMode - Setter for selection mode
  * @param {function} setSelectedItems - Setter for selected items
  * @param {function} handleDeleteSingle - Handler for deleting a single student
@@ -45,11 +40,6 @@ const StudentTableRow = ({
   setOpenMenuId,
   selectedRowId,
   setSelectedRowId,
-  setIsEditMode,
-  setEditStudentId,
-  setFormData,
-  setSkills,
-  setIsModalOpen,
   setSelectionMode,
   setSelectedItems,
   handleDeleteSingle,
@@ -739,17 +729,13 @@ const StudentTableRow = ({
           setOpenMenuId={setOpenMenuId}
           selectedRowId={selectedRowId}
           setSelectedRowId={setSelectedRowId}
-          setIsEditMode={setIsEditMode}
-          setEditStudentId={setEditStudentId}
-          setFormData={setFormData}
-          setSkills={setSkills}
-          setIsModalOpen={setIsModalOpen}
           setSelectionMode={setSelectionMode}
           setSelectedItems={setSelectedItems}
           handleDeleteSingle={handleDeleteSingle}
           handleAcceptStudent={handleAcceptStudent}
           isDeleting={isDeleting}
           isAdviser={isAdviser}
+          onEdit={onEdit ? () => onEdit(row) : undefined}
         />
       </td>
     </tr>
@@ -767,11 +753,6 @@ StudentTableRow.propTypes = {
   setOpenMenuId: PropTypes.func,
   selectedRowId: PropTypes.any,
   setSelectedRowId: PropTypes.func,
-  setIsEditMode: PropTypes.func,
-  setEditStudentId: PropTypes.func,
-  setFormData: PropTypes.func,
-  setSkills: PropTypes.func,
-  setIsModalOpen: PropTypes.func,
   setSelectionMode: PropTypes.func,
   setSelectedItems: PropTypes.func,
   handleDeleteSingle: PropTypes.func,

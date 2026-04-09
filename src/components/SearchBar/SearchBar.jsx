@@ -19,6 +19,7 @@ const FILTER_LABELS = {
   hired: "Hired",
   blocked: "Blocked",
   approvedRequirement: "Approved",
+  submittedRequirements: "Requirement files",
 };
 
 const INITIAL_FILTERS = {
@@ -32,6 +33,7 @@ const INITIAL_FILTERS = {
   locationPreference: "",
   approvedRequirement: "",
   blocked: "",
+  submittedRequirements: "",
 };
 
 const SearchBar = ({

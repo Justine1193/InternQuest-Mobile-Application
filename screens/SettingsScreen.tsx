@@ -474,7 +474,7 @@ const SettingsScreen: React.FC = () => {
               <Icon name="close" size={24} color={colors.textMuted} />
             </TouchableOpacity>
             <Text style={styles.modalTitle}>Version</Text>
-            <Text style={styles.modalBodyText}>Version 2.5.0</Text>
+            <Text style={styles.modalBodyText}>Version 2.7.0</Text>
           </View>
         </View>
       </Modal>

@@ -402,6 +402,7 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
     try {
       const userId = auth.currentUser.uid;
       const userRef = doc(firestore, 'users', userId);
+      let existingData: any = {};
 
       // If the account was provisioned by admin under a different Firestore doc ID,
       // migrate that legacy doc into the UID doc to prevent duplicate rows in admin lists.
@@ -438,6 +439,15 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
           console.warn('⚠️ Legacy user doc migration skipped/failed:', migErr);
         }
       }
+
+      // Read latest profile (after migration) so we preserve workflow state.
+      try {
+        const existingSnap = await getDoc(userRef);
+        existingData = existingSnap.exists() ? (existingSnap.data() as any) : {};
+      } catch (e) {
+        existingData = {};
+      }
+
       // Get the selected program and field details
       const selectedProgram = programList.find(p => p === program);
       const programCategory = programCategories.find(cat =>
@@ -448,6 +458,36 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
       const { name, ...programWithoutName } = {
         id: program,
         name: selectedProgram || '',
+      };
+
+      const existingStatus = typeof existingData?.status === 'string' ? existingData.status.trim() : '';
+      const shouldSetActiveStatus = !existingStatus;
+
+      const existingAccountAccess = (existingData && typeof existingData.accountAccess === 'object') ? existingData.accountAccess : null;
+      const nextAccountAccess = existingAccountAccess
+        ? {
+            ...existingAccountAccess,
+            // Never auto-unblock an account during setup.
+            isBlocked: existingAccountAccess.isBlocked === true ? true : false,
+          }
+        : {
+            isBlocked: false,
+            blockedReason: null,
+            blockedBy: null,
+            blockedAt: null,
+          };
+
+      const existingMustChangePassword = existingData?.mustChangePassword;
+      const nextMustChangePassword = existingMustChangePassword === false ? false : true;
+
+      const existingOjt = (existingData && typeof existingData.ojtStatus === 'object') ? existingData.ojtStatus : null;
+      const nextOjtStatus = {
+        isHired: false,
+        currentCompany: null,
+        hiredAt: null,
+        completedHours: 0,
+        requiredHours: 300,
+        ...(existingOjt || {}),
       };
       const userData: any = {
         // Basic Information
@@ -483,31 +523,20 @@ export const SetupAccountScreen: React.FC<SetupAccountScreenProps> = ({
         updatedAt: serverTimestamp(),
 
         // Account Status
-        status: 'active',
+        ...(shouldSetActiveStatus ? { status: 'active' } : {}),
         accountType: 'student',
 
         // Account Access
         // If an adviser/coordinator blocks the account, set accountAccess.isBlocked=true and provide a reason.
         // Keep separate from the existing top-level `status` field (which is also used for OJT state like 'hired').
-        accountAccess: {
-          isBlocked: false,
-          blockedReason: null,
-          blockedBy: null,
-          blockedAt: null,
-        },
+        accountAccess: nextAccountAccess,
 
         // Security
         // Require users to change the admin-provided default password once.
-        mustChangePassword: true,
+        mustChangePassword: nextMustChangePassword,
 
         // OJT Status
-        ojtStatus: {
-          isHired: false,
-          currentCompany: null,
-          hiredAt: null,
-          completedHours: 0,
-          requiredHours: 300, // Default value, can be updated later
-        }
+        ojtStatus: nextOjtStatus,
       };
 
       console.log('Saving userData to Firestore:', userData);

@@ -17,9 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSavedInternships } from '../context/SavedInternshipsContext';
 import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
-import { firestore, db, auth } from '../firebase/config';
-import { onAuthStateChanged } from 'firebase/auth';
-import { ref, onValue } from 'firebase/database';
+import { firestore, auth } from '../firebase/config';
 import { accentPalette, colors, radii, shadows } from '../ui/theme';
 import { Screen } from '../ui/components/Screen';
 import { useNotificationCount } from '../context/NotificationCountContext';
@@ -44,6 +42,70 @@ const userPreferences = ['Programming', 'AI', 'React Native', 'Cloud'];
 const skillOptions = ['Python', 'JavaScript', 'React', 'Node.js', 'Cloud Computing', 'Data Science', 'All Skills'];
 const industryOptions = ['Technology', 'Finance', 'Healthcare', 'Education', 'Manufacturing', 'All Industries'];
 const workModeOptions = ['On-site', 'Remote', 'Hybrid', 'All Modes'];
+
+const MOA_NEAR_EXPIRY_DAYS = 30;
+
+const parseDocDate = (v: any): Date | null => {
+  if (!v) return null;
+  if (typeof v === 'object' && typeof v.toDate === 'function') {
+    const d = v.toDate();
+    return d instanceof Date && !Number.isNaN(d.getTime()) ? d : null;
+  }
+  if (typeof v === 'string' || typeof v === 'number') {
+    const d = new Date(v);
+    return !Number.isNaN(d.getTime()) ? d : null;
+  }
+  return null;
+};
+
+const normalizeStringArrayOrString = (v: any): string => {
+  if (Array.isArray(v)) {
+    return v.map((x) => String(x)).filter(Boolean).join(', ');
+  }
+  return typeof v === 'string' ? v : '';
+};
+
+const deriveMoaValidityFromCompanyDoc = (data: any): MoaValidity => {
+  const rawYears = data?.moaValidityYears ?? data?.moa_validity_years ?? data?.moaValidity ?? null;
+  const parsedYears = typeof rawYears === 'number' ? rawYears : Number(rawYears);
+  const years = Number.isFinite(parsedYears) ? parsedYears : null;
+
+  const baseDate =
+    parseDocDate(data?.moaUpdatedAt) ||
+    parseDocDate(data?.moaUpdatedOn) ||
+    parseDocDate(data?.moaSignedAt) ||
+    parseDocDate(data?.moaEffectiveAt) ||
+    parseDocDate(data?.updatedAt) ||
+    parseDocDate(data?.createdAt) ||
+    null;
+
+  const explicitExpiry =
+    parseDocDate(data?.moaExpiresOn) ||
+    parseDocDate(data?.moaExpiresAt) ||
+    parseDocDate(data?.moaExpiryDate) ||
+    parseDocDate(data?.moaExpiry) ||
+    null;
+
+  let expiresOn: string | null = null;
+  if (explicitExpiry) {
+    expiresOn = explicitExpiry.toISOString();
+  } else if (baseDate && years && years > 0) {
+    const expiry = new Date(baseDate);
+    expiry.setFullYear(expiry.getFullYear() + years);
+    if (!Number.isNaN(expiry.getTime())) {
+      expiresOn = expiry.toISOString();
+    }
+  }
+
+  const expired = expiresOn ? new Date(expiresOn).getTime() < Date.now() : false;
+
+  return {
+    years,
+    updatedAt: baseDate ? baseDate.toISOString() : null,
+    expiresOn,
+    expired,
+  };
+};
 
 const HomeScreen: React.FC<Props> = ({ navigation }) => {
   const { notificationCount } = useNotificationCount();
@@ -76,8 +138,13 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
     try {
       setRefreshing(true);
       const querySnapshot = await getDocs(collection(firestore, 'companies'));
+      const moaIndex: { [companyId: string]: MoaValidity } = {};
+
       const companyData: Post[] = querySnapshot.docs.map((doc: any) => {
         const data = doc.data();
+
+        const moaStatusRaw = String(data?.moaStatus ?? data?.moa_status ?? '').trim().toLowerCase();
+        const isNoMoaStatus = moaStatusRaw === 'no-moa' || moaStatusRaw === 'no_moa' || moaStatusRaw === 'none';
 
         const normalizeMoaCandidate = (v: any): string => {
           if (typeof v === 'string') return v.trim();
@@ -96,7 +163,7 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
           data?.moaPath,
           data?.moa,
         ];
-        const moaValue = moaCandidates
+        let moaValue = moaCandidates
           .map(normalizeMoaCandidate)
           .find((s) => {
             if (!s) return false;
@@ -105,27 +172,56 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
             return true;
           }) || normalizeMoaCandidate(data?.moa);
 
+        // Respect Firestore moaStatus: "no-moa" means hide MOA entirely.
+        if (isNoMoaStatus) {
+          moaValue = '';
+        } else if (moaStatusRaw && !moaValue) {
+          // Any other status value implies a MOA exists, even if the file URL lives elsewhere.
+          moaValue = 'Yes';
+        }
+
+        // Build MOA validity from the company document itself (Firestore).
+        // This avoids relying on Realtime DB permissions for the company list.
+        moaIndex[String(doc.id)] = deriveMoaValidityFromCompanyDoc(data);
+        const companyNameKey = typeof data?.companyName === 'string' ? data.companyName.trim().toLowerCase() : '';
+        if (companyNameKey) moaIndex[companyNameKey] = moaIndex[String(doc.id)];
+
+        const modeOfWorkRaw = data?.modeOfWork ?? data?.modeofwork ?? data?.mode_of_work;
+        const modeOfWork = Array.isArray(modeOfWorkRaw)
+          ? String(modeOfWorkRaw[0] ?? '')
+          : (typeof modeOfWorkRaw === 'string' ? modeOfWorkRaw : '');
+
+        const skillsRaw =
+          data?.skillsREq ??
+          data?.skillsReq ??
+          data?.skillsRequired ??
+          data?.skills ??
+          [];
+
+        const industry = normalizeStringArrayOrString(data?.fields ?? data?.industry ?? data?.industryField);
+
         return {
           id: doc.id,
           company: data.companyName || '',
           description: data.companyDescription || '',
           category: data.category || '',
           location: data.companyAddress || '',
-          industry: data.fields || '',
-          tags: data.skillsREq || [],
+          industry,
+          tags: Array.isArray(skillsRaw) ? skillsRaw : (typeof skillsRaw === 'string' ? [skillsRaw] : []),
           endorsedByCollege: data.endorsedByCollege || data.endorsed_by_college || data.collegeEndorsement || '',
           website: data.companyWeb || '',
           email: data.companyEmail || '',
           contactPersonName: data.contactPersonName || data.companyContactPerson || data.contactPerson || '',
           contactPersonPhone: data.contactPersonPhone || data.companyContactPhone || data.contactPhone || data.phone || '',
           moa: moaValue || '',
-          modeOfWork: Array.isArray(data.modeofwork) ? data.modeofwork[0] : data.modeofwork || '',
+          modeOfWork,
           latitude: data.latitude || 0,
           longitude: data.longitude || 0,
           createdAt: data.createdAt ? (data.createdAt.toDate ? data.createdAt.toDate() : new Date(data.createdAt)) : new Date(),
         };
       });
       setCompanies(companyData);
+      setMoaValidity(moaIndex);
     } catch (error) {
       console.error('Error fetching companies: ', error);
     } finally {
@@ -170,177 +266,6 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
       }
     };
     fetchUserFieldsAndSkills();
-
-    // Subscribe to realtime MOA validity for all companies.
-    // IMPORTANT: RTDB rules typically require auth; avoid subscribing while auth is still null.
-    let unsubCompaniesListener: null | (() => void) = null;
-    let unsubMoaAvailabilityListener: null | (() => void) = null;
-    let unsubAuth: null | (() => void) = null;
-    let retryTimeout: ReturnType<typeof setTimeout> | null = null;
-    let retriedAfterTokenRefresh = false;
-
-    const isPermissionDenied = (err: any) => {
-      const code = (err && (err.code || err.name)) ? String(err.code || err.name) : '';
-      const message = err && err.message ? String(err.message) : '';
-      return code.toLowerCase().includes('permission') || message.toLowerCase().includes('permission_denied');
-    };
-
-    const startMoaAvailabilitySubscription = () => {
-      if (unsubMoaAvailabilityListener) return;
-      try {
-        const availabilityRef = ref(db, 'moaAvailability');
-        unsubMoaAvailabilityListener = onValue(
-          availabilityRef,
-          (snapshot: any) => {
-            const availability = snapshot.val() || {};
-            const processed: { [key: string]: MoaValidity } = {};
-
-            Object.entries(availability).forEach(([companyId, rawYears]) => {
-              const parsedYears = typeof rawYears === 'number' ? rawYears : Number(rawYears);
-              const years = Number.isFinite(parsedYears) ? parsedYears : null;
-
-              processed[String(companyId)] = {
-                years,
-                updatedAt: null,
-                expiresOn: null,
-                expired: false,
-              };
-            });
-
-            setMoaValidity(processed);
-          },
-          (error: any) => {
-            // If even moaAvailability is denied, avoid spamming errors.
-            if (isPermissionDenied(error)) {
-              console.warn('Realtime DB MOA availability read denied.');
-              setMoaValidity({});
-              return;
-            }
-            console.error('Failed to read MOA availability from Realtime DB', error);
-          }
-        );
-      } catch (e) {
-        console.warn('Realtime DB MOA availability subscription skipped:', e);
-      }
-    };
-
-    const startMoaSubscription = () => {
-      if (unsubCompaniesListener) return;
-      try {
-        const companiesRef = ref(db, 'companies');
-        unsubCompaniesListener = onValue(
-          companiesRef,
-          (snapshot: any) => {
-            const companies = snapshot.val() || {};
-            const processed: { [key: string]: MoaValidity } = {};
-
-            Object.entries(companies).forEach(([companyId, data]) => {
-              const rawYears = (data as any)?.moaValidityYears;
-              const parsedYears = typeof rawYears === 'number' ? rawYears : Number(rawYears);
-              const years = Number.isFinite(parsedYears) ? parsedYears : null;
-              const updatedAt = (data as any)?.updatedAt ?? null;
-              const companyName = typeof (data as any)?.companyName === 'string'
-                ? (data as any).companyName.trim().toLowerCase()
-                : null;
-
-              let expiresOn: string | null = null;
-              let expired = false;
-              if (updatedAt && years !== null) {
-                const updatedDate = new Date(updatedAt);
-                if (!Number.isNaN(updatedDate.getTime())) {
-                  const expiryDate = new Date(updatedDate);
-                  expiryDate.setFullYear(expiryDate.getFullYear() + years);
-                  expiresOn = expiryDate.toISOString();
-                  expired = expiryDate.getTime() < Date.now();
-                }
-              }
-
-              processed[companyId] = {
-                years,
-                updatedAt,
-                expiresOn,
-                expired,
-              };
-
-              if (companyName) {
-                processed[companyName] = {
-                  years,
-                  updatedAt,
-                  expiresOn,
-                  expired,
-                };
-              }
-            });
-
-            setMoaValidity(processed);
-          },
-          (error: any) => {
-            if (isPermissionDenied(error)) {
-              // This usually means your deployed RTDB rules disallow reading /companies.
-              // First: retry once after forcing an auth token refresh.
-              if (!retriedAfterTokenRefresh && auth.currentUser) {
-                retriedAfterTokenRefresh = true;
-                auth.currentUser
-                  .getIdToken(true)
-                  .catch(() => {
-                    // ignore
-                  })
-                  .finally(() => {
-                    try {
-                      if (unsubCompaniesListener) {
-                        unsubCompaniesListener();
-                        unsubCompaniesListener = null;
-                      }
-                    } catch { }
-                    retryTimeout = setTimeout(() => {
-                      startMoaSubscription();
-                    }, 250);
-                  });
-                return;
-              }
-
-              // Second: fall back to the more restricted node used by admin tooling.
-              console.warn('Realtime DB /companies read denied. Falling back to moaAvailability.');
-              try {
-                if (unsubCompaniesListener) {
-                  unsubCompaniesListener();
-                  unsubCompaniesListener = null;
-                }
-              } catch { }
-              startMoaAvailabilitySubscription();
-              return;
-            }
-
-            console.error('Failed to read MOA validity from Realtime DB', error);
-          }
-        );
-      } catch (e) {
-        console.warn('Realtime DB MOA subscription skipped:', e);
-      }
-    };
-
-    if (auth.currentUser) {
-      startMoaSubscription();
-    } else {
-      unsubAuth = onAuthStateChanged(auth, (user) => {
-        if (user) {
-          startMoaSubscription();
-          if (unsubAuth) {
-            unsubAuth();
-            unsubAuth = null;
-          }
-        }
-      });
-    }
-
-    return () => {
-      try {
-        if (retryTimeout) clearTimeout(retryTimeout);
-        if (unsubCompaniesListener) unsubCompaniesListener();
-        if (unsubMoaAvailabilityListener) unsubMoaAvailabilityListener();
-        if (unsubAuth) unsubAuth();
-      } catch (e) { }
-    };
   }, []);
 
   const toTokens = (value: unknown): string[] => {
@@ -442,8 +367,50 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
   const effectiveSkill = categoryTag === 'All' ? selectedSkill : (userSkills.includes(categoryTag) ? categoryTag : selectedSkill);
   const effectiveIndustry = categoryTag === 'All' ? selectedIndustry : (industryOptions.includes(categoryTag) ? categoryTag : selectedIndustry);
 
+  const getMoaInfo = (post: Post): MoaValidity | null => {
+    const idKey = typeof post.id === 'string' ? post.id : '';
+    const nameKey = typeof post.company === 'string' ? post.company.trim().toLowerCase() : '';
+    return (idKey && moaValidity[idKey]) || (nameKey && moaValidity[nameKey]) || null;
+  };
+
+  const hasMoaConfigured = (post: Post): boolean => {
+    const raw = typeof post.moa === 'string' ? post.moa.trim() : '';
+    if (!raw) return false;
+    const lower = raw.toLowerCase();
+    if (['no', 'false', '0', 'n'].includes(lower)) return false;
+    // Treat "yes" as a flag meaning MOA exists even if the file URL lives elsewhere.
+    return true;
+  };
+
+  const isActiveMoa = (post: Post): boolean => {
+    if (!hasMoaConfigured(post)) return false;
+
+    // If we have expiry metadata, respect it; otherwise, treat as active.
+    const info = getMoaInfo(post);
+    if (info && info.expired === true) return false;
+    return true;
+  };
+
+  const getDaysUntilMoaExpiry = (post: Post): number | null => {
+    const info = getMoaInfo(post);
+    if (!info || !info.expiresOn || info.expired) return null;
+
+    const expiryDate = new Date(info.expiresOn);
+    if (Number.isNaN(expiryDate.getTime())) return null;
+
+    const ms = expiryDate.getTime() - Date.now();
+    const days = Math.ceil(ms / (1000 * 60 * 60 * 24));
+    return Number.isFinite(days) ? days : null;
+  };
+
+  const isMoaNearExpiry = (post: Post): boolean => {
+    const days = getDaysUntilMoaExpiry(post);
+    return typeof days === 'number' && days >= 0 && days <= MOA_NEAR_EXPIRY_DAYS;
+  };
+
   // Enhanced search and filtering logic
   const filteredPosts = (activeFilter === 'Saved' ? savedInternships : companies)
+    .filter(post => isActiveMoa(post as Post))
     .filter(post => {
       // If no search text, show all posts
       if (!searchText.trim()) return true;
@@ -538,9 +505,7 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
   };
 
   const formatMoaValidity = (post: Post) => {
-    const idKey = typeof post.id === 'string' ? post.id : '';
-    const nameKey = typeof post.company === 'string' ? post.company.trim().toLowerCase() : '';
-    const info = (idKey && moaValidity[idKey]) || (nameKey && moaValidity[nameKey]);
+    const info = getMoaInfo(post);
     if (!info || (info.years === null && !info.expiresOn)) return '—';
 
     const segments: string[] = [];
@@ -801,6 +766,8 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
         {/* Company Cards (with 'Load more') */}
         {filteredPosts.length > 0 && filteredPosts.slice(0, visibleCount).map(post => {
             const logo = getCompanyLogo(post.company);
+            const showMoaNearExpiry = isMoaNearExpiry(post as Post);
+            const daysUntilExpiry = showMoaNearExpiry ? getDaysUntilMoaExpiry(post as Post) : null;
             return (
               <TouchableOpacity
                 key={post.id}
@@ -824,6 +791,14 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
                   </TouchableOpacity>
                 </View>
                 <View style={[styles.cardAccent, { backgroundColor: logo.color }]} />
+                {showMoaNearExpiry && (
+                  <View style={styles.moaExpiryChip}>
+                    <Ionicons name="warning-outline" size={14} color={colors.warning} />
+                    <Text style={styles.moaExpiryChipText}>
+                      MOA expiring{typeof daysUntilExpiry === 'number' ? ` in ${daysUntilExpiry} day${daysUntilExpiry === 1 ? '' : 's'}` : ' soon'}
+                    </Text>
+                  </View>
+                )}
                 <Text style={styles.companyName}>{post.company}</Text>
                 <Text style={styles.cardDetailsLine}>
                   {typeof post.modeOfWork === 'string' ? post.modeOfWork : 'Internship'} · {typeof post.location === 'string' ? post.location : 'Location not specified'}
@@ -1479,6 +1454,24 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     marginBottom: 12,
     alignSelf: 'flex-start',
+  },
+  moaExpiryChip: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radii.md,
+    backgroundColor: colors.warningSoft,
+    borderWidth: 1,
+    borderColor: colors.warning,
+    marginBottom: 10,
+  },
+  moaExpiryChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.warning,
   },
   companyName: {
     fontSize: 20,

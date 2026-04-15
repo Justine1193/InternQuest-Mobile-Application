@@ -44,8 +44,11 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
   const [companyName, setCompanyName] = useState('');
   const [avatarChanged, setAvatarChanged] = useState(false);
   const [totalHours, setTotalHours] = useState(0);
-  const [progress, setProgress] = useState(0);
   const [requiredHours, setRequiredHours] = useState(300);
+
+  const safeRequiredHours = Number.isFinite(requiredHours) && requiredHours > 0 ? requiredHours : 0;
+  const progressFraction = safeRequiredHours > 0 ? Math.min(1, totalHours / safeRequiredHours) : 0;
+  const progressPercent = Math.round(progressFraction * 100);
 
   const [avatarUploading, setAvatarUploading] = useState(false);
   const FIRESTORE_MAX_BYTES = 700 * 1024; // only store small base64 previews in Firestore
@@ -329,11 +332,10 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
       logsSnap.forEach((doc: any) => {
         const log: any = doc.data();
         console.log('Fetched log:', log);
-        const hours = parseFloat(log.hours);
+        const hours = typeof log.hours === 'number' ? log.hours : parseFloat(String(log.hours ?? ''));
         if (!isNaN(hours)) sum += hours;
       });
       setTotalHours(sum);
-      setProgress(Math.min(sum / requiredHours, 1));
     } catch (error) {
       console.error('Failed to fetch OJT logs:', error);
       try {
@@ -362,7 +364,9 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
   // Update loadRequiredHours to be reusable
   const loadRequiredHours = async () => {
     const savedGoal = await AsyncStorage.getItem('OJT_REQUIRED_HOURS');
-    if (savedGoal) setRequiredHours(Number(savedGoal));
+    if (!savedGoal) return;
+    const n = Number(savedGoal);
+    if (Number.isFinite(n) && n > 0) setRequiredHours(n);
   };
 
   // no persisted avatar upload mode — always upload to Storage and optionally save small base64 preview
@@ -719,7 +723,7 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
             <View style={styles.settingsTextWrapper}>
               <Text style={styles.settingsTitle}>Internship Progress</Text>
               <Text style={styles.settingsSubtitle} numberOfLines={2}>
-                {totalHours} hrs / {requiredHours} hrs ({Math.round(progress * 100)}% completed)
+                {totalHours} hrs / {requiredHours} hrs ({progressPercent}% completed)
               </Text>
             </View>
           </TouchableOpacity>

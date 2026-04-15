@@ -85,6 +85,7 @@ const Stack = createStackNavigator<RootStackParamList>();
 
 const profileCompleteKeyForUser = (uid: string) => `@InternQuest_profileComplete_${uid}`;
 const passwordChangedKeyForUser = (uid: string) => `@InternQuest_passwordChanged_${uid}`;
+const onboardingSeenKeyForUser = (uid: string) => `@InternQuest_onboardingSeen_${uid}`;
 
 const AppInner: React.FC = () => {
   const insets = useSafeAreaInsets();
@@ -94,11 +95,16 @@ const AppInner: React.FC = () => {
   const [mustChangePassword, setMustChangePassword] = useState<boolean | null>(null);
   const [currentScreen, setCurrentScreen] = useState<string>('SignIn');
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
+  const [userStatus, setUserStatus] = useState<string | null>(null);
+  const [hasAppliedCompany, setHasAppliedCompany] = useState<boolean>(false);
+  const [hasPendingRequirements, setHasPendingRequirements] = useState<boolean>(false);
+  const [onboardingSeen, setOnboardingSeen] = useState<boolean | null>(null);
   const [awaitingBiometric, setAwaitingBiometric] = useState(false);
   const [authBlockMessage, setAuthBlockMessage] = useState<string | null>(null);
   const { notificationCount, setNotificationCount } = useNotificationCount();
   const { biometricEnabled } = useBiometric();
   const blockedListenerUnsubRef = useRef<null | (() => void)>(null);
+  const lastMainRouteRef = useRef<null | (keyof RootStackParamList)>(null);
 
   const handleBlockedAccount = useCallback(async (data: any) => {
     const accountAccess = (data && typeof data.accountAccess === 'object' && data.accountAccess) ? data.accountAccess : null;
@@ -307,6 +313,96 @@ const AppInner: React.FC = () => {
           if (userDocAfter.exists()) {
             const data: any = userDocAfter.data();
 
+            // Track high-level user status for routing decisions.
+            // NOTE: Some legacy/SetupAccount flows store account lifecycle as `status: 'active'`,
+            // while OJT readiness is stored under `ojtStatus` and/or `company` fields.
+            // For routing, treat these as hired signals so existing OJT users don't get sent to Guides.
+            const rawStatus = typeof data?.status === 'string' ? data.status : null;
+            const statusLower = String(rawStatus || '').toLowerCase();
+            const ojtStatus = (data as any)?.ojtStatus;
+            const hasOjtCompany =
+              !!(ojtStatus && (
+                ojtStatus.currentCompany ||
+                ojtStatus.currentCompanyId ||
+                ojtStatus.currentCompanyName ||
+                ojtStatus.company ||
+                ojtStatus.companyId ||
+                ojtStatus.companyName
+              )) ||
+              !!(data as any)?.company ||
+              !!(data as any)?.companyId ||
+              !!(data as any)?.companyName ||
+              !!(data as any)?.hiredCompanyId ||
+              !!(data as any)?.hiredCompanyName ||
+              !!(data as any)?.assignedCompanyId ||
+              !!(data as any)?.assignedCompanyName;
+            const isHiredSignal =
+              statusLower === 'hired' ||
+              statusLower === 'approved' ||
+              statusLower === 'assigned' ||
+              (ojtStatus && ojtStatus.isHired === true) ||
+              hasOjtCompany;
+
+            const effectiveStatus = isHiredSignal ? 'hired' : rawStatus;
+            setUserStatus(effectiveStatus);
+
+            // "Pending" (applied but not yet finished) detection.
+            // Many flows store appliedCompanyId/appliedCompanyName on the user doc.
+            let applied = Boolean(data?.appliedCompanyId || data?.appliedCompanyName);
+            let appliedViaApplications = false;
+            if (!applied) {
+              try {
+                const appsSnap = await getDocs(
+                  query(
+                    collection(firestore, 'applications'),
+                    where('userId', '==', user.uid)
+                  )
+                );
+                appliedViaApplications = appsSnap.docs.some((d: any) => {
+                  const s = String(d.data()?.status || '').toLowerCase();
+                  return s === 'pending' || s === 'approved';
+                });
+                applied = appliedViaApplications;
+              } catch (e) {
+                // best-effort; keep existing `applied` value
+              }
+            }
+            setHasAppliedCompany(applied);
+
+            // Compute whether the user has pending (not-yet-approved) required requirements.
+            // Used to route "pending" users to Requirements Checklist.
+            try {
+              const reqs = Array.isArray(data?.requirements) ? data.requirements : null;
+              if (!reqs || reqs.length === 0) {
+                // Don't trap users in the checklist when legacy accounts are missing the array.
+                // (They can still open the checklist manually.)
+                setHasPendingRequirements(false);
+              } else {
+                // Treat "pending" as "missing required uploads".
+                // Approval can take time; users shouldn't be forced back here if they've already submitted.
+                const required = reqs.filter((r: any) => r?.isRequired !== false);
+                if (!required || required.length === 0) {
+                  setHasPendingRequirements(false);
+                } else {
+                  const missingUploads = required.some((r: any) => {
+                    const uploadedOk = Array.isArray(r?.uploadedFiles) && r.uploadedFiles.length > 0;
+                    return !uploadedOk;
+                  });
+                  setHasPendingRequirements(missingUploads);
+                }
+              }
+            } catch (e) {
+              setHasPendingRequirements(false);
+            }
+
+            // Onboarding flag (per-user). New users who haven't seen onboarding land on Guides.
+            try {
+              const seen = await AsyncStorage.getItem(onboardingSeenKeyForUser(user.uid));
+              setOnboardingSeen(seen === 'true');
+            } catch (e) {
+              setOnboardingSeen(false);
+            }
+
             // Account access block (adviser/coordinator/admin)
             const accountAccess = (data && typeof data.accountAccess === 'object' && data.accountAccess) ? data.accountAccess : null;
             const isBlocked =
@@ -405,7 +501,26 @@ const AppInner: React.FC = () => {
 
             const hasBasics = hasName && hasProgram && hasField && hasSkills;
 
-            const computedComplete = flagComplete || hasBasics;
+            // If the user has already progressed in the workflow (applied / hired / OJT),
+            // don't force them back into SetupAccount just because some optional profile fields are missing.
+            const ojtStatusForProgress = (data as any)?.ojtStatus;
+            const progressedInApp =
+              Boolean(applied) ||
+              Boolean((data as any)?.assignedCompanyId || (data as any)?.assignedCompanyName) ||
+              Boolean((data as any)?.company || (data as any)?.companyId || (data as any)?.companyName) ||
+              Boolean((data as any)?.hiredCompanyId || (data as any)?.hiredCompanyName) ||
+              Boolean(ojtStatusForProgress && (
+                ojtStatusForProgress.isHired === true ||
+                ojtStatusForProgress.currentCompany ||
+                ojtStatusForProgress.currentCompanyId ||
+                ojtStatusForProgress.currentCompanyName ||
+                ojtStatusForProgress.company ||
+                ojtStatusForProgress.companyId ||
+                ojtStatusForProgress.companyName
+              )) ||
+              isHiredSignal;
+
+            const computedComplete = flagComplete || hasBasics || progressedInApp;
             setIsProfileComplete(computedComplete);
             console.log('📋 Profile complete:', computedComplete);
 
@@ -429,6 +544,10 @@ const AppInner: React.FC = () => {
           } else {
             setIsProfileComplete(false);
             setMustChangePassword(false);
+            setUserStatus(null);
+            setHasAppliedCompany(false);
+            setHasPendingRequirements(false);
+            setOnboardingSeen(false);
             console.log('📋 Profile not found in Firestore');
 
             // If there is no profile doc, it's not a block scenario.
@@ -498,11 +617,92 @@ const AppInner: React.FC = () => {
         setAwaitingBiometric(false);
         setIsProfileComplete(null);
         setMustChangePassword(null);
+        setUserStatus(null);
+        setHasAppliedCompany(false);
+        setHasPendingRequirements(false);
+        setOnboardingSeen(null);
       }
       setIsLoading(false);
     });
     return () => unsubscribe();
   }, []);
+
+  // When the user enters the main app, route them based on state:
+  // - New user (onboarding not seen): Guides
+  // - Hired: OJT Tracker
+  // - Pending (applied + requirements incomplete): Requirements Checklist
+  // - Otherwise: Home
+  useEffect(() => {
+    const inMainApp =
+      isLoggedIn &&
+      isProfileComplete === true &&
+      mustChangePassword !== true &&
+      !isLoading &&
+      !authBlockMessage;
+
+    if (!inMainApp) {
+      lastMainRouteRef.current = null;
+      return;
+    }
+
+    if (!auth.currentUser) return;
+    if (onboardingSeen === null) return;
+
+    const status = String(userStatus || '').toLowerCase();
+    // Priority matters:
+    // 1) If the user is hired/ready for OJT, always land on OJT Tracker.
+    // 2) If the user applied and still has incomplete requirements, land on Checklist.
+    // 3) Only then treat them as "new" and land on Guides.
+    const desiredRoute: keyof RootStackParamList =
+      status === 'hired' ? 'OJTTracker' :
+      (hasAppliedCompany && hasPendingRequirements) ? 'RequirementsChecklist' :
+      onboardingSeen === false ? 'ResourceManagement' :
+      'Home';
+
+    // If we're already on the desired route (common when the navigator re-mounts
+    // with main screens after login), don't reset again — that causes a visible
+    // double-load/flicker.
+    try {
+      const currentRouteName = navigationRef.current?.getCurrentRoute?.()?.name;
+      if (currentRouteName === desiredRoute) {
+        lastMainRouteRef.current = desiredRoute;
+        handleScreenChange(String(desiredRoute));
+        return;
+      }
+    } catch (e) {
+      // best-effort
+    }
+
+    // If we already attempted to route to this exact destination, don't do it again.
+    if (lastMainRouteRef.current === desiredRoute) {
+      return;
+    }
+
+    lastMainRouteRef.current = desiredRoute;
+
+    // Reset stack so the chosen destination becomes the root.
+    setTimeout(() => {
+      try {
+        navigationRef.current?.reset?.({
+          index: 0,
+          routes: [{ name: desiredRoute as any }],
+        });
+        handleScreenChange(String(desiredRoute));
+      } catch (e) {
+        // best-effort
+      }
+    }, 0);
+  }, [
+    isLoggedIn,
+    isProfileComplete,
+    mustChangePassword,
+    isLoading,
+    authBlockMessage,
+    onboardingSeen,
+    userStatus,
+    hasAppliedCompany,
+    hasPendingRequirements,
+  ]);
 
   // Helper to handle screen changes
   const handleScreenChange = (screenName: string) => {
@@ -644,12 +844,37 @@ const AppInner: React.FC = () => {
     }
 
     // Main app screens
+    const status = String(userStatus || '').toLowerCase();
+    const mainInitialRoute: keyof RootStackParamList =
+      status === 'hired' ? 'OJTTracker' :
+      (hasAppliedCompany && hasPendingRequirements) ? 'RequirementsChecklist' :
+      onboardingSeen === false ? 'ResourceManagement' :
+      'Home';
+
     return (
       <>
-        <Stack.Screen
-          name="Home"
-          component={HomeScreen}
-        />
+        {mainInitialRoute === 'Home' && (
+          <Stack.Screen name="Home" component={HomeScreen} />
+        )}
+        {mainInitialRoute === 'OJTTracker' && (
+          <Stack.Screen name="OJTTracker" component={OJTTrackerScreen} />
+        )}
+        {mainInitialRoute === 'RequirementsChecklist' && (
+          <Stack.Screen name="RequirementsChecklist" component={RequirementsChecklistScreen} />
+        )}
+        {mainInitialRoute === 'ResourceManagement' && (
+          <Stack.Screen
+            name="ResourceManagement"
+            component={require('./screens/ResourceManagementScreen').default}
+          />
+        )}
+
+        {mainInitialRoute !== 'OJTTracker' && (
+          <Stack.Screen name="OJTTracker" component={OJTTrackerScreen} />
+        )}
+        {mainInitialRoute !== 'Home' && (
+          <Stack.Screen name="Home" component={HomeScreen} />
+        )}
         <Stack.Screen
           name="Profile"
           component={ProfileScreen}
@@ -658,10 +883,12 @@ const AppInner: React.FC = () => {
           name="Notifications"
           component={NotificationsScreen}
         />
-        <Stack.Screen
-          name="ResourceManagement"
-          component={require('./screens/ResourceManagementScreen').default}
-        />
+        {mainInitialRoute !== 'ResourceManagement' && (
+          <Stack.Screen
+            name="ResourceManagement"
+            component={require('./screens/ResourceManagementScreen').default}
+          />
+        )}
         <Stack.Screen
           name="Settings"
           component={SettingsScreen}
@@ -674,17 +901,12 @@ const AppInner: React.FC = () => {
           component={InternshipDetailsScreen}
         />
         <Stack.Screen
-          name="OJTTracker"
-          component={OJTTrackerScreen}
-        />
-        <Stack.Screen
           name="CompanyProfile"
           component={CompanyProfileScreen}
         />
-        <Stack.Screen
-          name="RequirementsChecklist"
-          component={RequirementsChecklistScreen}
-        />
+        {mainInitialRoute !== 'RequirementsChecklist' && (
+          <Stack.Screen name="RequirementsChecklist" component={RequirementsChecklistScreen} />
+        )}
         <Stack.Screen
           name="WeeklyReport"
           component={WeeklyReportScreen}
@@ -700,6 +922,14 @@ const AppInner: React.FC = () => {
           <NavigationContainer
             ref={navigationRef}
             theme={navigationTheme}
+            onReady={() => {
+              try {
+                const route = navigationRef.current?.getCurrentRoute?.();
+                if (route?.name) handleScreenChange(route.name);
+              } catch (e) {
+                // ignore
+              }
+            }}
             onStateChange={() => {
               try {
                 const route = navigationRef.current?.getCurrentRoute?.();
@@ -743,15 +973,15 @@ const AppInner: React.FC = () => {
                   open: {
                     animation: 'timing',
                     config: {
-                      duration: 320,
-                      easing: Easing.bezier(0.25, 0.1, 0.25, 1),
+                      duration: 190,
+                      easing: Easing.out(Easing.cubic),
                     },
                   },
                   close: {
                     animation: 'timing',
                     config: {
-                      duration: 280,
-                      easing: Easing.bezier(0.25, 0.1, 0.25, 1),
+                      duration: 160,
+                      easing: Easing.out(Easing.cubic),
                     },
                   },
                 },

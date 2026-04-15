@@ -28,6 +28,78 @@ type CompanyProfileNavigationProp = StackNavigationProp<RootStackParamList, 'Com
 type ApplicationStatus = 'pending' | 'approved' | 'rejected' | 'not_applied';
 
 const BOTTOM_BAR_HEIGHT = 80;
+const MOA_NEAR_EXPIRY_DAYS = 30;
+
+const normalizeCompanyKey = (value: unknown): string => {
+    if (typeof value !== 'string') return '';
+    return value
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9]+/g, '');
+};
+
+const parseDocDate = (v: any): Date | null => {
+    if (!v) return null;
+    if (typeof v === 'object' && typeof v.toDate === 'function') {
+        const d = v.toDate();
+        return d instanceof Date && !Number.isNaN(d.getTime()) ? d : null;
+    }
+    if (typeof v === 'string' || typeof v === 'number') {
+        const d = new Date(v);
+        return !Number.isNaN(d.getTime()) ? d : null;
+    }
+    return null;
+};
+
+const deriveMoaExpiryFromCompanyDoc = (data: any): { expiresOn: string | null; daysUntilExpiry: number | null } => {
+    const rawYears = data?.moaValidityYears ?? data?.moa_validity_years ?? data?.moaValidity ?? null;
+    const parsedYears = typeof rawYears === 'number' ? rawYears : Number(rawYears);
+    const years = Number.isFinite(parsedYears) ? parsedYears : null;
+
+    const baseDate =
+        parseDocDate(data?.moaUpdatedAt) ||
+        parseDocDate(data?.moaUpdatedOn) ||
+        parseDocDate(data?.moaSignedAt) ||
+        parseDocDate(data?.moaEffectiveAt) ||
+        parseDocDate(data?.updatedAt) ||
+        parseDocDate(data?.createdAt) ||
+        null;
+
+    const explicitExpiry =
+        parseDocDate(data?.moaExpiresOn) ||
+        parseDocDate(data?.moaExpiresAt) ||
+        parseDocDate(data?.moaExpiryDate) ||
+        parseDocDate(data?.moaExpiry) ||
+        parseDocDate(data?.expiresOn) ||
+        parseDocDate(data?.expires_at) ||
+        null;
+
+    let expiresOn: string | null = null;
+    if (explicitExpiry) {
+        expiresOn = explicitExpiry.toISOString();
+    } else if (baseDate && years && years > 0) {
+        const expiry = new Date(baseDate);
+        expiry.setFullYear(expiry.getFullYear() + years);
+        if (!Number.isNaN(expiry.getTime())) {
+            expiresOn = expiry.toISOString();
+        }
+    }
+
+    if (!expiresOn) {
+        return { expiresOn: null, daysUntilExpiry: null };
+    }
+
+    const expiryDate = new Date(expiresOn);
+    if (Number.isNaN(expiryDate.getTime())) {
+        return { expiresOn: null, daysUntilExpiry: null };
+    }
+
+    const days = Math.ceil((expiryDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    return {
+        expiresOn,
+        daysUntilExpiry: Number.isFinite(days) ? days : null,
+    };
+};
 
 const CompanyProfileScreen: React.FC = () => {
     const navigation = useNavigation<CompanyProfileNavigationProp>();
@@ -36,6 +108,8 @@ const CompanyProfileScreen: React.FC = () => {
     const { savedInternships, toggleSaveInternship } = useSavedInternships();
 
     const [company, setCompany] = useState<Post | null>(null);
+    const [moaDaysUntilExpiry, setMoaDaysUntilExpiry] = useState<number | null>(null);
+    const [moaExpiresOn, setMoaExpiresOn] = useState<string | null>(null);
 
     useEffect(() => {
         const loadCompany = async () => {
@@ -44,6 +118,9 @@ const CompanyProfileScreen: React.FC = () => {
                 const docSnap = await getDoc(docRef);
                 if (docSnap.exists()) {
                     const data = docSnap.data() as any;
+
+                    const moaStatusRaw = String(data?.moaStatus ?? data?.moa_status ?? '').trim().toLowerCase();
+                    const isNoMoaStatus = moaStatusRaw === 'no-moa' || moaStatusRaw === 'no_moa' || moaStatusRaw === 'none';
 
                     const normalizeMoaCandidate = (v: any): string => {
                         if (typeof v === 'string') return v.trim();
@@ -65,7 +142,7 @@ const CompanyProfileScreen: React.FC = () => {
                         data?.moaPath,
                         data?.moa,
                     ];
-                    const moaValue = moaCandidates
+                    let moaValue = moaCandidates
                         .map(normalizeMoaCandidate)
                         .find((s) => {
                             if (!s) return false;
@@ -74,6 +151,13 @@ const CompanyProfileScreen: React.FC = () => {
                             if (['yes', 'no', 'true', 'false', '1', '0', 'y', 'n'].includes(lower)) return false;
                             return true;
                         }) || normalizeMoaCandidate(data?.moa);
+
+                    // Respect Firestore moaStatus: "no-moa" means no MOA section.
+                    if (isNoMoaStatus) {
+                        moaValue = '';
+                    } else if (moaStatusRaw && !moaValue) {
+                        moaValue = 'Yes';
+                    }
 
                     const mapped: Post = {
                         id: docSnap.id,
@@ -95,6 +179,16 @@ const CompanyProfileScreen: React.FC = () => {
                         createdAt: data.createdAt ? (data.createdAt.toDate ? data.createdAt.toDate() : new Date(data.createdAt)) : new Date(),
                     };
                     setCompany(mapped);
+
+                    // Compute near-expiry warning from Firestore doc fields (no RTDB dependency).
+                    if (isNoMoaStatus) {
+                        setMoaExpiresOn(null);
+                        setMoaDaysUntilExpiry(null);
+                    } else {
+                        const expiry = deriveMoaExpiryFromCompanyDoc(data);
+                        setMoaExpiresOn(expiry.expiresOn);
+                        setMoaDaysUntilExpiry(expiry.daysUntilExpiry);
+                    }
                 }
             } catch (error) {
                 console.error('Error loading company:', error);
@@ -114,6 +208,8 @@ const CompanyProfileScreen: React.FC = () => {
     const [placementLockStatus, setPlacementLockStatus] = useState<'pending' | 'approved' | ''>('');
     const [showPlacementLockedModal, setShowPlacementLockedModal] = useState(false);
 
+    const hideApplyBecauseHired = placementLocked && placementLockStatus === 'approved';
+
     useEffect(() => {
         fetchUserProfile();
     }, []);
@@ -125,9 +221,12 @@ const CompanyProfileScreen: React.FC = () => {
         }
     }, [company]);
 
-    const checkPlacementLock = async () => {
-        if (!auth.currentUser) return;
+    const checkPlacementLock = async (): Promise<boolean> => {
+        if (!auth.currentUser) return false;
         try {
+            const currentId = String(companyId);
+
+            // Source of truth: applications collection.
             const q = query(
                 collection(firestore, 'applications'),
                 where('userId', '==', auth.currentUser.uid),
@@ -137,34 +236,70 @@ const CompanyProfileScreen: React.FC = () => {
             );
             const snap = await getDocs(q);
             if (!snap.empty) {
-                // If there's an approved application for a different company, lock applying elsewhere
-                const app = snap.docs[0].data() as any;
-                const approvedCompanyId = String(app.companyId || '');
-                const approvedCompanyName = String(app.companyName || app.company || '');
-                const status = String(app.status || '') as any;
-                if (approvedCompanyId && approvedCompanyId !== String(companyId)) {
-                    setPlacementLocked(true);
-                    setPlacementCompanyName(approvedCompanyName || 'your assigned company');
-                    setPlacementLockStatus(status === 'pending' ? 'pending' : 'approved');
-                    return;
+                const apps = snap.docs.map((d: any) => ({ id: d.id, ...(d.data() as any) }));
+                const approved = apps.find((a: any) => String(a.status || '').toLowerCase() === 'approved');
+                const pending = apps.find((a: any) => String(a.status || '').toLowerCase() === 'pending');
+                const chosen = approved || pending;
+
+                if (chosen) {
+                    const otherCompanyId = String(chosen.companyId || '').trim();
+                    const otherCompanyName = String(chosen.companyName || chosen.company || '').trim();
+                    const chosenStatus = String(chosen.status || '').toLowerCase();
+
+                    if (otherCompanyId && otherCompanyId !== currentId) {
+                        setPlacementLocked(true);
+                        setPlacementCompanyName(otherCompanyName || 'your assigned company');
+                        setPlacementLockStatus(chosenStatus === 'pending' ? 'pending' : 'approved');
+                        return true;
+                    }
                 }
             }
+
+            // Fallback: if the user profile already says they're hired/assigned.
+            const userStatus = typeof userProfile?.status === 'string' ? userProfile.status.trim().toLowerCase() : '';
+            if (userStatus === 'hired') {
+                const hiredCompanyId = String(
+                    userProfile?.hiredCompanyId ??
+                    userProfile?.approvedCompanyId ??
+                    userProfile?.assignedCompanyId ??
+                    ''
+                ).trim();
+                const hiredCompanyName = String(userProfile?.company ?? userProfile?.hiredCompanyName ?? '').trim();
+                const currentCompanyName = String(company?.company ?? '').trim();
+
+                const isSameCompanyById = hiredCompanyId && hiredCompanyId === currentId;
+                const isSameCompanyByName =
+                    !isSameCompanyById &&
+                    normalizeCompanyKey(hiredCompanyName) &&
+                    normalizeCompanyKey(currentCompanyName) &&
+                    normalizeCompanyKey(hiredCompanyName) === normalizeCompanyKey(currentCompanyName);
+
+                if (!isSameCompanyById && !isSameCompanyByName) {
+                    setPlacementLocked(true);
+                    setPlacementCompanyName(hiredCompanyName || 'your assigned company');
+                    setPlacementLockStatus('approved');
+                    return true;
+                }
+            }
+
             setPlacementLocked(false);
             setPlacementCompanyName('');
             setPlacementLockStatus('');
+            return false;
         } catch (e) {
             // best-effort; don't block UI if query fails
             console.warn('CompanyProfile: failed to check placement lock', e);
             setPlacementLocked(false);
             setPlacementCompanyName('');
             setPlacementLockStatus('');
+            return false;
         }
     };
 
     // Also check if the user is already approved elsewhere (only one approved company allowed)
     useEffect(() => {
         void checkPlacementLock();
-    }, [companyId, applicationStatus]);
+    }, [companyId, applicationStatus, userProfile, company?.company]);
 
     const fetchUserProfile = async () => {
         if (!auth.currentUser) return;
@@ -294,13 +429,14 @@ const CompanyProfileScreen: React.FC = () => {
             return;
         }
 
-        if (placementLocked) {
-            setShowPlacementLockedModal(true);
+        if (!userProfile) {
+            Alert.alert('Error', 'Please complete your profile before applying.');
             return;
         }
 
-        if (!userProfile) {
-            Alert.alert('Error', 'Please complete your profile before applying.');
+        const lockedNow = await checkPlacementLock();
+        if (lockedNow || placementLocked) {
+            setShowPlacementLockedModal(true);
             return;
         }
 
@@ -569,6 +705,14 @@ const CompanyProfileScreen: React.FC = () => {
                 {company.moa && (
                     <View style={[styles.section, styles.moaSection, applicationStatus === 'approved' && styles.moaSectionUnlocked]}>
                         <Text style={styles.sectionLabel}>Memorandum of Agreement (MOA)</Text>
+                        {typeof moaDaysUntilExpiry === 'number' && moaDaysUntilExpiry >= 0 && moaDaysUntilExpiry <= MOA_NEAR_EXPIRY_DAYS && (
+                            <View style={styles.moaExpiryRow}>
+                                <Ionicons name="warning-outline" size={20} color={colors.warning} />
+                                <Text style={styles.moaExpiryText}>
+                                    MOA expires in {moaDaysUntilExpiry} day{moaDaysUntilExpiry === 1 ? '' : 's'}{moaExpiresOn ? ` (until ${new Date(moaExpiresOn).toLocaleDateString()})` : ''}
+                                </Text>
+                            </View>
+                        )}
                         {applicationStatus === 'approved' ? (
                             <>
                                 <Text style={styles.moaMessage}>Your application was approved. You can now download the MOA.</Text>
@@ -817,40 +961,46 @@ const CompanyProfileScreen: React.FC = () => {
 
             {/* Fixed bottom bar: Apply + Save Internship */}
             <View style={[styles.bottomBar, { height: BOTTOM_BAR_HEIGHT }]}>
+                {!hideApplyBecauseHired && (
+                    <TouchableOpacity
+                        style={[
+                            styles.bottomBarApplyBtn,
+                            (applicationStatus !== 'not_applied' || placementLocked) && styles.bottomBarApplyBtnDisabled,
+                        ]}
+                        onPress={handleApply}
+                        disabled={isLoading || applicationStatus !== 'not_applied' || placementLocked}
+                        activeOpacity={0.8}
+                    >
+                        {isLoading ? (
+                            <ActivityIndicator size="small" color={colors.onPrimary} />
+                        ) : (
+                            <Text
+                                style={[
+                                    styles.bottomBarApplyText,
+                                    (applicationStatus !== 'not_applied' || placementLocked) && styles.bottomBarApplyTextDisabled,
+                                ]}
+                                numberOfLines={1}
+                                ellipsizeMode="tail"
+                            >
+                                {placementLocked
+                                    ? 'Locked'
+                                    : applicationStatus === 'not_applied'
+                                        ? 'Apply now'
+                                        : applicationStatus === 'pending'
+                                            ? 'Pending'
+                                            : applicationStatus === 'approved'
+                                                ? 'Approved'
+                                                : 'Rejected'}
+                            </Text>
+                        )}
+                    </TouchableOpacity>
+                )}
                 <TouchableOpacity
                     style={[
-                        styles.bottomBarApplyBtn,
-                        (applicationStatus !== 'not_applied' || placementLocked) && styles.bottomBarApplyBtnDisabled,
+                        styles.bottomBarSaveBtn,
+                        hideApplyBecauseHired && styles.bottomBarSaveBtnFull,
+                        isSaved && styles.bottomBarSaveBtnSaved,
                     ]}
-                    onPress={handleApply}
-                    disabled={isLoading || applicationStatus !== 'not_applied' || placementLocked}
-                    activeOpacity={0.8}
-                >
-                    {isLoading ? (
-                        <ActivityIndicator size="small" color={colors.onPrimary} />
-                    ) : (
-                        <Text
-                            style={[
-                                styles.bottomBarApplyText,
-                                (applicationStatus !== 'not_applied' || placementLocked) && styles.bottomBarApplyTextDisabled,
-                            ]}
-                            numberOfLines={1}
-                            ellipsizeMode="tail"
-                        >
-                            {placementLocked
-                                ? (placementLockStatus === 'pending' ? 'Locked' : 'Assigned')
-                                : applicationStatus === 'not_applied'
-                                    ? 'Apply now'
-                                    : applicationStatus === 'pending'
-                                        ? 'Pending'
-                                        : applicationStatus === 'approved'
-                                            ? 'Approved'
-                                            : 'Rejected'}
-                        </Text>
-                    )}
-                </TouchableOpacity>
-                <TouchableOpacity
-                    style={[styles.bottomBarSaveBtn, isSaved && styles.bottomBarSaveBtnSaved]}
                     onPress={handleSave}
                     activeOpacity={0.8}
                 >
@@ -974,6 +1124,10 @@ const styles = StyleSheet.create({
         borderColor: colors.primary,
         flexShrink: 0,
         minWidth: 165,
+    },
+    bottomBarSaveBtnFull: {
+        flex: 1,
+        minWidth: 0,
     },
     bottomBarSaveBtnSaved: {
         backgroundColor: colors.primarySoft,
@@ -1255,6 +1409,25 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'flex-start',
         gap: 12,
+    },
+    moaExpiryRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 12,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        borderRadius: radii.md,
+        backgroundColor: colors.warningSoft,
+        borderWidth: 1,
+        borderColor: colors.warning,
+        marginBottom: 12,
+    },
+    moaExpiryText: {
+        flex: 1,
+        fontSize: 14,
+        color: colors.text,
+        lineHeight: 20,
+        fontWeight: '600',
     },
     moaLockText: {
         flex: 1,

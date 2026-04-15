@@ -752,6 +752,11 @@ const OJTTrackerScreen: React.FC = () => {
     return new Date(year, month, 0).getDate();
   };
 
+  const getFirstWeekdayOfMonth = (year: number, month: number) => {
+    // month is 1–12, Date expects 0–11
+    return new Date(year, month - 1, 1).getDay(); // 0=Sun..6=Sat
+  };
+
   const getPaginatedLogs = () => {
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
@@ -1123,8 +1128,17 @@ const OJTTrackerScreen: React.FC = () => {
                       {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
                         <Text key={day} style={styles.datePickerDayHeader}>{day}</Text>
                       ))}
-                      {Array.from({ length: generateDaysInMonth(tempDate.year, tempDate.month) }, (_, i) => {
-                        const day = i + 1;
+                      {(() => {
+                        const daysInMonth = generateDaysInMonth(tempDate.year, tempDate.month);
+                        const firstWeekday = getFirstWeekdayOfMonth(tempDate.year, tempDate.month);
+                        const cellCount = firstWeekday + daysInMonth;
+
+                        return Array.from({ length: cellCount }, (_, i) => {
+                          if (i < firstWeekday) {
+                            return <View key={`empty-${i}`} style={styles.datePickerDayEmpty} />;
+                          }
+
+                          const day = i - firstWeekday + 1;
                         const date = new Date(tempDate.year, tempDate.month - 1, day);
                         const today = new Date();
                         const todayMid = new Date(today.getFullYear(), today.getMonth(), today.getDate());
@@ -1154,7 +1168,8 @@ const OJTTrackerScreen: React.FC = () => {
                             </Text>
                           </TouchableOpacity>
                         );
-                      })}
+                        });
+                      })()}
                     </View>
                     <TouchableOpacity
                       style={styles.datePickerCloseButton}
@@ -1895,6 +1910,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginVertical: 4,
     borderRadius: 999,
+  },
+  datePickerDayEmpty: {
+    width: '14.28%',
+    aspectRatio: 1,
+    marginVertical: 4,
   },
   datePickerDayText: {
     fontSize: 16,

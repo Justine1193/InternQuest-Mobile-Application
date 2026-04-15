@@ -5,6 +5,7 @@ import { Card, Button, ActivityIndicator, IconButton, TextInput } from 'react-na
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { auth, firestore, storage, ADMIN_FILE_FUNCTION_BASE_URL } from '../firebase/config';
 import { collection, addDoc, query, orderBy, getDocs, doc, deleteDoc, updateDoc, getDoc, deleteField, where, setDoc } from 'firebase/firestore';
 import * as DocumentPicker from 'expo-document-picker';
@@ -17,6 +18,8 @@ import { Screen } from '../ui/components/Screen';
 import { AppHeader } from '../ui/components/AppHeader';
 
 const FIRESTORE_MAX_BYTES = 700 * 1024; // ~700KB
+
+const onboardingSeenKeyForUser = (uid: string) => `@InternQuest_onboardingSeen_${uid}`;
 
 
 type TemplateDoc = {
@@ -135,14 +138,111 @@ const ResourceManagementScreen: React.FC = () => {
   const [stepProgress, setStepProgress] = useState<Record<string, StepProgressStatus>>({});
   const [stepsLoading, setStepsLoading] = useState(false);
   const [activeStepId, setActiveStepId] = useState<string | null>(null);
+  const [showTutorialModal, setShowTutorialModal] = useState(false);
+  const [tutorialStepIndex, setTutorialStepIndex] = useState(0);
 
   useEffect(() => {
     (async () => {
       const admin = await SecurityUtils.isAdmin();
       setIsAdmin(admin);
       await Promise.all([loadTemplates(), loadMyDocuments(), loadSteps()]);
+
+      // One-time onboarding/tutorial for new users.
+      try {
+        const uid = auth.currentUser?.uid;
+        if (!uid) return;
+        const seen = await AsyncStorage.getItem(onboardingSeenKeyForUser(uid));
+        if (seen !== 'true') {
+          setTutorialStepIndex(0);
+          setShowTutorialModal(true);
+        }
+      } catch (e) {
+        // best-effort
+      }
     })();
   }, []);
+
+  const dismissTutorial = async () => {
+    try {
+      const uid = auth.currentUser?.uid;
+      if (uid) {
+        await AsyncStorage.setItem(onboardingSeenKeyForUser(uid), 'true');
+      }
+    } catch (e) {
+      // best-effort
+    }
+    setTutorialStepIndex(0);
+    setShowTutorialModal(false);
+  };
+
+  const tutorialSteps: Array<{
+    key: string;
+    title: string;
+    icon: string;
+    description: string;
+    bullets?: string[];
+    ctaLabel?: string;
+    ctaRoute?: string;
+  }> = [
+    {
+      key: 'tabs',
+      title: 'Navigate with the tabs',
+      icon: 'grid-outline',
+      description: 'Use the bottom tabs to move around the app anytime.',
+      bullets: [
+        'Internships: browse companies and open details.',
+        'Checklist: upload and track required documents.',
+        'Guides: read steps and download resources (you are here).',
+        'OJT Tracker: track OJT once you are hired/ready.',
+        'Settings/Profile: update your info and preferences.',
+      ],
+    },
+    {
+      key: 'internships',
+      title: 'Browse & apply',
+      icon: 'briefcase-outline',
+      description: 'Search internships, open a company, then apply from the company details screen.',
+      bullets: [
+        'Only companies with an active MOA are shown in the list.',
+        'If an MOA is expiring soon, you will see a warning.',
+      ],
+      ctaLabel: 'Open Internships',
+      ctaRoute: 'Home',
+    },
+    {
+      key: 'checklist',
+      title: 'Complete your Checklist',
+      icon: 'checkmark-done-outline',
+      description: 'Upload required documents and track approval status in Checklist.',
+      bullets: [
+        'If you already applied but still have incomplete requirements, the app may land you on Checklist.',
+      ],
+      ctaLabel: 'Open Checklist',
+      ctaRoute: 'RequirementsChecklist',
+    },
+    {
+      key: 'guides',
+      title: 'Follow Guides',
+      icon: 'book-outline',
+      description: 'Guides help you step-by-step. You can download forms/resources and mark steps completed.',
+    },
+    {
+      key: 'ojt',
+      title: 'Track your OJT',
+      icon: 'time-outline',
+      description: 'Once you are hired/ready for OJT, use OJT Tracker to log progress. Weekly reports are part of this flow.',
+      ctaLabel: 'Open OJT Tracker',
+      ctaRoute: 'OJTTracker',
+    },
+    {
+      key: 'notifications',
+      title: 'Stay updated',
+      icon: 'notifications-outline',
+      description: 'Check Notifications for updates from your adviser/coordinator and the system.',
+      ctaLabel: 'Open Notifications',
+      ctaRoute: 'Notifications',
+    },
+  ];
 
   const loadMyDocuments = async () => {
     try {
@@ -901,6 +1001,124 @@ const ResourceManagementScreen: React.FC = () => {
           </>
         )}
       </ScrollView>
+
+      {/* New user tutorial (one-time) */}
+      <Modal
+        visible={showTutorialModal}
+        animationType="fade"
+        transparent
+        onRequestClose={dismissTutorial}
+      >
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity
+            style={styles.modalBackdrop}
+            activeOpacity={1}
+            onPress={dismissTutorial}
+          />
+          <View style={[styles.modalContent, { maxHeight: '82%' }]}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Welcome to InternQuest</Text>
+              <TouchableOpacity
+                onPress={dismissTutorial}
+                activeOpacity={0.7}
+                style={styles.modalCloseBtn}
+              >
+                <Ionicons name="close" size={24} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.modalSubtitle}>
+              Step {tutorialStepIndex + 1} of {tutorialSteps.length}
+            </Text>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ marginTop: 2 }}>
+              {(() => {
+                const step = tutorialSteps[tutorialStepIndex];
+                return (
+                  <View style={styles.tutorialCard}>
+                    <View style={styles.tutorialTitleRow}>
+                      <View style={styles.tutorialIconWrap}>
+                        <Ionicons name={step.icon as any} size={20} color={colors.primary} />
+                      </View>
+                      <Text style={styles.tutorialTitle}>{step.title}</Text>
+                    </View>
+
+                    <Text style={styles.tutorialDescription}>{step.description}</Text>
+
+                    {Array.isArray(step.bullets) && step.bullets.length > 0 && (
+                      <View style={{ marginTop: 10 }}>
+                        {step.bullets.map((b) => (
+                          <View key={b} style={styles.tutorialBulletRow}>
+                            <Text style={styles.tutorialBulletDot}>•</Text>
+                            <Text style={styles.tutorialBulletText}>{b}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+
+                    {step.ctaRoute && step.ctaLabel && (
+                      <TouchableOpacity
+                        style={styles.tutorialCtaButton}
+                        activeOpacity={0.85}
+                        onPress={async () => {
+                          await dismissTutorial();
+                          try {
+                            navigation.navigate(step.ctaRoute as never);
+                          } catch (e) {
+                            // best-effort
+                          }
+                        }}
+                      >
+                        <Text style={styles.tutorialCtaText}>{step.ctaLabel}</Text>
+                        <Ionicons name="arrow-forward" size={18} color={colors.primary} />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                );
+              })()}
+            </ScrollView>
+
+            <View style={styles.tutorialActionsRow}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonCancel, tutorialStepIndex === 0 && { opacity: 0.5 }]}
+                onPress={() => {
+                  if (tutorialStepIndex === 0) return;
+                  setTutorialStepIndex((i) => Math.max(0, i - 1));
+                }}
+                disabled={tutorialStepIndex === 0}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.modalButtonCancelText}>Back</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.tutorialSkipButton}
+                onPress={dismissTutorial}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.tutorialSkipText}>Skip</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonPrimary]}
+                onPress={() => {
+                  const isLast = tutorialStepIndex >= tutorialSteps.length - 1;
+                  if (isLast) {
+                    void dismissTutorial();
+                    return;
+                  }
+                  setTutorialStepIndex((i) => Math.min(tutorialSteps.length - 1, i + 1));
+                }}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.modalButtonPrimaryText}>
+                  {tutorialStepIndex >= tutorialSteps.length - 1 ? 'Done' : 'Next'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* Upload Modal */}
       <Modal visible={showUploadModal} animationType="slide" transparent onRequestClose={() => setShowUploadModal(false)}>
         <View style={styles.modalOverlay}>
@@ -1926,6 +2144,90 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: colors.onPrimary,
+  },
+
+  /* Tutorial modal (multi-step) */
+  tutorialCard: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: radii.lg,
+    padding: 14,
+  },
+  tutorialTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  tutorialIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primarySoft,
+    marginRight: 10,
+  },
+  tutorialTitle: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '800',
+    color: colors.text,
+  },
+  tutorialDescription: {
+    marginTop: 10,
+    fontSize: 14,
+    lineHeight: 20,
+    color: colors.textMuted,
+  },
+  tutorialBulletRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginTop: 8,
+  },
+  tutorialBulletDot: {
+    width: 16,
+    color: colors.text,
+    lineHeight: 20,
+    fontSize: 14,
+  },
+  tutorialBulletText: {
+    flex: 1,
+    color: colors.text,
+    lineHeight: 20,
+    fontSize: 14,
+  },
+  tutorialCtaButton: {
+    marginTop: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  tutorialCtaText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  tutorialActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  tutorialSkipButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tutorialSkipText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.textMuted,
   },
 
   /* Full-screen image viewer */

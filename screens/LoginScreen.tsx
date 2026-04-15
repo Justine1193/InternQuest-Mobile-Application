@@ -61,14 +61,6 @@ const LoginScreen: React.FC<LoginProps> = ({ setIsLoggedIn, gateMode, onBiometri
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (user: any) => {
-      if (user) {
-        // In gate mode, App controls unlock; don't auto-set isLoggedIn here
-        if (!gateMode && setIsLoggedIn) {
-          setIsLoggedIn(true);
-        } else if (!gateMode) {
-          try { (navigation as any).getParent?.()?.navigate?.('Home'); } catch (e) { /* ignore */ }
-        }
-      }
       setCheckingSession(false);
     });
     return unsub;
@@ -198,8 +190,6 @@ const LoginScreen: React.FC<LoginProps> = ({ setIsLoggedIn, gateMode, onBiometri
       setBlockedMessage(null);
 
       if (gateMode && onPasswordUnlock) onPasswordUnlock();
-      if (setIsLoggedIn) setIsLoggedIn(true);
-      else { try { (navigation as any).getParent?.()?.navigate?.('Home'); } catch (e) { /* ignore */ } }
     } catch (e: any) {
       const code = e?.code ?? '';
       let type: LoginErrorType = 'other';

@@ -3,7 +3,7 @@
     "origin": [
       "http://localhost:5173",
       "https://internship-quest.netlify.app",
-      "https://neuinternshipdb.firebaseapp.com"
+      "https://neuinternshipdb.firebaseapp.app"
     ],
     "method": ["GET", "HEAD", "OPTIONS"],
     "responseHeader": ["Content-Type", "Content-Length", "Content-Range", "Accept-Ranges"],

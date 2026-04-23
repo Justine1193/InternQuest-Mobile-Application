@@ -1638,6 +1638,9 @@ const StudentDashboard = () => {
       const folderMapping = {
         "proof-of-enrollment-com": "Proof of Enrollment (COM)",
         "parent-guardian-consent-form": "Notarized Parental Consent",
+        "notarized-parental-consent": "Notarized Parental Consent",
+        "parental-consent": "Notarized Parental Consent",
+        "guardian-consent-form": "Notarized Parental Consent",
         "medical-certificate": "Medical Certificate",
         "psychological-test-certification": "Psychological Test Certification",
         "proof-of-insurance": "Proof of Insurance",
@@ -1662,7 +1665,7 @@ const StudentDashboard = () => {
           // First try exact mapping
           let requirementType = folderMapping[folderName];
 
-          // If no exact match, try keyword matching for CV/Resume
+          // If no exact match, try keyword matching
           if (!requirementType) {
             const folderNameLower = folderName.toLowerCase();
             if (
@@ -1672,6 +1675,13 @@ const StudentDashboard = () => {
               folderNameLower.includes("vitae")
             ) {
               requirementType = "Curriculum Vitae";
+            } else if (
+              folderNameLower.includes("parent") ||
+              folderNameLower.includes("guardian") ||
+              folderNameLower.includes("consent") ||
+              folderNameLower.includes("notarized")
+            ) {
+              requirementType = "Notarized Parental Consent";
             } else if (
               folderNameLower.includes("moa") ||
               folderNameLower.includes("memorandum") ||

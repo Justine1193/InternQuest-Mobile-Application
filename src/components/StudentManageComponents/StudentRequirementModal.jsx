@@ -175,6 +175,9 @@ const StudentRequirementModal = ({
         const folderMapping = {
           "proof-of-enrollment-com": "Proof of Enrollment (COM)",
           "parent-guardian-consent-form": "Notarized Parental Consent",
+          "notarized-parental-consent": "Notarized Parental Consent",
+          "parental-consent": "Notarized Parental Consent",
+          "guardian-consent-form": "Notarized Parental Consent",
           "medical-certificate": "Medical Certificate",
           "psychological-test-certification":
             "Psychological Test Certification",
@@ -950,6 +953,9 @@ const StudentRequirementModal = ({
             const folderMapping = {
               "proof-of-enrollment-com": "Proof of Enrollment (COM)",
               "parent-guardian-consent-form": "Notarized Parental Consent",
+              "notarized-parental-consent": "Notarized Parental Consent",
+              "parental-consent": "Notarized Parental Consent",
+              "guardian-consent-form": "Notarized Parental Consent",
               "medical-certificate": "Medical Certificate",
               "psychological-test-certification":
                 "Psychological Test Certification",
@@ -1433,9 +1439,15 @@ const StudentRequirementModal = ({
                       "moa-memorandum-of-agreement",
                       "resume-cv",
                     ]);
+                    const LEGACY_FOLDER_ALIASES = {
+                      "notarized-parental-consent":
+                        "parent-guardian-consent-form",
+                      "parental-consent": "parent-guardian-consent-form",
+                      "guardian-consent-form": "parent-guardian-consent-form",
+                    };
                     const submittedFolderNames = new Set(
                       (storageFiles || [])
-                        .map((f) => f.folderName)
+                        .map((f) => LEGACY_FOLDER_ALIASES[f.folderName] || f.folderName)
                         .filter(
                           (n) =>
                             typeof n === "string" && REQUIRED_FOLDERS.has(n),
@@ -1459,9 +1471,19 @@ const StudentRequirementModal = ({
                         "moa-memorandum-of-agreement",
                         "resume-cv",
                       ]);
+                      const LEGACY_FOLDER_ALIASES = {
+                        "notarized-parental-consent":
+                          "parent-guardian-consent-form",
+                        "parental-consent": "parent-guardian-consent-form",
+                        "guardian-consent-form": "parent-guardian-consent-form",
+                      };
                       const submittedFolderNames = new Set(
                         (storageFiles || [])
-                          .map((f) => f.folderName)
+                          .map(
+                            (f) =>
+                              LEGACY_FOLDER_ALIASES[f.folderName] ||
+                              f.folderName,
+                          )
                           .filter(
                             (n) =>
                               typeof n === "string" && REQUIRED_FOLDERS.has(n),

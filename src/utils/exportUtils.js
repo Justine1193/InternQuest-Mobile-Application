@@ -117,6 +117,7 @@ export const prepareCompaniesForExport = (companies) => {
     "Skills": Array.isArray(company.skillsREq) ? company.skillsREq.join("; ") : (company.skillsREq || ""),
     "MOA": company.moa === "Yes" ? "Yes" : "No",
     "MOA Validity Years": company.moaValidityYears || "",
+    "MOA Validity Months": company.moaValidityMonths ?? 0,
     "MOA Start Date": company.moaStartDate ? formatDateForCSV(company.moaStartDate) : "",
     "MOA Expiration Date": company.moaExpirationDate ? formatDateForCSV(company.moaExpirationDate) : "",
     "MOA File URL": company.moaFileUrl || "",

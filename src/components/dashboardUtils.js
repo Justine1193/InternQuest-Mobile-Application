@@ -142,6 +142,14 @@ const removeCompanyFromRealtime = async (companyId) => {
   }
 };
 
+const computeMoaExpirationDate = (startDateString, validityYears, validityMonths = 0) => {
+  const startDate = new Date(startDateString);
+  const expirationDate = new Date(startDate);
+  expirationDate.setFullYear(expirationDate.getFullYear() + Number(validityYears));
+  expirationDate.setMonth(expirationDate.getMonth() + Number(validityMonths || 0));
+  return expirationDate;
+};
+
 export const dashboardHandlers = {
   /**
    * Handles skill input changes and shows dropdown
@@ -226,6 +234,14 @@ export const dashboardHandlers = {
       ) {
         throw new Error("MOA validity (years) is required. MOA is mandatory for all companies.");
       }
+      if (
+        formData.moaValidityMonths === "" ||
+        Number(formData.moaValidityMonths) < 0 ||
+        Number(formData.moaValidityMonths) > 11 ||
+        Number.isNaN(Number(formData.moaValidityMonths))
+      ) {
+        throw new Error("MOA validity months must be between 0 and 11.");
+      }
       if (!formData.moaStartDate) {
         throw new Error("MOA start date is required. MOA is mandatory for all companies.");
       }
@@ -236,9 +252,11 @@ export const dashboardHandlers = {
       setIsLoading(true);
       
       // Calculate expiration date
-      const startDate = new Date(formData.moaStartDate);
-      const expirationDate = new Date(startDate);
-      expirationDate.setFullYear(expirationDate.getFullYear() + Number(formData.moaValidityYears));
+      const expirationDate = computeMoaExpirationDate(
+        formData.moaStartDate,
+        formData.moaValidityYears,
+        formData.moaValidityMonths
+      );
       
       // Get creator info
       const session = getAdminSession();
@@ -256,6 +274,7 @@ export const dashboardHandlers = {
         skillsREq: skills,
         moa: "Yes", // MOA is now always required
         moaValidityYears: Number(formData.moaValidityYears),
+        moaValidityMonths: Number(formData.moaValidityMonths || 0),
         moaStartDate: formData.moaStartDate,
         moaExpirationDate: expirationDate.toISOString(),
         moaFileUrl: formData.moaFileUrl || "",
@@ -281,6 +300,7 @@ export const dashboardHandlers = {
       await syncMoaValidityToRealtime(docRef.id, {
         moa: "Yes", // MOA is now always required
         moaValidityYears: newCompany.moaValidityYears,
+        moaValidityMonths: newCompany.moaValidityMonths,
         companyName: newCompany.companyName,
         updatedAt: new Date().toISOString(),
       });
@@ -315,6 +335,7 @@ export const dashboardHandlers = {
         moa: false,
         modeOfWork: "",
         moaValidityYears: "",
+        moaValidityMonths: "0",
         moaStartDate: "",
         moaFileUrl: "",
         moaFileName: "",
@@ -372,6 +393,14 @@ export const dashboardHandlers = {
       ) {
         throw new Error("MOA validity (years) is required. MOA is mandatory for all companies.");
       }
+      if (
+        formData.moaValidityMonths === "" ||
+        Number(formData.moaValidityMonths) < 0 ||
+        Number(formData.moaValidityMonths) > 11 ||
+        Number.isNaN(Number(formData.moaValidityMonths))
+      ) {
+        throw new Error("MOA validity months must be between 0 and 11.");
+      }
       if (!formData.moaStartDate) {
         throw new Error("MOA start date is required. MOA is mandatory for all companies.");
       }
@@ -390,6 +419,7 @@ export const dashboardHandlers = {
         skillsREq: skills,
         moa: "Yes", // MOA is now always required
         moaValidityYears: Number(formData.moaValidityYears),
+        moaValidityMonths: Number(formData.moaValidityMonths || 0),
         moaFileUrl: formData.moaFileUrl || "",
         moaFileName: formData.moaFileName || "",
         moaStoragePath: formData.moaStoragePath || "",
@@ -403,9 +433,11 @@ export const dashboardHandlers = {
 
       // Calculate expiration date if start date and validity years are provided
       if (formData.moaStartDate && formData.moaValidityYears) {
-        const startDate = new Date(formData.moaStartDate);
-        const expirationDate = new Date(startDate);
-        expirationDate.setFullYear(expirationDate.getFullYear() + Number(formData.moaValidityYears));
+        const expirationDate = computeMoaExpirationDate(
+          formData.moaStartDate,
+          formData.moaValidityYears,
+          formData.moaValidityMonths
+        );
         updatedCompany.moaStartDate = formData.moaStartDate;
         updatedCompany.moaExpirationDate = expirationDate.toISOString();
         
@@ -432,6 +464,7 @@ export const dashboardHandlers = {
       await syncMoaValidityToRealtime(editCompanyId, {
         moa: "Yes", // MOA is now always required
         moaValidityYears: updatedCompany.moaValidityYears,
+        moaValidityMonths: updatedCompany.moaValidityMonths,
         companyName: updatedCompany.companyName,
         updatedAt: new Date().toISOString(),
       });
@@ -459,6 +492,7 @@ export const dashboardHandlers = {
         moa: false,
         modeOfWork: "",
         moaValidityYears: "",
+        moaValidityMonths: "0",
         moaStartDate: "",
         moaFileUrl: "",
         moaFileName: "",
@@ -528,6 +562,10 @@ export const dashboardHandlers = {
         typeof company.moaValidityYears === "number" && company.moaValidityYears > 0
           ? String(company.moaValidityYears)
           : "",
+      moaValidityMonths:
+        typeof company.moaValidityMonths === "number" && company.moaValidityMonths >= 0
+          ? String(company.moaValidityMonths)
+          : "0",
       moaStartDate: company.moaStartDate || "",
       modeOfWork: modeOfWorkValue,
       moaFileUrl: company.moaFileUrl || "",

@@ -659,6 +659,16 @@
   gap: 0.3rem;
 }
 
+.moa-validity-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.moa-validity-input.compact .moa-input-wrapper {
+  max-width: 100%;
+}
+
 .moa-validity-label {
   display: flex;
   align-items: center;
@@ -675,13 +685,14 @@
 .moa-input-wrapper {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
+  justify-content: space-between;
+  gap: 0.5rem;
   border: 2px solid #d0d7de;
   border-radius: 10px;
   background: #fff;
-  padding: 0.3rem 0.75rem 0.3rem 0.5rem;
+  padding: 0.3rem 0.85rem 0.3rem 0.5rem;
   transition: all 0.2s ease;
-  max-width: 250px;
+  max-width: 300px;
 }
 
 .moa-input-wrapper:hover {
@@ -692,6 +703,7 @@
   border: none;
   background: transparent;
   flex: 1;
+  min-width: 0;
   font-size: 1rem;
   padding: 0.45rem 0.4rem;
   color: #1f2a37;
@@ -718,6 +730,18 @@
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin-left: 0;
+  white-space: nowrap;
+  flex-shrink: 0;
+  background: #eef2f7;
+  border: 1px solid #dde3ea;
+  border-radius: 999px;
+  padding: 0.2rem 0.55rem;
+}
+
+.moa-validity-helper {
+  margin: -0.2rem 0 0.15rem;
+  font-size: 0.82rem;
+  color: #64748b;
 }
 
 .moa-expiration-preview {
@@ -1164,5 +1188,9 @@
   .company-modal .modal-error-message {
     margin-left: 1.1rem;
     margin-right: 1.1rem;
+  }
+
+  .moa-validity-grid {
+    grid-template-columns: 1fr;
   }
 }

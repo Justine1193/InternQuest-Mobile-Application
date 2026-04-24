@@ -73,9 +73,15 @@ const TableRow = ({
       return { text: "No MOA", variant: "muted" };
     }
     const years = Number(row.moaValidityYears);
-    if (!Number.isNaN(years) && years > 0) {
+    const months = Number(row.moaValidityMonths ?? 0);
+    if (!Number.isNaN(years) && years > 0 && !Number.isNaN(months) && months >= 0) {
+      const parts = [];
+      parts.push(`${years} year${years > 1 ? "s" : ""}`);
+      if (months > 0) {
+        parts.push(`${months} month${months > 1 ? "s" : ""}`);
+      }
       return {
-        text: `${years} year${years > 1 ? "s" : ""}`,
+        text: parts.join(", "),
         variant: "active",
       };
     }

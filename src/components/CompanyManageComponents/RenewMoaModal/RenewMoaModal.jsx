@@ -5,7 +5,7 @@ import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import "./RenewMoaModal.css";
 
 /**
- * RenewMoaModal - Modal for renewing a company's MOA with start date, validity years, and required document upload.
+ * RenewMoaModal - Modal for renewing a company's MOA with start date, validity years/months, and required document upload.
  */
 function RenewMoaModal({
   open,
@@ -15,9 +15,11 @@ function RenewMoaModal({
   isSubmitting,
 }) {
   const defaultValidity = company ? (company.moaValidityYears || 1) : 1;
+  const defaultValidityMonths = company ? (company.moaValidityMonths || 0) : 0;
 
   const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [validityYears, setValidityYears] = useState(defaultValidity);
+  const [validityMonths, setValidityMonths] = useState(defaultValidityMonths);
   const [moaFile, setMoaFile] = useState(null);
   const [moaFileUploading, setMoaFileUploading] = useState(false);
   const [uploadedMoa, setUploadedMoa] = useState(null); // { url, fileName, storagePath }
@@ -30,6 +32,7 @@ function RenewMoaModal({
       const today = new Date().toISOString().slice(0, 10);
       setStartDate(today);
       setValidityYears(company.moaValidityYears || 1);
+      setValidityMonths(company.moaValidityMonths || 0);
       setMoaFile(null);
       setUploadedMoa(null);
       setError("");
@@ -116,6 +119,11 @@ function RenewMoaModal({
       setError("Validity must be at least 1 year.");
       return;
     }
+    const months = Number(validityMonths);
+    if (!Number.isInteger(months) || months < 0 || months > 11) {
+      setError("Validity months must be between 0 and 11.");
+      return;
+    }
 
     if (!uploadedMoa) {
       setError("MOA document is required. Please upload a file.");
@@ -130,11 +138,13 @@ function RenewMoaModal({
 
     const expirationDate = new Date(start);
     expirationDate.setFullYear(expirationDate.getFullYear() + years);
+    expirationDate.setMonth(expirationDate.getMonth() + months);
 
     onSubmit({
       startDate: start.toISOString(),
       expirationDate: expirationDate.toISOString(),
       validityYears: years,
+      validityMonths: months,
       moaFileUrl: uploadedMoa.url,
       moaFileName: uploadedMoa.fileName,
       moaStoragePath: uploadedMoa.storagePath,
@@ -198,6 +208,22 @@ function RenewMoaModal({
               max={99}
               value={validityYears}
               onChange={(e) => setValidityYears(e.target.value)}
+              required
+              disabled={isSubmitting}
+              className="renew-moa-input"
+            />
+          </div>
+          <div className="renew-moa-field">
+            <label htmlFor="renew-moa-validity-months">
+              Validity (months) <span className="required">*</span>
+            </label>
+            <input
+              id="renew-moa-validity-months"
+              type="number"
+              min={0}
+              max={11}
+              value={validityMonths}
+              onChange={(e) => setValidityMonths(e.target.value)}
               required
               disabled={isSubmitting}
               className="renew-moa-input"

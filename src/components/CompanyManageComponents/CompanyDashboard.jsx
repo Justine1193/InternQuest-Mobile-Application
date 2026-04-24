@@ -82,6 +82,7 @@ const Dashboard = () => {
     skills: "",
     moa: true,
     moaValidityYears: "",
+    moaValidityMonths: "0",
     moaStartDate: "",
     moaFileUrl: "",
     moaFileName: "",
@@ -739,7 +740,7 @@ const Dashboard = () => {
             }
           }
 
-          // Compute MOA expiration from start date + validity years when provided
+          // Compute MOA expiration from start date + validity years/months when provided
           let moaStartDate = company.moaStartDate || "";
           let moaExpirationDate = "";
           if (moaStartDate && (company.moaValidityYears || 1) > 0) {
@@ -747,6 +748,7 @@ const Dashboard = () => {
               const start = new Date(moaStartDate);
               const exp = new Date(start);
               exp.setFullYear(exp.getFullYear() + (company.moaValidityYears || 1));
+              exp.setMonth(exp.getMonth() + (company.moaValidityMonths || 0));
               moaExpirationDate = exp.toISOString();
             } catch (_) {}
           }
@@ -768,6 +770,7 @@ const Dashboard = () => {
             skillsREq: company.skills,
             moa: "Yes", // MOA is always required
             moaValidityYears: company.moaValidityYears || 1,
+            moaValidityMonths: company.moaValidityMonths || 0,
             moaFileUrl: company.moaFileUrl || "",
             moaFileName: company.moaFileName || "",
             modeOfWork: company.modeOfWork,
@@ -806,6 +809,7 @@ const Dashboard = () => {
           await updateRealtime(ref(realtimeDb, `companies/${docRef.id}`), {
             moa: "Yes",
             moaValidityYears: newCompany.moaValidityYears,
+            moaValidityMonths: newCompany.moaValidityMonths,
             companyName: newCompany.companyName,
             updatedAt: new Date().toISOString(),
           });
@@ -1272,6 +1276,7 @@ const Dashboard = () => {
                     skills: "",
                     moa: true,
                     moaValidityYears: "",
+                    moaValidityMonths: "0",
                     moaStartDate: "",
                     moaFileUrl: "",
                     moaFileName: "",
@@ -1383,6 +1388,7 @@ const Dashboard = () => {
               moaStartDate: payload.startDate,
               moaExpirationDate: payload.expirationDate,
               moaValidityYears: payload.validityYears,
+              moaValidityMonths: payload.validityMonths,
               moaFileUrl: payload.moaFileUrl,
               moaFileName: payload.moaFileName,
               moaStoragePath: payload.moaStoragePath,
@@ -1402,6 +1408,7 @@ const Dashboard = () => {
                 moaStartDate: payload.startDate,
                 moaExpirationDate: payload.expirationDate,
                 moaValidityYears: payload.validityYears,
+                moaValidityMonths: payload.validityMonths,
               },
             );
 
@@ -1513,6 +1520,7 @@ const Dashboard = () => {
                     <th>Contact Number</th>
                     <th>MOA</th>
                     <th>MOA Validity Years</th>
+                    <th>MOA Validity Months</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1534,6 +1542,7 @@ const Dashboard = () => {
                       <td>{company.contactPersonPhone || "N/A"}</td>
                       <td>{company.moa ? "Yes" : "No"}</td>
                       <td>{company.moaValidityYears || (company.moa ? "1 (default)" : "N/A")}</td>
+                      <td>{company.moaValidityMonths ?? 0}</td>
                     </tr>
                   ))}
                 </tbody>

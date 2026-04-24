@@ -116,6 +116,7 @@ export const convertCSVToCompanies = (csvData) => {
         skills: parseArrayField(row['Skills'] || row['skills'] || '', ';'),
         moa: parseBooleanField(row['MOA'] || row['moa'] || ''),
         moaValidityYears: parseNumberField(row['MOA Validity Years'] || row['moaValidityYears'] || ''),
+        moaValidityMonths: parseNumberField(row['MOA Validity Months'] || row['moaValidityMonths'] || ''),
         modeOfWork: parseArrayField(row['Mode of Work'] || row['modeOfWork'] || '', ','),
         endorsedByCollege: (row['Endorsed by College'] || row['endorsedByCollege'] || '').trim(),
         contactPersonName: (row['Contact Person Name'] || row['contactPersonName'] || '').trim(),
@@ -140,6 +141,9 @@ export const convertCSVToCompanies = (csvData) => {
       // Default MOA Validity Years to 1 if MOA is Yes but validity years is not provided
       if (company.moa && !company.moaValidityYears) {
         company.moaValidityYears = 1;
+      }
+      if (company.moa && (company.moaValidityMonths == null || Number.isNaN(company.moaValidityMonths))) {
+        company.moaValidityMonths = 0;
       }
 
       companies.push(company);

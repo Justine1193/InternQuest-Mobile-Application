@@ -162,6 +162,11 @@ function CompanyModal({
       Number(formData.moaValidityYears) <= 0 ||
       Number.isNaN(Number(formData.moaValidityYears));
     const requiresMoaStartDate = !formData.moaStartDate;
+    const invalidMoaMonths =
+      formData.moaValidityMonths === "" ||
+      Number(formData.moaValidityMonths) < 0 ||
+      Number(formData.moaValidityMonths) > 11 ||
+      Number.isNaN(Number(formData.moaValidityMonths));
     if (
       !formData.companyName.trim() ||
       !formData.description.trim() ||
@@ -174,6 +179,7 @@ function CompanyModal({
       !formData.modeOfWork ||
       formData.modeOfWork.length === 0 ||
       requiresMoaValidity ||
+      invalidMoaMonths ||
       requiresMoaStartDate ||
       !formData.moaFileUrl
     ) {
@@ -184,6 +190,8 @@ function CompanyModal({
           ? "Please specify the MOA start date. MOA is required."
           : requiresMoaValidity
           ? "Please specify how many years the MOA is valid. MOA is required."
+          : invalidMoaMonths
+          ? "Please specify MOA validity months from 0 to 11."
           : !formData.endorsedByCollege?.trim()
           ? "Please select or enter the Endorsed by College."
           : "Please fill in all required fields."
@@ -234,6 +242,11 @@ function CompanyModal({
       Number(formData.moaValidityYears) <= 0 ||
       Number.isNaN(Number(formData.moaValidityYears));
     const requiresMoaStartDate = !formData.moaStartDate;
+    const invalidMoaMonths =
+      formData.moaValidityMonths === "" ||
+      Number(formData.moaValidityMonths) < 0 ||
+      Number(formData.moaValidityMonths) > 11 ||
+      Number.isNaN(Number(formData.moaValidityMonths));
     const requiresMoaFile = !formData.moaFileUrl;
     if (
       !formData.companyName ||
@@ -247,6 +260,7 @@ function CompanyModal({
       !formData.modeOfWork ||
       formData.modeOfWork.length === 0 ||
       requiresMoaValidity ||
+      invalidMoaMonths ||
       requiresMoaStartDate ||
       requiresMoaFile
     ) {
@@ -257,6 +271,8 @@ function CompanyModal({
           ? "Please specify the MOA start date. MOA is required."
           : requiresMoaValidity
           ? "Please specify how many years the MOA is valid. MOA is required."
+          : invalidMoaMonths
+          ? "Please specify MOA validity months from 0 to 11."
           : !formData.endorsedByCollege?.trim()
           ? "Please select or enter the Endorsed by College."
           : "Please fill in all required fields."
@@ -888,36 +904,64 @@ function CompanyModal({
                 />
               </div>
             </div>
-            <div className="moa-validity-input">
-              <div className="moa-validity-label">
-                <span>Validity</span>
-                <span className="moa-required">*</span>
+            <div className="moa-validity-grid">
+              <div className="moa-validity-input compact">
+                <div className="moa-validity-label">
+                  <span>Validity (Years)</span>
+                  <span className="moa-required">*</span>
+                </div>
+                <div className="moa-input-wrapper">
+                  <input
+                    id="moaValidityYears"
+                    type="number"
+                    name="moaValidityYears"
+                    min="1"
+                    step="1"
+                    placeholder="0"
+                    value={formData.moaValidityYears}
+                    onChange={handleInputChange}
+                    required
+                  />
+                  <span className="moa-unit">years</span>
+                </div>
               </div>
-              <div className="moa-input-wrapper">
-                <input
-                  id="moaValidityYears"
-                  type="number"
-                  name="moaValidityYears"
-                  min="1"
-                  step="1"
-                  placeholder="Enter number of years"
-                  value={formData.moaValidityYears}
-                  onChange={handleInputChange}
-                  required
-                />
-                <span className="moa-unit">years</span>
+              <div className="moa-validity-input compact">
+                <div className="moa-validity-label">
+                  <span>Validity (Months)</span>
+                  <span className="moa-required">*</span>
+                </div>
+                <div className="moa-input-wrapper">
+                  <input
+                    id="moaValidityMonths"
+                    type="number"
+                    name="moaValidityMonths"
+                    min="0"
+                    max="11"
+                    step="1"
+                    placeholder="0"
+                    value={formData.moaValidityMonths ?? "0"}
+                    onChange={handleInputChange}
+                    required
+                  />
+                  <span className="moa-unit">months</span>
+                </div>
               </div>
             </div>
-            {formData.moaStartDate && formData.moaValidityYears && (
+            <p className="moa-validity-helper">
+              Set agreement duration using years and optional extra months (0 to 11).
+            </p>
+            {formData.moaStartDate && formData.moaValidityYears && formData.moaValidityMonths !== "" && (
               <div className="moa-expiration-preview">
                 <span className="expiration-label">Expiration Date:</span>
                 <span className="expiration-value">
                   {(() => {
                     const startDate = new Date(formData.moaStartDate);
                     const years = Number(formData.moaValidityYears);
-                    if (!isNaN(years) && years > 0) {
+                    const months = Number(formData.moaValidityMonths);
+                    if (!isNaN(years) && years > 0 && !isNaN(months) && months >= 0 && months <= 11) {
                       const expirationDate = new Date(startDate);
                       expirationDate.setFullYear(expirationDate.getFullYear() + years);
+                      expirationDate.setMonth(expirationDate.getMonth() + months);
                       return expirationDate.toLocaleDateString('en-US', { 
                         year: 'numeric', 
                         month: 'short', 
@@ -1057,6 +1101,7 @@ function CompanyModal({
                   skills: "",
                   moa: true,
                   moaValidityYears: "",
+                  moaValidityMonths: "0",
                   moaStartDate: "",
                   modeOfWork: "",
                   contactPersonName: "",

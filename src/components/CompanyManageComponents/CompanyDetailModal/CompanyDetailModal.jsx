@@ -462,8 +462,18 @@ const CompanyDetailModal = ({
                 <div className="moa-detail-item">
                   <span className="moa-detail-label">Validity</span>
                   <span className="moa-detail-value">
-                    {company.moaValidityYears}{" "}
-                    {company.moaValidityYears === 1 ? "year" : "years"}
+                    {(() => {
+                      const years = Number(company.moaValidityYears);
+                      const months = Number(company.moaValidityMonths ?? 0);
+                      const parts = [];
+                      if (!Number.isNaN(years) && years > 0) {
+                        parts.push(`${years} ${years === 1 ? "year" : "years"}`);
+                      }
+                      if (!Number.isNaN(months) && months > 0) {
+                        parts.push(`${months} ${months === 1 ? "month" : "months"}`);
+                      }
+                      return parts.length ? parts.join(", ") : "Not set";
+                    })()}
                   </span>
                 </div>
               )}

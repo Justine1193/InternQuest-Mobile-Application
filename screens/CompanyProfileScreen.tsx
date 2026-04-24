@@ -304,10 +304,47 @@ const CompanyProfileScreen: React.FC = () => {
     const fetchUserProfile = async () => {
         if (!auth.currentUser) return;
         try {
-            const userDoc = await getDoc(doc(firestore, 'users', auth.currentUser.uid));
-            if (userDoc.exists()) {
-                setUserProfile(userDoc.data());
+            const uid = auth.currentUser.uid;
+            const email = auth.currentUser.email;
+
+            const uidSnap = await getDoc(doc(firestore, 'users', uid));
+            const uidData = uidSnap.exists() ? (uidSnap.data() as any) : null;
+
+            let emailData: any | null = null;
+            if (email) {
+                const q = query(collection(firestore, 'users'), where('email', '==', email));
+                const qsnap = await getDocs(q);
+                if (!qsnap.empty) {
+                    emailData = qsnap.docs[0].data() as any;
+                }
             }
+
+            if (!uidData && !emailData) return;
+
+            // Prefer UID doc, but if it's incomplete (common with legacy provisioning),
+            // fall back to the email doc's skills/field so matching works.
+            let merged: any = uidData || emailData;
+            if (uidData && emailData) {
+                merged = { ...emailData, ...uidData };
+
+                const uidSkills = Array.isArray(uidData.skills) ? uidData.skills : [];
+                const emailSkills = Array.isArray(emailData.skills) ? emailData.skills : [];
+                if (uidSkills.length === 0 && emailSkills.length > 0) {
+                    merged.skills = emailSkills;
+                }
+
+                const uidField = uidData.field;
+                const emailField = emailData.field;
+                const uidFieldEmpty =
+                    uidField == null ||
+                    (Array.isArray(uidField) && uidField.filter(Boolean).length === 0) ||
+                    (typeof uidField === 'string' && !uidField.trim());
+                if (uidFieldEmpty && emailField != null) {
+                    merged.field = emailField;
+                }
+            }
+
+            setUserProfile(merged);
         } catch (error) {
             console.error('Error fetching user profile:', error);
         }
@@ -587,14 +624,53 @@ const CompanyProfileScreen: React.FC = () => {
             ? company.industry.split(/[,/]+/).map((s: string) => s.trim()).filter(Boolean)
             : [];
 
+    const splitSkillLike = (value: unknown): string[] => {
+        if (!value) return [];
+        if (Array.isArray(value)) return value.flatMap(splitSkillLike);
+        if (typeof value !== 'string') return [String(value)].map((s) => s.trim()).filter(Boolean);
+
+        // Some docs store multiple skills in one string (e.g. "HTML, CSS / JS").
+        return value
+            .split(/[\n,;/|]+/g)
+            .map((s) => s.trim())
+            .filter(Boolean);
+    };
+
+    const toTokens = (value: unknown): string[] => {
+        if (!value) return [];
+        return String(value)
+            .toLowerCase()
+            .split(/[^a-z0-9]+/g)
+            .map((t) => t.trim())
+            .filter(Boolean);
+    };
+
+    const stableDedupe = (items: string[]) => {
+        const seen = new Set<string>();
+        const out: string[] = [];
+        for (const item of items) {
+            const key = toTokens(item).join(' ');
+            if (!key || seen.has(key)) continue;
+            seen.add(key);
+            out.push(item);
+        }
+        return out;
+    };
+
     // Required skills that the user has (skills picked by the user that match this internship)
+    const requiredSkills = stableDedupe(splitSkillLike(company.tags));
+    const userSkills = stableDedupe(splitSkillLike(userProfile?.skills));
+    const userTokenSet = new Set<string>(userSkills.flatMap(toTokens));
+
     const userMatchingSkills: string[] =
-        company.tags && Array.isArray(company.tags) && userProfile?.skills?.length
-            ? company.tags.filter((tag: string) =>
-                userProfile.skills.some((s: string) =>
-                    String(s).trim().toLowerCase() === String(tag).trim().toLowerCase()
-                )
-            )
+        requiredSkills.length > 0 && userTokenSet.size > 0
+            ? requiredSkills.filter((required) => {
+                const requiredTokens = toTokens(required);
+                if (requiredTokens.length === 0) return false;
+                // Match if ALL required tokens exist in the user's token set.
+                // Example: required "react native" matches user skill "React-Native".
+                return requiredTokens.every((t) => userTokenSet.has(t));
+            })
             : [];
 
     return (

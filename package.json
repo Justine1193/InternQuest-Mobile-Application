@@ -2,6 +2,7 @@
   "name": "internquest-admin-workspace",
   "private": true,
   "scripts": {
+    "debug:build-check": "node scripts/debug-build-check.mjs",
     "fe:install": "npm --prefix frontend install",
     "fe:dev": "npm --prefix frontend run dev",
     "fe:build": "npm --prefix frontend run build",

@@ -1,10 +1,11 @@
 # PowerShell script to deploy signChecklistPDF Cloud Function
-# Run this script from the project root directory
+# Can be run from any directory
 
 Write-Host "Deploying signChecklistPDF Cloud Function..." -ForegroundColor Cyan
 
-# Navigate to functions directory
-Set-Location functions
+# Navigate to backend/functions directory
+$scriptRoot = $PSScriptRoot
+Set-Location (Join-Path $scriptRoot "functions")
 
 # Check if node_modules exists
 if (-not (Test-Path "node_modules")) {
@@ -16,8 +17,8 @@ if (-not (Test-Path "node_modules")) {
 Write-Host "Deploying function..." -ForegroundColor Yellow
 firebase deploy --only functions:signChecklistPDF
 
-# Return to project root
-Set-Location ..
+# Return to backend directory
+Set-Location $scriptRoot
 
 Write-Host "`nDeployment complete! Check the output above for any errors." -ForegroundColor Green
 Write-Host "If deployment was successful, try approving a requirement again." -ForegroundColor Green

@@ -371,10 +371,10 @@ const Navbar = ({ onLogout }) => {
                       className={`sidebar-link ${
                         isActive("/adminManagement") ? "active" : ""
                       }`}
-                      title="User & Role Management"
+                      title="OJT Faculties"
                     >
                       <IoPeopleOutline className="sidebar-icon" />
-                      <span>User & Role Management</span>
+                      <span>OJT Faculties</span>
                     </Link>
                   )}
 
@@ -448,17 +448,17 @@ const Navbar = ({ onLogout }) => {
             </>
           ) : (
             <>
-              {/* 1. User & Role Management */}
+              {/* 1. OJT Faculties */}
               {canCreate && (
                 <Link
                   to="/adminManagement"
                   className={`sidebar-link ${
                     isActive("/adminManagement") ? "active" : ""
                   }`}
-                  title="User & Role Management"
+                  title="OJT Faculties"
                 >
                   <IoPeopleOutline className="sidebar-icon" />
-                  {!desktopCollapsed && <span>User & Role Management</span>}
+                  {!desktopCollapsed && <span>OJT Faculties</span>}
                 </Link>
               )}
 

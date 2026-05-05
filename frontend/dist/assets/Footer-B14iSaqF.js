@@ -1,0 +1,1 @@
+import{n as e}from"./index-JEjjYULX.js";const r=()=>e.jsx("footer",{className:"app-footer",children:e.jsx("div",{className:"footer-content",children:e.jsxs("span",{children:["© ",new Date().getFullYear()," InternQuest. All rights reserved."]})})});export{r as F};

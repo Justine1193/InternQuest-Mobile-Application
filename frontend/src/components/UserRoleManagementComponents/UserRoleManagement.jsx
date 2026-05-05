@@ -135,7 +135,7 @@ const UserRoleManagement = () => {
   }, [isCoordinator, adminCollegeCode]);
 
   useEffect(() => {
-    document.title = "User & Role Management | InternQuest Admin";
+    document.title = "OJT Faculties | InternQuest Admin";
     if (!canCreate) {
       navigate("/dashboard", { replace: true });
     }
@@ -1597,7 +1597,7 @@ const UserRoleManagement = () => {
               <IoPeopleOutline className="dashboard-header-icon dashboard-header-icon--purple" />
             </div>
             <div>
-              <h1>Role & user management</h1>
+              <h1>OJT Faculties</h1>
               <p>
                 Create accounts, assign roles, and filter coordinators and
                 advisers from one administrative workspace.
